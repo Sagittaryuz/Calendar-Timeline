@@ -21,6 +21,7 @@ const SETTINGS = {
   secondaryTextColor: "#A9A9B0",
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
+  overflowColor: "#636366",
   // Escreva aqui nomes exatos de agendas/listas que não devem aparecer.
   excludedCalendars: [],
 };
@@ -176,29 +177,102 @@ function chooseItems(items, referenceDate, limit) {
     (item) => item.isAllDay || item.end >= referenceDate
   );
 
-  const byTime = (a, b) => a.start.getTime() - b.start.getTime();
-  const allEvents = relevant
+  const byTime = (a, b) =>
+    a.start.getTime() - b.start.getTime() ||
+    a.end.getTime() - b.end.getTime();
+  const events = relevant
     .filter((item) => item.kind === "event")
     .sort(byTime);
-  const allReminders = relevant
+  const reminders = relevant
     .filter((item) => item.kind === "reminder")
     .sort(byTime);
 
-  // Havendo lembrete, ao menos a quinta posição fica reservada para ele.
-  const eventLimit =
-    allReminders.length > 0
-      ? Math.max(0, limit - 1)
-      : limit;
-  const events = allEvents.slice(0, eventLimit);
-  const reminders = allReminders.slice(0, limit - events.length);
+  // Cada linha pode receber quantos itens forem necessários, desde que seus
+  // intervalos não se sobreponham. Eventos procuram de cima para baixo;
+  // lembretes procuram de baixo para cima.
+  const rows = Array.from({ length: limit }, () => []);
+  const placed = [];
+  const hidden = [];
 
-  return [
-    ...events.map((item, index) => ({ ...item, gridRow: index })),
-    ...reminders.map((item, index) => ({
-      ...item,
-      gridRow: limit - 1 - index,
-    })),
-  ];
+  const placeItem = (item, rowOrder) => {
+    const availableRow = rowOrder.find((row) =>
+      rows[row].every((existing) => !itemsOverlap(item, existing))
+    );
+
+    if (availableRow === undefined) {
+      hidden.push(item);
+      return;
+    }
+
+    const positioned = { ...item, gridRow: availableRow };
+    rows[availableRow].push(positioned);
+    placed.push(positioned);
+  };
+
+  const topDownRows = Array.from({ length: limit }, (_, index) => index);
+  const bottomUpRows = [...topDownRows].reverse();
+
+  events.forEach((item) => placeItem(item, topDownRows));
+  reminders.forEach((item) => placeItem(item, bottomUpRows));
+
+  // Excedentes realmente coincidentes são agrupados em um único +N.
+  // O indicador permanece na quinta linha, como limite visual do widget.
+  const overflowMarkers = groupOverflowItems(hidden).map((group) => ({
+    kind: "overflow",
+    title: `+${group.count}`,
+    start: group.start,
+    end: group.end,
+    gridRow: limit - 1,
+    isOverflow: true,
+    color: SETTINGS.overflowColor,
+  }));
+
+  return [...placed, ...overflowMarkers];
+}
+
+function itemsOverlap(first, second) {
+  const firstStart = first.start.getTime();
+  const secondStart = second.start.getTime();
+  const firstEnd = effectiveItemEnd(first);
+  const secondEnd = effectiveItemEnd(second);
+
+  // Um item que começa exatamente quando o outro termina pode reutilizar
+  // a mesma linha.
+  return firstStart < secondEnd && secondStart < firstEnd;
+}
+
+function effectiveItemEnd(item) {
+  const start = item.start.getTime();
+  const end = item.end.getTime();
+  return Math.max(end, start + 60 * 1000);
+}
+
+function groupOverflowItems(items) {
+  const sorted = [...items].sort(
+    (a, b) => a.start.getTime() - b.start.getTime()
+  );
+  const groups = [];
+
+  for (const item of sorted) {
+    const start = item.start.getTime();
+    const end = effectiveItemEnd(item);
+    const current = groups[groups.length - 1];
+
+    if (current && start < current.end.getTime()) {
+      current.end = new Date(
+        Math.max(current.end.getTime(), end)
+      );
+      current.count++;
+    } else {
+      groups.push({
+        start: new Date(start),
+        end: new Date(end),
+        count: 1,
+      });
+    }
+  }
+
+  return groups;
 }
 
 function makeWidget(items, loadError) {
@@ -321,9 +395,9 @@ function hexToRGB(hex) {
 }
 
 function drawDatePanel(ctx, holidayDates) {
-  const prefix = formatDate(now, "d 'de' MMMM, ").toLocaleLowerCase("pt-BR");
   const weekday = formatDate(now, "EEEE").toLocaleLowerCase("pt-BR");
-  const fullDate = `${prefix}${weekday}`;
+  const dateText = formatDate(now, ", d 'de' MMMM").toLocaleLowerCase("pt-BR");
+  const fullDate = `${weekday}${dateText}`;
   const maximumFontSize = 60;
   const fontSize = Math.min(
     maximumFontSize,
@@ -331,23 +405,30 @@ function drawDatePanel(ctx, holidayDates) {
   );
   const characterWidth = fontSize * 0.61;
   const totalWidth = fullDate.length * characterWidth;
-  const prefixWidth = prefix.length * characterWidth;
+  const weekdayWidth = weekday.length * characterWidth;
   const startX = (CANVAS.width - totalWidth) / 2;
   const weekdayColor = titleWeekdayColor(now, holidayDates);
 
   ctx.setStrokeColor(new Color("#242428"));
   ctx.setLineWidth(3);
-  ctx.strokeRect(   new Rect(     CANVAS.marginX,     CANVAS.headerHeight - 3,     CANVAS.width - CANVAS.marginX * 2,     1   ) );
+  ctx.strokeRect(
+    new Rect(
+      CANVAS.marginX,
+      CANVAS.headerHeight - 3,
+      CANVAS.width - CANVAS.marginX * 2,
+      1
+    )
+  );
 
   ctx.setTextAlignedCenter();
   ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
 
   ctx.setTextAlignedLeft();
-  ctx.setTextColor(new Color(SETTINGS.primaryTextColor));
-  ctx.drawText(prefix, new Point(startX, 34));
-
   ctx.setTextColor(weekdayColor);
-  ctx.drawText(weekday, new Point(startX + prefixWidth, 34));
+  ctx.drawText(weekday, new Point(startX, 34));
+
+  ctx.setTextColor(new Color(SETTINGS.primaryTextColor));
+  ctx.drawText(dateText, new Point(startX + weekdayWidth, 34));
 }
 
 function drawFooter(ctx, eventCount, reminderCount) {
@@ -409,8 +490,17 @@ function renderTimelinePanel(items, loadError) {
 
   for (let row = 0; row < SETTINGS.maxItems; row++) {
     const y = CANVAS.localPlotTop + row * rowHeight;
-    const item = items.find((candidate) => candidate.gridRow === row);
-    if (item) drawTimelineItem(ctx, item, y, rowHeight);
+    const rowItems = items
+      .filter((candidate) => candidate.gridRow === row)
+      .sort(
+        (a, b) =>
+          Number(a.isOverflow) - Number(b.isOverflow) ||
+          a.start.getTime() - b.start.getTime()
+      );
+
+    rowItems.forEach((item) =>
+      drawTimelineItem(ctx, item, y, rowHeight)
+    );
   }
 
   return ctx.getImage();
@@ -474,6 +564,32 @@ function drawHourAxis(ctx) {
 function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
+  const barHeight = item.isOverflow ? 38 : 42;
+  const barY = centerY - barHeight / 2;
+
+  if (item.isOverflow) {
+    const markerWidth = 58;
+    const markerX = Math.max(
+      0,
+      Math.min(timelineWidth() - markerWidth, timeToX(item.start))
+    );
+
+    fillRoundedRect(
+      ctx,
+      new Rect(markerX, barY, markerWidth, barHeight),
+      6,
+      color
+    );
+
+    ctx.setTextAlignedCenter();
+    ctx.setFont(Font.blackRoundedSystemFont(22));
+    ctx.setTextColor(Color.white());
+    ctx.drawTextInRect(
+      item.title,
+      new Rect(markerX, barY + 6, markerWidth, 27)
+    );
+    return;
+  }
 
   const originalX = timeToX(item.start);
   const x =
@@ -481,8 +597,6 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       ? Math.max(0, originalX)
       : originalX;
   const width = Math.max(1, timeToX(item.end) - x);
-  const barHeight = 42;
-  const barY = centerY - barHeight / 2;
 
   fillRoundedRect(
     ctx,
