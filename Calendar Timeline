@@ -22,6 +22,9 @@ const SETTINGS = {
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
   overflowColor: "#636366",
+  nightMoonColor: "#FFF1A8",
+  nightStarColor: "#FFFFFF",
+  nightCloudColor: "#8A93A6",
   // Escreva aqui nomes exatos de agendas/listas que não devem aparecer.
   excludedCalendars: [],
 };
@@ -474,6 +477,8 @@ function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
+  // A decoração noturna fica atrás das linhas e dos charts.
+  drawNightScenes(ctx);
   drawHourAxis(ctx);
 
   if (loadError) {
@@ -504,6 +509,82 @@ function renderTimelinePanel(items, loadError) {
   }
 
   return ctx.getImage();
+}
+
+function drawNightScenes(ctx) {
+  let dayStart = startOfDay(windowStart);
+
+  while (dayStart < windowEnd) {
+    const nightStart = new Date(dayStart);
+    const nightEnd = new Date(dayStart);
+    nightEnd.setHours(8, 0, 0, 0);
+
+    const visibleStart = new Date(
+      Math.max(nightStart.getTime(), windowStart.getTime())
+    );
+    const visibleEnd = new Date(
+      Math.min(nightEnd.getTime(), windowEnd.getTime())
+    );
+
+    if (visibleEnd > visibleStart) {
+      drawNightScene(ctx, dayStart, visibleStart, visibleEnd);
+    }
+
+    dayStart = addDays(dayStart, 1);
+  }
+}
+
+function drawNightScene(ctx, dayStart, visibleStart, visibleEnd) {
+  const x0 = timeToX(visibleStart);
+  const x1 = timeToX(visibleEnd);
+  const sceneWidth = x1 - x0;
+  if (sceneWidth < 18) return;
+
+  const sceneHeight = timelineHeight();
+  const nightBackground = new Color(
+    timelineBackgroundColorForDate(dayStart),
+    1.0
+  );
+
+  // Lua minguante: um disco claro com a parte direita recortada pelo fundo.
+  const moonSize = Math.min(82, Math.max(42, sceneWidth * 0.22));
+  const moonX = x0 + Math.min(sceneWidth - moonSize - 8, sceneWidth * 0.16);
+  const moonY = CANVAS.localPlotTop + 24;
+  ctx.setFillColor(new Color(SETTINGS.nightMoonColor, 0.72));
+  ctx.fillEllipse(new Rect(moonX, moonY, moonSize, moonSize));
+  ctx.setFillColor(nightBackground);
+  ctx.fillEllipse(
+    new Rect(
+      moonX + moonSize * 0.30,
+      moonY - moonSize * 0.02,
+      moonSize,
+      moonSize
+    )
+  );
+
+  // Estrelas pequenas e discretas ao redor da lua.
+  const stars = [
+    [0.42, 0.16, 3],
+    [0.62, 0.11, 2],
+    [0.80, 0.25, 3],
+    [0.36, 0.42, 2],
+    [0.86, 0.48, 2],
+  ];
+  ctx.setFillColor(new Color(SETTINGS.nightStarColor, 0.62));
+  for (const [relativeX, relativeY, size] of stars) {
+    const starX = x0 + sceneWidth * relativeX;
+    const starY = CANVAS.localPlotTop + 18 + (sceneHeight - 72) * relativeY;
+    ctx.fillEllipse(new Rect(starX - size / 2, starY - size / 2, size, size));
+  }
+
+  // Nuvens baixas, translúcidas, para não competir com os charts.
+  const cloudY = CANVAS.localPlotTop + Math.min(144, sceneHeight - 58);
+  const cloudX = x0 + sceneWidth * 0.54;
+  ctx.setFillColor(new Color(SETTINGS.nightCloudColor, 0.22));
+  ctx.fillEllipse(new Rect(cloudX, cloudY + 12, 70, 26));
+  ctx.fillEllipse(new Rect(cloudX + 22, cloudY, 42, 34));
+  ctx.fillEllipse(new Rect(cloudX + 54, cloudY + 9, 54, 29));
+  ctx.fillRect(new Rect(cloudX + 15, cloudY + 17, 82, 22));
 }
 
 function drawHourAxis(ctx) {
@@ -835,4 +916,3 @@ function cleanTitle(value, fallback) {
   const title = String(value ?? "").replace(/\s+/g, " ").trim();
   return title || fallback;
 }
-
