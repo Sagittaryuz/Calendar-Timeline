@@ -25,6 +25,11 @@ const SETTINGS = {
   nightMoonColor: "#FFF1A8",
   nightStarColor: "#FFFFFF",
   nightCloudColor: "#8A93A6",
+  useCurrentLocation: true,
+  locationCacheHours: 6,
+  // Localização de reserva: Jataí-GO.
+  fallbackLatitude: -17.8814,
+  fallbackLongitude: -51.7144,
   // Escreva aqui nomes exatos de agendas/listas que não devem aparecer.
   excludedCalendars: [],
 };
@@ -52,6 +57,7 @@ const windowEnd = new Date(
 );
 const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 const loadResult = await loadWindow();
+const astronomy = await loadAstronomy();
 const selectedItems = chooseItems(loadResult.items, now, SETTINGS.maxItems);
 const widget = makeWidget(selectedItems, loadResult.error);
 
@@ -172,6 +178,47 @@ async function loadWindow() {
       holidayDates: new Set(),
       error: String(error),
     };
+  }
+}
+
+async function loadAstronomy() {
+  const fallback = {
+    latitude: SETTINGS.fallbackLatitude,
+    longitude: SETTINGS.fallbackLongitude,
+  };
+  if (!SETTINGS.useCurrentLocation) return fallback;
+
+  const cacheKey = "agenda-timeline-location-v1";
+  let cachedLocation = null;
+
+  try {
+    if (Keychain.contains(cacheKey)) {
+      cachedLocation = JSON.parse(Keychain.get(cacheKey));
+      const maximumAge = SETTINGS.locationCacheHours * 60 * 60 * 1000;
+      if (
+        Number.isFinite(cachedLocation.latitude) &&
+        Number.isFinite(cachedLocation.longitude) &&
+        Date.now() - cachedLocation.updatedAt < maximumAge
+      ) {
+        return cachedLocation;
+      }
+    }
+  } catch (_) {
+    cachedLocation = null;
+  }
+
+  try {
+    Location.setAccuracyToThreeKilometers();
+    const currentLocation = await Location.current();
+    const location = {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      updatedAt: Date.now(),
+    };
+    Keychain.set(cacheKey, JSON.stringify(location));
+    return location;
+  } catch (_) {
+    return cachedLocation ?? fallback;
   }
 }
 
@@ -477,8 +524,9 @@ function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // A decoração noturna fica atrás das linhas e dos charts.
+  // A decoração e os destaques ficam atrás das horas e dos charts.
   drawNightScenes(ctx);
+  drawEventHourHighlights(ctx, loadResult.items);
   drawHourAxis(ctx);
 
   if (loadError) {
@@ -512,29 +560,33 @@ function renderTimelinePanel(items, loadError) {
 }
 
 function drawNightScenes(ctx) {
-  let dayStart = startOfDay(windowStart);
+  // Começa no dia anterior porque a noite pode ter iniciado antes da janela.
+  let dayStart = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
 
-  while (dayStart < windowEnd) {
-    const nightStart = new Date(dayStart);
-    const nightEnd = new Date(dayStart);
-    nightEnd.setHours(8, 0, 0, 0);
+  while (dayStart <= finalDay) {
+    const nightStart = solarTimeForDate(dayStart, false);
+    const nextDay = addDays(dayStart, 1);
+    const nightEnd = solarTimeForDate(nextDay, true);
 
-    const visibleStart = new Date(
-      Math.max(nightStart.getTime(), windowStart.getTime())
-    );
-    const visibleEnd = new Date(
-      Math.min(nightEnd.getTime(), windowEnd.getTime())
-    );
+    if (nightStart && nightEnd) {
+      const visibleStart = new Date(
+        Math.max(nightStart.getTime(), windowStart.getTime())
+      );
+      const visibleEnd = new Date(
+        Math.min(nightEnd.getTime(), windowEnd.getTime())
+      );
 
-    if (visibleEnd > visibleStart) {
-      drawNightScene(ctx, dayStart, visibleStart, visibleEnd);
+      if (visibleEnd > visibleStart) {
+        drawNightScene(ctx, visibleStart, visibleEnd, nightStart, nightEnd);
+      }
     }
 
     dayStart = addDays(dayStart, 1);
   }
 }
 
-function drawNightScene(ctx, dayStart, visibleStart, visibleEnd) {
+function drawNightScene(ctx, visibleStart, visibleEnd, nightStart, nightEnd) {
   const x0 = timeToX(visibleStart);
   const x1 = timeToX(visibleEnd);
   const sceneWidth = x1 - x0;
@@ -542,24 +594,31 @@ function drawNightScene(ctx, dayStart, visibleStart, visibleEnd) {
 
   const sceneHeight = timelineHeight();
   const nightBackground = new Color(
-    timelineBackgroundColorForDate(dayStart),
+    timelineBackgroundColorForDate(now),
     1.0
   );
+  const moon = moonPhaseForDate(
+    new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
+  );
 
-  // Lua minguante: um disco claro com a parte direita recortada pelo fundo.
-  const moonSize = Math.min(82, Math.max(42, sceneWidth * 0.22));
-  const moonX = x0 + Math.min(sceneWidth - moonSize - 8, sceneWidth * 0.16);
+  const moonSize = Math.max(
+    12,
+    Math.min(82, sceneWidth * 0.34, sceneWidth - 6)
+  );
+  const moonX = x0 + (sceneWidth - moonSize) / 2;
   const moonY = CANVAS.localPlotTop + 24;
-  ctx.setFillColor(new Color(SETTINGS.nightMoonColor, 0.72));
-  ctx.fillEllipse(new Rect(moonX, moonY, moonSize, moonSize));
-  ctx.setFillColor(nightBackground);
-  ctx.fillEllipse(
-    new Rect(
-      moonX + moonSize * 0.30,
-      moonY - moonSize * 0.02,
-      moonSize,
-      moonSize
-    )
+  drawMoonPhase(ctx, moon, moonX, moonY, moonSize, nightBackground);
+
+  ctx.setTextAlignedCenter();
+  const phaseFontSize = Math.max(
+    8,
+    Math.min(17, sceneWidth / (moon.name.length * 0.62))
+  );
+  ctx.setFont(Font.boldRoundedSystemFont(phaseFontSize));
+  ctx.setTextColor(new Color(SETTINGS.nightStarColor, 0.68));
+  ctx.drawTextInRect(
+    moon.name,
+    new Rect(x0, moonY + moonSize + 6, sceneWidth, 23)
   );
 
   // Estrelas pequenas e discretas ao redor da lua.
@@ -585,6 +644,160 @@ function drawNightScene(ctx, dayStart, visibleStart, visibleEnd) {
   ctx.fillEllipse(new Rect(cloudX + 22, cloudY, 42, 34));
   ctx.fillEllipse(new Rect(cloudX + 54, cloudY + 9, 54, 29));
   ctx.fillRect(new Rect(cloudX + 15, cloudY + 17, 82, 22));
+}
+
+function drawMoonPhase(ctx, moon, x, y, size, background) {
+  const moonRect = new Rect(x, y, size, size);
+
+  if (moon.phase === "new") {
+    ctx.setFillColor(new Color("#232329", 0.92));
+    ctx.fillEllipse(moonRect);
+    ctx.setStrokeColor(new Color(SETTINGS.nightMoonColor, 0.42));
+    ctx.setLineWidth(2);
+    ctx.strokeEllipse(moonRect);
+    return;
+  }
+
+  ctx.setFillColor(new Color(SETTINGS.nightMoonColor, 0.78));
+  ctx.fillEllipse(moonRect);
+
+  if (moon.phase === "full") return;
+
+  ctx.setFillColor(background);
+  const cutoutOffset = moon.phase === "waxing" ? -0.30 : 0.30;
+  ctx.fillEllipse(
+    new Rect(
+      x + size * cutoutOffset,
+      y - size * 0.02,
+      size,
+      size
+    )
+  );
+}
+
+function moonPhaseForDate(date) {
+  const synodicMonth = 29.530588853;
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14, 0);
+  const elapsedDays = (date.getTime() - knownNewMoon) / 86400000;
+  const fraction = ((elapsedDays / synodicMonth) % 1 + 1) % 1;
+
+  if (fraction < 0.0625 || fraction >= 0.9375) {
+    return { phase: "new", name: "LUA NOVA" };
+  }
+  if (fraction < 0.4375) {
+    return { phase: "waxing", name: "LUA CRESCENTE" };
+  }
+  if (fraction < 0.5625) {
+    return { phase: "full", name: "LUA CHEIA" };
+  }
+  return { phase: "waning", name: "LUA MINGUANTE" };
+}
+
+function solarTimeForDate(date, isSunrise) {
+  const latitude = astronomy.latitude;
+  const longitude = astronomy.longitude;
+  const day = dayOfYear(date);
+  const longitudeHour = longitude / 15;
+  const approximateTime =
+    day + ((isSunrise ? 6 : 18) - longitudeHour) / 24;
+  const meanAnomaly = 0.9856 * approximateTime - 3.289;
+  let trueLongitude =
+    meanAnomaly +
+    1.916 * sinDegrees(meanAnomaly) +
+    0.020 * sinDegrees(2 * meanAnomaly) +
+    282.634;
+  trueLongitude = normalizeDegrees(trueLongitude);
+
+  let rightAscension = radiansToDegrees(
+    Math.atan(0.91764 * Math.tan(degreesToRadians(trueLongitude)))
+  );
+  rightAscension = normalizeDegrees(rightAscension);
+  rightAscension +=
+    Math.floor(trueLongitude / 90) * 90 -
+    Math.floor(rightAscension / 90) * 90;
+  rightAscension /= 15;
+
+  const sinDeclination = 0.39782 * sinDegrees(trueLongitude);
+  const cosDeclination = Math.cos(Math.asin(sinDeclination));
+  const zenith = 90.833;
+  const cosHourAngle =
+    (Math.cos(degreesToRadians(zenith)) -
+      sinDeclination * sinDegrees(latitude)) /
+    (cosDeclination * Math.cos(degreesToRadians(latitude)));
+
+  if (cosHourAngle > 1 || cosHourAngle < -1) return null;
+
+  let hourAngle = radiansToDegrees(Math.acos(cosHourAngle));
+  if (isSunrise) hourAngle = 360 - hourAngle;
+  hourAngle /= 15;
+
+  const localMeanTime =
+    hourAngle + rightAscension - 0.06571 * approximateTime - 6.622;
+  const universalTime = normalizeHours(localMeanTime - longitudeHour);
+  return new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) +
+      universalTime * 60 * 60 * 1000
+  );
+}
+
+function dayOfYear(date) {
+  const currentUTC = Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate()
+  );
+  const yearStartUTC = Date.UTC(date.getFullYear(), 0, 0);
+  return Math.floor((currentUTC - yearStartUTC) / 86400000);
+}
+
+function degreesToRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function radiansToDegrees(value) {
+  return (value * 180) / Math.PI;
+}
+
+function sinDegrees(value) {
+  return Math.sin(degreesToRadians(value));
+}
+
+function normalizeDegrees(value) {
+  return ((value % 360) + 360) % 360;
+}
+
+function normalizeHours(value) {
+  return ((value % 24) + 24) % 24;
+}
+
+function drawEventHourHighlights(ctx, items) {
+  const events = items.filter(
+    (item) =>
+      item.kind === "event" &&
+      item.end > windowStart &&
+      item.start < windowEnd
+  );
+
+  for (const event of events) {
+    const startX = Math.max(0, timeToX(event.start));
+    const endX = Math.min(timelineWidth(), timeToX(event.end));
+    const width = endX - startX;
+    if (width <= 0) continue;
+
+    // Cápsula translúcida preserva os números; a borda superior mostra a cor.
+    fillRoundedRect(
+      ctx,
+      new Rect(startX, 1, Math.max(2, width), 39),
+      Math.min(9, width / 2),
+      new Color(event.color, 0.26)
+    );
+    fillRoundedRect(
+      ctx,
+      new Rect(startX, 1, Math.max(2, width), 5),
+      Math.min(3, width / 2),
+      new Color(event.color, 0.96)
+    );
+  }
 }
 
 function drawHourAxis(ctx) {
