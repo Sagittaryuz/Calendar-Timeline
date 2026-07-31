@@ -603,31 +603,48 @@ function drawNightScenes(ctx) {
     const nightEnd = solarTimeForDate(nextDay, true);
 
     if (nightStart && nightEnd) {
-      const visibleStart = new Date(
-        Math.max(nightStart.getTime(), windowStart.getTime())
-      );
-      const visibleEnd = new Date(
-        Math.min(nightEnd.getTime(), windowEnd.getTime())
+      // Uma Lua centralizada entre o pôr do sol e 00:00.
+      drawNightSegment(
+        ctx,
+        nightStart,
+        nextDay,
+        nightStart,
+        nightEnd
       );
 
-      if (visibleEnd > visibleStart) {
-        drawNightScene(ctx, visibleStart, visibleEnd, nightStart, nightEnd);
-      }
+      // A mesma Lua repetida e centralizada entre 00:00 e o nascer do sol.
+      drawNightSegment(
+        ctx,
+        nextDay,
+        nightEnd,
+        nightStart,
+        nightEnd
+      );
     }
 
     dayStart = addDays(dayStart, 1);
   }
 }
 
-function drawNightScene(ctx, visibleStart, visibleEnd, nightStart, nightEnd) {
-  const x0 = timeToX(visibleStart);
-  const x1 = timeToX(visibleEnd);
+function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
+  const visibleStart = new Date(
+    Math.max(segmentStart.getTime(), windowStart.getTime())
+  );
+  const visibleEnd = new Date(
+    Math.min(segmentEnd.getTime(), windowEnd.getTime())
+  );
+  if (visibleEnd <= visibleStart) return;
+
+  // Usa os limites completos do segmento para manter a Lua centralizada no
+  // horário real, mesmo quando parte do intervalo estiver fora do widget.
+  const x0 = timeToX(segmentStart);
+  const x1 = timeToX(segmentEnd);
   const sceneWidth = x1 - x0;
   if (sceneWidth < 18) return;
 
   const sceneHeight = timelineHeight();
   const moonDate = new Date(
-    (visibleStart.getTime() + visibleEnd.getTime()) / 2
+    (segmentStart.getTime() + segmentEnd.getTime()) / 2
   );
   const nightBackground = new Color(
     timelineBackgroundColorForDate(moonDate),
@@ -914,13 +931,10 @@ function drawEventHourHighlights(ctx, items) {
     const width = endX - startX;
     if (width <= 0) continue;
 
-    const capsuleHeight = 44;
-    fillRoundedRect(
-      ctx,
-      new Rect(startX, 1, Math.max(2, width), capsuleHeight),
-      Math.min(capsuleHeight / 2, width / 2),
-      new Color(event.color, 0.86)
-    );
+    // Mesmo formato do badge do dia da semana: retângulo de cantos retos,
+    // na mesma posição e com a mesma altura.
+    ctx.setFillColor(new Color(event.color, 0.90));
+    ctx.fillRect(new Rect(startX, 3, Math.max(2, width), 34));
   }
 }
 
