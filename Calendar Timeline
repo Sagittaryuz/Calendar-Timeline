@@ -17,6 +17,7 @@ const SETTINGS = {
   timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
   sundayTimelineBackgroundColor: "#2A0A0D",
+  holidayTimelineBackgroundColor: "#332A00",
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
   fallbackEventColor: "#0A84FF",
@@ -381,6 +382,9 @@ function renderWidget(items, loadError) {
 }
 
 function timelineBackgroundColorForDate(date) {
+  if (loadResult.holidayDates.has(dateKey(date))) {
+    return SETTINGS.holidayTimelineBackgroundColor;
+  }
   if (date.getDay() === 6) {
     return SETTINGS.saturdayTimelineBackgroundColor;
   }
@@ -478,9 +482,25 @@ function hexToRGB(hex) {
 }
 
 function drawDatePanel(ctx, holidayDates) {
-  const weekday = formatDate(now, "EEEE").toLocaleLowerCase("pt-BR");
-  const dateText = formatDate(now, ", d 'de' MMMM").toLocaleLowerCase("pt-BR");
-  const fullDate = `${weekday}${dateText}`;
+  const weekday = titleWeekday(now);
+  const dayNumber = formatDate(now, "d");
+  const month = formatDate(now, "MMMM").toLocaleLowerCase("pt-BR");
+  const segments = [
+    {
+      text: weekday,
+      bold: true,
+      color: titleWeekdayColor(now, holidayDates),
+    },
+    { text: ", ", bold: false, color: Color.white() },
+    {
+      text: dayNumber,
+      bold: true,
+      color: titleDayColor(now, holidayDates),
+    },
+    { text: " de ", bold: false, color: Color.white() },
+    { text: month, bold: true, color: Color.white() },
+  ];
+  const fullDate = segments.map((segment) => segment.text).join("");
   const maximumFontSize = 60;
   const fontSize = Math.min(
     maximumFontSize,
@@ -488,9 +508,7 @@ function drawDatePanel(ctx, holidayDates) {
   );
   const characterWidth = fontSize * 0.61;
   const totalWidth = fullDate.length * characterWidth;
-  const weekdayWidth = weekday.length * characterWidth;
   const startX = (CANVAS.width - totalWidth) / 2;
-  const weekdayColor = titleWeekdayColor(now, holidayDates);
 
   ctx.setStrokeColor(new Color("#242428"));
   ctx.setLineWidth(3);
@@ -503,15 +521,18 @@ function drawDatePanel(ctx, holidayDates) {
     )
   );
 
-  ctx.setTextAlignedCenter();
-  ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
-
   ctx.setTextAlignedLeft();
-  ctx.setTextColor(weekdayColor);
-  ctx.drawText(weekday, new Point(startX, 34));
-
-  ctx.setTextColor(new Color(SETTINGS.primaryTextColor));
-  ctx.drawText(dateText, new Point(startX + weekdayWidth, 34));
+  let segmentX = startX;
+  for (const segment of segments) {
+    ctx.setFont(
+      segment.bold
+        ? Font.blackMonospacedSystemFont(fontSize)
+        : Font.regularMonospacedSystemFont(fontSize)
+    );
+    ctx.setTextColor(segment.color);
+    ctx.drawText(segment.text, new Point(segmentX, 34));
+    segmentX += segment.text.length * characterWidth;
+  }
 }
 
 function drawFooter(ctx, eventCount, reminderCount) {
@@ -926,8 +947,15 @@ function drawEventHourHighlights(ctx, items) {
   // o evento prioritário permanece visível por cima: dia inteiro primeiro;
   // entre os demais, prevalece o que começar antes.
   for (const event of [...events].reverse()) {
-    const startX = Math.max(0, timeToX(event.start));
-    const endX = Math.min(timelineWidth(), timeToX(event.end));
+    const horizontalPadding = 25;
+    const startX = Math.max(
+      0,
+      timeToX(event.start) - horizontalPadding
+    );
+    const endX = Math.min(
+      timelineWidth(),
+      timeToX(event.end) + horizontalPadding
+    );
     const width = endX - startX;
     if (width <= 0) continue;
 
@@ -955,9 +983,13 @@ function prioritizedEvents(items) {
 }
 
 function eventAtTime(date, items) {
-  return prioritizedEvents(items).find(
-    (event) => event.start <= date && event.end > date
-  );
+  const labelX = timeToX(date);
+  const horizontalPadding = 25;
+  return prioritizedEvents(items).find((event) => {
+    const eventStartX = timeToX(event.start) - horizontalPadding;
+    const eventEndX = timeToX(event.end) + horizontalPadding;
+    return labelX >= eventStartX && labelX <= eventEndX;
+  });
 }
 
 function hourTicks() {
@@ -987,8 +1019,8 @@ function drawHourAxis(ctx, items) {
     const isNoon = hour === 12;
 
     ctx.setStrokeColor(
-      isMidnight 
-        ? new Color("#FFFFFF", 1.0)
+      isMidnight
+        ? dayBoundaryLineColor(tick, loadResult.holidayDates)
         : new Color("#3A3A3C", 1.0)
     );
     ctx.setLineWidth(isMidnight ? 4 : isNoon ? 2 : 1);
@@ -1024,15 +1056,14 @@ function drawHourAxis(ctx, items) {
       ctx.drawTextInRect(weekday, new Rect(x - 25, 8, 50, 25));
     } else if (windowHours <= 24 || isNoon) {
       const label = String(hour).padStart(2, "0");
+      const activeEvent = eventAtTime(tick, items);
       ctx.setFont(
-        isNoon
+        activeEvent || isNoon
           ? Font.blackMonospacedSystemFont(21)
           : Font.regularMonospacedSystemFont(21)
       );
-      const activeEvent = eventAtTime(tick, items);
-      const textColor = activeEvent
-        ? contrastingHourColor(activeEvent.color)
-        : isNoon
+      const textColor =
+        activeEvent || isNoon
           ? Color.white()
           : new Color(SETTINGS.secondaryTextColor);
       ctx.setTextColor(textColor);
@@ -1040,24 +1071,6 @@ function drawHourAxis(ctx, items) {
       ctx.drawTextInRect(label, new Rect(x - 22, 7, 44, 27));
     }
   }
-}
-
-function contrastingHourColor(hexColor) {
-  const rgb = hexToRGB(hexColor);
-  const linearChannel = (value) => {
-    const channel = value / 255;
-    return channel <= 0.04045
-      ? channel / 12.92
-      : Math.pow((channel + 0.055) / 1.055, 2.4);
-  };
-  const luminance =
-    0.2126 * linearChannel(rgb.r) +
-    0.7152 * linearChannel(rgb.g) +
-    0.0722 * linearChannel(rgb.b);
-
-  if (luminance > 0.54) return Color.black();
-  if (luminance > 0.30) return new Color("#F2F2F7");
-  return Color.white();
 }
 
 function drawTimelineItem(ctx, item, y, rowHeight) {
@@ -1277,11 +1290,39 @@ function dayBadgeStyle(date, holidayDates) {
   };
 }
 
+function dayBoundaryLineColor(date, holidayDates) {
+  if (holidayDates.has(dateKey(date))) return new Color("#FFCC00", 1.0);
+  if (date.getDay() === 6) return new Color("#0A84FF", 1.0);
+  if (date.getDay() === 0) return new Color("#FF453A", 1.0);
+  return Color.white();
+}
+
 function titleWeekdayColor(date, holidayDates) {
   if (holidayDates.has(dateKey(date))) return new Color("#FFCC00");
   if (date.getDay() === 6) return new Color("#0A84FF");
   if (date.getDay() === 0) return new Color("#FF453A");
   return Color.white();
+}
+
+function titleDayColor(date, holidayDates) {
+  if (holidayDates.has(dateKey(date))) return new Color("#FFCC00");
+  if (date.getDay() === 6 || date.getDay() === 0) {
+    return new Color("#0A84FF");
+  }
+  return Color.white();
+}
+
+function titleWeekday(date) {
+  const weekdays = [
+    "Domingo",
+    "Segunda",
+    "Terça",
+    "Quarta",
+    "Quinta",
+    "Sexta",
+    "Sábado",
+  ];
+  return weekdays[date.getDay()];
 }
 
 function shortWeekday(date) {
