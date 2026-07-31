@@ -353,16 +353,9 @@ function renderWidget(items, loadError) {
   // substitua os textos e charts ao combinar backgroundGradient/backgroundImage.
   drawIOSDarkGradient(ctx);
 
-  // A timeline muda sutilmente conforme o dia atual.
-  ctx.setFillColor(new Color(timelineBackgroundColorForDate(now)));
-  ctx.fillRect(
-    new Rect(
-      CANVAS.plotLeft,
-      CANVAS.timelineTop,
-      timelineWidth(),
-      timelineHeight()
-    )
-  );
+  // Cada trecho diário recebe sua própria cor: preto nos dias úteis,
+  // azul aos sábados e vermelho aos domingos.
+  drawTimelineBackground(ctx);
 
   drawDatePanel(ctx, loadResult.holidayDates);
   const timelineImage = renderTimelinePanel(items, loadError);
@@ -392,6 +385,33 @@ function timelineBackgroundColorForDate(date) {
     return SETTINGS.sundayTimelineBackgroundColor;
   }
   return SETTINGS.timelineBackgroundColor;
+}
+
+function drawTimelineBackground(ctx) {
+  let dayStart = startOfDay(windowStart);
+
+  while (dayStart < windowEnd) {
+    const nextDay = addDays(dayStart, 1);
+    const visibleStart = new Date(
+      Math.max(dayStart.getTime(), windowStart.getTime())
+    );
+    const visibleEnd = new Date(
+      Math.min(nextDay.getTime(), windowEnd.getTime())
+    );
+    const x0 = CANVAS.plotLeft + Math.max(0, timeToX(visibleStart));
+    const x1 = CANVAS.plotLeft + Math.min(timelineWidth(), timeToX(visibleEnd));
+
+    if (x1 > x0) {
+      ctx.setFillColor(
+        new Color(timelineBackgroundColorForDate(dayStart))
+      );
+      ctx.fillRect(
+        new Rect(x0, CANVAS.timelineTop, x1 - x0, timelineHeight())
+      );
+    }
+
+    dayStart = nextDay;
+  }
 }
 
 function drawIOSDarkGradient(ctx) {
@@ -603,8 +623,11 @@ function drawNightScene(ctx, visibleStart, visibleEnd, nightStart, nightEnd) {
   if (sceneWidth < 18) return;
 
   const sceneHeight = timelineHeight();
+  const moonDate = new Date(
+    (visibleStart.getTime() + visibleEnd.getTime()) / 2
+  );
   const nightBackground = new Color(
-    timelineBackgroundColorForDate(now),
+    timelineBackgroundColorForDate(moonDate),
     1.0
   );
   const moon = moonPhaseForDate(
