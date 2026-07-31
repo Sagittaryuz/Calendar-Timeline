@@ -1034,7 +1034,7 @@ function drawHourAxis(ctx, items) {
     );
   }
 
-  // Segundo: cápsulas cilíndricas sobre as linhas.
+  // Segundo: retângulos coloridos sobre as linhas.
   drawEventHourHighlights(ctx, items);
 
   // Terceiro: horas e badges acima das cápsulas.
