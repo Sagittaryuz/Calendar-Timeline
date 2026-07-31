@@ -11,7 +11,7 @@ const SETTINGS = {
   locale: "pt_BR",
   maxItems: 5,
   defaultWindowHours: 24,
-  maximumWindowHours: 24,
+  maximumWindowHours: 168, // Até 7 dias.
   refreshSeconds: 60,
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -218,7 +218,17 @@ async function loadAstronomy() {
     Keychain.set(cacheKey, JSON.stringify(location));
     return location;
   } catch (_) {
-    return cachedLocation ?? fallback;
+    // Mesmo quando a localização falhar, aguarda seis horas antes de tentar
+    // novamente. Isso impede novas consultas a cada refresh de um minuto.
+    const offlineLocation = {
+      latitude: cachedLocation?.latitude ?? fallback.latitude,
+      longitude: cachedLocation?.longitude ?? fallback.longitude,
+      updatedAt: Date.now(),
+    };
+    try {
+      Keychain.set(cacheKey, JSON.stringify(offlineLocation));
+    } catch (_) {}
+    return offlineLocation;
   }
 }
 
@@ -524,10 +534,10 @@ function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // A decoração e os destaques ficam atrás das horas e dos charts.
+  // A decoração fica atrás do grid. As cápsulas cobrem o grid e as horas
+  // são desenhadas por último, sempre acima das cores dos eventos.
   drawNightScenes(ctx);
-  drawEventHourHighlights(ctx, loadResult.items);
-  drawHourAxis(ctx);
+  drawHourAxis(ctx, loadResult.items);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -637,13 +647,35 @@ function drawNightScene(ctx, visibleStart, visibleEnd, nightStart, nightEnd) {
   }
 
   // Nuvens baixas, translúcidas, para não competir com os charts.
+  const cloudScale = Math.min(1, Math.max(0.24, sceneWidth / 150));
   const cloudY = CANVAS.localPlotTop + Math.min(144, sceneHeight - 58);
-  const cloudX = x0 + sceneWidth * 0.54;
+  const cloudX = Math.min(
+    x1 - 108 * cloudScale,
+    x0 + sceneWidth * 0.54
+  );
   ctx.setFillColor(new Color(SETTINGS.nightCloudColor, 0.22));
-  ctx.fillEllipse(new Rect(cloudX, cloudY + 12, 70, 26));
-  ctx.fillEllipse(new Rect(cloudX + 22, cloudY, 42, 34));
-  ctx.fillEllipse(new Rect(cloudX + 54, cloudY + 9, 54, 29));
-  ctx.fillRect(new Rect(cloudX + 15, cloudY + 17, 82, 22));
+  ctx.fillEllipse(
+    new Rect(cloudX, cloudY + 12 * cloudScale, 70 * cloudScale, 26 * cloudScale)
+  );
+  ctx.fillEllipse(
+    new Rect(cloudX + 22 * cloudScale, cloudY, 42 * cloudScale, 34 * cloudScale)
+  );
+  ctx.fillEllipse(
+    new Rect(
+      cloudX + 54 * cloudScale,
+      cloudY + 9 * cloudScale,
+      54 * cloudScale,
+      29 * cloudScale
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      cloudX + 15 * cloudScale,
+      cloudY + 17 * cloudScale,
+      82 * cloudScale,
+      22 * cloudScale
+    )
+  );
 }
 
 function drawMoonPhase(ctx, moon, x, y, size, background) {
@@ -771,40 +803,70 @@ function normalizeHours(value) {
 }
 
 function drawEventHourHighlights(ctx, items) {
-  const events = items.filter(
-    (item) =>
-      item.kind === "event" &&
-      item.end > windowStart &&
-      item.start < windowEnd
-  );
+  const events = prioritizedEvents(items);
 
-  for (const event of events) {
+  // Desenha a prioridade menor primeiro. Assim, quando houver sobreposição,
+  // o evento prioritário permanece visível por cima: dia inteiro primeiro;
+  // entre os demais, prevalece o que começar antes.
+  for (const event of [...events].reverse()) {
     const startX = Math.max(0, timeToX(event.start));
     const endX = Math.min(timelineWidth(), timeToX(event.end));
     const width = endX - startX;
     if (width <= 0) continue;
 
-    // Cápsula translúcida preserva os números; a borda superior mostra a cor.
+    const capsuleHeight = 44;
     fillRoundedRect(
       ctx,
-      new Rect(startX, 1, Math.max(2, width), 39),
-      Math.min(9, width / 2),
-      new Color(event.color, 0.26)
-    );
-    fillRoundedRect(
-      ctx,
-      new Rect(startX, 1, Math.max(2, width), 5),
-      Math.min(3, width / 2),
-      new Color(event.color, 0.96)
+      new Rect(startX, 1, Math.max(2, width), capsuleHeight),
+      Math.min(capsuleHeight / 2, width / 2),
+      new Color(event.color, 0.86)
     );
   }
 }
 
-function drawHourAxis(ctx) {
+function prioritizedEvents(items) {
+  return items
+    .filter(
+      (item) =>
+        item.kind === "event" &&
+        item.end > windowStart &&
+        item.start < windowEnd
+    )
+    .sort(
+      (a, b) =>
+        Number(b.isAllDay) - Number(a.isAllDay) ||
+        a.start.getTime() - b.start.getTime() ||
+        a.end.getTime() - b.end.getTime()
+    );
+}
+
+function eventAtTime(date, items) {
+  return prioritizedEvents(items).find(
+    (event) => event.start <= date && event.end > date
+  );
+}
+
+function hourTicks() {
+  const ticks = [];
   let tick = floorToHour(windowStart);
   const finalTick = ceilToHour(windowEnd);
 
   while (tick <= finalTick) {
+    const hour = tick.getHours();
+    if (windowHours <= 24 || hour === 0 || hour === 12) {
+      ticks.push(new Date(tick));
+    }
+    tick = new Date(tick.getTime() + 60 * 60 * 1000);
+  }
+
+  return ticks;
+}
+
+function drawHourAxis(ctx, items) {
+  const ticks = hourTicks();
+
+  // Primeiro: linhas do grid.
+  for (const tick of ticks) {
     const x = timeToX(tick);
     const hour = tick.getHours();
     const isMidnight = hour === 0;
@@ -824,6 +886,17 @@ function drawHourAxis(ctx) {
         localPlotBottom() - CANVAS.localPlotTop + 7
       )
     );
+  }
+
+  // Segundo: cápsulas cilíndricas sobre as linhas.
+  drawEventHourHighlights(ctx, items);
+
+  // Terceiro: horas e badges acima das cápsulas.
+  for (const tick of ticks) {
+    const x = timeToX(tick);
+    const hour = tick.getHours();
+    const isMidnight = hour === 0;
+    const isNoon = hour === 12;
 
     if (isMidnight) {
       const weekday = shortWeekday(tick);
@@ -835,24 +908,42 @@ function drawHourAxis(ctx) {
       ctx.setTextColor(style.text);
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(weekday, new Rect(x - 25, 8, 50, 25));
-    } else {
+    } else if (windowHours <= 24 || isNoon) {
       const label = String(hour).padStart(2, "0");
       ctx.setFont(
         isNoon
           ? Font.blackMonospacedSystemFont(21)
           : Font.regularMonospacedSystemFont(21)
       );
-      ctx.setTextColor(
-        isNoon
+      const activeEvent = eventAtTime(tick, items);
+      const textColor = activeEvent
+        ? contrastingHourColor(activeEvent.color)
+        : isNoon
           ? Color.white()
-          : new Color(SETTINGS.secondaryTextColor)
-      );
+          : new Color(SETTINGS.secondaryTextColor);
+      ctx.setTextColor(textColor);
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(label, new Rect(x - 22, 7, 44, 27));
     }
-
-    tick = new Date(tick.getTime() + 60 * 60 * 1000);
   }
+}
+
+function contrastingHourColor(hexColor) {
+  const rgb = hexToRGB(hexColor);
+  const linearChannel = (value) => {
+    const channel = value / 255;
+    return channel <= 0.04045
+      ? channel / 12.92
+      : Math.pow((channel + 0.055) / 1.055, 2.4);
+  };
+  const luminance =
+    0.2126 * linearChannel(rgb.r) +
+    0.7152 * linearChannel(rgb.g) +
+    0.0722 * linearChannel(rgb.b);
+
+  if (luminance > 0.54) return Color.black();
+  if (luminance > 0.30) return new Color("#F2F2F7");
+  return Color.white();
 }
 
 function drawTimelineItem(ctx, item, y, rowHeight) {
@@ -900,16 +991,59 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   );
 
   const title = item.title.toLocaleUpperCase("pt-BR");
-  const textPoint = new Point(Math.max(0, x) + 7, barY + 7);
+  const visibleLeft = Math.max(0, x);
+  const visibleRight = Math.min(timelineWidth(), x + width);
+  const availableTextWidth = Math.max(0, visibleRight - visibleLeft - 14);
+  const titleFontSize = windowHours > 24 ? 18 : 22;
+  const visibleTitle =
+    windowHours > 24
+      ? truncateTitle(title, availableTextWidth, titleFontSize)
+      : title;
+  if (!visibleTitle) return;
 
-  // O título nunca é truncado pelo tamanho da barra. Ele só é recortado
-  // pelo limite direito; na esquerda ele permanece sempre totalmente visível.
+  const textPoint = new Point(
+    visibleLeft + 7,
+    barY + (windowHours > 24 ? 10 : 7)
+  );
+
+  // Até 24 horas, mantém o comportamento amplo original. Acima disso,
+  // o título é limitado ao próprio chart e termina em reticências.
   ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackRoundedSystemFont(22));
+  ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
   ctx.setTextColor(new Color("#000000", 0.85));
-  ctx.drawText(title, new Point(textPoint.x + 2, textPoint.y + 2));
+  ctx.drawText(
+    visibleTitle,
+    new Point(textPoint.x + 2, textPoint.y + 2)
+  );
   ctx.setTextColor(Color.white());
-  ctx.drawText(title, textPoint);
+  ctx.drawText(visibleTitle, textPoint);
+}
+
+function truncateTitle(title, maximumWidth, fontSize) {
+  if (maximumWidth <= 0) return "";
+  if (estimatedTextWidth(title, fontSize) <= maximumWidth) return title;
+
+  const ellipsis = "…";
+  if (estimatedTextWidth(ellipsis, fontSize) > maximumWidth) return "";
+
+  let result = "";
+  for (const character of title) {
+    const candidate = result + character + ellipsis;
+    if (estimatedTextWidth(candidate, fontSize) > maximumWidth) break;
+    result += character;
+  }
+  return result.trimEnd() + ellipsis;
+}
+
+function estimatedTextWidth(text, fontSize) {
+  let units = 0;
+  for (const character of text) {
+    if (/[MW@%&]/.test(character)) units += 0.86;
+    else if (/[I1.,:;!'|]/.test(character)) units += 0.34;
+    else if (/\s/.test(character)) units += 0.33;
+    else units += 0.62;
+  }
+  return units * fontSize;
 }
 
 function drawPermissionState(ctx) {
