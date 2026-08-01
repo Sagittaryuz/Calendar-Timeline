@@ -482,9 +482,9 @@ function hexToRGB(hex) {
 }
 
 function drawDatePanel(ctx, holidayDates) {
-  const weekday = titleWeekday(now);
+  const weekday = titleWeekday(now).toLocaleUpperCase("pt-BR");
   const dayNumber = formatDate(now, "d");
-  const month = formatDate(now, "MMMM").toLocaleLowerCase("pt-BR");
+  const month = formatDate(now, "MMMM").toLocaleUpperCase("pt-BR");
   const segments = [
     {
       text: weekday,
@@ -497,7 +497,7 @@ function drawDatePanel(ctx, holidayDates) {
       bold: true,
       color: titleDayColor(now, holidayDates),
     },
-    { text: " de ", bold: false, color: Color.white() },
+    { text: " DE ", bold: false, color: Color.white() },
     { text: month, bold: true, color: Color.white() },
   ];
   const fullDate = segments.map((segment) => segment.text).join("");
