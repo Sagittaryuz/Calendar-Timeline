@@ -501,10 +501,10 @@ function drawDatePanel(ctx, holidayDates) {
     { text: month, bold: true, color: Color.white() },
   ];
   const fullDate = segments.map((segment) => segment.text).join("");
-  const maximumFontSize = 60;
+  const maximumFontSize = 100;
   const fontSize = Math.min(
     maximumFontSize,
-    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.66)
+    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65)
   );
   const characterWidth = fontSize * 0.61;
   const totalWidth = fullDate.length * characterWidth;
@@ -530,7 +530,7 @@ function drawDatePanel(ctx, holidayDates) {
         : Font.regularMonospacedSystemFont(fontSize)
     );
     ctx.setTextColor(segment.color);
-    ctx.drawText(segment.text, new Point(segmentX, 34));
+    ctx.drawText(segment.text, new Point(segmentX, 20));
     segmentX += segment.text.length * characterWidth;
   }
 }
