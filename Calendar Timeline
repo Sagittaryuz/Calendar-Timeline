@@ -15,7 +15,7 @@ const SETTINGS = {
   refreshSeconds: 60,
   compactModeFromHours: 72,
   backgroundColor: "#0A0A0B",
-  timelineBackgroundColor: "#B0A999",
+  timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
   sundayTimelineBackgroundColor: "#2A0A0D",
   holidayTimelineBackgroundColor: "#332A00",
