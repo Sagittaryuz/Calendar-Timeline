@@ -14,6 +14,14 @@ const SETTINGS = {
   maximumWindowHours: 168, // Até 7 dias.
   refreshSeconds: 60,
   compactModeFromHours: 72,
+  minimumChartWidth: 34,
+  compactMinimumChartWidth: 18,
+  minimumFreeMinutes: 60,
+  freeTimeColor: "#30D158",
+  currentEventColor: "#FFFFFF",
+  showEventMetadataIcons: true,
+  showOverdueReminders: true,
+  alternateFooterSummary: true,
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
@@ -45,6 +53,8 @@ const SETTINGS = {
   excludedCalendars: [],
 };
 
+const USER_CONFIGURATION_KEY = "agenda-timeline-user-settings-v1";
+
 const CANVAS = {
   width: 1092,
   height: 510,
@@ -59,6 +69,18 @@ const CANVAS = {
   localPlotTop: 48,
 };
 
+const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
+let userConfiguration = loadUserConfiguration();
+if (
+  config.runsInApp &&
+  !refreshRequested &&
+  !userConfiguration.setupCompleted
+) {
+  userConfiguration = await runInitialSetup(userConfiguration);
+  saveUserConfiguration(userConfiguration);
+}
+applyUserConfiguration(userConfiguration);
+
 const now = new Date();
 now.setSeconds(0, 0);
 const windowHours = parseWindowHours(args.widgetParameter);
@@ -66,7 +88,6 @@ const windowStart = new Date(now);
 const windowEnd = new Date(
   windowStart.getTime() + windowHours * 60 * 60 * 1000
 );
-const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
 const automaticHolidayDates = await loadAutomaticHolidays(astronomy);
@@ -99,6 +120,138 @@ if (config.runsInWidget) {
 
 Script.complete();
 
+function loadUserConfiguration() {
+  const defaults = {
+    setupCompleted: false,
+    defaultWindowHours: SETTINGS.defaultWindowHours,
+    minimumFreeMinutes: SETTINGS.minimumFreeMinutes,
+    useCurrentLocation: SETTINGS.useCurrentLocation,
+    automaticHolidays: SETTINGS.automaticHolidays,
+    showOverdueReminders: SETTINGS.showOverdueReminders,
+    excludedCalendars: [...SETTINGS.excludedCalendars],
+  };
+  try {
+    if (!Keychain.contains(USER_CONFIGURATION_KEY)) return defaults;
+    return {
+      ...defaults,
+      ...JSON.parse(Keychain.get(USER_CONFIGURATION_KEY)),
+    };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+function saveUserConfiguration(configuration) {
+  try {
+    Keychain.set(USER_CONFIGURATION_KEY, JSON.stringify(configuration));
+  } catch (_) {}
+}
+
+function applyUserConfiguration(configuration) {
+  SETTINGS.defaultWindowHours = validInteger(
+    configuration.defaultWindowHours,
+    1,
+    SETTINGS.maximumWindowHours,
+    SETTINGS.defaultWindowHours
+  );
+  SETTINGS.minimumFreeMinutes = validInteger(
+    configuration.minimumFreeMinutes,
+    15,
+    720,
+    SETTINGS.minimumFreeMinutes
+  );
+  SETTINGS.useCurrentLocation = configuration.useCurrentLocation !== false;
+  SETTINGS.automaticHolidays = configuration.automaticHolidays !== false;
+  SETTINGS.showOverdueReminders =
+    configuration.showOverdueReminders !== false;
+  SETTINGS.excludedCalendars = Array.isArray(configuration.excludedCalendars)
+    ? configuration.excludedCalendars
+    : [];
+}
+
+async function runInitialSetup(current) {
+  const valuesAlert = new Alert();
+  valuesAlert.title = "Configurar Calendar Timeline";
+  valuesAlert.message =
+    "Defina a visualização padrão. O parâmetro do widget continuará tendo prioridade sobre estas horas.";
+  valuesAlert.addTextField(
+    "Horas exibidas: 1 a 168",
+    String(current.defaultWindowHours ?? 24)
+  );
+  valuesAlert.addTextField(
+    "Intervalo livre mínimo, em minutos",
+    String(current.minimumFreeMinutes ?? 60)
+  );
+  valuesAlert.addAction("Continuar");
+  valuesAlert.addCancelAction("Usar padrões");
+  const valuesChoice = await valuesAlert.presentAlert();
+
+  const configured = { ...current };
+  if (valuesChoice >= 0) {
+    configured.defaultWindowHours = validInteger(
+      valuesAlert.textFieldValue(0),
+      1,
+      SETTINGS.maximumWindowHours,
+      24
+    );
+    configured.minimumFreeMinutes = validInteger(
+      valuesAlert.textFieldValue(1),
+      15,
+      720,
+      60
+    );
+  }
+
+  const locationAlert = new Alert();
+  locationAlert.title = "Localização e feriados";
+  locationAlert.message =
+    "A localização é atualizada no máximo a cada seis horas e permite calcular o período noturno e identificar feriados regionais.";
+  locationAlert.addAction("Ativar os dois");
+  locationAlert.addAction("Somente localização");
+  locationAlert.addDestructiveAction("Desativar os dois");
+  const locationChoice = await locationAlert.presentAlert();
+  configured.useCurrentLocation = locationChoice !== 2;
+  configured.automaticHolidays = locationChoice === 0;
+
+  const reminderAlert = new Alert();
+  reminderAlert.title = "Lembretes atrasados";
+  reminderAlert.message =
+    "Deseja mostrar lembretes vencidos na timeline, com !! e contorno vermelho?";
+  reminderAlert.addAction("Mostrar atrasados");
+  reminderAlert.addAction("Não mostrar");
+  configured.showOverdueReminders =
+    (await reminderAlert.presentAlert()) === 0;
+
+  const calendarAlert = new Alert();
+  calendarAlert.title = "Agendas ocultas";
+  calendarAlert.message =
+    "Opcional: escreva os nomes exatos das agendas ou listas que não devem aparecer, separados por vírgula.";
+  calendarAlert.addTextField(
+    "Ex.: Aniversários, Sugestões",
+    (current.excludedCalendars ?? []).join(", ")
+  );
+  calendarAlert.addAction("Concluir");
+  calendarAlert.addCancelAction("Não ocultar nenhuma");
+  const calendarChoice = await calendarAlert.presentAlert();
+  configured.excludedCalendars =
+    calendarChoice >= 0
+      ? calendarAlert
+          .textFieldValue(0)
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+  configured.setupCompleted = true;
+  return configured;
+}
+
+function validInteger(value, minimum, maximum, fallback) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= minimum && number <= maximum
+    ? number
+    : fallback;
+}
+
 async function loadWindow() {
   try {
     // No primeiro uso dentro do app, estas consultas exibem os pedidos
@@ -116,7 +269,9 @@ async function loadWindow() {
         Reminder.incompleteDueBetween(startOfToday(), reminderQueryEnd),
         CalendarEvent.today(),
         Reminder.incompleteDueToday(),
-        Reminder.scheduled(),
+        SETTINGS.showOverdueReminders
+          ? Reminder.scheduled()
+          : Promise.resolve([]),
       ]);
 
     const excluded = new Set(
@@ -147,6 +302,14 @@ async function loadWindow() {
         end: event.endDate,
         isAllDay: Boolean(event.isAllDay),
         identifier: event.identifier ?? `${event.title}-${event.startDate}`,
+        location: cleanOptionalText(event.location),
+        notes: cleanOptionalText(event.notes),
+        attendeeCount: Array.isArray(event.attendees)
+          ? event.attendees.filter((attendee) => !attendee.isCurrentUser).length
+          : 0,
+        participationStatus: currentUserParticipationStatus(event.attendees),
+        availability: event.availability ?? "busy",
+        hasVideoLink: eventHasVideoLink(event),
         color: safeCalendarColor(
           event.calendar,
           SETTINGS.fallbackEventColor
@@ -215,10 +378,18 @@ async function loadWindow() {
         .map((event) => dateKey(event.startDate))
     );
 
+    const todayScheduleSummary = calculateScheduleSummary(
+      todayEvents,
+      startOfToday(),
+      addDays(startOfToday(), 1)
+    );
+
     return {
       items: [...eventItems, ...reminderItems, ...overdueReminderItems],
       todayEventCount: todayEvents.length,
       todayReminderCount: todayReminders.length,
+      todayBusyMinutes: todayScheduleSummary.busyMinutes,
+      todayFreeMinutes: todayScheduleSummary.freeMinutes,
       holidayDates,
       error: null,
     };
@@ -227,6 +398,8 @@ async function loadWindow() {
       items: [],
       todayEventCount: 0,
       todayReminderCount: 0,
+      todayBusyMinutes: 0,
+      todayFreeMinutes: 24 * 60,
       holidayDates: new Set(),
       error: String(error),
     };
@@ -514,6 +687,94 @@ function stateToUF(value) {
   return states[normalized] ?? null;
 }
 
+function cleanOptionalText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function currentUserParticipationStatus(attendees) {
+  if (!Array.isArray(attendees)) return "";
+  return attendees.find((attendee) => attendee.isCurrentUser)?.status ?? "";
+}
+
+function eventHasVideoLink(event) {
+  const searchable = `${event.location ?? ""} ${event.notes ?? ""}`;
+  return /(zoom\.us|meet\.google|teams\.microsoft|facetime|webex|videochamada|videoconferencia)/i.test(
+    searchable
+  );
+}
+
+function calculateScheduleSummary(events, rangeStart, rangeEnd) {
+  const intervals = events
+    .filter((event) => {
+      const isAllDay = Boolean(event.isAllDay);
+      const availability = event.availability ?? "busy";
+      return !isAllDay && availability !== "free";
+    })
+    .map((event) => ({
+      start: new Date(
+        Math.max(
+          rangeStart.getTime(),
+          (event.start ?? event.startDate).getTime()
+        )
+      ),
+      end: new Date(
+        Math.min(
+          rangeEnd.getTime(),
+          (event.end ?? event.endDate).getTime()
+        )
+      ),
+    }))
+    .filter((interval) => interval.end > interval.start)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const merged = [];
+  for (const interval of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && interval.start <= last.end) {
+      if (interval.end > last.end) last.end = interval.end;
+    } else {
+      merged.push({ ...interval });
+    }
+  }
+
+  const busyMinutes = Math.round(
+    merged.reduce(
+      (total, interval) => total + interval.end - interval.start,
+      0
+    ) / 60000
+  );
+  const totalMinutes = Math.max(
+    0,
+    Math.round((rangeEnd - rangeStart) / 60000)
+  );
+  return {
+    intervals: merged,
+    busyMinutes,
+    freeMinutes: Math.max(0, totalMinutes - busyMinutes),
+  };
+}
+
+function calculateFreeWindows(events, rangeStart, rangeEnd) {
+  const busy = calculateScheduleSummary(events, rangeStart, rangeEnd).intervals;
+  const free = [];
+  let cursor = new Date(rangeStart);
+
+  for (const interval of busy) {
+    if (interval.start > cursor) {
+      free.push({ start: new Date(cursor), end: new Date(interval.start) });
+    }
+    if (interval.end > cursor) cursor = new Date(interval.end);
+  }
+  if (cursor < rangeEnd) {
+    free.push({ start: new Date(cursor), end: new Date(rangeEnd) });
+  }
+
+  return free.filter(
+    (interval) =>
+      (interval.end - interval.start) / 60000 >= SETTINGS.minimumFreeMinutes
+  );
+}
+
 function prepareTimelineItems(items, referenceDate) {
   const prepared = items.map((item) => ({ ...item }));
   const events = prepared.filter(
@@ -521,6 +782,8 @@ function prepareTimelineItems(items, referenceDate) {
   );
 
   for (const event of events) {
+    event.isCurrentEvent =
+      event.start <= referenceDate && event.end > referenceDate;
     event.conflictCount = events.filter(
       (candidate) => candidate !== event && itemsOverlap(event, candidate)
     ).length;
@@ -603,6 +866,7 @@ function isCompactMode() {
 }
 
 function itemImportance(item) {
+  if (item.isCurrentEvent) return 110;
   if (item.isNextEvent) return 100;
   if (item.isOverdue) return 95;
   if (item.kind === "reminder" && item.priority > 0 && item.priority <= 4) {
@@ -695,7 +959,9 @@ function renderWidget(items, loadError) {
   drawFooter(
     ctx,
     loadResult.todayEventCount,
-    loadResult.todayReminderCount
+    loadResult.todayReminderCount,
+    loadResult.todayBusyMinutes,
+    loadResult.todayFreeMinutes
   );
 
   return ctx.getImage();
@@ -855,7 +1121,13 @@ function drawDatePanel(ctx, holidayDates) {
   }
 }
 
-function drawFooter(ctx, eventCount, reminderCount) {
+function drawFooter(
+  ctx,
+  eventCount,
+  reminderCount,
+  busyMinutes,
+  freeMinutes
+) {
   const centerX = CANVAS.width / 2;
   const footerY = CANVAS.footerTop;
 
@@ -868,9 +1140,18 @@ function drawFooter(ctx, eventCount, reminderCount) {
   ctx.setFont(Font.blackRoundedSystemFont(isCompactMode() ? 21 : 25));
   ctx.setTextAlignedCenter();
 
+  const showTimeSummary =
+    SETTINGS.alternateFooterSummary && now.getMinutes() % 2 === 1;
+  const leftText = showTimeSummary
+    ? `OCUPADO: ${formatDuration(busyMinutes)}`
+    : `EVENTOS: ${eventCount}`;
+  const rightText = showTimeSummary
+    ? `LIVRE: ${formatDuration(freeMinutes)}`
+    : `LEMBRETES: ${reminderCount}`;
+
   ctx.setTextColor(new Color("#FF453A"));
   ctx.drawTextInRect(
-    `EVENTOS: ${eventCount}`,
+    leftText,
     new Rect(CANVAS.marginX, footerY + 13, centerX - CANVAS.marginX - 28, 31)
   );
 
@@ -880,9 +1161,11 @@ function drawFooter(ctx, eventCount, reminderCount) {
     new Rect(centerX - 18, footerY + 10, 36, 34)
   );
 
-  ctx.setTextColor(new Color("#0A84FF"));
+  ctx.setTextColor(
+    new Color(showTimeSummary ? SETTINGS.freeTimeColor : "#0A84FF")
+  );
   ctx.drawTextInRect(
-    `LEMBRETES: ${reminderCount}`,
+    rightText,
     new Rect(
       centerX + 28,
       footerY + 13,
@@ -890,6 +1173,14 @@ function drawFooter(ctx, eventCount, reminderCount) {
       31
     )
   );
+}
+
+function formatDuration(minutes) {
+  const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+  const hours = Math.floor(safeMinutes / 60);
+  const remainder = safeMinutes % 60;
+  if (!hours) return `${remainder}MIN`;
+  return remainder ? `${hours}H${String(remainder).padStart(2, "0")}` : `${hours}H`;
 }
 
 function renderTimelinePanel(items, loadError) {
@@ -1286,6 +1577,41 @@ function drawEventHourHighlights(ctx, items) {
   }
 }
 
+function drawFreeTimeWindows(ctx, items) {
+  const events = items.filter((item) => item.kind === "event");
+  const freeWindows = calculateFreeWindows(events, windowStart, windowEnd);
+
+  for (const freeWindow of freeWindows) {
+    const x0 = Math.max(0, timeToX(freeWindow.start));
+    const x1 = Math.min(timelineWidth(), timeToX(freeWindow.end));
+    const width = x1 - x0;
+    if (width <= 1) continue;
+
+    ctx.setFillColor(new Color(SETTINGS.freeTimeColor, 0.9));
+    ctx.fillRect(new Rect(x0, CANVAS.localPlotTop - 6, width, 4));
+
+    const label = isCompactMode()
+      ? "LIVRE"
+      : `LIVRE ${formatClock(freeWindow.start)}–${formatClock(freeWindow.end)}`;
+    const fontSize = isCompactMode() ? 11 : 13;
+    if (width >= estimatedTextWidth(label, fontSize) + 12) {
+      ctx.setTextAlignedCenter();
+      ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+      ctx.setTextColor(new Color(SETTINGS.freeTimeColor));
+      ctx.drawTextInRect(
+        label,
+        new Rect(x0, CANVAS.localPlotTop - 22, width, 16)
+      );
+    }
+  }
+}
+
+function formatClock(date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
 function prioritizedEvents(items) {
   return items
     .filter(
@@ -1353,6 +1679,9 @@ function drawHourAxis(ctx, items) {
       )
     );
   }
+
+  // Janelas sem eventos ficam sublinhadas logo abaixo da legenda de horas.
+  drawFreeTimeWindows(ctx, items);
 
   // Segundo: retângulos coloridos sobre as linhas.
   drawEventHourHighlights(ctx, items);
@@ -1436,7 +1765,14 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     item.kind === "reminder"
       ? Math.max(0, originalX)
       : originalX;
-  const width = Math.max(1, timeToX(item.end) - x);
+  const exactWidth = Math.max(1, timeToX(item.end) - x);
+  const minimumWidth =
+    item.kind === "event"
+      ? isCompactMode()
+        ? SETTINGS.compactMinimumChartWidth
+        : SETTINGS.minimumChartWidth
+      : 1;
+  const width = Math.max(exactWidth, minimumWidth);
 
   const barRect = new Rect(x, barY, width, barHeight);
   drawTimelineBar(ctx, barRect, color, item);
@@ -1447,8 +1783,10 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleLeft = Math.max(0, x);
   const visibleRight = Math.min(timelineWidth(), x + width);
   const statusText = timelineItemStatus(item);
+  const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode() ? 15 : windowHours > 24 ? 18 : 22;
   const statusFontSize = isCompactMode() ? 12 : 15;
+  const metadataFontSize = isCompactMode() ? 11 : 15;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusWidth =
     statusText && visibleBarWidth >= 155
@@ -1457,9 +1795,16 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
           estimatedTextWidth(statusText, statusFontSize) + 18
         )
       : 0;
+  const metadataWidth =
+    metadataText && !isCompactMode() && visibleBarWidth - statusWidth >= 95
+      ? Math.min(
+          visibleBarWidth * 0.30,
+          estimatedTextWidth(metadataText, metadataFontSize) + 16
+        )
+      : 0;
   const availableTextWidth = Math.max(
     0,
-    visibleBarWidth - 14 - statusWidth
+    visibleBarWidth - 14 - statusWidth - metadataWidth
   );
   const visibleTitle =
     windowHours > 24 || statusWidth > 0
@@ -1500,11 +1845,27 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       )
     );
   }
+
+  if (metadataWidth > 0) {
+    ctx.setTextAlignedCenter();
+    ctx.setFont(Font.blackRoundedSystemFont(metadataFontSize));
+    ctx.setTextColor(Color.white());
+    ctx.drawTextInRect(
+      metadataText,
+      new Rect(
+        visibleRight - statusWidth - metadataWidth,
+        barY + 9,
+        metadataWidth,
+        barHeight - 8
+      )
+    );
+  }
 }
 
 function drawTimelineBar(ctx, rect, color, item) {
   let accent = null;
   if (item.isOverdue) accent = new Color(SETTINGS.overdueReminderColor);
+  else if (item.isCurrentEvent) accent = new Color(SETTINGS.currentEventColor);
   else if (item.isNextEvent) accent = new Color(SETTINGS.nextEventColor);
   else if (item.conflictCount > 0) accent = new Color(SETTINGS.conflictColor);
   else if (item.kind === "reminder" && item.priority > 0) {
@@ -1516,10 +1877,16 @@ function drawTimelineBar(ctx, rect, color, item) {
     return;
   }
 
+  const borderWidth = item.isCurrentEvent ? 4 : 3;
   fillRoundedRect(ctx, rect, 6, accent);
   fillRoundedRect(
     ctx,
-    new Rect(rect.x + 3, rect.y + 3, rect.width - 6, rect.height - 6),
+    new Rect(
+      rect.x + borderWidth,
+      rect.y + borderWidth,
+      rect.width - borderWidth * 2,
+      rect.height - borderWidth * 2
+    ),
     4,
     color
   );
@@ -1534,9 +1901,39 @@ function reminderPriorityPrefix(item) {
 
 function timelineItemStatus(item) {
   const pieces = [];
-  if (item.isNextEvent) pieces.push(nextEventCountdown(item.start));
+  if (item.isCurrentEvent) pieces.push(currentEventCountdown(item.end));
+  else if (item.isNextEvent) pieces.push(nextEventCountdown(item.start));
   if (item.conflictCount > 0) pieces.push(`×${item.conflictCount + 1}`);
   return pieces.join("  ");
+}
+
+function eventMetadataText(item) {
+  if (item.kind !== "event" || !SETTINGS.showEventMetadataIcons) return "";
+  const icons = [];
+  if (item.location) icons.push("⌖");
+  if (item.hasVideoLink) icons.push("▶");
+  if (item.attendeeCount > 0) icons.push("◉");
+  if (
+    item.availability === "tentative" ||
+    item.participationStatus === "tentative" ||
+    item.participationStatus === "pending"
+  ) {
+    icons.push("?");
+  }
+  return icons.join("  ");
+}
+
+function currentEventCountdown(end) {
+  const minutes = Math.max(
+    0,
+    Math.ceil((end.getTime() - now.getTime()) / 60000)
+  );
+  if (minutes < 60) return `AGORA · ${minutes} MIN`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder
+    ? `AGORA · ${hours}H${remainder}`
+    : `AGORA · ${hours}H`;
 }
 
 function nextEventCountdown(start) {
