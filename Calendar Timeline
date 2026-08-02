@@ -13,6 +13,7 @@ const SETTINGS = {
   defaultWindowHours: 24,
   maximumWindowHours: 168, // Até 7 dias.
   refreshSeconds: 60,
+  compactModeFromHours: 72,
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
@@ -31,6 +32,12 @@ const SETTINGS = {
   nightCloudShadeColor: "#D8DCE2",
   useCurrentLocation: true,
   locationCacheHours: 6,
+  holidayCacheDays: 30,
+  automaticHolidays: true,
+  conflictColor: "#FF9F0A",
+  nextEventColor: "#FFFFFF",
+  overdueReminderColor: "#FF453A",
+  priorityReminderColor: "#FFCC00",
   // Localização de reserva: Jataí-GO.
   fallbackLatitude: -17.8814,
   fallbackLongitude: -51.7144,
@@ -62,7 +69,10 @@ const windowEnd = new Date(
 const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
-const selectedItems = chooseItems(loadResult.items, now, SETTINGS.maxItems);
+const automaticHolidayDates = await loadAutomaticHolidays(astronomy);
+automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
+const preparedItems = prepareTimelineItems(loadResult.items, now);
+const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems);
 const widget = makeWidget(selectedItems, loadResult.error);
 
 const runScriptURL = URLScheme.forRunningScript();
@@ -94,12 +104,19 @@ async function loadWindow() {
     // No primeiro uso dentro do app, estas consultas exibem os pedidos
     // nativos de acesso ao Calendário e aos Lembretes.
     const reminderQueryEnd = addDays(startOfDay(windowEnd), 1);
-    const [events, reminders, todayEventsRaw, todayRemindersRaw] =
+    const [
+      events,
+      reminders,
+      todayEventsRaw,
+      todayRemindersRaw,
+      scheduledReminders,
+    ] =
       await Promise.all([
         CalendarEvent.between(windowStart, windowEnd),
         Reminder.incompleteDueBetween(startOfToday(), reminderQueryEnd),
         CalendarEvent.today(),
         Reminder.incompleteDueToday(),
+        Reminder.scheduled(),
       ]);
 
     const excluded = new Set(
@@ -129,6 +146,7 @@ async function loadWindow() {
         start: event.startDate,
         end: event.endDate,
         isAllDay: Boolean(event.isAllDay),
+        identifier: event.identifier ?? `${event.title}-${event.startDate}`,
         color: safeCalendarColor(
           event.calendar,
           SETTINGS.fallbackEventColor
@@ -154,12 +172,42 @@ async function loadWindow() {
           start: hasTime ? due : reminderDayStart,
           end: addDays(reminderDayStart, 1),
           isAllDay: !hasTime,
+          identifier: reminder.identifier ?? `${reminder.title}-${due}`,
+          priority: Number(reminder.priority) || 0,
+          isOverdue: Boolean(reminder.isOverdue) || due < now,
           color: safeCalendarColor(
             reminder.calendar,
             SETTINGS.fallbackReminderColor
           ),
         };
       });
+
+    const reminderIdentifiers = new Set(
+      reminderItems.map((item) => item.identifier)
+    );
+    const overdueReminderItems = scheduledReminders
+      .filter((reminder) => {
+        const due = reminder.dueDate;
+        if (!due || due >= startOfToday()) return false;
+        if (!includeCalendar(reminder.calendar)) return false;
+        const identifier = reminder.identifier ?? `${reminder.title}-${due}`;
+        return !reminderIdentifiers.has(identifier);
+      })
+      .map((reminder) => ({
+        kind: "reminder",
+        title: cleanTitle(reminder.title, "Lembrete"),
+        calendarTitle: reminder.calendar?.title ?? "Lembretes",
+        start: startOfToday(),
+        end: addDays(startOfToday(), 1),
+        isAllDay: true,
+        identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
+        priority: Number(reminder.priority) || 0,
+        isOverdue: true,
+        color: safeCalendarColor(
+          reminder.calendar,
+          SETTINGS.fallbackReminderColor
+        ),
+      }));
 
     const holidayDates = new Set(
       [...events, ...todayEvents]
@@ -168,7 +216,7 @@ async function loadWindow() {
     );
 
     return {
-      items: [...eventItems, ...reminderItems],
+      items: [...eventItems, ...reminderItems, ...overdueReminderItems],
       todayEventCount: todayEvents.length,
       todayReminderCount: todayReminders.length,
       holidayDates,
@@ -236,14 +284,270 @@ async function loadAstronomy() {
   }
 }
 
+async function loadAutomaticHolidays(location) {
+  const dates = new Set();
+  if (!SETTINGS.automaticHolidays) return dates;
+
+  const years = new Set([
+    windowStart.getFullYear(),
+    windowEnd.getFullYear(),
+  ]);
+  const region = await resolveBrazilianRegion(location);
+
+  for (const year of years) {
+    brazilianNationalHolidayDates(year).forEach((key) => dates.add(key));
+    if (!region) continue;
+
+    const regionalDates = await loadRegionalHolidayDates(year, region);
+    regionalDates.forEach((key) => dates.add(key));
+  }
+
+  return dates;
+}
+
+async function resolveBrazilianRegion(location) {
+  const cacheKey = "agenda-timeline-region-v2";
+  const maximumAge = SETTINGS.holidayCacheDays * 86400000;
+
+  try {
+    if (Keychain.contains(cacheKey)) {
+      const cached = JSON.parse(Keychain.get(cacheKey));
+      const nearby =
+        Math.abs(cached.latitude - location.latitude) < 0.25 &&
+        Math.abs(cached.longitude - location.longitude) < 0.25;
+      if (nearby && Date.now() - cached.updatedAt < maximumAge) {
+        return cached;
+      }
+    }
+  } catch (_) {}
+
+  let city = null;
+  let uf = null;
+  try {
+    const placemarks = await Location.reverseGeocode(
+      location.latitude,
+      location.longitude,
+      SETTINGS.locale
+    );
+    const placemark = placemarks?.[0] ?? {};
+    const address = placemark.postalAddress ?? {};
+    city =
+      address.city ??
+      address.subAdministrativeArea ??
+      placemark.locality ??
+      placemark.subAdministrativeArea ??
+      null;
+    uf = stateToUF(
+      address.state ?? placemark.administrativeArea ?? placemark.state
+    );
+  } catch (_) {}
+
+  // Reserva explícita somente quando a posição estiver na região de Jataí.
+  if (
+    !city &&
+    Math.abs(location.latitude - SETTINGS.fallbackLatitude) < 0.8 &&
+    Math.abs(location.longitude - SETTINGS.fallbackLongitude) < 0.8
+  ) {
+    city = "Jataí";
+    uf = "GO";
+  }
+  if (!city || !uf) return null;
+
+  let ibgeCode = null;
+  try {
+    const request = new Request(
+      `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`
+    );
+    request.timeoutInterval = 12;
+    const municipalities = await request.loadJSON();
+    const target = normalizeSearchText(city);
+    const municipality = municipalities.find(
+      (item) => normalizeSearchText(item.nome) === target
+    );
+    ibgeCode = municipality?.id ?? null;
+  } catch (_) {}
+
+  // Código IBGE de Jataí, usado apenas como reserva local.
+  if (!ibgeCode && uf === "GO" && normalizeSearchText(city) === "jatai") {
+    ibgeCode = 5211909;
+  }
+
+  const region = {
+    city,
+    uf,
+    ibgeCode,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    updatedAt: Date.now(),
+  };
+  try {
+    Keychain.set(cacheKey, JSON.stringify(region));
+  } catch (_) {}
+  return region;
+}
+
+async function loadRegionalHolidayDates(year, region) {
+  const fm = FileManager.local();
+  const safeRegion = `${region.uf}-${region.ibgeCode ?? "state"}`;
+  const cachePath = fm.joinPath(
+    fm.documentsDirectory(),
+    `Agenda-Timeline-holidays-${year}-${safeRegion}.json`
+  );
+  const maximumAge = SETTINGS.holidayCacheDays * 86400000;
+
+  try {
+    if (fm.fileExists(cachePath)) {
+      const cached = JSON.parse(fm.readString(cachePath));
+      if (Date.now() < (cached.expiresAt ?? cached.updatedAt + maximumAge)) {
+        return new Set(cached.dates ?? []);
+      }
+    }
+  } catch (_) {}
+
+  const base =
+    "https://raw.githubusercontent.com/joaopbini/feriados-brasil/master/dados/feriados";
+  const sources = [
+    {
+      url: `${base}/estadual/json/${year}.json`,
+      matches: (holiday) => holiday.uf === region.uf,
+    },
+  ];
+  if (region.ibgeCode) {
+    sources.push({
+      url: `${base}/municipal/json/${year}.json`,
+      matches: (holiday) =>
+        String(holiday.codigo_ibge) === String(region.ibgeCode),
+    });
+  }
+
+  const dates = new Set();
+  let successfulSources = 0;
+  for (const source of sources) {
+    try {
+      const request = new Request(`${source.url}?v=${year}`);
+      request.timeoutInterval = 18;
+      const holidays = await request.loadJSON();
+      holidays
+        .filter(source.matches)
+        .map((holiday) => holidayDateKey(holiday.data))
+        .filter(Boolean)
+        .forEach((key) => dates.add(key));
+      successfulSources++;
+    } catch (_) {
+      // Mantém os feriados nacionais calculados localmente se a base regional
+      // ainda não tiver publicado o ano ou estiver temporariamente indisponível.
+    }
+  }
+
+  try {
+    const complete = successfulSources === sources.length;
+    fm.writeString(
+      cachePath,
+      JSON.stringify({
+        updatedAt: Date.now(),
+        expiresAt:
+          Date.now() + (complete ? maximumAge : 24 * 60 * 60 * 1000),
+        dates: [...dates],
+      })
+    );
+  } catch (_) {}
+  return dates;
+}
+
+function brazilianNationalHolidayDates(year) {
+  const fixed = [
+    [1, 1],
+    [4, 21],
+    [5, 1],
+    [9, 7],
+    [10, 12],
+    [11, 2],
+    [11, 15],
+    [11, 20],
+    [12, 25],
+  ].map(([month, day]) => localDateKey(year, month, day));
+  const goodFriday = addDays(easterSunday(year), -2);
+  return new Set([...fixed, dateKey(goodFriday)]);
+}
+
+function easterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function holidayDateKey(value) {
+  const match = String(value ?? "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : null;
+}
+
+function localDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function stateToUF(value) {
+  const normalized = normalizeSearchText(value ?? "");
+  const states = {
+    acre: "AC", alagoas: "AL", amapa: "AP", amazonas: "AM",
+    bahia: "BA", ceara: "CE", "distrito federal": "DF",
+    "espirito santo": "ES", goias: "GO", maranhao: "MA",
+    "mato grosso": "MT", "mato grosso do sul": "MS",
+    "minas gerais": "MG", para: "PA", paraiba: "PB", parana: "PR",
+    pernambuco: "PE", piaui: "PI", "rio de janeiro": "RJ",
+    "rio grande do norte": "RN", "rio grande do sul": "RS",
+    rondonia: "RO", roraima: "RR", "santa catarina": "SC",
+    "sao paulo": "SP", sergipe: "SE", tocantins: "TO",
+  };
+  if (/^[a-z]{2}$/.test(normalized)) return normalized.toUpperCase();
+  return states[normalized] ?? null;
+}
+
+function prepareTimelineItems(items, referenceDate) {
+  const prepared = items.map((item) => ({ ...item }));
+  const events = prepared.filter(
+    (item) => item.kind === "event" && !item.isAllDay
+  );
+
+  for (const event of events) {
+    event.conflictCount = events.filter(
+      (candidate) => candidate !== event && itemsOverlap(event, candidate)
+    ).length;
+  }
+
+  const nextEvent = events
+    .filter((event) => event.start >= referenceDate)
+    .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
+  if (nextEvent) nextEvent.isNextEvent = true;
+  return prepared;
+}
+
 function chooseItems(items, referenceDate, limit) {
   const relevant = [...items].filter(
     (item) => item.isAllDay || item.end >= referenceDate
   );
 
-  const byTime = (a, b) =>
-    a.start.getTime() - b.start.getTime() ||
-    a.end.getTime() - b.end.getTime();
+  const byTime = (a, b) => {
+    if (isCompactMode()) {
+      const importanceDifference = itemImportance(b) - itemImportance(a);
+      if (importanceDifference) return importanceDifference;
+    }
+    return (
+      a.start.getTime() - b.start.getTime() ||
+      a.end.getTime() - b.end.getTime()
+    );
+  };
   const events = relevant
     .filter((item) => item.kind === "event")
     .sort(byTime);
@@ -292,6 +596,22 @@ function chooseItems(items, referenceDate, limit) {
   }));
 
   return [...placed, ...overflowMarkers];
+}
+
+function isCompactMode() {
+  return windowHours >= SETTINGS.compactModeFromHours;
+}
+
+function itemImportance(item) {
+  if (item.isNextEvent) return 100;
+  if (item.isOverdue) return 95;
+  if (item.kind === "reminder" && item.priority > 0 && item.priority <= 4) {
+    return 85;
+  }
+  if (item.conflictCount > 0) return 75;
+  if (item.kind === "reminder" && item.priority > 0) return 65;
+  if (!item.isAllDay) return 40;
+  return 20;
 }
 
 function itemsOverlap(first, second) {
@@ -501,7 +821,7 @@ function drawDatePanel(ctx, holidayDates) {
     { text: month, bold: true, color: Color.white() },
   ];
   const fullDate = segments.map((segment) => segment.text).join("");
-  const maximumFontSize = 100;
+  const maximumFontSize = isCompactMode() ? 82 : 100;
   const fontSize = Math.min(
     maximumFontSize,
     (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65)
@@ -545,7 +865,7 @@ function drawFooter(ctx, eventCount, reminderCount) {
     new Rect(CANVAS.marginX, footerY, CANVAS.width - CANVAS.marginX * 2, 1)
   );
 
-  ctx.setFont(Font.blackRoundedSystemFont(25));
+  ctx.setFont(Font.blackRoundedSystemFont(isCompactMode() ? 21 : 25));
   ctx.setTextAlignedCenter();
 
   ctx.setTextColor(new Color("#FF453A"));
@@ -580,7 +900,7 @@ function renderTimelinePanel(items, loadError) {
 
   // A decoração fica atrás do grid. As cápsulas cobrem o grid e as horas
   // são desenhadas por último, sempre acima das cores dos eventos.
-  drawNightScenes(ctx);
+  if (!isCompactMode()) drawNightScenes(ctx);
   drawHourAxis(ctx, loadResult.items);
 
   if (loadError) {
@@ -1047,20 +1367,26 @@ function drawHourAxis(ctx, items) {
     if (isMidnight) {
       const weekday = shortWeekday(tick);
       const style = dayBadgeStyle(tick, loadResult.holidayDates);
-      const badge = new Rect(x - 25, 3, 50, 34);
+      const badgeWidth = isCompactMode() ? 44 : 50;
+      const badgeHeight = isCompactMode() ? 30 : 34;
+      const badge = new Rect(x - badgeWidth / 2, 3, badgeWidth, badgeHeight);
       ctx.setFillColor(style.background);
       ctx.fillRect(badge);
-      ctx.setFont(Font.blackRoundedSystemFont(21));
+      ctx.setFont(Font.blackRoundedSystemFont(isCompactMode() ? 17 : 21));
       ctx.setTextColor(style.text);
       ctx.setTextAlignedCenter();
-      ctx.drawTextInRect(weekday, new Rect(x - 25, 8, 50, 25));
+      ctx.drawTextInRect(
+        weekday,
+        new Rect(x - badgeWidth / 2, isCompactMode() ? 8 : 8, badgeWidth, 25)
+      );
     } else if (windowHours <= 24 || isNoon) {
       const label = String(hour).padStart(2, "0");
       const activeEvent = eventAtTime(tick, items);
+      const hourFontSize = isCompactMode() ? 17 : 21;
       ctx.setFont(
         activeEvent || isNoon
-          ? Font.blackMonospacedSystemFont(21)
-          : Font.regularMonospacedSystemFont(21)
+          ? Font.blackMonospacedSystemFont(hourFontSize)
+          : Font.regularMonospacedSystemFont(hourFontSize)
       );
       const textColor =
         activeEvent || isNoon
@@ -1076,7 +1402,9 @@ function drawHourAxis(ctx, items) {
 function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
-  const barHeight = item.isOverflow ? 38 : 42;
+  const barHeight = item.isOverflow
+    ? isCompactMode() ? 30 : 38
+    : isCompactMode() ? 32 : 42;
   const barY = centerY - barHeight / 2;
 
   if (item.isOverflow) {
@@ -1110,23 +1438,34 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       : originalX;
   const width = Math.max(1, timeToX(item.end) - x);
 
-  fillRoundedRect(
-    ctx,
-    new Rect(x, barY, width, barHeight),
-    6,
-    color
-  );
+  const barRect = new Rect(x, barY, width, barHeight);
+  drawTimelineBar(ctx, barRect, color, item);
 
-  const title = item.title.toLocaleUpperCase("pt-BR");
+  const title =
+    reminderPriorityPrefix(item) +
+    item.title.toLocaleUpperCase("pt-BR");
   const visibleLeft = Math.max(0, x);
   const visibleRight = Math.min(timelineWidth(), x + width);
-  const availableTextWidth = Math.max(0, visibleRight - visibleLeft - 14);
-  const titleFontSize = windowHours > 24 ? 18 : 22;
+  const statusText = timelineItemStatus(item);
+  const titleFontSize = isCompactMode() ? 15 : windowHours > 24 ? 18 : 22;
+  const statusFontSize = isCompactMode() ? 12 : 15;
+  const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
+  const statusWidth =
+    statusText && visibleBarWidth >= 155
+      ? Math.min(
+          visibleBarWidth * 0.45,
+          estimatedTextWidth(statusText, statusFontSize) + 18
+        )
+      : 0;
+  const availableTextWidth = Math.max(
+    0,
+    visibleBarWidth - 14 - statusWidth
+  );
   const visibleTitle =
-    windowHours > 24
+    windowHours > 24 || statusWidth > 0
       ? truncateTitle(title, availableTextWidth, titleFontSize)
       : title;
-  if (!visibleTitle) return;
+  if (!visibleTitle && statusWidth === 0) return;
 
   const textPoint = new Point(
     visibleLeft + 7,
@@ -1135,15 +1474,85 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
   // Até 24 horas, mantém o comportamento amplo original. Acima disso,
   // o título é limitado ao próprio chart e termina em reticências.
-  ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
-  ctx.setTextColor(new Color("#000000", 0.85));
-  ctx.drawText(
-    visibleTitle,
-    new Point(textPoint.x + 2, textPoint.y + 2)
+  if (visibleTitle) {
+    ctx.setTextAlignedLeft();
+    ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
+    ctx.setTextColor(new Color("#000000", 0.85));
+    ctx.drawText(
+      visibleTitle,
+      new Point(textPoint.x + 2, textPoint.y + 2)
+    );
+    ctx.setTextColor(Color.white());
+    ctx.drawText(visibleTitle, textPoint);
+  }
+
+  if (statusWidth > 0) {
+    ctx.setTextAlignedCenter();
+    ctx.setFont(Font.blackRoundedSystemFont(statusFontSize));
+    ctx.setTextColor(Color.white());
+    ctx.drawTextInRect(
+      statusText,
+      new Rect(
+        visibleRight - statusWidth,
+        barY + (isCompactMode() ? 8 : 10),
+        statusWidth,
+        barHeight - 8
+      )
+    );
+  }
+}
+
+function drawTimelineBar(ctx, rect, color, item) {
+  let accent = null;
+  if (item.isOverdue) accent = new Color(SETTINGS.overdueReminderColor);
+  else if (item.isNextEvent) accent = new Color(SETTINGS.nextEventColor);
+  else if (item.conflictCount > 0) accent = new Color(SETTINGS.conflictColor);
+  else if (item.kind === "reminder" && item.priority > 0) {
+    accent = new Color(SETTINGS.priorityReminderColor);
+  }
+
+  if (!accent || rect.width < 8 || rect.height < 8) {
+    fillRoundedRect(ctx, rect, 6, color);
+    return;
+  }
+
+  fillRoundedRect(ctx, rect, 6, accent);
+  fillRoundedRect(
+    ctx,
+    new Rect(rect.x + 3, rect.y + 3, rect.width - 6, rect.height - 6),
+    4,
+    color
   );
-  ctx.setTextColor(Color.white());
-  ctx.drawText(visibleTitle, textPoint);
+}
+
+function reminderPriorityPrefix(item) {
+  if (item.kind !== "reminder") return "";
+  if (item.isOverdue || (item.priority > 0 && item.priority <= 4)) return "!! ";
+  if (item.priority > 0) return "! ";
+  return "";
+}
+
+function timelineItemStatus(item) {
+  const pieces = [];
+  if (item.isNextEvent) pieces.push(nextEventCountdown(item.start));
+  if (item.conflictCount > 0) pieces.push(`×${item.conflictCount + 1}`);
+  return pieces.join("  ");
+}
+
+function nextEventCountdown(start) {
+  const minutes = Math.max(
+    0,
+    Math.ceil((start.getTime() - now.getTime()) / 60000)
+  );
+  if (minutes < 60) return `EM ${minutes} MIN`;
+  if (minutes < 24 * 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder ? `EM ${hours}H${remainder}` : `EM ${hours}H`;
+  }
+  const days = Math.floor(minutes / (24 * 60));
+  const hours = Math.floor((minutes % (24 * 60)) / 60);
+  return hours ? `EM ${days}D ${hours}H` : `EM ${days}D`;
 }
 
 function truncateTitle(title, maximumWidth, fontSize) {
@@ -1306,9 +1715,8 @@ function titleWeekdayColor(date, holidayDates) {
 
 function titleDayColor(date, holidayDates) {
   if (holidayDates.has(dateKey(date))) return new Color("#FFCC00");
-  if (date.getDay() === 6 || date.getDay() === 0) {
-    return new Color("#0A84FF");
-  }
+  if (date.getDay() === 6) return new Color("#0A84FF");
+  if (date.getDay() === 0) return new Color("#FF453A");
   return Color.white();
 }
 
