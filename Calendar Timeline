@@ -1592,15 +1592,13 @@ function drawFreeTimeWindows(ctx, items) {
       ? "LIVRE"
       : `LIVRE ${formatClock(freeWindow.start)}–${formatClock(freeWindow.end)}`;
     const fontSize = isCompactMode() ? 11 : 13;
-    if (width >= estimatedTextWidth(label, fontSize) + 12) {
-      ctx.setTextAlignedCenter();
-      ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-      ctx.setTextColor(new Color(SETTINGS.freeTimeColor));
-      ctx.drawTextInRect(
-        label,
-        new Rect(x0, CANVAS.localPlotTop - 22, width, 16)
-      );
-    }
+    ctx.setTextAlignedCenter();
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setTextColor(new Color(SETTINGS.freeTimeColor));
+    ctx.drawTextInRect(
+      label,
+      new Rect(x0, CANVAS.localPlotTop - 22, width, 16)
+    );
   }
 }
 
