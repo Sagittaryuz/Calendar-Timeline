@@ -310,11 +310,14 @@ async function loadWindow() {
         const due = reminder.dueDate ?? startOfToday();
         const hasTime = Boolean(reminder.dueDateIncludesTime);
         const reminderDayStart = startOfDay(due);
+        const reminderDisplayStart = hasTime
+          ? due
+          : dateAtHour(reminderDayStart, 8);
         return {
           kind: "reminder",
           title: cleanTitle(reminder.title, "Lembrete"),
           calendarTitle: reminder.calendar?.title ?? "Lembretes",
-          start: hasTime ? due : reminderDayStart,
+          start: reminderDisplayStart,
           end: addDays(reminderDayStart, 1),
           isAllDay: !hasTime,
           identifier: reminder.identifier ?? `${reminder.title}-${due}`,
@@ -342,7 +345,7 @@ async function loadWindow() {
         kind: "reminder",
         title: cleanTitle(reminder.title, "Lembrete"),
         calendarTitle: reminder.calendar?.title ?? "Lembretes",
-        start: startOfToday(),
+        start: dateAtHour(startOfToday(), 8),
         end: addDays(startOfToday(), 1),
         isAllDay: true,
         identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
@@ -2078,6 +2081,12 @@ function startOfToday() {
 function startOfDay(sourceDate) {
   const date = new Date(sourceDate);
   date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function dateAtHour(sourceDate, hour) {
+  const date = new Date(sourceDate);
+  date.setHours(hour, 0, 0, 0);
   return date;
 }
 
