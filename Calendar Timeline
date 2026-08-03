@@ -16,7 +16,6 @@ const SETTINGS = {
   compactModeFromHours: 72,
   minimumChartWidth: 34,
   compactMinimumChartWidth: 18,
-  minimumFreeMinutes: 60,
   freeTimeColor: "#30D158",
   currentEventColor: "#FFFFFF",
   showEventMetadataIcons: true,
@@ -124,7 +123,6 @@ function loadUserConfiguration() {
   const defaults = {
     setupCompleted: false,
     defaultWindowHours: SETTINGS.defaultWindowHours,
-    minimumFreeMinutes: SETTINGS.minimumFreeMinutes,
     useCurrentLocation: SETTINGS.useCurrentLocation,
     automaticHolidays: SETTINGS.automaticHolidays,
     showOverdueReminders: SETTINGS.showOverdueReminders,
@@ -154,12 +152,6 @@ function applyUserConfiguration(configuration) {
     SETTINGS.maximumWindowHours,
     SETTINGS.defaultWindowHours
   );
-  SETTINGS.minimumFreeMinutes = validInteger(
-    configuration.minimumFreeMinutes,
-    15,
-    720,
-    SETTINGS.minimumFreeMinutes
-  );
   SETTINGS.useCurrentLocation = configuration.useCurrentLocation !== false;
   SETTINGS.automaticHolidays = configuration.automaticHolidays !== false;
   SETTINGS.showOverdueReminders =
@@ -178,10 +170,6 @@ async function runInitialSetup(current) {
     "Horas exibidas: 1 a 168",
     String(current.defaultWindowHours ?? 24)
   );
-  valuesAlert.addTextField(
-    "Intervalo livre mínimo, em minutos",
-    String(current.minimumFreeMinutes ?? 60)
-  );
   valuesAlert.addAction("Continuar");
   valuesAlert.addCancelAction("Usar padrões");
   const valuesChoice = await valuesAlert.presentAlert();
@@ -193,12 +181,6 @@ async function runInitialSetup(current) {
       1,
       SETTINGS.maximumWindowHours,
       24
-    );
-    configured.minimumFreeMinutes = validInteger(
-      valuesAlert.textFieldValue(1),
-      15,
-      720,
-      60
     );
   }
 
@@ -755,24 +737,40 @@ function calculateScheduleSummary(events, rangeStart, rangeEnd) {
 }
 
 function calculateFreeWindows(events, rangeStart, rangeEnd) {
-  const busy = calculateScheduleSummary(events, rangeStart, rangeEnd).intervals;
   const free = [];
-  let cursor = new Date(rangeStart);
+  let dayStart = startOfDay(rangeStart);
+  while (dayStart < rangeEnd) {
+    const nextDay = addDays(dayStart, 1);
+    const visibleDayStart = new Date(
+      Math.max(dayStart.getTime(), rangeStart.getTime())
+    );
 
-  for (const interval of busy) {
-    if (interval.start > cursor) {
-      free.push({ start: new Date(cursor), end: new Date(interval.start) });
+    // O limite lógico é sempre 00:00. O desenho será recortado pelo fim da
+    // timeline quando a janela terminar antes da meia-noite.
+    const busy = calculateScheduleSummary(
+      events,
+      visibleDayStart,
+      nextDay
+    ).intervals;
+    let cursor = new Date(visibleDayStart);
+
+    for (const interval of busy) {
+      if (interval.start > cursor) {
+        free.push({
+          start: new Date(cursor),
+          end: new Date(interval.start),
+        });
+      }
+      if (interval.end > cursor) cursor = new Date(interval.end);
     }
-    if (interval.end > cursor) cursor = new Date(interval.end);
-  }
-  if (cursor < rangeEnd) {
-    free.push({ start: new Date(cursor), end: new Date(rangeEnd) });
+
+    if (cursor < nextDay) {
+      free.push({ start: new Date(cursor), end: new Date(nextDay) });
+    }
+    dayStart = nextDay;
   }
 
-  return free.filter(
-    (interval) =>
-      (interval.end - interval.start) / 60000 >= SETTINGS.minimumFreeMinutes
-  );
+  return free;
 }
 
 function prepareTimelineItems(items, referenceDate) {
@@ -1777,9 +1775,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const barRect = new Rect(x, barY, width, barHeight);
   drawTimelineBar(ctx, barRect, color, item);
 
-  const title =
-    reminderPriorityPrefix(item) +
-    item.title.toLocaleUpperCase("pt-BR");
+  const priorityPrefix = reminderPriorityPrefix(item);
+  const title = priorityPrefix + item.title.toLocaleUpperCase("pt-BR");
   const visibleLeft = Math.max(0, x);
   const visibleRight = Math.min(timelineWidth(), x + width);
   const statusText = timelineItemStatus(item);
@@ -1829,6 +1826,11 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     );
     ctx.setTextColor(Color.white());
     ctx.drawText(visibleTitle, textPoint);
+
+    if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
+      ctx.setTextColor(new Color("#FF453A"));
+      ctx.drawText(priorityPrefix.trim(), textPoint);
+    }
   }
 
   if (statusWidth > 0) {
@@ -1849,7 +1851,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   if (metadataWidth > 0) {
     ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackRoundedSystemFont(metadataFontSize));
-    ctx.setTextColor(Color.white());
+    ctx.setTextColor(new Color("#FF453A"));
     ctx.drawTextInRect(
       metadataText,
       new Rect(
