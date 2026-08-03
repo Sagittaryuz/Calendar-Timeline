@@ -238,6 +238,11 @@ async function loadWindow() {
   try {
     // No primeiro uso dentro do app, estas consultas exibem os pedidos
     // nativos de acesso ao Calendário e aos Lembretes.
+    // Lembretes sem horário podem chegar do EventKit como 00:00 UTC. Em
+    // fusos negativos, isso aparece localmente na noite do dia anterior.
+    // A margem de um dia garante que eles entrem na consulta; abaixo a data
+    // é normalizada antes de decidir se pertence à janela visível.
+    const reminderQueryStart = addDays(startOfToday(), -1);
     const reminderQueryEnd = addDays(startOfDay(windowEnd), 1);
     const [
       events,
@@ -248,7 +253,7 @@ async function loadWindow() {
     ] =
       await Promise.all([
         CalendarEvent.between(windowStart, windowEnd),
-        Reminder.incompleteDueBetween(startOfToday(), reminderQueryEnd),
+        Reminder.incompleteDueBetween(reminderQueryStart, reminderQueryEnd),
         CalendarEvent.today(),
         Reminder.incompleteDueToday(),
         SETTINGS.showOverdueReminders
@@ -268,9 +273,22 @@ async function loadWindow() {
     const todayEvents = todayEventsRaw.filter((event) =>
       includeCalendar(event.calendar)
     );
-    const todayReminders = todayRemindersRaw.filter((reminder) =>
-      includeCalendar(reminder.calendar)
-    );
+    const todayReminderMap = new Map();
+    for (const reminder of [...todayRemindersRaw, ...reminders]) {
+      const dayStart = normalizedReminderDayStart(reminder);
+      if (
+        !dayStart ||
+        !includeCalendar(reminder.calendar) ||
+        dateKey(dayStart) !== dateKey(now)
+      ) {
+        continue;
+      }
+      const identifier =
+        reminder.identifier ??
+        `${reminder.calendar?.title ?? ""}-${reminder.title}-${dateKey(dayStart)}`;
+      todayReminderMap.set(identifier, reminder);
+    }
+    const todayReminders = [...todayReminderMap.values()];
 
     const eventItems = events
       .filter((event) => {
@@ -300,16 +318,15 @@ async function loadWindow() {
 
     const reminderItems = reminders
       .filter((reminder) => {
-        const due = reminder.dueDate;
-        if (!due || !includeCalendar(reminder.calendar)) return false;
-        const dayStart = startOfDay(due);
+        const dayStart = normalizedReminderDayStart(reminder);
+        if (!dayStart || !includeCalendar(reminder.calendar)) return false;
         const dayEnd = addDays(dayStart, 1);
         return dayEnd > windowStart && dayStart < windowEnd;
       })
       .map((reminder) => {
         const due = reminder.dueDate ?? startOfToday();
         const hasTime = Boolean(reminder.dueDateIncludesTime);
-        const reminderDayStart = startOfDay(due);
+        const reminderDayStart = normalizedReminderDayStart(reminder);
         const reminderDisplayStart = hasTime
           ? due
           : dateAtHour(reminderDayStart, 8);
@@ -322,7 +339,9 @@ async function loadWindow() {
           isAllDay: !hasTime,
           identifier: reminder.identifier ?? `${reminder.title}-${due}`,
           priority: Number(reminder.priority) || 0,
-          isOverdue: Boolean(reminder.isOverdue) || due < now,
+          isOverdue:
+            Boolean(reminder.isOverdue) ||
+            (hasTime ? due < now : addDays(reminderDayStart, 1) <= now),
           color: safeCalendarColor(
             reminder.calendar,
             SETTINGS.fallbackReminderColor
@@ -2082,6 +2101,32 @@ function startOfDay(sourceDate) {
   const date = new Date(sourceDate);
   date.setHours(0, 0, 0, 0);
   return date;
+}
+
+function normalizedReminderDayStart(reminder) {
+  const due = reminder?.dueDate;
+  if (!due) return null;
+  if (Boolean(reminder.dueDateIncludesTime)) return startOfDay(due);
+
+  // O EventKit pode codificar uma data sem horário como meia-noite UTC.
+  // Reconstruí-la com os componentes UTC preserva o dia escolhido pelo
+  // usuário em fusos negativos, como o horário de Brasília.
+  const isUTCDateOnly =
+    due.getUTCHours() === 0 &&
+    due.getUTCMinutes() === 0 &&
+    due.getUTCSeconds() === 0;
+  if (isUTCDateOnly) {
+    return new Date(
+      due.getUTCFullYear(),
+      due.getUTCMonth(),
+      due.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    );
+  }
+  return startOfDay(due);
 }
 
 function dateAtHour(sourceDate, hour) {
