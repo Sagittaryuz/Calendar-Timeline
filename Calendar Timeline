@@ -736,43 +736,6 @@ function calculateScheduleSummary(events, rangeStart, rangeEnd) {
   };
 }
 
-function calculateFreeWindows(events, rangeStart, rangeEnd) {
-  const free = [];
-  let dayStart = startOfDay(rangeStart);
-  while (dayStart < rangeEnd) {
-    const nextDay = addDays(dayStart, 1);
-    const visibleDayStart = new Date(
-      Math.max(dayStart.getTime(), rangeStart.getTime())
-    );
-
-    // O limite lógico é sempre 00:00. O desenho será recortado pelo fim da
-    // timeline quando a janela terminar antes da meia-noite.
-    const busy = calculateScheduleSummary(
-      events,
-      visibleDayStart,
-      nextDay
-    ).intervals;
-    let cursor = new Date(visibleDayStart);
-
-    for (const interval of busy) {
-      if (interval.start > cursor) {
-        free.push({
-          start: new Date(cursor),
-          end: new Date(interval.start),
-        });
-      }
-      if (interval.end > cursor) cursor = new Date(interval.end);
-    }
-
-    if (cursor < nextDay) {
-      free.push({ start: new Date(cursor), end: new Date(nextDay) });
-    }
-    dayStart = nextDay;
-  }
-
-  return free;
-}
-
 function prepareTimelineItems(items, referenceDate) {
   const prepared = items.map((item) => ({ ...item }));
   const events = prepared.filter(
@@ -1575,39 +1538,6 @@ function drawEventHourHighlights(ctx, items) {
   }
 }
 
-function drawFreeTimeWindows(ctx, items) {
-  const events = items.filter((item) => item.kind === "event");
-  const freeWindows = calculateFreeWindows(events, windowStart, windowEnd);
-
-  for (const freeWindow of freeWindows) {
-    const x0 = Math.max(0, timeToX(freeWindow.start));
-    const x1 = Math.min(timelineWidth(), timeToX(freeWindow.end));
-    const width = x1 - x0;
-    if (width <= 1) continue;
-
-    ctx.setFillColor(new Color(SETTINGS.freeTimeColor, 0.9));
-    ctx.fillRect(new Rect(x0, CANVAS.localPlotTop - 6, width, 4));
-
-    const label = isCompactMode()
-      ? "LIVRE"
-      : `LIVRE ${formatClock(freeWindow.start)}–${formatClock(freeWindow.end)}`;
-    const fontSize = isCompactMode() ? 11 : 13;
-    ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-    ctx.setTextColor(new Color(SETTINGS.freeTimeColor));
-    ctx.drawTextInRect(
-      label,
-      new Rect(x0, CANVAS.localPlotTop - 22, width, 16)
-    );
-  }
-}
-
-function formatClock(date) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes()
-  ).padStart(2, "0")}`;
-}
-
 function prioritizedEvents(items) {
   return items
     .filter(
@@ -1675,9 +1605,6 @@ function drawHourAxis(ctx, items) {
       )
     );
   }
-
-  // Janelas sem eventos ficam sublinhadas logo abaixo da legenda de horas.
-  drawFreeTimeWindows(ctx, items);
 
   // Segundo: retângulos coloridos sobre as linhas.
   drawEventHourHighlights(ctx, items);
