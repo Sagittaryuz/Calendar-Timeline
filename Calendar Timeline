@@ -37,12 +37,17 @@ const SETTINGS = {
   nightStarColor: "#FFFFFF",
   nightCloudColor: "#F2F2F7",
   nightCloudShadeColor: "#D8DCE2",
-  nightSkyTopColor: "#3A3D46",
-  nightSkyMidColor: "#292C34",
-  nightSkyBottomColor: "#111318",
-  nightGeometryColor: "#8E929C",
+  nightSkyTopColor: "#151A26",
+  nightSkyMidColor: "#0B1020",
+  nightSkyBottomColor: "#03050A",
+  nightGeometryColor: "#8A93A8",
   twilightGlowColor: "#FFD166",
   daylightGlowColor: "#FFCC66",
+  daylightSkyColor: "#D59A45",
+  daylightCoreColor: "#FFE09A",
+  saturdayAtmosphereColor: "#0A84FF",
+  sundayAtmosphereColor: "#FF453A",
+  holidayAtmosphereColor: "#FFCC00",
   useCurrentLocation: true,
   locationCacheHours: 6,
   holidayCacheDays: 30,
@@ -1182,6 +1187,7 @@ function renderTimelinePanel(items, loadError) {
   // são desenhadas por último, sempre acima das cores dos eventos.
   if (!isCompactMode()) {
     drawSkyCycleBackground(ctx);
+    drawCalendarDayAtmosphere(ctx);
     drawNightScenes(ctx);
   }
   drawHourAxis(ctx, loadResult.items);
@@ -1255,7 +1261,7 @@ function drawNightAtmosphere(ctx, nightStart, nightEnd) {
   const height = timelineHeight();
   if (width <= 0) return;
 
-  // Gradiente vertical cinza-azulado, inclusive atrás da legenda das horas.
+  // Noite azul-preta profunda, inclusive atrás da legenda das horas.
   for (let y = 0; y < height; y += 2) {
     const progress = y / Math.max(1, height - 1);
     const color =
@@ -1270,14 +1276,14 @@ function drawNightAtmosphere(ctx, nightStart, nightEnd) {
             SETTINGS.nightSkyBottomColor,
             (progress - 0.46) / 0.54
           );
-    const opacity = 0.88 - progress * 0.14;
+    const opacity = 0.91 - progress * 0.08;
     ctx.setFillColor(new Color(color, opacity));
     ctx.fillRect(new Rect(x0, y, width, 2));
   }
 
-  // Textura geométrica sutil para diferenciar o período noturno.
-  const geometryStep = 52;
-  ctx.setStrokeColor(new Color(SETTINGS.nightGeometryColor, 0.12));
+  // Textura geométrica sutil inspirada nas curvas orbitais da referência.
+  const geometryStep = 68;
+  ctx.setStrokeColor(new Color(SETTINGS.nightGeometryColor, 0.10));
   ctx.setLineWidth(1);
   for (let baseX = x0 + 8; baseX < x1; baseX += geometryStep) {
     const path = new Path();
@@ -1290,6 +1296,21 @@ function drawNightAtmosphere(ctx, nightStart, nightEnd) {
     path.addLine(new Point(xC, height * 0.52));
     path.addLine(new Point(xD, height * 0.78));
     path.addLine(new Point(Math.min(x1, baseX + 14), height));
+    ctx.addPath(path);
+    ctx.strokePath();
+  }
+
+  for (let curve = 0; curve < 3; curve++) {
+    const path = new Path();
+    const baseY = 34 + curve * 24;
+    const amplitude = 18 + curve * 7;
+    for (let step = 0; step <= 24; step++) {
+      const progress = step / 24;
+      const x = x0 + width * progress;
+      const y = baseY + Math.pow(progress - 0.5, 2) * amplitude * 4;
+      if (step === 0) path.move(new Point(x, y));
+      else path.addLine(new Point(x, y));
+    }
     ctx.addPath(path);
     ctx.strokePath();
   }
@@ -1312,7 +1333,7 @@ function drawNightAtmosphere(ctx, nightStart, nightEnd) {
 function drawTwilightGlow(ctx, moment, isSunrise) {
   const centerX = timeToX(moment);
   const hourWidth = timelineWidth() / Math.max(1, windowHours);
-  const radius = Math.max(18, Math.min(70, hourWidth * 1.45));
+  const radius = Math.max(22, Math.min(88, hourWidth * 1.85));
   if (centerX + radius < 0 || centerX - radius > timelineWidth()) return;
 
   // No pôr do sol, o brilho fecha vindo do dia; no nascer, abre em direção
@@ -1328,19 +1349,25 @@ function drawTwilightGlow(ctx, moment, isSunrise) {
       : (x - centerX) / Math.max(1, rightRadius);
     const strength = Math.max(0, 1 - distance);
     ctx.setFillColor(
-      new Color(SETTINGS.twilightGlowColor, 0.16 * strength * strength)
+      new Color(SETTINGS.twilightGlowColor, 0.24 * strength * strength)
     );
     ctx.fillRect(new Rect(x, 0, 2, timelineHeight()));
 
     ctx.setFillColor(
-      new Color(SETTINGS.twilightGlowColor, 0.20 * strength * strength)
+      new Color(SETTINGS.twilightGlowColor, 0.28 * strength * strength)
     );
     ctx.fillRect(new Rect(x, 0, 2, CANVAS.localPlotTop + 30));
   }
 
-  ctx.setFillColor(new Color(SETTINGS.twilightGlowColor, 0.13));
+  // Coluna solar fina e intensa exatamente no nascer ou pôr do sol.
+  ctx.setFillColor(new Color(SETTINGS.twilightGlowColor, 0.76));
+  ctx.fillRect(new Rect(centerX - 1, 0, 3, timelineHeight()));
+  ctx.setFillColor(new Color("#FFF4CC", 0.82));
+  ctx.fillRect(new Rect(centerX, 0, 1, timelineHeight()));
+
+  ctx.setFillColor(new Color(SETTINGS.twilightGlowColor, 0.18));
   ctx.fillEllipse(
-    new Rect(centerX - radius * 0.42, -22, radius * 0.84, 116)
+    new Rect(centerX - radius * 0.52, -28, radius * 1.04, 150)
   );
 }
 
@@ -1373,19 +1400,103 @@ function drawDaylightGlow(ctx, sunrise, sunset, dayStart) {
     const clamped = Math.max(0, Math.min(1, linearStrength));
     const strength = 0.5 - 0.5 * Math.cos(Math.PI * clamped);
 
-    // Brilho concentrado logo abaixo da legenda e respirando até o grid.
+    // Halo dourado que ocupa todo o painel, mais forte próximo ao meio-dia.
+    // As faixas verticais mantêm o efeito leve sobre charts e linhas.
     ctx.setFillColor(
-      new Color(SETTINGS.daylightGlowColor, 0.11 * strength)
+      new Color(SETTINGS.daylightSkyColor, 0.10 + 0.17 * strength)
     );
-    ctx.fillRect(new Rect(x, 35, 2, 18));
+    ctx.fillRect(new Rect(x, 0, 2, timelineHeight()));
+
     ctx.setFillColor(
-      new Color(SETTINGS.daylightGlowColor, 0.065 * strength)
+      new Color(SETTINGS.daylightGlowColor, 0.10 * strength)
     );
-    ctx.fillRect(new Rect(x, 53, 2, 28));
+    ctx.fillRect(new Rect(x, 0, 2, CANVAS.localPlotTop + 56));
+
     ctx.setFillColor(
-      new Color(SETTINGS.daylightGlowColor, 0.025 * strength)
+      new Color(SETTINGS.daylightCoreColor, 0.11 * strength * strength)
     );
-    ctx.fillRect(new Rect(x, 81, 2, 28));
+    ctx.fillRect(
+      new Rect(
+        x,
+        CANVAS.localPlotTop + 26,
+        2,
+        timelineHeight() - CANVAS.localPlotTop - 54
+      )
+    );
+  }
+
+  const noonX = timeToX(noon);
+  const daylightWidth = Math.max(1, timeToX(sunset) - timeToX(sunrise));
+  const haloWidth = Math.min(timelineWidth() * 0.72, daylightWidth * 0.82);
+  ctx.setFillColor(new Color(SETTINGS.daylightCoreColor, 0.10));
+  ctx.fillEllipse(
+    new Rect(
+      noonX - haloWidth / 2,
+      -timelineHeight() * 0.28,
+      haloWidth,
+      timelineHeight() * 1.50
+    )
+  );
+
+  drawDaylightGeometry(ctx, x0, x1);
+}
+
+function drawDaylightGeometry(ctx, x0, x1) {
+  const width = x1 - x0;
+  if (width < 12) return;
+
+  ctx.setStrokeColor(new Color("#FFE7B0", 0.075));
+  ctx.setLineWidth(1);
+  for (let curve = 0; curve < 3; curve++) {
+    const path = new Path();
+    const baseY = 42 + curve * 26;
+    const amplitude = 14 + curve * 6;
+    for (let step = 0; step <= 28; step++) {
+      const progress = step / 28;
+      const x = x0 + width * progress;
+      const y = baseY + Math.pow(progress - 0.5, 2) * amplitude * 4;
+      if (step === 0) path.move(new Point(x, y));
+      else path.addLine(new Point(x, y));
+    }
+    ctx.addPath(path);
+    ctx.strokePath();
+  }
+}
+
+function drawCalendarDayAtmosphere(ctx) {
+  let dayStart = startOfDay(windowStart);
+
+  while (dayStart < windowEnd) {
+    const nextDay = addDays(dayStart, 1);
+    const visibleStart = new Date(
+      Math.max(dayStart.getTime(), windowStart.getTime())
+    );
+    const visibleEnd = new Date(
+      Math.min(nextDay.getTime(), windowEnd.getTime())
+    );
+    const x0 = Math.max(0, timeToX(visibleStart));
+    const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+    const isHoliday = loadResult.holidayDates.has(dateKey(dayStart));
+
+    let color = null;
+    let opacity = 0;
+    if (isHoliday) {
+      color = SETTINGS.holidayAtmosphereColor;
+      opacity = 0.18;
+    } else if (dayStart.getDay() === 6) {
+      color = SETTINGS.saturdayAtmosphereColor;
+      opacity = 0.15;
+    } else if (dayStart.getDay() === 0) {
+      color = SETTINGS.sundayAtmosphereColor;
+      opacity = 0.16;
+    }
+
+    if (color && x1 > x0) {
+      ctx.setFillColor(new Color(color, opacity));
+      ctx.fillRect(new Rect(x0, 0, x1 - x0, timelineHeight()));
+    }
+
+    dayStart = nextDay;
   }
 }
 
