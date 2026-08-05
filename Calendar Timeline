@@ -1565,12 +1565,12 @@ function prioritizedEvents(items) {
     .filter(
       (item) =>
         item.kind === "event" &&
+        !item.isAllDay &&
         item.end > windowStart &&
         item.start < windowEnd
     )
     .sort(
       (a, b) =>
-        Number(b.isAllDay) - Number(a.isAllDay) ||
         a.start.getTime() - b.start.getTime() ||
         a.end.getTime() - b.end.getTime()
     );
