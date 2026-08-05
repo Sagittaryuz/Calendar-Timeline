@@ -94,17 +94,15 @@ const CANVAS = {
   localPlotTop: 48,
 };
 
-const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 let userConfiguration = loadUserConfiguration();
 let appAction = "previewHome";
 if (
   config.runsInApp &&
-  !refreshRequested &&
   !userConfiguration.setupCompleted
 ) {
   userConfiguration = await runInitialSetup(userConfiguration);
   saveUserConfiguration(userConfiguration);
-} else if (config.runsInApp && !refreshRequested) {
+} else if (config.runsInApp) {
   appAction = await presentMainMenu();
   if (appAction === "settings") {
     userConfiguration = await presentSettingsPanel(userConfiguration);
@@ -139,9 +137,8 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : makeWidget(selectedItems, loadResult.error);
 
-// Um toque abre o Calendário diretamente, sem passar pela interface do
-// Scriptable. A atualização permanece solicitada pelo agendamento abaixo.
-widget.url = calendarURL(now);
+// A interação ao tocar no widget é definida nas configurações do próprio
+// widget no iOS. Este script não abre aplicativos nem atualiza pelo toque.
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -153,11 +150,7 @@ if (config.runsInWidget) {
     await showPermissionHelp(loadResult.error);
   }
 
-  if (refreshRequested) {
-    // Recalcula o widget antes de abrir o Calendário.
-    Script.setWidget(widget);
-    Safari.open(calendarURL(now));
-  } else if (appAction === "diagnostics") {
+  if (appAction === "diagnostics") {
     await showDiagnostics(loadResult, astronomy, nightTextures);
   } else if (appAction === "install") {
     Safari.open(PUBLIC_INSTALL_URL);
@@ -2880,22 +2873,6 @@ function parseWindowHours(parameter) {
     return SETTINGS.defaultWindowHours;
   }
   return value;
-}
-
-function calendarURL(date) {
-  const appleReferenceDate = Date.UTC(2001, 0, 1, 0, 0, 0);
-  const secondsSinceReference = Math.floor(
-    (date.getTime() - appleReferenceDate) / 1000
-  );
-  return `calshow:${secondsSinceReference}`;
-}
-
-function addURLParameter(url, name, value) {
-  const separator = url.includes("?") ? "&" : "?";
-  return (
-    `${url}${separator}` +
-    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
-  );
 }
 
 function isHolidayEvent(event) {
