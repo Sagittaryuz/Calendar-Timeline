@@ -1181,6 +1181,11 @@ function renderTimelinePanel(items, loadError) {
   // Brilho diurno discreto e fixo das 06:00 às 18:00. Fora desse intervalo,
   // o fundo original da timeline permanece completamente inalterado.
   drawFixedDaylightGlow(ctx);
+  if (!isCompactMode()) {
+    // Mantém a Lua anterior com fase, nuvens, estrelas e legenda, mas sem
+    // reativar qualquer gradiente ou textura sobre o fundo noturno.
+    drawNightScenes(ctx);
+  }
   drawHourAxis(ctx, loadResult.items);
 
   if (loadError) {
@@ -1219,7 +1224,7 @@ function drawFixedDaylightGlow(ctx) {
     lineY + 1,
     Math.min(
       timelineHeight(),
-      CANVAS.height / 2 - CANVAS.timelineTop
+      CANVAS.height * 0.56 - CANVAS.timelineTop
     )
   );
   let dayStart = startOfDay(windowStart);
@@ -1251,8 +1256,8 @@ function drawFixedDaylightGlow(ctx) {
         for (let y = lineY + 2; y < glowEndY; y += 2) {
           const progress =
             (y - lineY) / Math.max(1, glowEndY - lineY);
-          const strength = Math.pow(1 - progress, 2.35);
-          ctx.setFillColor(new Color("#FFCC33", 0.18 * strength));
+          const strength = Math.pow(1 - progress, 1.45);
+          ctx.setFillColor(new Color("#FFCC33", 0.20 * strength));
           ctx.fillRect(new Rect(x0, y, width, 2));
         }
       }
