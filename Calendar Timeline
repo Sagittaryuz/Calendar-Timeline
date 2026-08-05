@@ -5,7 +5,10 @@
 // AGENDA TIMELINE 4x2
 // Calendário + Lembretes do iPhone em uma timeline diária.
 
-const THEME_MODE = "black"; // "black" | "dark"
+let THEME_MODE = "black"; // "black" | "dark"
+const APP_VERSION = "2.0.0";
+const PUBLIC_INSTALL_URL =
+  "https://calendar-timeline-install.sagittaryuz.chatgpt.site";
 
 const SETTINGS = {
   locale: "pt_BR",
@@ -20,6 +23,10 @@ const SETTINGS = {
   currentEventColor: "#FFFFFF",
   showEventMetadataIcons: true,
   showOverdueReminders: true,
+  showMoon: true,
+  showNightTexture: true,
+  showSolarGlow: true,
+  solarGlowIntensity: 1.0,
   alternateFooterSummary: true,
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -43,6 +50,11 @@ const SETTINGS = {
   nightGeometryColor: "#8E929C",
   twilightGlowColor: "#FFD166",
   daylightGlowColor: "#FFCC66",
+  daylightCoreColor: "#FFE34D",
+  daylightSkyColor: "#FFD62A",
+  saturdayAtmosphereColor: "#0A84FF",
+  sundayAtmosphereColor: "#FF453A",
+  holidayAtmosphereColor: "#FFCC00",
   nightTextureVersion: "v1",
   nightTextureBaseURL:
     "https://raw.githubusercontent.com/Sagittaryuz/Calendar-Timeline/main/assets",
@@ -59,6 +71,7 @@ const SETTINGS = {
   fallbackLongitude: -51.7144,
   // Escreva aqui nomes exatos de agendas/listas que não devem aparecer.
   excludedCalendars: [],
+  selectedCalendarIdentifiers: [],
 };
 
 const USER_CONFIGURATION_KEY = "agenda-timeline-user-settings-v1";
@@ -79,6 +92,7 @@ const CANVAS = {
 
 const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 let userConfiguration = loadUserConfiguration();
+let appAction = "previewHome";
 if (
   config.runsInApp &&
   !refreshRequested &&
@@ -86,6 +100,13 @@ if (
 ) {
   userConfiguration = await runInitialSetup(userConfiguration);
   saveUserConfiguration(userConfiguration);
+} else if (config.runsInApp && !refreshRequested) {
+  appAction = await presentMainMenu();
+  if (appAction === "settings") {
+    userConfiguration = await presentSettingsPanel(userConfiguration);
+    saveUserConfiguration(userConfiguration);
+    appAction = "previewHome";
+  }
 }
 applyUserConfiguration(userConfiguration);
 
@@ -98,12 +119,21 @@ const windowEnd = new Date(
 );
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
-const nightTextures = await loadNightTextures();
+const requestedFamily = accessoryFamilyForAction(appAction);
+const nightTextures =
+  SETTINGS.showNightTexture && !isAccessoryFamily(requestedFamily)
+    ? await loadNightTextures()
+    : emptyNightTextures();
 const automaticHolidayDates = await loadAutomaticHolidays(astronomy);
 automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
 const preparedItems = prepareTimelineItems(loadResult.items, now);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems);
-const widget = makeWidget(selectedItems, loadResult.error);
+const widgetFamily = config.runsInWidget
+  ? config.widgetFamily
+  : requestedFamily;
+const widget = isAccessoryFamily(widgetFamily)
+  ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
+  : makeWidget(selectedItems, loadResult.error);
 
 const runScriptURL = URLScheme.forRunningScript();
 widget.url = addURLParameter(runScriptURL, "refresh", "1");
@@ -122,6 +152,16 @@ if (config.runsInWidget) {
     // Recalcula o widget antes de abrir o Calendário.
     Script.setWidget(widget);
     Safari.open(calendarURL(now));
+  } else if (appAction === "diagnostics") {
+    await showDiagnostics(loadResult, astronomy, nightTextures);
+  } else if (appAction === "install") {
+    Safari.open(PUBLIC_INSTALL_URL);
+  } else if (appAction === "previewAccessoryCircular") {
+    await widget.presentAccessoryCircular();
+  } else if (appAction === "previewAccessoryInline") {
+    await widget.presentAccessoryInline();
+  } else if (appAction === "previewAccessoryRectangular") {
+    await widget.presentAccessoryRectangular();
   } else {
     await widget.presentMedium();
   }
@@ -136,6 +176,13 @@ function loadUserConfiguration() {
     useCurrentLocation: SETTINGS.useCurrentLocation,
     automaticHolidays: SETTINGS.automaticHolidays,
     showOverdueReminders: SETTINGS.showOverdueReminders,
+    showMoon: SETTINGS.showMoon,
+    showNightTexture: SETTINGS.showNightTexture,
+    showSolarGlow: SETTINGS.showSolarGlow,
+    solarGlowIntensity: SETTINGS.solarGlowIntensity,
+    themeMode: THEME_MODE,
+    selectedCalendarIdentifiers: [],
+    selectedCalendarTitles: [],
     excludedCalendars: [...SETTINGS.excludedCalendars],
   };
   try {
@@ -166,6 +213,19 @@ function applyUserConfiguration(configuration) {
   SETTINGS.automaticHolidays = configuration.automaticHolidays !== false;
   SETTINGS.showOverdueReminders =
     configuration.showOverdueReminders !== false;
+  SETTINGS.showMoon = configuration.showMoon !== false;
+  SETTINGS.showNightTexture = configuration.showNightTexture !== false;
+  SETTINGS.showSolarGlow = configuration.showSolarGlow !== false;
+  SETTINGS.solarGlowIntensity = Math.max(
+    0.25,
+    Math.min(2, Number(configuration.solarGlowIntensity) || 1)
+  );
+  THEME_MODE = configuration.themeMode === "dark" ? "dark" : "black";
+  SETTINGS.selectedCalendarIdentifiers = Array.isArray(
+    configuration.selectedCalendarIdentifiers
+  )
+    ? configuration.selectedCalendarIdentifiers
+    : [];
   SETTINGS.excludedCalendars = Array.isArray(configuration.excludedCalendars)
     ? configuration.excludedCalendars
     : [];
@@ -237,6 +297,143 @@ async function runInitialSetup(current) {
   return configured;
 }
 
+async function presentMainMenu() {
+  const menu = new Alert();
+  menu.title = `Calendar Timeline ${APP_VERSION}`;
+  menu.message = "Escolha o que deseja abrir ou configurar.";
+  menu.addAction("Visualizar na Tela de Início");
+  menu.addAction("Tela Bloqueada — retangular");
+  menu.addAction("Tela Bloqueada — circular");
+  menu.addAction("Tela Bloqueada — em linha");
+  menu.addAction("Configurações");
+  menu.addAction("Diagnóstico");
+  menu.addAction("Página de instalação");
+  menu.addCancelAction("Fechar");
+  const choice = await menu.presentSheet();
+  return [
+    "previewHome",
+    "previewAccessoryRectangular",
+    "previewAccessoryCircular",
+    "previewAccessoryInline",
+    "settings",
+    "diagnostics",
+    "install",
+  ][choice] ?? "previewHome";
+}
+
+async function presentSettingsPanel(current) {
+  const configured = { ...current };
+  let editing = true;
+
+  while (editing) {
+    const menu = new Alert();
+    menu.title = "Configurações";
+    menu.message =
+      `${configured.defaultWindowHours ?? 24} h · ` +
+      `${(configured.selectedCalendarTitles ?? []).length || "todas"} agendas · ` +
+      `brilho ${Math.round((configured.solarGlowIntensity ?? 1) * 100)}%`;
+    menu.addAction("Intervalo padrão");
+    menu.addAction("Selecionar agendas");
+    menu.addAction(`Lua: ${enabledLabel(configured.showMoon)}`);
+    menu.addAction(`Céu noturno: ${enabledLabel(configured.showNightTexture)}`);
+    menu.addAction(`Brilho solar: ${enabledLabel(configured.showSolarGlow)}`);
+    menu.addAction("Intensidade do brilho");
+    menu.addAction(`Tema: ${(configured.themeMode ?? "black").toUpperCase()}`);
+    menu.addAction(`Localização: ${enabledLabel(configured.useCurrentLocation)}`);
+    menu.addAction(`Feriados automáticos: ${enabledLabel(configured.automaticHolidays)}`);
+    menu.addAction(`Atrasados: ${enabledLabel(configured.showOverdueReminders)}`);
+    menu.addDestructiveAction("Limpar caches");
+    menu.addCancelAction("Salvar e concluir");
+    const choice = await menu.presentSheet();
+
+    if (choice === 0) {
+      const alert = new Alert();
+      alert.title = "Intervalo padrão";
+      alert.message = "Use um número inteiro entre 1 e 168. O parâmetro do widget continua tendo prioridade.";
+      alert.addTextField("Horas", String(configured.defaultWindowHours ?? 24));
+      alert.addAction("Aplicar");
+      alert.addCancelAction("Cancelar");
+      if ((await alert.presentAlert()) >= 0) {
+        configured.defaultWindowHours = validInteger(
+          alert.textFieldValue(0), 1, SETTINGS.maximumWindowHours, 24
+        );
+      }
+    } else if (choice === 1) {
+      try {
+        const calendars = await Calendar.presentPicker(true);
+        configured.selectedCalendarIdentifiers = calendars.map(
+          (calendar) => calendar.identifier
+        );
+        configured.selectedCalendarTitles = calendars.map(
+          (calendar) => calendar.title
+        );
+      } catch (_) {}
+    } else if (choice === 2) {
+      configured.showMoon = configured.showMoon === false;
+    } else if (choice === 3) {
+      configured.showNightTexture = configured.showNightTexture === false;
+    } else if (choice === 4) {
+      configured.showSolarGlow = configured.showSolarGlow === false;
+    } else if (choice === 5) {
+      const alert = new Alert();
+      alert.title = "Intensidade solar";
+      alert.message = "Informe de 25 a 200%.";
+      alert.addTextField(
+        "Porcentagem",
+        String(Math.round((configured.solarGlowIntensity ?? 1) * 100))
+      );
+      alert.addAction("Aplicar");
+      alert.addCancelAction("Cancelar");
+      if ((await alert.presentAlert()) >= 0) {
+        const percentage = validInteger(alert.textFieldValue(0), 25, 200, 100);
+        configured.solarGlowIntensity = percentage / 100;
+      }
+    } else if (choice === 6) {
+      configured.themeMode = configured.themeMode === "dark" ? "black" : "dark";
+    } else if (choice === 7) {
+      configured.useCurrentLocation = configured.useCurrentLocation === false;
+    } else if (choice === 8) {
+      configured.automaticHolidays = configured.automaticHolidays === false;
+    } else if (choice === 9) {
+      configured.showOverdueReminders = configured.showOverdueReminders === false;
+    } else if (choice === 10) {
+      clearWidgetCaches();
+    } else {
+      editing = false;
+    }
+  }
+
+  configured.setupCompleted = true;
+  return configured;
+}
+
+function enabledLabel(value) {
+  return value === false ? "DESLIGADO" : "LIGADO";
+}
+
+function clearWidgetCaches() {
+  const fm = FileManager.local();
+  const directory = fm.documentsDirectory();
+  try {
+    for (const filename of fm.listContents(directory)) {
+      if (
+        filename.startsWith("Calendar-Timeline-night-") ||
+        filename.startsWith("Agenda-Timeline-holidays-")
+      ) {
+        fm.remove(fm.joinPath(directory, filename));
+      }
+    }
+  } catch (_) {}
+  for (const key of [
+    "agenda-timeline-location-v1",
+    "agenda-timeline-region-v2",
+  ]) {
+    try {
+      if (Keychain.contains(key)) Keychain.remove(key);
+    } catch (_) {}
+  }
+}
+
 function validInteger(value, minimum, maximum, fallback) {
   const number = Number(value);
   return Number.isInteger(number) && number >= minimum && number <= maximum
@@ -274,10 +471,16 @@ async function loadWindow() {
     const excluded = new Set(
       SETTINGS.excludedCalendars.map((name) => name.toLocaleLowerCase())
     );
+    const selected = new Set(SETTINGS.selectedCalendarIdentifiers ?? []);
 
     const includeCalendar = (calendar) => {
       const calendarName = calendar?.title ?? "";
-      return !excluded.has(calendarName.toLocaleLowerCase());
+      const isSelected =
+        selected.size === 0 || selected.has(calendar?.identifier);
+      return (
+        isSelected &&
+        !excluded.has(calendarName.toLocaleLowerCase())
+      );
     };
 
     const todayEvents = todayEventsRaw.filter((event) =>
@@ -967,6 +1170,142 @@ function makeWidget(items, loadError) {
   return widget;
 }
 
+function isAccessoryFamily(family) {
+  return [
+    "accessoryRectangular",
+    "accessoryCircular",
+    "accessoryInline",
+  ].includes(family);
+}
+
+function accessoryFamilyForAction(action) {
+  if (action === "previewAccessoryCircular") return "accessoryCircular";
+  if (action === "previewAccessoryInline") return "accessoryInline";
+  if (action === "previewAccessoryRectangular") {
+    return "accessoryRectangular";
+  }
+  return null;
+}
+
+function emptyNightTextures() {
+  return { default: null, saturday: null, sunday: null, holiday: null };
+}
+
+function makeAccessoryWidget(items, result, family) {
+  const widget = new ListWidget();
+  widget.setPadding(4, 6, 4, 6);
+  widget.addAccessoryWidgetBackground = true;
+  const nextEvent = findNextAccessoryEvent(items);
+  const todayLabel = formatDate(now, "EEE d").toLocaleUpperCase("pt-BR");
+
+  if (family === "accessoryInline") {
+    const text = widget.addText(
+      nextEvent
+        ? `CAL · ${accessoryEventStatus(nextEvent)} · ${nextEvent.title}`
+        : `CAL · ${result.todayEventCount} EVENTOS · ${result.todayReminderCount} LEMBRETES`
+    );
+    text.font = Font.boldSystemFont(12);
+    text.textColor = Color.white();
+    text.lineLimit = 1;
+    text.minimumScaleFactor = 0.65;
+    return widget;
+  }
+
+  if (family === "accessoryCircular") {
+    const day = widget.addText(String(now.getDate()));
+    day.centerAlignText();
+    day.font = Font.blackRoundedSystemFont(28);
+    day.textColor = Color.white();
+    day.minimumScaleFactor = 0.65;
+    const counts = widget.addText(
+      `E${result.todayEventCount} · L${result.todayReminderCount}`
+    );
+    counts.centerAlignText();
+    counts.font = Font.boldSystemFont(9);
+    counts.textColor = Color.white();
+    counts.minimumScaleFactor = 0.55;
+    return widget;
+  }
+
+  const header = widget.addText(todayLabel);
+  header.font = Font.blackRoundedSystemFont(12);
+  header.textColor = Color.white();
+  header.lineLimit = 1;
+  widget.addSpacer(2);
+
+  const title = widget.addText(
+    nextEvent ? nextEvent.title.toLocaleUpperCase("pt-BR") : "SEM PRÓXIMO EVENTO"
+  );
+  title.font = Font.boldRoundedSystemFont(13);
+  title.textColor = Color.white();
+  title.lineLimit = 1;
+  title.minimumScaleFactor = 0.62;
+
+  const detail = widget.addText(
+    nextEvent
+      ? `${accessoryEventStatus(nextEvent)}  ·  ${result.todayReminderCount} LEMBRETES`
+      : `${result.todayEventCount} EVENTOS  ·  ${result.todayReminderCount} LEMBRETES`
+  );
+  detail.font = Font.mediumSystemFont(10);
+  detail.textColor = new Color("#FFFFFF", 0.78);
+  detail.lineLimit = 1;
+  detail.minimumScaleFactor = 0.6;
+  return widget;
+}
+
+function findNextAccessoryEvent(items) {
+  return [...items]
+    .filter(
+      (item) =>
+        item.kind === "event" &&
+        !item.isAllDay &&
+        item.end.getTime() > now.getTime()
+    )
+    .sort((a, b) => a.start.getTime() - b.start.getTime())[0] ?? null;
+}
+
+function accessoryEventStatus(event) {
+  if (event.start <= now && event.end > now) return "AGORA";
+  const minutes = Math.max(
+    0,
+    Math.round((event.start.getTime() - now.getTime()) / 60000)
+  );
+  if (minutes < 60) return `EM ${minutes} MIN`;
+  if (minutes < 24 * 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder ? `EM ${hours}H${String(remainder).padStart(2, "0")}` : `EM ${hours}H`;
+  }
+  return formatDate(event.start, "EEE HH:mm").toLocaleUpperCase("pt-BR");
+}
+
+async function showDiagnostics(result, astronomyData, textures) {
+  const locationStatus = SETTINGS.useCurrentLocation
+    ? "ativada (cache de 6 h)"
+    : "desativada / Jataí";
+  const textureCount = Object.values(textures).filter(Boolean).length;
+  const sunrise = solarTimeForDate(startOfDay(now), true);
+  const sunset = solarTimeForDate(startOfDay(now), false);
+  const selectedCalendars =
+    (userConfiguration.selectedCalendarTitles ?? []).join(", ") || "todas";
+  const alert = new Alert();
+  alert.title = `Diagnóstico ${APP_VERSION}`;
+  alert.message = [
+    `Janela: ${windowHours} h`,
+    `Eventos de hoje: ${result.todayEventCount}`,
+    `Lembretes de hoje: ${result.todayReminderCount}`,
+    `Itens consultados: ${result.items.length}`,
+    `Agendas: ${selectedCalendars}`,
+    `Localização: ${locationStatus}`,
+    `Nascer do sol: ${sunrise ? formatDate(sunrise, "HH:mm") : "indisponível"}`,
+    `Pôr do sol: ${sunset ? formatDate(sunset, "HH:mm") : "indisponível"}`,
+    `Texturas noturnas: ${textureCount}/4`,
+    `Erro: ${result.error ?? "nenhum"}`,
+  ].join("\n");
+  alert.addAction("OK");
+  await alert.presentAlert();
+}
+
 function renderWidget(items, loadError) {
   const ctx = new DrawContext();
   ctx.size = new Size(CANVAS.width, CANVAS.height);
@@ -1227,13 +1566,13 @@ function renderTimelinePanel(items, loadError) {
 
   // As camadas atmosféricas permanecem atrás dos eventos. O núcleo do brilho
   // solar é desenhado depois do grid para formar uma faixa única e contínua.
-  drawNightTextureBackground(ctx);
-  drawFixedDaylightGlow(ctx);
-  if (!isCompactMode()) {
+  if (SETTINGS.showNightTexture) drawNightTextureBackground(ctx);
+  if (SETTINGS.showSolarGlow) drawFixedDaylightGlow(ctx);
+  if (SETTINGS.showMoon && !isCompactMode()) {
     drawNightScenes(ctx);
   }
   drawHourAxis(ctx, loadResult.items);
-  drawFixedDaylightGloss(ctx);
+  if (SETTINGS.showSolarGlow) drawFixedDaylightGloss(ctx);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -1293,7 +1632,7 @@ function drawFixedDaylightGlow(ctx) {
               1.12
             );
       const opacity = y < lineY ? 0.12 * strength : 0.25 * strength;
-      ctx.setFillColor(new Color("#FFD62A", opacity));
+      ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
       // O feixe desce perpendicularmente, sempre com a mesma largura.
       ctx.fillRect(new Rect(x0, y, width, 2));
     }
@@ -1312,7 +1651,7 @@ function drawFixedDaylightGloss(ctx) {
 
     // Halos circulares projetam a luz para fora e arredondam as laterais.
     for (const [radius, opacity] of [[34, 0.08], [24, 0.13], [15, 0.19]]) {
-      ctx.setFillColor(new Color("#FFD62A", opacity));
+      ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
       ctx.fillEllipse(
         new Rect(x0 - radius, centerY - radius, radius * 2, radius * 2)
       );
@@ -1338,7 +1677,7 @@ function drawFixedDaylightGloss(ctx) {
           2
         ),
         1,
-        new Color("#FFD62A", 0.42 * strength)
+        new Color("#FFD62A", solarOpacity(0.42 * strength))
       );
     }
 
@@ -1351,15 +1690,19 @@ function drawFixedDaylightGloss(ctx) {
         coreThickness
       ),
       coreThickness / 2,
-      new Color("#FFE34D", 0.72)
+      new Color("#FFE34D", solarOpacity(0.72))
     );
     fillRoundedRect(
       ctx,
       new Rect(x0 - 2, centerY - 1, width + 4, 3),
       1.5,
-      new Color("#FFF3A0", 0.38)
+      new Color("#FFF3A0", solarOpacity(0.38))
     );
   }
+}
+
+function solarOpacity(value) {
+  return Math.min(1, value * SETTINGS.solarGlowIntensity);
 }
 
 function visibleDaylightIntervals() {
