@@ -1292,8 +1292,8 @@ function drawFixedDaylightGlow(ctx) {
               Math.max(0, 1 - (y - lineY) / (glowEndY - lineY)),
               1.12
             );
-      const opacity = y < lineY ? 0.10 * strength : 0.22 * strength;
-      ctx.setFillColor(new Color("#FFCB32", opacity));
+      const opacity = y < lineY ? 0.20 * strength : 0.38 * strength;
+      ctx.setFillColor(new Color("#FFFF00", opacity));
       ctx.fillRect(new Rect(x0, y, width, 2));
     }
   }
@@ -1302,7 +1302,8 @@ function drawFixedDaylightGlow(ctx) {
 function drawFixedDaylightGloss(ctx) {
   const centerY = 44;
   const upperRadius = 5;
-  const lowerRadius = 18;
+  const lowerRadius = 32;
+  const coreThickness = 11;
 
   for (const { x0, x1 } of visibleDaylightIntervals()) {
     const width = x1 - x0;
@@ -1314,15 +1315,22 @@ function drawFixedDaylightGloss(ctx) {
         offset < 0
           ? Math.abs(offset) / upperRadius
           : offset / lowerRadius;
-      const strength = Math.pow(Math.max(0, 1 - normalized), 2.2);
-      ctx.setFillColor(new Color("#FFD84D", 0.34 * strength));
+      const strength = Math.pow(Math.max(0, 1 - normalized), 1.55);
+      ctx.setFillColor(new Color("#FFFF00", 0.72 * strength));
       ctx.fillRect(new Rect(x0, centerY + offset, width, 2));
     }
 
-    ctx.setFillColor(new Color("#FFF2A6", 0.58));
-    ctx.fillRect(new Rect(x0, centerY - 2, width, 5));
-    ctx.setFillColor(new Color("#FFFFFF", 0.24));
-    ctx.fillRect(new Rect(x0, centerY - 1, width, 2));
+    ctx.setFillColor(new Color("#FFFF00", 0.96));
+    ctx.fillRect(
+      new Rect(
+        x0,
+        centerY - Math.floor(coreThickness / 2),
+        width,
+        coreThickness
+      )
+    );
+    ctx.setFillColor(new Color("#FFFF8A", 0.78));
+    ctx.fillRect(new Rect(x0, centerY - 2, width, 4));
   }
 }
 
