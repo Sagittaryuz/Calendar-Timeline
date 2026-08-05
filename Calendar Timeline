@@ -27,10 +27,10 @@ const SETTINGS = {
   showNightTexture: true,
   showSolarGlow: true,
   solarGlowIntensity: 1.0,
-  nightStartHour: 17,
-  nightEndHour: 7,
-  daylightStartHour: 7,
-  daylightEndHour: 17,
+  nightStartHour: 18,
+  nightEndHour: 6,
+  daylightStartHour: 6,
+  daylightEndHour: 18,
   alternateFooterSummary: true,
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -137,8 +137,9 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : makeWidget(selectedItems, loadResult.error);
 
-// A interação ao tocar no widget é definida nas configurações do próprio
-// widget no iOS. Este script não abre aplicativos nem atualiza pelo toque.
+// O toque abre diretamente o Calendário. A atualização dos dados continua
+// independente do toque e é solicitada ao iOS a cada 60 segundos.
+widget.url = "calshow://";
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -255,7 +256,7 @@ async function runInitialSetup(current) {
   const locationAlert = new Alert();
   locationAlert.title = "Localização e feriados";
   locationAlert.message =
-    "O período noturno agora é fixo, das 17:00 às 07:00. A localização é opcional e serve somente para identificar feriados estaduais e municipais.";
+    "O período noturno agora é fixo, das 18:00 às 06:00. A localização é opcional e serve somente para identificar feriados estaduais e municipais.";
   locationAlert.addAction("Ativar os dois");
   locationAlert.addAction("Somente localização");
   locationAlert.addDestructiveAction("Desativar os dois");
@@ -1293,8 +1294,8 @@ async function showDiagnostics(result, astronomyData, textures) {
     `Itens consultados: ${result.items.length}`,
     `Agendas: ${selectedCalendars}`,
     `Localização: ${locationStatus}`,
-    `Período diurno fixo: 07:00–17:00`,
-    `Período noturno fixo: 17:00–07:00`,
+    `Período diurno fixo: 06:00–18:00`,
+    `Período noturno fixo: 18:00–06:00`,
     `Texturas noturnas: ${textureCount}/4`,
     `Erro: ${result.error ?? "nenhum"}`,
   ].join("\n");
@@ -2068,7 +2069,7 @@ function drawNightScenes(ctx) {
     const nextDay = addDays(dayStart, 1);
     const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    // Uma Lua centralizada entre 17:00 e 00:00.
+    // Uma Lua centralizada entre 18:00 e 00:00.
     drawNightSegment(
       ctx,
       nightStart,
@@ -2077,7 +2078,7 @@ function drawNightScenes(ctx) {
       nightEnd
     );
 
-    // A mesma Lua repetida e centralizada entre 00:00 e 07:00.
+    // A mesma Lua repetida e centralizada entre 00:00 e 06:00.
     drawNightSegment(
       ctx,
       nextDay,
