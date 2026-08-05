@@ -1292,9 +1292,17 @@ function drawFixedDaylightGlow(ctx) {
               Math.max(0, 1 - (y - lineY) / (glowEndY - lineY)),
               1.12
             );
-      const opacity = y < lineY ? 0.20 * strength : 0.38 * strength;
-      ctx.setFillColor(new Color("#FFFF00", opacity));
-      ctx.fillRect(new Rect(x0, y, width, 2));
+      const opacity = y < lineY ? 0.12 * strength : 0.25 * strength;
+      const sideProjection = 18 * strength;
+      ctx.setFillColor(new Color("#FFD62A", opacity));
+      ctx.fillRect(
+        new Rect(
+          x0 - sideProjection,
+          y,
+          width + sideProjection * 2,
+          2
+        )
+      );
     }
   }
 }
@@ -1302,35 +1310,62 @@ function drawFixedDaylightGlow(ctx) {
 function drawFixedDaylightGloss(ctx) {
   const centerY = 44;
   const upperRadius = 5;
-  const lowerRadius = 32;
-  const coreThickness = 11;
+  const lowerRadius = 22;
+  const coreThickness = 7;
 
   for (const { x0, x1 } of visibleDaylightIntervals()) {
     const width = x1 - x0;
     if (width <= 0) continue;
 
-    // Camadas simétricas criam um gloss forte sem aparência de linha reta.
+    // Halos circulares projetam a luz para fora e arredondam as laterais.
+    for (const [radius, opacity] of [[34, 0.08], [24, 0.13], [15, 0.19]]) {
+      ctx.setFillColor(new Color("#FFD62A", opacity));
+      ctx.fillEllipse(
+        new Rect(x0 - radius, centerY - radius, radius * 2, radius * 2)
+      );
+      ctx.fillEllipse(
+        new Rect(x1 - radius, centerY - radius, radius * 2, radius * 2)
+      );
+    }
+
+    // Camadas suaves formam um gloss moderado e contínuo.
     for (let offset = -upperRadius; offset <= lowerRadius; offset += 2) {
       const normalized =
         offset < 0
           ? Math.abs(offset) / upperRadius
           : offset / lowerRadius;
-      const strength = Math.pow(Math.max(0, 1 - normalized), 1.55);
-      ctx.setFillColor(new Color("#FFFF00", 0.72 * strength));
-      ctx.fillRect(new Rect(x0, centerY + offset, width, 2));
+      const strength = Math.pow(Math.max(0, 1 - normalized), 2.0);
+      const sideProjection = 22 * strength;
+      fillRoundedRect(
+        ctx,
+        new Rect(
+          x0 - sideProjection,
+          centerY + offset,
+          width + sideProjection * 2,
+          2
+        ),
+        1,
+        new Color("#FFD62A", 0.42 * strength)
+      );
     }
 
-    ctx.setFillColor(new Color("#FFFF00", 0.96));
-    ctx.fillRect(
+    fillRoundedRect(
+      ctx,
       new Rect(
-        x0,
+        x0 - 4,
         centerY - Math.floor(coreThickness / 2),
-        width,
+        width + 8,
         coreThickness
-      )
+      ),
+      coreThickness / 2,
+      new Color("#FFE34D", 0.72)
     );
-    ctx.setFillColor(new Color("#FFFF8A", 0.78));
-    ctx.fillRect(new Rect(x0, centerY - 2, width, 4));
+    fillRoundedRect(
+      ctx,
+      new Rect(x0 - 2, centerY - 1, width + 4, 3),
+      1.5,
+      new Color("#FFF3A0", 0.38)
+    );
   }
 }
 
