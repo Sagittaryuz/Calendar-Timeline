@@ -135,8 +135,9 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : makeWidget(selectedItems, loadResult.error);
 
-const runScriptURL = URLScheme.forRunningScript();
-widget.url = addURLParameter(runScriptURL, "refresh", "1");
+// Um toque abre o Calendário diretamente, sem passar pela interface do
+// Scriptable. A atualização permanece solicitada pelo agendamento abaixo.
+widget.url = calendarURL(now);
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -2119,11 +2120,12 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     Math.min(96, sceneWidth * 0.44, sceneWidth - 6)
   );
   const moonX = x0 + (sceneWidth - moonSize) / 2;
-  // Centraliza verticalmente o conjunto Lua + nome da fase.
-  const moonY = Math.max(
-    CANVAS.localPlotTop + 6,
-    (sceneHeight - moonSize - 37) / 2
-  );
+  // Centraliza verticalmente o conjunto Lua + nome da fase usando somente a
+  // altura útil do grid, sem considerar a legenda superior das horas.
+  const moonGroupHeight = moonSize + 37;
+  const gridHeight = localPlotBottom() - CANVAS.localPlotTop;
+  const moonY =
+    CANVAS.localPlotTop + (gridHeight - moonGroupHeight) / 2;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
