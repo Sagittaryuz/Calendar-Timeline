@@ -27,6 +27,10 @@ const SETTINGS = {
   showNightTexture: true,
   showSolarGlow: true,
   solarGlowIntensity: 1.0,
+  nightStartHour: 17,
+  nightEndHour: 7,
+  daylightStartHour: 7,
+  daylightEndHour: 17,
   alternateFooterSummary: true,
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -258,7 +262,7 @@ async function runInitialSetup(current) {
   const locationAlert = new Alert();
   locationAlert.title = "Localização e feriados";
   locationAlert.message =
-    "A localização é atualizada no máximo a cada seis horas e permite calcular o período noturno e identificar feriados regionais.";
+    "O período noturno agora é fixo, das 17:00 às 07:00. A localização é opcional e serve somente para identificar feriados estaduais e municipais.";
   locationAlert.addAction("Ativar os dois");
   locationAlert.addAction("Somente localização");
   locationAlert.addDestructiveAction("Desativar os dois");
@@ -340,7 +344,7 @@ async function presentSettingsPanel(current) {
     menu.addAction(`Brilho solar: ${enabledLabel(configured.showSolarGlow)}`);
     menu.addAction("Intensidade do brilho");
     menu.addAction(`Tema: ${(configured.themeMode ?? "black").toUpperCase()}`);
-    menu.addAction(`Localização: ${enabledLabel(configured.useCurrentLocation)}`);
+    menu.addAction(`Localização para feriados: ${enabledLabel(configured.useCurrentLocation)}`);
     menu.addAction(`Feriados automáticos: ${enabledLabel(configured.automaticHolidays)}`);
     menu.addAction(`Atrasados: ${enabledLabel(configured.showOverdueReminders)}`);
     menu.addDestructiveAction("Limpar caches");
@@ -1282,11 +1286,9 @@ function accessoryEventStatus(event) {
 
 async function showDiagnostics(result, astronomyData, textures) {
   const locationStatus = SETTINGS.useCurrentLocation
-    ? "ativada (cache de 6 h)"
-    : "desativada / Jataí";
+    ? "ativada somente para feriados (cache de 6 h)"
+    : "desativada";
   const textureCount = Object.values(textures).filter(Boolean).length;
-  const sunrise = solarTimeForDate(startOfDay(now), true);
-  const sunset = solarTimeForDate(startOfDay(now), false);
   const selectedCalendars =
     (userConfiguration.selectedCalendarTitles ?? []).join(", ") || "todas";
   const alert = new Alert();
@@ -1298,8 +1300,8 @@ async function showDiagnostics(result, astronomyData, textures) {
     `Itens consultados: ${result.items.length}`,
     `Agendas: ${selectedCalendars}`,
     `Localização: ${locationStatus}`,
-    `Nascer do sol: ${sunrise ? formatDate(sunrise, "HH:mm") : "indisponível"}`,
-    `Pôr do sol: ${sunset ? formatDate(sunset, "HH:mm") : "indisponível"}`,
+    `Período diurno fixo: 07:00–17:00`,
+    `Período noturno fixo: 17:00–07:00`,
     `Texturas noturnas: ${textureCount}/4`,
     `Erro: ${result.error ?? "nenhum"}`,
   ].join("\n");
@@ -1712,8 +1714,14 @@ function visibleDaylightIntervals() {
   const finalDay = startOfDay(windowEnd);
 
   while (dayStart <= finalDay) {
-    const daylightStart = dateAtHour(dayStart, 6);
-    const daylightEnd = dateAtHour(dayStart, 18);
+    const daylightStart = dateAtHour(
+      dayStart,
+      SETTINGS.daylightStartHour
+    );
+    const daylightEnd = dateAtHour(
+      dayStart,
+      SETTINGS.daylightEndHour
+    );
     const visibleStart = new Date(
       Math.max(daylightStart.getTime(), windowStart.getTime())
     );
@@ -1737,14 +1745,12 @@ function drawNightTextureBackground(ctx) {
   const finalDay = addDays(startOfDay(windowEnd), 1);
 
   while (dayStart <= finalDay) {
-    const nightStart = solarTimeForDate(dayStart, false);
+    const nightStart = dateAtHour(dayStart, SETTINGS.nightStartHour);
     const nextDay = addDays(dayStart, 1);
-    const nightEnd = solarTimeForDate(nextDay, true);
+    const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    if (nightStart && nightEnd) {
-      drawNightTextureSegment(ctx, nightStart, nextDay, dayStart);
-      drawNightTextureSegment(ctx, nextDay, nightEnd, nextDay);
-    }
+    drawNightTextureSegment(ctx, nightStart, nextDay, dayStart);
+    drawNightTextureSegment(ctx, nextDay, nightEnd, nextDay);
     dayStart = nextDay;
   }
 }
@@ -1787,10 +1793,10 @@ function drawSkyCycleBackground(ctx) {
   const finalDay = addDays(startOfDay(windowEnd), 1);
 
   while (dayStart <= finalDay) {
-    const sunrise = solarTimeForDate(dayStart, true);
-    const sunset = solarTimeForDate(dayStart, false);
+    const sunrise = dateAtHour(dayStart, SETTINGS.daylightStartHour);
+    const sunset = dateAtHour(dayStart, SETTINGS.daylightEndHour);
     const nextDay = addDays(dayStart, 1);
-    const nextSunrise = solarTimeForDate(nextDay, true);
+    const nextSunrise = dateAtHour(nextDay, SETTINGS.daylightStartHour);
 
     if (sunrise && sunset) {
       drawDaylightGlow(ctx, sunrise, sunset, dayStart);
@@ -2065,29 +2071,27 @@ function drawNightScenes(ctx) {
   const finalDay = addDays(startOfDay(windowEnd), 1);
 
   while (dayStart <= finalDay) {
-    const nightStart = solarTimeForDate(dayStart, false);
+    const nightStart = dateAtHour(dayStart, SETTINGS.nightStartHour);
     const nextDay = addDays(dayStart, 1);
-    const nightEnd = solarTimeForDate(nextDay, true);
+    const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    if (nightStart && nightEnd) {
-      // Uma Lua centralizada entre o pôr do sol e 00:00.
-      drawNightSegment(
-        ctx,
-        nightStart,
-        nextDay,
-        nightStart,
-        nightEnd
-      );
+    // Uma Lua centralizada entre 17:00 e 00:00.
+    drawNightSegment(
+      ctx,
+      nightStart,
+      nextDay,
+      nightStart,
+      nightEnd
+    );
 
-      // A mesma Lua repetida e centralizada entre 00:00 e o nascer do sol.
-      drawNightSegment(
-        ctx,
-        nextDay,
-        nightEnd,
-        nightStart,
-        nightEnd
-      );
-    }
+    // A mesma Lua repetida e centralizada entre 00:00 e 07:00.
+    drawNightSegment(
+      ctx,
+      nextDay,
+      nightEnd,
+      nightStart,
+      nightEnd
+    );
 
     dayStart = addDays(dayStart, 1);
   }
