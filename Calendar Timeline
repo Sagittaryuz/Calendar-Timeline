@@ -1608,9 +1608,10 @@ function hourGridLineColor(tick) {
     : new Color("#3A3A3C", 1.0);
 }
 
-function drawHourLabelSideFrames(ctx, ticks) {
+function drawHourLabelFrames(ctx, ticks) {
   const frameHeight = isCompactMode() ? 30 : 34;
   const lineWidth = 2;
+  const gapWidth = 6;
   const visibleTickXs = ticks.map((tick) => timeToX(tick));
   const tickSpacing = visibleTickXs.length > 1
     ? Math.min(
@@ -1621,8 +1622,27 @@ function drawHourLabelSideFrames(ctx, ticks) {
     : 50;
   const frameWidth = Math.max(
     30,
-    Math.min(isCompactMode() ? 42 : 44, tickSpacing - 6)
+    Math.min(isCompactMode() ? 42 : 44, tickSpacing - gapWidth)
   );
+
+  // Somente o pequeno intervalo entre duas horas fica vazado. O interior
+  // de cada retângulo preserva o destaque colorido do evento, quando houver.
+  for (let index = 0; index < ticks.length - 1; index++) {
+    const gapCenterX =
+      (visibleTickXs[index] + visibleTickXs[index + 1]) / 2;
+    const gapDate = new Date(
+      (ticks[index].getTime() + ticks[index + 1].getTime()) / 2
+    );
+    ctx.setFillColor(new Color(timelineBackgroundColorForDate(gapDate)));
+    ctx.fillRect(
+      new Rect(
+        gapCenterX - gapWidth / 2,
+        3,
+        gapWidth,
+        frameHeight
+      )
+    );
+  }
 
   for (const tick of ticks) {
     // O badge de meia-noite permanece exatamente como antes.
@@ -1631,15 +1651,14 @@ function drawHourLabelSideFrames(ctx, ticks) {
     const centerX = timeToX(tick);
     const leftX = centerX - frameWidth / 2;
     const rightX = centerX + frameWidth / 2 - lineWidth;
-
-    // Remove qualquer destaque de evento dentro da moldura, deixando apenas
-    // a cor sólida correspondente ao fundo deste dia da timeline.
-    ctx.setFillColor(new Color(timelineBackgroundColorForDate(tick)));
-    ctx.fillRect(new Rect(leftX, 3, frameWidth, frameHeight));
+    const topY = 3;
+    const bottomY = topY + frameHeight - lineWidth;
 
     ctx.setFillColor(hourGridLineColor(tick));
-    ctx.fillRect(new Rect(leftX, 3, lineWidth, frameHeight));
-    ctx.fillRect(new Rect(rightX, 3, lineWidth, frameHeight));
+    ctx.fillRect(new Rect(leftX, topY, lineWidth, frameHeight));
+    ctx.fillRect(new Rect(rightX, topY, lineWidth, frameHeight));
+    ctx.fillRect(new Rect(leftX, topY, frameWidth, lineWidth));
+    ctx.fillRect(new Rect(leftX, bottomY, frameWidth, lineWidth));
   }
 }
 
@@ -1668,8 +1687,8 @@ function drawHourAxis(ctx, items) {
   // Segundo: retângulos coloridos sobre as linhas.
   drawEventHourHighlights(ctx, items);
 
-  // Terceiro: molduras vazadas das horas, sem alterar o dia da semana.
-  drawHourLabelSideFrames(ctx, ticks);
+  // Terceiro: retângulos individuais das horas, sem alterar o dia da semana.
+  drawHourLabelFrames(ctx, ticks);
 
   // Quarto: horas e badges acima das cápsulas e das molduras.
   for (const tick of ticks) {
