@@ -1602,6 +1602,28 @@ function hourTicks() {
   return ticks;
 }
 
+function hourGridLineColor(tick) {
+  return tick.getHours() === 0
+    ? dayBoundaryLineColor(tick, loadResult.holidayDates)
+    : new Color("#3A3A3C", 1.0);
+}
+
+function drawHourLabelSideFrames(ctx, ticks) {
+  const frameWidth = isCompactMode() ? 44 : 50;
+  const frameHeight = isCompactMode() ? 30 : 34;
+  const lineWidth = 2;
+
+  for (const tick of ticks) {
+    const centerX = timeToX(tick);
+    const leftX = centerX - frameWidth / 2;
+    const rightX = centerX + frameWidth / 2 - lineWidth;
+
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(new Rect(leftX, 3, lineWidth, frameHeight));
+    ctx.fillRect(new Rect(rightX, 3, lineWidth, frameHeight));
+  }
+}
+
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
 
@@ -1612,11 +1634,7 @@ function drawHourAxis(ctx, items) {
     const isMidnight = hour === 0;
     const isNoon = hour === 12;
 
-    ctx.setStrokeColor(
-      isMidnight
-        ? dayBoundaryLineColor(tick, loadResult.holidayDates)
-        : new Color("#3A3A3C", 1.0)
-    );
+    ctx.setStrokeColor(hourGridLineColor(tick));
     ctx.setLineWidth(isMidnight ? 4 : isNoon ? 2 : 1);
     ctx.strokeRect(
       new Rect(
@@ -1671,6 +1689,10 @@ function drawHourAxis(ctx, items) {
       ctx.drawTextInRect(label, new Rect(x - 22, 7, 44, 27));
     }
   }
+
+  // Molduras laterais sem preenchimento: separam visualmente cada legenda
+  // usando a mesma geometria do badge do dia da semana.
+  drawHourLabelSideFrames(ctx, ticks);
 }
 
 function drawTimelineItem(ctx, item, y, rowHeight) {
