@@ -37,6 +37,12 @@ const SETTINGS = {
   nightStarColor: "#FFFFFF",
   nightCloudColor: "#F2F2F7",
   nightCloudShadeColor: "#D8DCE2",
+  nightSkyTopColor: "#3A3D46",
+  nightSkyMidColor: "#292C34",
+  nightSkyBottomColor: "#111318",
+  nightGeometryColor: "#8E929C",
+  twilightGlowColor: "#FFD166",
+  daylightGlowColor: "#FFCC66",
   useCurrentLocation: true,
   locationCacheHours: 6,
   holidayCacheDays: 30,
@@ -1174,7 +1180,10 @@ function renderTimelinePanel(items, loadError) {
 
   // A decoração fica atrás do grid. As cápsulas cobrem o grid e as horas
   // são desenhadas por último, sempre acima das cores dos eventos.
-  if (!isCompactMode()) drawNightScenes(ctx);
+  if (!isCompactMode()) {
+    drawSkyCycleBackground(ctx);
+    drawNightScenes(ctx);
+  }
   drawHourAxis(ctx, loadResult.items);
 
   if (loadError) {
@@ -1205,6 +1214,179 @@ function renderTimelinePanel(items, loadError) {
   }
 
   return ctx.getImage();
+}
+
+function drawSkyCycleBackground(ctx) {
+  // Começa no dia anterior para incluir a noite que atravessa a meia-noite.
+  let dayStart = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+
+  while (dayStart <= finalDay) {
+    const sunrise = solarTimeForDate(dayStart, true);
+    const sunset = solarTimeForDate(dayStart, false);
+    const nextDay = addDays(dayStart, 1);
+    const nextSunrise = solarTimeForDate(nextDay, true);
+
+    if (sunrise && sunset) {
+      drawDaylightGlow(ctx, sunrise, sunset, dayStart);
+    }
+    if (sunset && nextSunrise) {
+      drawNightAtmosphere(ctx, sunset, nextSunrise);
+      drawTwilightGlow(ctx, sunset, false);
+      drawTwilightGlow(ctx, nextSunrise, true);
+    }
+
+    dayStart = nextDay;
+  }
+}
+
+function drawNightAtmosphere(ctx, nightStart, nightEnd) {
+  const visibleStart = new Date(
+    Math.max(nightStart.getTime(), windowStart.getTime())
+  );
+  const visibleEnd = new Date(
+    Math.min(nightEnd.getTime(), windowEnd.getTime())
+  );
+  if (visibleEnd <= visibleStart) return;
+
+  const x0 = Math.max(0, timeToX(visibleStart));
+  const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+  const width = x1 - x0;
+  const height = timelineHeight();
+  if (width <= 0) return;
+
+  // Gradiente vertical cinza-azulado, inclusive atrás da legenda das horas.
+  for (let y = 0; y < height; y += 2) {
+    const progress = y / Math.max(1, height - 1);
+    const color =
+      progress <= 0.46
+        ? interpolateHexColor(
+            SETTINGS.nightSkyTopColor,
+            SETTINGS.nightSkyMidColor,
+            progress / 0.46
+          )
+        : interpolateHexColor(
+            SETTINGS.nightSkyMidColor,
+            SETTINGS.nightSkyBottomColor,
+            (progress - 0.46) / 0.54
+          );
+    const opacity = 0.88 - progress * 0.14;
+    ctx.setFillColor(new Color(color, opacity));
+    ctx.fillRect(new Rect(x0, y, width, 2));
+  }
+
+  // Textura geométrica sutil para diferenciar o período noturno.
+  const geometryStep = 52;
+  ctx.setStrokeColor(new Color(SETTINGS.nightGeometryColor, 0.12));
+  ctx.setLineWidth(1);
+  for (let baseX = x0 + 8; baseX < x1; baseX += geometryStep) {
+    const path = new Path();
+    const xA = baseX;
+    const xB = Math.min(x1, baseX + 20);
+    const xC = Math.min(x1, baseX + 7);
+    const xD = Math.min(x1, baseX + 30);
+    path.move(new Point(xA, 0));
+    path.addLine(new Point(xB, height * 0.24));
+    path.addLine(new Point(xC, height * 0.52));
+    path.addLine(new Point(xD, height * 0.78));
+    path.addLine(new Point(Math.min(x1, baseX + 14), height));
+    ctx.addPath(path);
+    ctx.strokePath();
+  }
+
+  // Pequenas estrelas de fundo; as estrelas principais permanecem nas luas.
+  const starCount = Math.max(2, Math.floor(width / 72));
+  for (let index = 0; index < starCount; index++) {
+    const relativeX = ((index * 0.61803398875 + 0.17) % 1);
+    const relativeY = ((index * 0.371 + 0.21) % 1);
+    drawFivePointStar(
+      ctx,
+      x0 + width * relativeX,
+      12 + (height - 24) * relativeY,
+      1.8 + (index % 3) * 0.45,
+      new Color(SETTINGS.nightStarColor, 0.22)
+    );
+  }
+}
+
+function drawTwilightGlow(ctx, moment, isSunrise) {
+  const centerX = timeToX(moment);
+  const hourWidth = timelineWidth() / Math.max(1, windowHours);
+  const radius = Math.max(18, Math.min(70, hourWidth * 1.45));
+  if (centerX + radius < 0 || centerX - radius > timelineWidth()) return;
+
+  // No pôr do sol, o brilho fecha vindo do dia; no nascer, abre em direção
+  // ao novo dia. A intensidade máxima permanece exatamente na transição.
+  const leftRadius = isSunrise ? radius * 0.42 : radius;
+  const rightRadius = isSunrise ? radius : radius * 0.42;
+  const startX = Math.max(0, centerX - leftRadius);
+  const endX = Math.min(timelineWidth(), centerX + rightRadius);
+
+  for (let x = startX; x < endX; x += 2) {
+    const distance = x <= centerX
+      ? (centerX - x) / Math.max(1, leftRadius)
+      : (x - centerX) / Math.max(1, rightRadius);
+    const strength = Math.max(0, 1 - distance);
+    ctx.setFillColor(
+      new Color(SETTINGS.twilightGlowColor, 0.16 * strength * strength)
+    );
+    ctx.fillRect(new Rect(x, 0, 2, timelineHeight()));
+
+    ctx.setFillColor(
+      new Color(SETTINGS.twilightGlowColor, 0.20 * strength * strength)
+    );
+    ctx.fillRect(new Rect(x, 0, 2, CANVAS.localPlotTop + 30));
+  }
+
+  ctx.setFillColor(new Color(SETTINGS.twilightGlowColor, 0.13));
+  ctx.fillEllipse(
+    new Rect(centerX - radius * 0.42, -22, radius * 0.84, 116)
+  );
+}
+
+function drawDaylightGlow(ctx, sunrise, sunset, dayStart) {
+  const visibleStart = new Date(
+    Math.max(sunrise.getTime(), windowStart.getTime())
+  );
+  const visibleEnd = new Date(
+    Math.min(sunset.getTime(), windowEnd.getTime())
+  );
+  if (visibleEnd <= visibleStart) return;
+
+  const x0 = Math.max(0, timeToX(visibleStart));
+  const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+  let noon = dateAtHour(dayStart, 12);
+  if (noon <= sunrise || noon >= sunset) {
+    noon = new Date((sunrise.getTime() + sunset.getTime()) / 2);
+  }
+
+  for (let x = x0; x < x1; x += 2) {
+    const time = new Date(
+      windowStart.getTime() +
+        (x / timelineWidth()) * (windowEnd.getTime() - windowStart.getTime())
+    );
+    const linearStrength = time <= noon
+      ? (time.getTime() - sunrise.getTime()) /
+        Math.max(1, noon.getTime() - sunrise.getTime())
+      : (sunset.getTime() - time.getTime()) /
+        Math.max(1, sunset.getTime() - noon.getTime());
+    const clamped = Math.max(0, Math.min(1, linearStrength));
+    const strength = 0.5 - 0.5 * Math.cos(Math.PI * clamped);
+
+    // Brilho concentrado logo abaixo da legenda e respirando até o grid.
+    ctx.setFillColor(
+      new Color(SETTINGS.daylightGlowColor, 0.11 * strength)
+    );
+    ctx.fillRect(new Rect(x, 35, 2, 18));
+    ctx.setFillColor(
+      new Color(SETTINGS.daylightGlowColor, 0.065 * strength)
+    );
+    ctx.fillRect(new Rect(x, 53, 2, 28));
+    ctx.setFillColor(
+      new Color(SETTINGS.daylightGlowColor, 0.025 * strength)
+    );
+    ctx.fillRect(new Rect(x, 81, 2, 28));
+  }
 }
 
 function drawNightScenes(ctx) {
@@ -1258,13 +1440,7 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
   if (sceneWidth < 18) return;
 
   const sceneHeight = timelineHeight();
-  const moonDate = new Date(
-    (segmentStart.getTime() + segmentEnd.getTime()) / 2
-  );
-  const nightBackground = new Color(
-    timelineBackgroundColorForDate(moonDate),
-    1.0
-  );
+  const nightBackground = new Color(SETTINGS.nightSkyMidColor, 1.0);
   const moon = moonPhaseForDate(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
