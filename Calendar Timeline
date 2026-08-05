@@ -1609,14 +1609,33 @@ function hourGridLineColor(tick) {
 }
 
 function drawHourLabelSideFrames(ctx, ticks) {
-  const frameWidth = isCompactMode() ? 44 : 50;
   const frameHeight = isCompactMode() ? 30 : 34;
   const lineWidth = 2;
+  const visibleTickXs = ticks.map((tick) => timeToX(tick));
+  const tickSpacing = visibleTickXs.length > 1
+    ? Math.min(
+        ...visibleTickXs
+          .slice(1)
+          .map((x, index) => Math.abs(x - visibleTickXs[index]))
+      )
+    : 50;
+  const frameWidth = Math.max(
+    30,
+    Math.min(isCompactMode() ? 42 : 44, tickSpacing - 6)
+  );
 
   for (const tick of ticks) {
+    // O badge de meia-noite permanece exatamente como antes.
+    if (tick.getHours() === 0) continue;
+
     const centerX = timeToX(tick);
     const leftX = centerX - frameWidth / 2;
     const rightX = centerX + frameWidth / 2 - lineWidth;
+
+    // Remove qualquer destaque de evento dentro da moldura, deixando apenas
+    // a cor sólida correspondente ao fundo deste dia da timeline.
+    ctx.setFillColor(new Color(timelineBackgroundColorForDate(tick)));
+    ctx.fillRect(new Rect(leftX, 3, frameWidth, frameHeight));
 
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(new Rect(leftX, 3, lineWidth, frameHeight));
@@ -1635,7 +1654,7 @@ function drawHourAxis(ctx, items) {
     const isNoon = hour === 12;
 
     ctx.setStrokeColor(hourGridLineColor(tick));
-    ctx.setLineWidth(isMidnight ? 4 : isNoon ? 2 : 1);
+    ctx.setLineWidth(isMidnight ? 8 : isNoon ? 2 : 1);
     ctx.strokeRect(
       new Rect(
         x,
@@ -1649,7 +1668,10 @@ function drawHourAxis(ctx, items) {
   // Segundo: retângulos coloridos sobre as linhas.
   drawEventHourHighlights(ctx, items);
 
-  // Terceiro: horas e badges acima das cápsulas.
+  // Terceiro: molduras vazadas das horas, sem alterar o dia da semana.
+  drawHourLabelSideFrames(ctx, ticks);
+
+  // Quarto: horas e badges acima das cápsulas e das molduras.
   for (const tick of ticks) {
     const x = timeToX(tick);
     const hour = tick.getHours();
@@ -1690,9 +1712,6 @@ function drawHourAxis(ctx, items) {
     }
   }
 
-  // Molduras laterais sem preenchimento: separam visualmente cada legenda
-  // usando a mesma geometria do badge do dia da semana.
-  drawHourLabelSideFrames(ctx, ticks);
 }
 
 function drawTimelineItem(ctx, item, y, rowHeight) {
