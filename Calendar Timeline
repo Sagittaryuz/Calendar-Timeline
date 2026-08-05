@@ -43,6 +43,9 @@ const SETTINGS = {
   nightGeometryColor: "#8E929C",
   twilightGlowColor: "#FFD166",
   daylightGlowColor: "#FFCC66",
+  nightTextureVersion: "v1",
+  nightTextureBaseURL:
+    "https://raw.githubusercontent.com/Sagittaryuz/Calendar-Timeline/main/assets",
   useCurrentLocation: true,
   locationCacheHours: 6,
   holidayCacheDays: 30,
@@ -95,6 +98,7 @@ const windowEnd = new Date(
 );
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
+const nightTextures = await loadNightTextures();
 const automaticHolidayDates = await loadAutomaticHolidays(astronomy);
 automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
 const preparedItems = prepareTimelineItems(loadResult.items, now);
@@ -464,6 +468,49 @@ async function loadAstronomy() {
       Keychain.set(cacheKey, JSON.stringify(offlineLocation));
     } catch (_) {}
     return offlineLocation;
+  }
+}
+
+async function loadNightTextures() {
+  const variants = ["default", "saturday", "sunday", "holiday"];
+  const entries = await Promise.all(
+    variants.map(async (variant) => [variant, await loadNightTexture(variant)])
+  );
+  return Object.fromEntries(entries);
+}
+
+async function loadNightTexture(variant) {
+  const fm = FileManager.local();
+  const version = SETTINGS.nightTextureVersion;
+  const cachePath = fm.joinPath(
+    fm.documentsDirectory(),
+    `Calendar-Timeline-night-${variant}-${version}.jpg`
+  );
+
+  if (fm.fileExists(cachePath)) {
+    try {
+      return fm.readImage(cachePath);
+    } catch (_) {}
+  }
+
+  const fileName =
+    variant === "default"
+      ? "night-sky.base64.txt"
+      : `night-sky-${variant}.base64.txt`;
+
+  try {
+    const request = new Request(
+      `${SETTINGS.nightTextureBaseURL}/${fileName}?v=${version}`
+    );
+    request.timeoutInterval = 12;
+    const encoded = (await request.loadString()).trim();
+    const image = Image.fromData(Data.fromBase64String(encoded));
+    try {
+      fm.writeImage(cachePath, image);
+    } catch (_) {}
+    return image;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -1178,15 +1225,15 @@ function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // Brilho diurno discreto e fixo das 06:00 às 18:00. Fora desse intervalo,
-  // o fundo original da timeline permanece completamente inalterado.
+  // As camadas atmosféricas permanecem atrás dos eventos. O núcleo do brilho
+  // solar é desenhado depois do grid para formar uma faixa única e contínua.
+  drawNightTextureBackground(ctx);
   drawFixedDaylightGlow(ctx);
   if (!isCompactMode()) {
-    // Mantém a Lua anterior com fase, nuvens, estrelas e legenda, mas sem
-    // reativar qualquer gradiente ou textura sobre o fundo noturno.
     drawNightScenes(ctx);
   }
   drawHourAxis(ctx, loadResult.items);
+  drawFixedDaylightGloss(ctx);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -1219,18 +1266,68 @@ function renderTimelinePanel(items, loadError) {
 }
 
 function drawFixedDaylightGlow(ctx) {
-  const lineY = 38;
-  const lineThickness = 5;
+  const lineY = 40;
+  const lineThickness = 9;
   const rowHeight =
     (localPlotBottom() - CANVAS.localPlotTop) / SETTINGS.maxItems;
   const glowEndY = Math.max(
     lineY + lineThickness,
     Math.min(
       timelineHeight(),
-      // Centro da terceira linha visual de eventos e lembretes.
-      CANVAS.localPlotTop + rowHeight * 2.5
+      // Centro da quinta linha visual de eventos e lembretes.
+      CANVAS.localPlotTop + rowHeight * 4.5
     )
   );
+
+  for (const { x0, x1 } of visibleDaylightIntervals()) {
+    const width = x1 - x0;
+    if (width <= 0) continue;
+
+    // Halo superior e queda vertical longa, sem borda rígida.
+    for (let y = lineY - 12; y < glowEndY; y += 2) {
+      const strength =
+        y < lineY
+          ? Math.max(0, 1 - (lineY - y) / 12)
+          : Math.pow(
+              Math.max(0, 1 - (y - lineY) / (glowEndY - lineY)),
+              1.12
+            );
+      const opacity = y < lineY ? 0.10 * strength : 0.22 * strength;
+      ctx.setFillColor(new Color("#FFCB32", opacity));
+      ctx.fillRect(new Rect(x0, y, width, 2));
+    }
+  }
+}
+
+function drawFixedDaylightGloss(ctx) {
+  const centerY = 44;
+  const upperRadius = 5;
+  const lowerRadius = 18;
+
+  for (const { x0, x1 } of visibleDaylightIntervals()) {
+    const width = x1 - x0;
+    if (width <= 0) continue;
+
+    // Camadas simétricas criam um gloss forte sem aparência de linha reta.
+    for (let offset = -upperRadius; offset <= lowerRadius; offset += 2) {
+      const normalized =
+        offset < 0
+          ? Math.abs(offset) / upperRadius
+          : offset / lowerRadius;
+      const strength = Math.pow(Math.max(0, 1 - normalized), 2.2);
+      ctx.setFillColor(new Color("#FFD84D", 0.34 * strength));
+      ctx.fillRect(new Rect(x0, centerY + offset, width, 2));
+    }
+
+    ctx.setFillColor(new Color("#FFF2A6", 0.58));
+    ctx.fillRect(new Rect(x0, centerY - 2, width, 5));
+    ctx.setFillColor(new Color("#FFFFFF", 0.24));
+    ctx.fillRect(new Rect(x0, centerY - 1, width, 2));
+  }
+}
+
+function visibleDaylightIntervals() {
+  const intervals = [];
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
 
@@ -1245,30 +1342,63 @@ function drawFixedDaylightGlow(ctx) {
     );
 
     if (visibleEnd > visibleStart) {
-      const x0 = Math.max(0, timeToX(visibleStart));
-      const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
-      const width = x1 - x0;
-
-      if (width > 0) {
-        // Linha amarela contínua imediatamente abaixo das horas.
-        ctx.setFillColor(new Color("#FFD84D", 0.92));
-        ctx.fillRect(new Rect(x0, lineY, width, lineThickness));
-        ctx.setFillColor(new Color("#FFF0A3", 0.62));
-        ctx.fillRect(new Rect(x0, lineY, width, 2));
-
-        // O brilho perde força progressivamente até a terceira linha.
-        for (let y = lineY + lineThickness; y < glowEndY; y += 2) {
-          const progress =
-            (y - lineY) / Math.max(1, glowEndY - lineY);
-          const strength = Math.pow(1 - progress, 1.45);
-          ctx.setFillColor(new Color("#FFCC33", 0.20 * strength));
-          ctx.fillRect(new Rect(x0, y, width, 2));
-        }
-      }
+      intervals.push({
+        x0: Math.max(0, timeToX(visibleStart)),
+        x1: Math.min(timelineWidth(), timeToX(visibleEnd)),
+      });
     }
-
     dayStart = addDays(dayStart, 1);
   }
+  return intervals;
+}
+
+function drawNightTextureBackground(ctx) {
+  let dayStart = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+
+  while (dayStart <= finalDay) {
+    const nightStart = solarTimeForDate(dayStart, false);
+    const nextDay = addDays(dayStart, 1);
+    const nightEnd = solarTimeForDate(nextDay, true);
+
+    if (nightStart && nightEnd) {
+      drawNightTextureSegment(ctx, nightStart, nextDay, dayStart);
+      drawNightTextureSegment(ctx, nextDay, nightEnd, nextDay);
+    }
+    dayStart = nextDay;
+  }
+}
+
+function drawNightTextureSegment(ctx, segmentStart, segmentEnd, styleDate) {
+  if (segmentEnd <= windowStart || segmentStart >= windowEnd) return;
+
+  const x0 = timeToX(segmentStart);
+  const x1 = timeToX(segmentEnd);
+  if (x1 <= x0) return;
+
+  const image = nightTextureForDate(styleDate);
+  if (image) {
+    ctx.drawImageInRect(
+      image,
+      new Rect(x0, 0, x1 - x0, timelineHeight())
+    );
+  } else {
+    // Reserva offline caso a textura ainda não tenha sido baixada.
+    drawNightAtmosphere(ctx, segmentStart, segmentEnd);
+  }
+}
+
+function nightTextureForDate(date) {
+  if (loadResult.holidayDates.has(dateKey(date))) {
+    return nightTextures.holiday ?? nightTextures.default;
+  }
+  if (date.getDay() === 6) {
+    return nightTextures.saturday ?? nightTextures.default;
+  }
+  if (date.getDay() === 0) {
+    return nightTextures.sunday ?? nightTextures.default;
+  }
+  return nightTextures.default;
 }
 
 function drawSkyCycleBackground(ctx) {
@@ -1600,7 +1730,7 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
   if (sceneWidth < 18) return;
 
   const sceneHeight = timelineHeight();
-  const nightBackground = new Color(SETTINGS.nightSkyMidColor, 1.0);
+  const nightBackground = new Color("#101114", 1.0);
   const moon = moonPhaseForDate(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
@@ -1610,7 +1740,11 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     Math.min(96, sceneWidth * 0.44, sceneWidth - 6)
   );
   const moonX = x0 + (sceneWidth - moonSize) / 2;
-  const moonY = CANVAS.localPlotTop + 18;
+  // Centraliza verticalmente o conjunto Lua + nome da fase.
+  const moonY = Math.max(
+    CANVAS.localPlotTop + 6,
+    (sceneHeight - moonSize - 37) / 2
+  );
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
