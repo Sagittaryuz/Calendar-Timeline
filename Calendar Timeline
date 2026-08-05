@@ -37,17 +37,12 @@ const SETTINGS = {
   nightStarColor: "#FFFFFF",
   nightCloudColor: "#F2F2F7",
   nightCloudShadeColor: "#D8DCE2",
-  nightSkyTopColor: "#151A26",
-  nightSkyMidColor: "#0B1020",
-  nightSkyBottomColor: "#03050A",
-  nightGeometryColor: "#8A93A8",
+  nightSkyTopColor: "#3A3D46",
+  nightSkyMidColor: "#292C34",
+  nightSkyBottomColor: "#111318",
+  nightGeometryColor: "#8E929C",
   twilightGlowColor: "#FFD166",
   daylightGlowColor: "#FFCC66",
-  daylightSkyColor: "#D59A45",
-  daylightCoreColor: "#FFE09A",
-  saturdayAtmosphereColor: "#0A84FF",
-  sundayAtmosphereColor: "#FF453A",
-  holidayAtmosphereColor: "#FFCC00",
   useCurrentLocation: true,
   locationCacheHours: 6,
   holidayCacheDays: 30,
@@ -1183,13 +1178,9 @@ function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // A decoração fica atrás do grid. As cápsulas cobrem o grid e as horas
-  // são desenhadas por último, sempre acima das cores dos eventos.
-  drawSkyCycleBackground(ctx);
-  drawCalendarDayAtmosphere(ctx);
-  if (!isCompactMode()) {
-    drawNightScenes(ctx);
-  }
+  // Brilho diurno discreto e fixo das 06:00 às 18:00. Fora desse intervalo,
+  // o fundo original da timeline permanece completamente inalterado.
+  drawFixedDaylightGlow(ctx);
   drawHourAxis(ctx, loadResult.items);
 
   if (loadError) {
@@ -1220,6 +1211,55 @@ function renderTimelinePanel(items, loadError) {
   }
 
   return ctx.getImage();
+}
+
+function drawFixedDaylightGlow(ctx) {
+  const lineY = 38;
+  const glowEndY = Math.max(
+    lineY + 1,
+    Math.min(
+      timelineHeight(),
+      CANVAS.height / 2 - CANVAS.timelineTop
+    )
+  );
+  let dayStart = startOfDay(windowStart);
+  const finalDay = startOfDay(windowEnd);
+
+  while (dayStart <= finalDay) {
+    const daylightStart = dateAtHour(dayStart, 6);
+    const daylightEnd = dateAtHour(dayStart, 18);
+    const visibleStart = new Date(
+      Math.max(daylightStart.getTime(), windowStart.getTime())
+    );
+    const visibleEnd = new Date(
+      Math.min(daylightEnd.getTime(), windowEnd.getTime())
+    );
+
+    if (visibleEnd > visibleStart) {
+      const x0 = Math.max(0, timeToX(visibleStart));
+      const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+      const width = x1 - x0;
+
+      if (width > 0) {
+        // Linha amarela contínua imediatamente abaixo das horas.
+        ctx.setFillColor(new Color("#FFD84D", 0.92));
+        ctx.fillRect(new Rect(x0, lineY, width, 2));
+        ctx.setFillColor(new Color("#FFF0A3", 0.62));
+        ctx.fillRect(new Rect(x0, lineY, width, 1));
+
+        // O brilho perde força progressivamente até a metade do widget.
+        for (let y = lineY + 2; y < glowEndY; y += 2) {
+          const progress =
+            (y - lineY) / Math.max(1, glowEndY - lineY);
+          const strength = Math.pow(1 - progress, 2.35);
+          ctx.setFillColor(new Color("#FFCC33", 0.18 * strength));
+          ctx.fillRect(new Rect(x0, y, width, 2));
+        }
+      }
+    }
+
+    dayStart = addDays(dayStart, 1);
+  }
 }
 
 function drawSkyCycleBackground(ctx) {
