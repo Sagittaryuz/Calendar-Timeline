@@ -2120,12 +2120,11 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     Math.min(96, sceneWidth * 0.44, sceneWidth - 6)
   );
   const moonX = x0 + (sceneWidth - moonSize) / 2;
-  // Centraliza verticalmente o conjunto Lua + nome da fase usando somente a
-  // altura útil do grid, sem considerar a legenda superior das horas.
-  const moonGroupHeight = moonSize + 37;
+  // Centraliza verticalmente apenas a Lua na altura útil do grid. O nome da
+  // fase não é mais exibido nem reserva espaço abaixo do ícone.
   const gridHeight = localPlotBottom() - CANVAS.localPlotTop;
   const moonY =
-    CANVAS.localPlotTop + (gridHeight - moonGroupHeight) / 2;
+    CANVAS.localPlotTop + (gridHeight - moonSize) / 2;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
@@ -2171,17 +2170,6 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     cloudScale
   );
 
-  ctx.setTextAlignedCenter();
-  const phaseFontSize = Math.max(
-    9,
-    Math.min(21, sceneWidth / (moon.name.length * 0.58))
-  );
-  ctx.setFont(Font.blackRoundedSystemFont(phaseFontSize));
-  ctx.setTextColor(new Color(SETTINGS.nightStarColor, 0.82));
-  ctx.drawTextInRect(
-    moon.name,
-    new Rect(x0, moonY + moonSize + 10, sceneWidth, 27)
-  );
 }
 
 function drawMoonPhase(ctx, moon, x, y, size, background) {
