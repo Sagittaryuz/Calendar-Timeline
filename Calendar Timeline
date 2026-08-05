@@ -1293,16 +1293,9 @@ function drawFixedDaylightGlow(ctx) {
               1.12
             );
       const opacity = y < lineY ? 0.12 * strength : 0.25 * strength;
-      const sideProjection = 18 * strength;
       ctx.setFillColor(new Color("#FFD62A", opacity));
-      ctx.fillRect(
-        new Rect(
-          x0 - sideProjection,
-          y,
-          width + sideProjection * 2,
-          2
-        )
-      );
+      // O feixe desce perpendicularmente, sempre com a mesma largura.
+      ctx.fillRect(new Rect(x0, y, width, 2));
     }
   }
 }
