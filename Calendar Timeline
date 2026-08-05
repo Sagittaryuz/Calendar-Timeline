@@ -1220,11 +1220,15 @@ function renderTimelinePanel(items, loadError) {
 
 function drawFixedDaylightGlow(ctx) {
   const lineY = 38;
+  const lineThickness = 5;
+  const rowHeight =
+    (localPlotBottom() - CANVAS.localPlotTop) / SETTINGS.maxItems;
   const glowEndY = Math.max(
-    lineY + 1,
+    lineY + lineThickness,
     Math.min(
       timelineHeight(),
-      CANVAS.height * 0.56 - CANVAS.timelineTop
+      // Centro da terceira linha visual de eventos e lembretes.
+      CANVAS.localPlotTop + rowHeight * 2.5
     )
   );
   let dayStart = startOfDay(windowStart);
@@ -1248,12 +1252,12 @@ function drawFixedDaylightGlow(ctx) {
       if (width > 0) {
         // Linha amarela contínua imediatamente abaixo das horas.
         ctx.setFillColor(new Color("#FFD84D", 0.92));
-        ctx.fillRect(new Rect(x0, lineY, width, 2));
+        ctx.fillRect(new Rect(x0, lineY, width, lineThickness));
         ctx.setFillColor(new Color("#FFF0A3", 0.62));
-        ctx.fillRect(new Rect(x0, lineY, width, 1));
+        ctx.fillRect(new Rect(x0, lineY, width, 2));
 
-        // O brilho perde força progressivamente até a metade do widget.
-        for (let y = lineY + 2; y < glowEndY; y += 2) {
+        // O brilho perde força progressivamente até a terceira linha.
+        for (let y = lineY + lineThickness; y < glowEndY; y += 2) {
           const progress =
             (y - lineY) / Math.max(1, glowEndY - lineY);
           const strength = Math.pow(1 - progress, 1.45);
