@@ -1185,9 +1185,9 @@ function renderTimelinePanel(items, loadError) {
 
   // A decoração fica atrás do grid. As cápsulas cobrem o grid e as horas
   // são desenhadas por último, sempre acima das cores dos eventos.
+  drawSkyCycleBackground(ctx);
+  drawCalendarDayAtmosphere(ctx);
   if (!isCompactMode()) {
-    drawSkyCycleBackground(ctx);
-    drawCalendarDayAtmosphere(ctx);
     drawNightScenes(ctx);
   }
   drawHourAxis(ctx, loadResult.items);
