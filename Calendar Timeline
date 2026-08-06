@@ -1416,6 +1416,8 @@ function visibleDaylightIntervals() {
   const intervals = [];
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
+  // Maior raio do halo circular desenhado nas extremidades solares.
+  const endpointGlowRadius = 34;
 
   while (dayStart <= finalDay) {
     const daylightStart = dateAtHour(
@@ -1426,18 +1428,17 @@ function visibleDaylightIntervals() {
       dayStart,
       SETTINGS.daylightEndHour
     );
-    const visibleStart = new Date(
-      Math.max(daylightStart.getTime(), windowStart.getTime())
-    );
-    const visibleEnd = new Date(
-      Math.min(daylightEnd.getTime(), windowEnd.getTime())
-    );
+    // Mantém as coordenadas presas aos horários reais de 06:00 e 18:00.
+    // Não as limita às bordas do widget: o DrawContext recorta naturalmente
+    // a linha e o halo quando entram ou saem parcialmente da área visível.
+    const x0 = timeToX(daylightStart);
+    const x1 = timeToX(daylightEnd);
+    const touchesVisibleArea =
+      x1 + endpointGlowRadius > 0 &&
+      x0 - endpointGlowRadius < timelineWidth();
 
-    if (visibleEnd > visibleStart) {
-      intervals.push({
-        x0: Math.max(0, timeToX(visibleStart)),
-        x1: Math.min(timelineWidth(), timeToX(visibleEnd)),
-      });
+    if (touchesVisibleArea) {
+      intervals.push({ x0, x1 });
     }
     dayStart = addDays(dayStart, 1);
   }
