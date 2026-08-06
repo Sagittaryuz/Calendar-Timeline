@@ -546,7 +546,7 @@ async function loadWindow() {
         );
         const reminderDisplayStart = hasTime
           ? due
-          : dateAtHour(reminderDayStart, 8);
+          : dateAtHour(reminderDayStart, SETTINGS.daylightStartHour);
         const identifier =
           reminder.identifier ?? `${reminder.title}-${due}`;
         const baseItem = {
@@ -713,14 +713,26 @@ async function loadAstronomy() {
 }
 
 async function loadNightTextures() {
-  const variants = ["default", "saturday", "sunday", "holiday"];
+  const variants = [
+    ["default", "night-sky.base64.txt"],
+    ["saturday", "night-sky-saturday.base64.txt"],
+    ["sunday", "night-sky-sunday.base64.txt"],
+    ["holiday", "night-sky-holiday.base64.txt"],
+    ["evening", "night-sky-evening.base64.txt"],
+    ["saturdayEvening", "night-sky-saturday-evening.base64.txt"],
+    ["sundayEvening", "night-sky-sunday-evening.base64.txt"],
+    ["holidayEvening", "night-sky-holiday-evening.base64.txt"],
+  ];
   const entries = await Promise.all(
-    variants.map(async (variant) => [variant, await loadNightTexture(variant)])
+    variants.map(async ([variant, fileName]) => [
+      variant,
+      await loadNightTexture(variant, fileName),
+    ])
   );
   return Object.fromEntries(entries);
 }
 
-async function loadNightTexture(variant) {
+async function loadNightTexture(variant, fileName) {
   const fm = FileManager.local();
   const version = SETTINGS.nightTextureVersion;
   const cachePath = fm.joinPath(
@@ -733,11 +745,6 @@ async function loadNightTexture(variant) {
       return fm.readImage(cachePath);
     } catch (_) {}
   }
-
-  const fileName =
-    variant === "default"
-      ? "night-sky.base64.txt"
-      : `night-sky-${variant}.base64.txt`;
 
   try {
     const request = new Request(
@@ -1226,7 +1233,16 @@ function accessoryFamilyForAction(action) {
 }
 
 function emptyNightTextures() {
-  return { default: null, saturday: null, sunday: null, holiday: null };
+  return {
+    default: null,
+    saturday: null,
+    sunday: null,
+    holiday: null,
+    evening: null,
+    saturdayEvening: null,
+    sundayEvening: null,
+    holidayEvening: null,
+  };
 }
 
 function makeAccessoryWidget(items, result, family) {
@@ -1782,20 +1798,28 @@ function drawNightTextureBackground(ctx) {
     const nextDay = addDays(dayStart, 1);
     const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    drawNightTextureSegment(ctx, nightStart, nextDay, dayStart);
-    drawNightTextureSegment(ctx, nextDay, nightEnd, nextDay);
+    // Das 18:00 às 00:00 usa a mesma arte espelhada verticalmente.
+    // Lua, nuvens e estrelas são desenhadas depois e não são espelhadas.
+    drawNightTextureSegment(ctx, nightStart, nextDay, dayStart, true);
+    drawNightTextureSegment(ctx, nextDay, nightEnd, nextDay, false);
     dayStart = nextDay;
   }
 }
 
-function drawNightTextureSegment(ctx, segmentStart, segmentEnd, styleDate) {
+function drawNightTextureSegment(
+  ctx,
+  segmentStart,
+  segmentEnd,
+  styleDate,
+  useEveningMirror
+) {
   if (segmentEnd <= windowStart || segmentStart >= windowEnd) return;
 
   const x0 = timeToX(segmentStart);
   const x1 = timeToX(segmentEnd);
   if (x1 <= x0) return;
 
-  const image = nightTextureForDate(styleDate);
+  const image = nightTextureForDate(styleDate, useEveningMirror);
   if (image) {
     ctx.drawImageInRect(
       image,
@@ -1807,17 +1831,22 @@ function drawNightTextureSegment(ctx, segmentStart, segmentEnd, styleDate) {
   }
 }
 
-function nightTextureForDate(date) {
+function nightTextureForDate(date, useEveningMirror) {
+  const suffix = useEveningMirror ? "Evening" : "";
+  const fallback = useEveningMirror
+    ? nightTextures.evening ?? nightTextures.default
+    : nightTextures.default;
+
   if (loadResult.holidayDates.has(dateKey(date))) {
-    return nightTextures.holiday ?? nightTextures.default;
+    return nightTextures[`holiday${suffix}`] ?? fallback;
   }
   if (date.getDay() === 6) {
-    return nightTextures.saturday ?? nightTextures.default;
+    return nightTextures[`saturday${suffix}`] ?? fallback;
   }
   if (date.getDay() === 0) {
-    return nightTextures.sunday ?? nightTextures.default;
+    return nightTextures[`sunday${suffix}`] ?? fallback;
   }
-  return nightTextures.default;
+  return fallback;
 }
 
 function drawSkyCycleBackground(ctx) {
@@ -2157,11 +2186,9 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     Math.min(96, sceneWidth * 0.44, sceneWidth - 6)
   );
   const moonX = x0 + (sceneWidth - moonSize) / 2;
-  // Centraliza verticalmente apenas a Lua na altura útil do grid. O nome da
-  // fase não é mais exibido nem reserva espaço abaixo do ícone.
-  const gridHeight = localPlotBottom() - CANVAS.localPlotTop;
-  const moonY =
-    CANVAS.localPlotTop + (gridHeight - moonSize) / 2;
+  // Centraliza a Lua entre o topo da legenda horária e o limite inferior do
+  // grid. A textura de fundo pode ser espelhada sem afetar este elemento.
+  const moonY = (localPlotBottom() - moonSize) / 2;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
@@ -2572,6 +2599,9 @@ function drawHourAxis(ctx, items) {
     const hour = tick.getHours();
     const isMidnight = hour === 0;
     const isNoon = hour === 12;
+    const isSolarBoundary =
+      hour === SETTINGS.daylightStartHour ||
+      hour === SETTINGS.daylightEndHour;
 
     if (isMidnight) {
       const weekday = shortWeekday(tick);
@@ -2593,14 +2623,15 @@ function drawHourAxis(ctx, items) {
       const activeEvent = eventAtTime(tick, items);
       const hourFontSize = isCompactMode() ? 17 : 21;
       ctx.setFont(
-        activeEvent || isNoon
+        activeEvent || isNoon || isSolarBoundary
           ? Font.blackMonospacedSystemFont(hourFontSize)
           : Font.regularMonospacedSystemFont(hourFontSize)
       );
-      const textColor =
-        activeEvent || isNoon
-          ? Color.white()
-          : new Color(SETTINGS.secondaryTextColor);
+      const textColor = isSolarBoundary
+        ? new Color(SETTINGS.daylightCoreColor, solarOpacity(0.72))
+        : activeEvent || isNoon
+        ? Color.white()
+        : new Color(SETTINGS.secondaryTextColor);
       ctx.setTextColor(textColor);
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(label, new Rect(x - 22, 7, 44, 27));
