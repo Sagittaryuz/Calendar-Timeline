@@ -535,30 +535,66 @@ async function loadWindow() {
         const dayEnd = addDays(dayStart, 1);
         return dayEnd > windowStart && dayStart < windowEnd;
       })
-      .map((reminder) => {
+      .flatMap((reminder) => {
         const due = reminder.dueDate ?? startOfToday();
         const hasTime = Boolean(reminder.dueDateIncludesTime);
         const reminderDayStart = normalizedReminderDayStart(reminder);
+        const reminderDayEnd = addDays(reminderDayStart, 1);
+        const reminderCutoff = dateAtHour(
+          reminderDayStart,
+          SETTINGS.daylightEndHour
+        );
         const reminderDisplayStart = hasTime
           ? due
           : dateAtHour(reminderDayStart, 8);
-        return {
+        const identifier =
+          reminder.identifier ?? `${reminder.title}-${due}`;
+        const baseItem = {
           kind: "reminder",
           title: cleanTitle(reminder.title, "Lembrete"),
           calendarTitle: reminder.calendar?.title ?? "Lembretes",
-          start: reminderDisplayStart,
-          end: addDays(reminderDayStart, 1),
-          isAllDay: !hasTime,
-          identifier: reminder.identifier ?? `${reminder.title}-${due}`,
+          // Mesmo quando a origem é "dia inteiro", o chart possui agora um
+          // intervalo horário definido e não deve sobreviver ao próprio fim.
+          isAllDay: false,
+          sourceIsAllDay: !hasTime,
+          identifier,
           priority: Number(reminder.priority) || 0,
-          isOverdue:
-            Boolean(reminder.isOverdue) ||
-            (hasTime ? due < now : addDays(reminderDayStart, 1) <= now),
           color: safeCalendarColor(
             reminder.calendar,
             SETTINGS.fallbackReminderColor
           ),
         };
+
+        // Lembretes do próprio dia permanecem normais somente até 18:00.
+        // Depois desse limite, se ainda estiverem pendentes, reaparecem como
+        // atrasados até 00:00. Os dois trechos encostam, mas não se sobrepõem.
+        const segments = [];
+        if (reminderDisplayStart < reminderCutoff) {
+          segments.push({
+            ...baseItem,
+            start: reminderDisplayStart,
+            end: reminderCutoff,
+            isOverdue: false,
+          });
+        }
+
+        const isDueToday = dateKey(reminderDayStart) === dateKey(now);
+        if (isDueToday && now >= reminderCutoff) {
+          const overdueStart = new Date(
+            Math.max(reminderCutoff.getTime(), reminderDisplayStart.getTime())
+          );
+          if (overdueStart < reminderDayEnd) {
+            segments.push({
+              ...baseItem,
+              start: overdueStart,
+              end: reminderDayEnd,
+              isAllDay: false,
+              isOverdue: true,
+            });
+          }
+        }
+
+        return segments;
       });
 
     const reminderIdentifiers = new Set(
@@ -567,7 +603,8 @@ async function loadWindow() {
     const overdueReminderItems = scheduledReminders
       .filter((reminder) => {
         const due = reminder.dueDate;
-        if (!due || due >= startOfToday()) return false;
+        const dueDayStart = normalizedReminderDayStart(reminder);
+        if (!due || !dueDayStart || dueDayStart >= startOfToday()) return false;
         if (!includeCalendar(reminder.calendar)) return false;
         const identifier = reminder.identifier ?? `${reminder.title}-${due}`;
         return !reminderIdentifiers.has(identifier);
@@ -576,9 +613,11 @@ async function loadWindow() {
         kind: "reminder",
         title: cleanTitle(reminder.title, "Lembrete"),
         calendarTitle: reminder.calendar?.title ?? "Lembretes",
-        start: dateAtHour(startOfToday(), 8),
-        end: addDays(startOfToday(), 1),
-        isAllDay: true,
+        // Nos dias seguintes, um lembrete ainda pendente reaparece apenas no
+        // período diurno, das 06:00 às 18:00, já marcado como atrasado.
+        start: dateAtHour(startOfToday(), SETTINGS.daylightStartHour),
+        end: dateAtHour(startOfToday(), SETTINGS.daylightEndHour),
+        isAllDay: false,
         identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
         priority: Number(reminder.priority) || 0,
         isOverdue: true,
