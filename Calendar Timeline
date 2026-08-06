@@ -5,10 +5,7 @@
 // AGENDA TIMELINE 4x2
 // Calendário + Lembretes do iPhone em uma timeline diária.
 
-let THEME_MODE = "black"; // "black" | "dark"
-const APP_VERSION = "2.0.0";
-const PUBLIC_INSTALL_URL =
-  "https://calendar-timeline-install.sagittaryuz.chatgpt.site";
+const THEME_MODE = "black"; // "black" | "dark"
 
 const SETTINGS = {
   locale: "pt_BR",
@@ -59,7 +56,7 @@ const SETTINGS = {
   saturdayAtmosphereColor: "#0A84FF",
   sundayAtmosphereColor: "#FF453A",
   holidayAtmosphereColor: "#FFCC00",
-  nightTextureVersion: "v1",
+  nightTextureVersion: "v2",
   nightTextureBaseURL:
     "https://raw.githubusercontent.com/Sagittaryuz/Calendar-Timeline/main/assets",
   useCurrentLocation: true,
@@ -78,8 +75,6 @@ const SETTINGS = {
   selectedCalendarIdentifiers: [],
 };
 
-const USER_CONFIGURATION_KEY = "agenda-timeline-user-settings-v1";
-
 const CANVAS = {
   width: 1092,
   height: 510,
@@ -94,52 +89,40 @@ const CANVAS = {
   localPlotTop: 48,
 };
 
-let userConfiguration = loadUserConfiguration();
-let appAction = "previewHome";
-if (
-  config.runsInApp &&
-  !userConfiguration.setupCompleted
-) {
-  userConfiguration = await runInitialSetup(userConfiguration);
-  saveUserConfiguration(userConfiguration);
-} else if (config.runsInApp) {
-  appAction = await presentMainMenu();
-  if (appAction === "settings") {
-    userConfiguration = await presentSettingsPanel(userConfiguration);
-    saveUserConfiguration(userConfiguration);
-    appAction = "previewHome";
-  }
-}
-applyUserConfiguration(userConfiguration);
-
 const now = new Date();
 now.setSeconds(0, 0);
-const windowHours = parseWindowHours(args.widgetParameter);
+const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
+const requestedHours =
+  (args.queryParameters ?? {}).hours ?? args.widgetParameter;
+const windowHours = parseWindowHours(requestedHours);
 const windowStart = new Date(now);
 const windowEnd = new Date(
   windowStart.getTime() + windowHours * 60 * 60 * 1000
 );
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
-const requestedFamily = accessoryFamilyForAction(appAction);
+const widgetFamily = config.runsInWidget ? config.widgetFamily : null;
 const nightTextures =
-  SETTINGS.showNightTexture && !isAccessoryFamily(requestedFamily)
+  SETTINGS.showNightTexture && !isAccessoryFamily(widgetFamily)
     ? await loadNightTextures()
     : emptyNightTextures();
 const automaticHolidayDates = await loadAutomaticHolidays(astronomy);
 automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
 const preparedItems = prepareTimelineItems(loadResult.items, now);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems);
-const widgetFamily = config.runsInWidget
-  ? config.widgetFamily
-  : requestedFamily;
 const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : makeWidget(selectedItems, loadResult.error);
 
-// O toque abre diretamente o Calendário. A atualização dos dados continua
-// independente do toque e é solicitada ao iOS a cada 60 segundos.
-widget.url = "calshow://";
+// Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
+// o Calendário, conservando o intervalo definido no parâmetro do widget.
+let refreshURL = addURLParameter(
+  URLScheme.forRunningScript(),
+  "refresh",
+  "1"
+);
+refreshURL = addURLParameter(refreshURL, "hours", String(windowHours));
+widget.url = refreshURL;
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -151,294 +134,15 @@ if (config.runsInWidget) {
     await showPermissionHelp(loadResult.error);
   }
 
-  if (appAction === "diagnostics") {
-    await showDiagnostics(loadResult, astronomy, nightTextures);
-  } else if (appAction === "install") {
-    Safari.open(PUBLIC_INSTALL_URL);
-  } else if (appAction === "previewAccessoryCircular") {
-    await widget.presentAccessoryCircular();
-  } else if (appAction === "previewAccessoryInline") {
-    await widget.presentAccessoryInline();
-  } else if (appAction === "previewAccessoryRectangular") {
-    await widget.presentAccessoryRectangular();
+  if (refreshRequested) {
+    Script.setWidget(widget);
+    Safari.open(calendarURL(now));
   } else {
     await widget.presentMedium();
   }
 }
 
 Script.complete();
-
-function loadUserConfiguration() {
-  const defaults = {
-    setupCompleted: false,
-    defaultWindowHours: SETTINGS.defaultWindowHours,
-    useCurrentLocation: SETTINGS.useCurrentLocation,
-    automaticHolidays: SETTINGS.automaticHolidays,
-    showOverdueReminders: SETTINGS.showOverdueReminders,
-    showMoon: SETTINGS.showMoon,
-    showNightTexture: SETTINGS.showNightTexture,
-    showSolarGlow: SETTINGS.showSolarGlow,
-    solarGlowIntensity: SETTINGS.solarGlowIntensity,
-    themeMode: THEME_MODE,
-    selectedCalendarIdentifiers: [],
-    selectedCalendarTitles: [],
-    excludedCalendars: [...SETTINGS.excludedCalendars],
-  };
-  try {
-    if (!Keychain.contains(USER_CONFIGURATION_KEY)) return defaults;
-    return {
-      ...defaults,
-      ...JSON.parse(Keychain.get(USER_CONFIGURATION_KEY)),
-    };
-  } catch (_) {
-    return defaults;
-  }
-}
-
-function saveUserConfiguration(configuration) {
-  try {
-    Keychain.set(USER_CONFIGURATION_KEY, JSON.stringify(configuration));
-  } catch (_) {}
-}
-
-function applyUserConfiguration(configuration) {
-  SETTINGS.defaultWindowHours = validInteger(
-    configuration.defaultWindowHours,
-    1,
-    SETTINGS.maximumWindowHours,
-    SETTINGS.defaultWindowHours
-  );
-  SETTINGS.useCurrentLocation = configuration.useCurrentLocation !== false;
-  SETTINGS.automaticHolidays = configuration.automaticHolidays !== false;
-  SETTINGS.showOverdueReminders =
-    configuration.showOverdueReminders !== false;
-  SETTINGS.showMoon = configuration.showMoon !== false;
-  SETTINGS.showNightTexture = configuration.showNightTexture !== false;
-  SETTINGS.showSolarGlow = configuration.showSolarGlow !== false;
-  SETTINGS.solarGlowIntensity = Math.max(
-    0.25,
-    Math.min(2, Number(configuration.solarGlowIntensity) || 1)
-  );
-  THEME_MODE = configuration.themeMode === "dark" ? "dark" : "black";
-  SETTINGS.selectedCalendarIdentifiers = Array.isArray(
-    configuration.selectedCalendarIdentifiers
-  )
-    ? configuration.selectedCalendarIdentifiers
-    : [];
-  SETTINGS.excludedCalendars = Array.isArray(configuration.excludedCalendars)
-    ? configuration.excludedCalendars
-    : [];
-}
-
-async function runInitialSetup(current) {
-  const valuesAlert = new Alert();
-  valuesAlert.title = "Configurar Calendar Timeline";
-  valuesAlert.message =
-    "Defina a visualização padrão. O parâmetro do widget continuará tendo prioridade sobre estas horas.";
-  valuesAlert.addTextField(
-    "Horas exibidas: 1 a 168",
-    String(current.defaultWindowHours ?? 24)
-  );
-  valuesAlert.addAction("Continuar");
-  valuesAlert.addCancelAction("Usar padrões");
-  const valuesChoice = await valuesAlert.presentAlert();
-
-  const configured = { ...current };
-  if (valuesChoice >= 0) {
-    configured.defaultWindowHours = validInteger(
-      valuesAlert.textFieldValue(0),
-      1,
-      SETTINGS.maximumWindowHours,
-      24
-    );
-  }
-
-  const locationAlert = new Alert();
-  locationAlert.title = "Localização e feriados";
-  locationAlert.message =
-    "O período noturno agora é fixo, das 18:00 às 06:00. A localização é opcional e serve somente para identificar feriados estaduais e municipais.";
-  locationAlert.addAction("Ativar os dois");
-  locationAlert.addAction("Somente localização");
-  locationAlert.addDestructiveAction("Desativar os dois");
-  const locationChoice = await locationAlert.presentAlert();
-  configured.useCurrentLocation = locationChoice !== 2;
-  configured.automaticHolidays = locationChoice === 0;
-
-  const reminderAlert = new Alert();
-  reminderAlert.title = "Lembretes atrasados";
-  reminderAlert.message =
-    "Deseja mostrar lembretes vencidos na timeline, com !! e contorno vermelho?";
-  reminderAlert.addAction("Mostrar atrasados");
-  reminderAlert.addAction("Não mostrar");
-  configured.showOverdueReminders =
-    (await reminderAlert.presentAlert()) === 0;
-
-  const calendarAlert = new Alert();
-  calendarAlert.title = "Agendas ocultas";
-  calendarAlert.message =
-    "Opcional: escreva os nomes exatos das agendas ou listas que não devem aparecer, separados por vírgula.";
-  calendarAlert.addTextField(
-    "Ex.: Aniversários, Sugestões",
-    (current.excludedCalendars ?? []).join(", ")
-  );
-  calendarAlert.addAction("Concluir");
-  calendarAlert.addCancelAction("Não ocultar nenhuma");
-  const calendarChoice = await calendarAlert.presentAlert();
-  configured.excludedCalendars =
-    calendarChoice >= 0
-      ? calendarAlert
-          .textFieldValue(0)
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean)
-      : [];
-  configured.setupCompleted = true;
-  return configured;
-}
-
-async function presentMainMenu() {
-  const menu = new Alert();
-  menu.title = `Calendar Timeline ${APP_VERSION}`;
-  menu.message = "Escolha o que deseja abrir ou configurar.";
-  menu.addAction("Visualizar na Tela de Início");
-  menu.addAction("Tela Bloqueada — retangular");
-  menu.addAction("Tela Bloqueada — circular");
-  menu.addAction("Tela Bloqueada — em linha");
-  menu.addAction("Configurações");
-  menu.addAction("Diagnóstico");
-  menu.addAction("Página de instalação");
-  menu.addCancelAction("Fechar");
-  const choice = await menu.presentSheet();
-  return [
-    "previewHome",
-    "previewAccessoryRectangular",
-    "previewAccessoryCircular",
-    "previewAccessoryInline",
-    "settings",
-    "diagnostics",
-    "install",
-  ][choice] ?? "previewHome";
-}
-
-async function presentSettingsPanel(current) {
-  const configured = { ...current };
-  let editing = true;
-
-  while (editing) {
-    const menu = new Alert();
-    menu.title = "Configurações";
-    menu.message =
-      `${configured.defaultWindowHours ?? 24} h · ` +
-      `${(configured.selectedCalendarTitles ?? []).length || "todas"} agendas · ` +
-      `brilho ${Math.round((configured.solarGlowIntensity ?? 1) * 100)}%`;
-    menu.addAction("Intervalo padrão");
-    menu.addAction("Selecionar agendas");
-    menu.addAction(`Lua: ${enabledLabel(configured.showMoon)}`);
-    menu.addAction(`Céu noturno: ${enabledLabel(configured.showNightTexture)}`);
-    menu.addAction(`Brilho solar: ${enabledLabel(configured.showSolarGlow)}`);
-    menu.addAction("Intensidade do brilho");
-    menu.addAction(`Tema: ${(configured.themeMode ?? "black").toUpperCase()}`);
-    menu.addAction(`Localização para feriados: ${enabledLabel(configured.useCurrentLocation)}`);
-    menu.addAction(`Feriados automáticos: ${enabledLabel(configured.automaticHolidays)}`);
-    menu.addAction(`Atrasados: ${enabledLabel(configured.showOverdueReminders)}`);
-    menu.addDestructiveAction("Limpar caches");
-    menu.addCancelAction("Salvar e concluir");
-    const choice = await menu.presentSheet();
-
-    if (choice === 0) {
-      const alert = new Alert();
-      alert.title = "Intervalo padrão";
-      alert.message = "Use um número inteiro entre 1 e 168. O parâmetro do widget continua tendo prioridade.";
-      alert.addTextField("Horas", String(configured.defaultWindowHours ?? 24));
-      alert.addAction("Aplicar");
-      alert.addCancelAction("Cancelar");
-      if ((await alert.presentAlert()) >= 0) {
-        configured.defaultWindowHours = validInteger(
-          alert.textFieldValue(0), 1, SETTINGS.maximumWindowHours, 24
-        );
-      }
-    } else if (choice === 1) {
-      try {
-        const calendars = await Calendar.presentPicker(true);
-        configured.selectedCalendarIdentifiers = calendars.map(
-          (calendar) => calendar.identifier
-        );
-        configured.selectedCalendarTitles = calendars.map(
-          (calendar) => calendar.title
-        );
-      } catch (_) {}
-    } else if (choice === 2) {
-      configured.showMoon = configured.showMoon === false;
-    } else if (choice === 3) {
-      configured.showNightTexture = configured.showNightTexture === false;
-    } else if (choice === 4) {
-      configured.showSolarGlow = configured.showSolarGlow === false;
-    } else if (choice === 5) {
-      const alert = new Alert();
-      alert.title = "Intensidade solar";
-      alert.message = "Informe de 25 a 200%.";
-      alert.addTextField(
-        "Porcentagem",
-        String(Math.round((configured.solarGlowIntensity ?? 1) * 100))
-      );
-      alert.addAction("Aplicar");
-      alert.addCancelAction("Cancelar");
-      if ((await alert.presentAlert()) >= 0) {
-        const percentage = validInteger(alert.textFieldValue(0), 25, 200, 100);
-        configured.solarGlowIntensity = percentage / 100;
-      }
-    } else if (choice === 6) {
-      configured.themeMode = configured.themeMode === "dark" ? "black" : "dark";
-    } else if (choice === 7) {
-      configured.useCurrentLocation = configured.useCurrentLocation === false;
-    } else if (choice === 8) {
-      configured.automaticHolidays = configured.automaticHolidays === false;
-    } else if (choice === 9) {
-      configured.showOverdueReminders = configured.showOverdueReminders === false;
-    } else if (choice === 10) {
-      clearWidgetCaches();
-    } else {
-      editing = false;
-    }
-  }
-
-  configured.setupCompleted = true;
-  return configured;
-}
-
-function enabledLabel(value) {
-  return value === false ? "DESLIGADO" : "LIGADO";
-}
-
-function clearWidgetCaches() {
-  const fm = FileManager.local();
-  const directory = fm.documentsDirectory();
-  try {
-    for (const filename of fm.listContents(directory)) {
-      if (
-        filename.startsWith("Calendar-Timeline-night-") ||
-        filename.startsWith("Agenda-Timeline-holidays-")
-      ) {
-        fm.remove(fm.joinPath(directory, filename));
-      }
-    }
-  } catch (_) {}
-  for (const key of [
-    "agenda-timeline-location-v1",
-    "agenda-timeline-region-v2",
-  ]) {
-    try {
-      if (Keychain.contains(key)) Keychain.remove(key);
-    } catch (_) {}
-  }
-}
-
-function validInteger(value, minimum, maximum, fallback) {
-  const number = Number(value);
-  return Number.isInteger(number) && number >= minimum && number <= maximum
-    ? number
-    : fallback;
-}
 
 async function loadWindow() {
   try {
@@ -714,14 +418,8 @@ async function loadAstronomy() {
 
 async function loadNightTextures() {
   const variants = [
-    ["default", "night-sky.base64.txt"],
-    ["saturday", "night-sky-saturday.base64.txt"],
-    ["sunday", "night-sky-sunday.base64.txt"],
-    ["holiday", "night-sky-holiday.base64.txt"],
-    ["evening", "night-sky-evening.base64.txt"],
-    ["saturdayEvening", "night-sky-saturday-evening.base64.txt"],
-    ["sundayEvening", "night-sky-sunday-evening.base64.txt"],
-    ["holidayEvening", "night-sky-holiday-evening.base64.txt"],
+    ["evening", "night-sky-18-00.base64.txt"],
+    ["morning", "night-sky-00-06.base64.txt"],
   ];
   const entries = await Promise.all(
     variants.map(async ([variant, fileName]) => [
@@ -1223,26 +921,8 @@ function isAccessoryFamily(family) {
   ].includes(family);
 }
 
-function accessoryFamilyForAction(action) {
-  if (action === "previewAccessoryCircular") return "accessoryCircular";
-  if (action === "previewAccessoryInline") return "accessoryInline";
-  if (action === "previewAccessoryRectangular") {
-    return "accessoryRectangular";
-  }
-  return null;
-}
-
 function emptyNightTextures() {
-  return {
-    default: null,
-    saturday: null,
-    sunday: null,
-    holiday: null,
-    evening: null,
-    saturdayEvening: null,
-    sundayEvening: null,
-    holidayEvening: null,
-  };
+  return { evening: null, morning: null };
 }
 
 function makeAccessoryWidget(items, result, family) {
@@ -1331,31 +1011,6 @@ function accessoryEventStatus(event) {
     return remainder ? `EM ${hours}H${String(remainder).padStart(2, "0")}` : `EM ${hours}H`;
   }
   return formatDate(event.start, "EEE HH:mm").toLocaleUpperCase("pt-BR");
-}
-
-async function showDiagnostics(result, astronomyData, textures) {
-  const locationStatus = SETTINGS.useCurrentLocation
-    ? "ativada somente para feriados (cache de 6 h)"
-    : "desativada";
-  const textureCount = Object.values(textures).filter(Boolean).length;
-  const selectedCalendars =
-    (userConfiguration.selectedCalendarTitles ?? []).join(", ") || "todas";
-  const alert = new Alert();
-  alert.title = `Diagnóstico ${APP_VERSION}`;
-  alert.message = [
-    `Janela: ${windowHours} h`,
-    `Eventos de hoje: ${result.todayEventCount}`,
-    `Lembretes de hoje: ${result.todayReminderCount}`,
-    `Itens consultados: ${result.items.length}`,
-    `Agendas: ${selectedCalendars}`,
-    `Localização: ${locationStatus}`,
-    `Período diurno fixo: 06:00–18:00`,
-    `Período noturno fixo: 18:00–06:00`,
-    `Texturas noturnas: ${textureCount}/4`,
-    `Erro: ${result.error ?? "nenhum"}`,
-  ].join("\n");
-  alert.addAction("OK");
-  await alert.presentAlert();
 }
 
 function renderWidget(items, loadError) {
@@ -1798,28 +1453,20 @@ function drawNightTextureBackground(ctx) {
     const nextDay = addDays(dayStart, 1);
     const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    // Das 18:00 às 00:00 usa a mesma arte espelhada verticalmente.
-    // Lua, nuvens e estrelas são desenhadas depois e não são espelhadas.
-    drawNightTextureSegment(ctx, nightStart, nextDay, dayStart, true);
-    drawNightTextureSegment(ctx, nextDay, nightEnd, nextDay, false);
+    drawNightTextureSegment(ctx, nightStart, nextDay, "evening");
+    drawNightTextureSegment(ctx, nextDay, nightEnd, "morning");
     dayStart = nextDay;
   }
 }
 
-function drawNightTextureSegment(
-  ctx,
-  segmentStart,
-  segmentEnd,
-  styleDate,
-  useEveningMirror
-) {
+function drawNightTextureSegment(ctx, segmentStart, segmentEnd, texturePart) {
   if (segmentEnd <= windowStart || segmentStart >= windowEnd) return;
 
   const x0 = timeToX(segmentStart);
   const x1 = timeToX(segmentEnd);
   if (x1 <= x0) return;
 
-  const image = nightTextureForDate(styleDate, useEveningMirror);
+  const image = nightTextures[texturePart];
   if (image) {
     ctx.drawImageInRect(
       image,
@@ -1829,24 +1476,6 @@ function drawNightTextureSegment(
     // Reserva offline caso a textura ainda não tenha sido baixada.
     drawNightAtmosphere(ctx, segmentStart, segmentEnd);
   }
-}
-
-function nightTextureForDate(date, useEveningMirror) {
-  const suffix = useEveningMirror ? "Evening" : "";
-  const fallback = useEveningMirror
-    ? nightTextures.evening ?? nightTextures.default
-    : nightTextures.default;
-
-  if (loadResult.holidayDates.has(dateKey(date))) {
-    return nightTextures[`holiday${suffix}`] ?? fallback;
-  }
-  if (date.getDay() === 6) {
-    return nightTextures[`saturday${suffix}`] ?? fallback;
-  }
-  if (date.getDay() === 0) {
-    return nightTextures[`sunday${suffix}`] ?? fallback;
-  }
-  return fallback;
 }
 
 function drawSkyCycleBackground(ctx) {
@@ -2186,8 +1815,7 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     Math.min(96, sceneWidth * 0.44, sceneWidth - 6)
   );
   const moonX = x0 + (sceneWidth - moonSize) / 2;
-  // Centraliza a Lua entre o topo da legenda horária e o limite inferior do
-  // grid. A textura de fundo pode ser espelhada sem afetar este elemento.
+  // Centraliza a Lua entre o topo da legenda e o limite inferior do grid.
   const moonY = (localPlotBottom() - moonSize) / 2;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
@@ -2944,6 +2572,22 @@ function parseWindowHours(parameter) {
     return SETTINGS.defaultWindowHours;
   }
   return value;
+}
+
+function calendarURL(date) {
+  const appleReferenceDate = Date.UTC(2001, 0, 1, 0, 0, 0);
+  const secondsSinceReference = Math.floor(
+    (date.getTime() - appleReferenceDate) / 1000
+  );
+  return `calshow:${secondsSinceReference}`;
+}
+
+function addURLParameter(url, name, value) {
+  const separator = url.includes("?") ? "&" : "?";
+  return (
+    `${url}${separator}` +
+    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
+  );
 }
 
 function isHolidayEvent(event) {
