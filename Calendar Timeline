@@ -28,6 +28,8 @@ const SETTINGS = {
   daylightStartHour: 6,
   daylightEndHour: 18,
   weatherCacheMinutes: 30,
+  forecaBaseURL: "https://fnw-us.foreca.com",
+  forecaTokenHours: 24,
   rainLineColor: "#0A84FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -427,7 +429,7 @@ async function loadHourlyWeather(location) {
   const fm = FileManager.local();
   const cachePath = fm.joinPath(
     fm.documentsDirectory(),
-    "Calendar-Timeline-weather-v1.json"
+    "Calendar-Timeline-foreca-weather-v1.json"
   );
   let cached = null;
 
@@ -454,40 +456,51 @@ async function loadHourlyWeather(location) {
   }
 
   try {
+    const credentials = await loadForecaCredentials();
+    if (!credentials) {
+      return Array.isArray(cached?.hours)
+        ? buildHourlyWeather(cached.hours)
+        : emptyHourlyWeather();
+    }
+    const token = await loadForecaToken(credentials);
+    const timezone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone ||
+      "America/Sao_Paulo";
+    const locationPath = encodeURIComponent(
+      `${location.longitude},${location.latitude}`
+    );
     const query = [
-      `latitude=${encodeURIComponent(location.latitude)}`,
-      `longitude=${encodeURIComponent(location.longitude)}`,
-      "hourly=temperature_2m,precipitation_probability",
-      "temperature_unit=celsius",
-      "timezone=auto",
-      "forecast_days=8",
+      "periods=168",
+      "tempunit=C",
+      `tz=${encodeURIComponent(timezone)}`,
+      "dataset=standard",
+      "history=1",
+      "rounding=0",
     ].join("&");
     const request = new Request(
-      `https://api.open-meteo.com/v1/forecast?${query}`
+      `${SETTINGS.forecaBaseURL}/api/v1/forecast/hourly/${locationPath}?${query}`
     );
     request.timeoutInterval = 12;
+    request.headers = {
+      Authorization: `Bearer ${token}`,
+    };
     const response = await request.loadJSON();
-    const times = response?.hourly?.time ?? [];
-    const temperatures = response?.hourly?.temperature_2m ?? [];
-    const rainChances =
-      response?.hourly?.precipitation_probability ?? [];
     const hours = [];
 
-    for (let index = 0; index < times.length; index++) {
-      // A API devolve a hora local da coordenada em ISO 8601. Como a
-      // localização é a do próprio iPhone, o Date preserva a mesma escala
-      // horária usada pela timeline.
-      const timestamp = new Date(String(times[index])).getTime();
-      const temperature = Number(temperatures[index]);
+    for (const forecast of response?.forecast ?? []) {
+      const timestamp = new Date(String(forecast.time)).getTime();
+      const temperature = Number(forecast.temperature);
       if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
         continue;
       }
       hours.push({
         timestamp,
+        // Na Foreca, precipProb representa a hora que termina no timestamp.
+        rainStartTimestamp: timestamp - 60 * 60 * 1000,
         temperature,
         rainChance: Math.max(
           0,
-          Math.min(100, Number(rainChances[index]) || 0)
+          Math.min(100, Number(forecast.precipProb) || 0)
         ),
       });
     }
@@ -502,17 +515,123 @@ async function loadHourlyWeather(location) {
       fm.writeString(cachePath, JSON.stringify(stored));
     } catch (_) {}
     return buildHourlyWeather(hours);
-  } catch (_) {
+  } catch (error) {
+    if (!config.runsInWidget) {
+      await showForecaConnectionError(error);
+    }
     return Array.isArray(cached?.hours)
       ? buildHourlyWeather(cached.hours)
       : emptyHourlyWeather();
   }
 }
 
+async function showForecaConnectionError(error) {
+  const alert = new Alert();
+  alert.title = "Não foi possível conectar à Foreca";
+  alert.message =
+    "Confira o usuário e a senha da Weather API ou a conexão com a internet. A última previsão armazenada continuará sendo usada quando estiver disponível.\n\n" +
+    String(error);
+  alert.addAction("Manter credenciais");
+  alert.addDestructiveAction("Apagar e digitar novamente");
+  const selected = await alert.presentAlert();
+  if (selected === 1) clearForecaCredentials();
+}
+
+function clearForecaCredentials() {
+  for (const key of [
+    "Calendar-Timeline-Foreca-Username-v1",
+    "Calendar-Timeline-Foreca-Password-v1",
+    "Calendar-Timeline-Foreca-Token-v1",
+  ]) {
+    try {
+      if (Keychain.contains(key)) Keychain.remove(key);
+    } catch (_) {}
+  }
+}
+
+async function loadForecaCredentials() {
+  const usernameKey = "Calendar-Timeline-Foreca-Username-v1";
+  const passwordKey = "Calendar-Timeline-Foreca-Password-v1";
+
+  try {
+    if (Keychain.contains(usernameKey) && Keychain.contains(passwordKey)) {
+      return {
+        user: Keychain.get(usernameKey),
+        password: Keychain.get(passwordKey),
+      };
+    }
+  } catch (_) {}
+
+  // A pergunta aparece somente ao executar o script dentro do Scriptable.
+  if (config.runsInWidget) return null;
+
+  const alert = new Alert();
+  alert.title = "Conectar à Foreca";
+  alert.message =
+    "Digite o usuário e a senha da Weather API. Eles serão guardados somente no Keychain deste iPhone e não serão enviados ao GitHub.";
+  alert.addTextField("Usuário Foreca", "");
+  alert.addSecureTextField("Senha Foreca", "");
+  alert.addAction("Salvar e conectar");
+  alert.addCancelAction("Cancelar");
+  const selected = await alert.presentAlert();
+  if (selected !== 0) return null;
+
+  const user = alert.textFieldValue(0).trim();
+  const password = alert.textFieldValue(1);
+  if (!user || !password) return null;
+
+  Keychain.set(usernameKey, user);
+  Keychain.set(passwordKey, password);
+  Keychain.set("Calendar-Timeline-Foreca-Token-v1", "");
+  return { user, password };
+}
+
+async function loadForecaToken(credentials) {
+  const tokenKey = "Calendar-Timeline-Foreca-Token-v1";
+
+  try {
+    if (Keychain.contains(tokenKey)) {
+      const cached = JSON.parse(Keychain.get(tokenKey));
+      if (
+        cached.accessToken &&
+        Number(cached.expiresAt) > Date.now() + 5 * 60 * 1000
+      ) {
+        return cached.accessToken;
+      }
+    }
+  } catch (_) {}
+
+  const request = new Request(
+    `${SETTINGS.forecaBaseURL}/authorize/token?expire_hours=${SETTINGS.forecaTokenHours}`
+  );
+  request.method = "POST";
+  request.timeoutInterval = 12;
+  request.headers = { "Content-Type": "application/json" };
+  request.body = JSON.stringify(credentials);
+  const response = await request.loadJSON();
+  const accessToken = response?.access_token;
+  if (!accessToken) {
+    throw new Error("A Foreca não forneceu um token de acesso.");
+  }
+
+  const expiresIn = Math.max(300, Number(response.expires_in) || 3600);
+  try {
+    Keychain.set(
+      tokenKey,
+      JSON.stringify({
+        accessToken,
+        expiresAt: Date.now() + expiresIn * 1000,
+      })
+    );
+  } catch (_) {}
+  return accessToken;
+}
+
 function buildHourlyWeather(hours) {
   const normalized = hours
     .map((hour) => ({
       timestamp: Number(hour.timestamp),
+      rainStartTimestamp: Number(hour.rainStartTimestamp),
       temperature: Number(hour.temperature),
       rainChance: Math.max(
         0,
@@ -1468,6 +1587,15 @@ function drawTemperatureFooter(ctx, weather) {
     footerCtx.drawTextInRect(label, textRect);
   }
 
+  // Atribuição exigida para exibição dos dados meteorológicos da Foreca.
+  footerCtx.setFont(Font.mediumSystemFont(9));
+  footerCtx.setTextColor(new Color("#FFFFFF", 0.46));
+  footerCtx.setTextAlignedCenter();
+  footerCtx.drawTextInRect(
+    "DADOS: FORECA",
+    new Rect(0, 43, timelineWidth(), 12)
+  );
+
   ctx.drawImageInRect(
     footerCtx.getImage(),
     new Rect(
@@ -1583,8 +1711,11 @@ function drawRainProbabilityGlow(ctx, weather) {
 
   for (const hour of weather.hours) {
     if (hour.rainChance <= 0) continue;
-    const start = new Date(hour.timestamp);
-    const end = new Date(hour.timestamp + 60 * 60 * 1000);
+    const rainStart = Number.isFinite(hour.rainStartTimestamp)
+      ? hour.rainStartTimestamp
+      : hour.timestamp;
+    const start = new Date(rainStart);
+    const end = new Date(rainStart + 60 * 60 * 1000);
     if (end <= windowStart || start >= windowEnd) continue;
 
     const x0 = timeToX(start);
