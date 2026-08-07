@@ -1336,58 +1336,105 @@ function drawTemperatureFooter(ctx, weather) {
   const byHour = new Map(
     weather.hours.map((hour) => [hour.timestamp, hour])
   );
-  const frameHeight = isCompactMode() ? 30 : 34;
-  const frameTop = CANVAS.footerTop + 8;
-  const lineWidth = 2;
-  const gapWidth = 6;
-  const tickXs = ticks.map((tick) => CANVAS.plotLeft + timeToX(tick));
-  const tickSpacing = tickXs.length > 1
-    ? Math.min(
-        ...tickXs
-          .slice(1)
-          .map((x, index) => Math.abs(x - tickXs[index]))
+  const metrics = hourLabelMetrics(ticks);
+  const frameHeight = metrics.frameHeight;
+  const frameWidth = metrics.frameWidth;
+  const lineWidth = metrics.lineWidth;
+  // A legenda superior termina em Y=37 e o grid começa em Y=41: 4 px.
+  // Repete exatamente essa distância abaixo do grid.
+  const frameTop = CANVAS.timelineBottom + 4;
+
+  const stateForTick = (tick) => {
+    const forecast = byHour.get(floorToHour(tick).getTime());
+    const statistics = forecast
+      ? weather.daily[dateKey(tick)]
+      : null;
+    return {
+      forecast,
+      isMaximum: Boolean(
+        forecast &&
+        statistics &&
+        Math.abs(forecast.temperature - statistics.maximum) < 0.05
+      ),
+      isMinimum: Boolean(
+        forecast &&
+        statistics &&
+        Math.abs(forecast.temperature - statistics.minimum) < 0.05
+      ),
+    };
+  };
+
+  // Prolonga cada eixo vertical até o centro superior de seu bloco térmico.
+  for (const tick of ticks) {
+    const centerX = CANVAS.plotLeft + timeToX(tick);
+    const hour = tick.getHours();
+    const connectorWidth = hour === 0 ? 8 : hour === 12 ? 2 : 1;
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(
+      new Rect(
+        centerX - connectorWidth / 2,
+        CANVAS.timelineBottom,
+        connectorWidth,
+        frameTop - CANVAS.timelineBottom
       )
-    : 50;
-  const frameWidth = Math.max(
-    30,
-    Math.min(isCompactMode() ? 42 : 44, tickSpacing - gapWidth)
-  );
+    );
+  }
 
   // Mesmas molduras e mesmas coordenadas horizontais da legenda superior.
   for (const tick of ticks) {
     const centerX = CANVAS.plotLeft + timeToX(tick);
-    const leftX = centerX - frameWidth / 2;
-    const rightX = centerX + frameWidth / 2 - lineWidth;
+    // À meia-noite, repete também a largura exata do badge do dia.
+    const tickFrameWidth = tick.getHours() === 0
+      ? isCompactMode() ? 44 : 50
+      : frameWidth;
+    const leftX = centerX - tickFrameWidth / 2;
+    const rightX = centerX + tickFrameWidth / 2 - lineWidth;
     const bottomY = frameTop + frameHeight - lineWidth;
-    const lineColor = hourGridLineColor(tick);
+    const state = stateForTick(tick);
+    const thermalColor = state.isMaximum
+      ? SETTINGS.maximumTemperatureColor
+      : state.isMinimum
+      ? SETTINGS.minimumTemperatureColor
+      : null;
+    const lineColor = thermalColor
+      ? new Color(thermalColor)
+      : new Color("#3A3A3C", 1.0);
+
+    // Somente máxima e mínima recebem preenchimento sólido. A condição
+    // térmica prevalece sobre sábado, domingo, dia da semana e feriado.
+    if (thermalColor) {
+      ctx.setFillColor(new Color(thermalColor));
+      ctx.fillRect(
+        new Rect(leftX, frameTop, tickFrameWidth, frameHeight)
+      );
+    }
+
     ctx.setFillColor(lineColor);
     ctx.fillRect(new Rect(leftX, frameTop, lineWidth, frameHeight));
     ctx.fillRect(new Rect(rightX, frameTop, lineWidth, frameHeight));
-    ctx.fillRect(new Rect(leftX, frameTop, frameWidth, lineWidth));
-    ctx.fillRect(new Rect(leftX, bottomY, frameWidth, lineWidth));
+    ctx.fillRect(new Rect(leftX, frameTop, tickFrameWidth, lineWidth));
+    ctx.fillRect(new Rect(leftX, bottomY, tickFrameWidth, lineWidth));
   }
 
   const fontSize = isCompactMode() ? 17 : 21;
   ctx.setTextAlignedCenter();
-  ctx.setFont(Font.regularMonospacedSystemFont(fontSize));
 
   for (const tick of ticks) {
-    const forecast = byHour.get(floorToHour(tick).getTime());
+    const state = stateForTick(tick);
+    const forecast = state.forecast;
     if (!forecast) continue;
-    const statistics = weather.daily[dateKey(tick)];
-    const isMaximum =
-      statistics &&
-      Math.abs(forecast.temperature - statistics.maximum) < 0.05;
-    const isMinimum =
-      statistics &&
-      Math.abs(forecast.temperature - statistics.minimum) < 0.05;
-    const color = isMaximum
-      ? SETTINGS.maximumTemperatureColor
-      : isMinimum
-      ? SETTINGS.minimumTemperatureColor
+    const isNoon = tick.getHours() === 12;
+    const highlighted = state.isMaximum || state.isMinimum || isNoon;
+    const color = highlighted
+      ? SETTINGS.primaryTextColor
       : SETTINGS.secondaryTextColor;
     const label = `${Math.round(forecast.temperature)}°`;
     const centerX = CANVAS.plotLeft + timeToX(tick);
+    ctx.setFont(
+      highlighted
+        ? Font.blackMonospacedSystemFont(fontSize)
+        : Font.regularMonospacedSystemFont(fontSize)
+    );
     ctx.setTextColor(new Color(color));
     ctx.drawTextInRect(
       label,
@@ -2001,29 +2048,56 @@ function drawNightScenes(ctx) {
     const nextDay = addDays(dayStart, 1);
     const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    // Uma Lua centralizada entre 18:00 e 00:00.
-    drawNightSegment(
-      ctx,
-      nightStart,
-      nextDay,
-      nightStart,
-      nightEnd
-    );
+    const eveningVisible = intervalIsVisible(nightStart, nextDay);
+    const morningVisible = intervalIsVisible(nextDay, nightEnd);
 
-    // A mesma Lua repetida e centralizada entre 00:00 e 06:00.
-    drawNightSegment(
-      ctx,
-      nextDay,
-      nightEnd,
-      nightStart,
-      nightEnd
-    );
+    if (eveningVisible && morningVisible) {
+      // Quando os dois meios da mesma noite aparecem lado a lado, eles viram
+      // uma única cena: uma Lua maior, centralizada exatamente à meia-noite.
+      drawNightSegment(
+        ctx,
+        nightStart,
+        nightEnd,
+        nightStart,
+        nightEnd,
+        true
+      );
+    } else if (eveningVisible) {
+      drawNightSegment(
+        ctx,
+        nightStart,
+        nextDay,
+        nightStart,
+        nightEnd,
+        false
+      );
+    } else if (morningVisible) {
+      drawNightSegment(
+        ctx,
+        nextDay,
+        nightEnd,
+        nightStart,
+        nightEnd,
+        false
+      );
+    }
 
     dayStart = addDays(dayStart, 1);
   }
 }
 
-function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
+function intervalIsVisible(start, end) {
+  return end > windowStart && start < windowEnd;
+}
+
+function drawNightSegment(
+  ctx,
+  segmentStart,
+  segmentEnd,
+  nightStart,
+  nightEnd,
+  mergedNight = false
+) {
   const visibleStart = new Date(
     Math.max(segmentStart.getTime(), windowStart.getTime())
   );
@@ -2045,9 +2119,13 @@ function drawNightSegment(ctx, segmentStart, segmentEnd, nightStart, nightEnd) {
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
 
+  const maximumMoonSize = mergedNight ? 128 : 96;
+  const proportionalSize = mergedNight
+    ? sceneWidth * 0.30
+    : sceneWidth * 0.44;
   const moonSize = Math.max(
     16,
-    Math.min(96, sceneWidth * 0.44, sceneWidth - 6)
+    Math.min(maximumMoonSize, proportionalSize, sceneWidth - 8)
   );
   const moonX = x0 + (sceneWidth - moonSize) / 2;
   // Centraliza a Lua entre o topo da legenda e o limite inferior do grid.
@@ -2374,22 +2452,39 @@ function hourGridLineColor(tick) {
     : new Color("#3A3A3C", 1.0);
 }
 
-function drawHourLabelFrames(ctx, ticks) {
+function hourLabelMetrics(ticks) {
   const frameHeight = isCompactMode() ? 30 : 34;
   const lineWidth = 2;
   const gapWidth = 6;
-  const visibleTickXs = ticks.map((tick) => timeToX(tick));
-  const tickSpacing = visibleTickXs.length > 1
+  const tickXs = ticks.map((tick) => timeToX(tick));
+  const tickSpacing = tickXs.length > 1
     ? Math.min(
-        ...visibleTickXs
+        ...tickXs
           .slice(1)
-          .map((x, index) => Math.abs(x - visibleTickXs[index]))
+          .map((x, index) => Math.abs(x - tickXs[index]))
       )
     : 50;
   const frameWidth = Math.max(
     30,
     Math.min(isCompactMode() ? 42 : 44, tickSpacing - gapWidth)
   );
+
+  return {
+    frameHeight,
+    frameWidth,
+    lineWidth,
+    gapWidth,
+    tickXs,
+  };
+}
+
+function drawHourLabelFrames(ctx, ticks) {
+  const metrics = hourLabelMetrics(ticks);
+  const frameHeight = metrics.frameHeight;
+  const frameWidth = metrics.frameWidth;
+  const lineWidth = metrics.lineWidth;
+  const gapWidth = metrics.gapWidth;
+  const visibleTickXs = metrics.tickXs;
 
   // Somente o pequeno intervalo entre duas horas fica vazado. O interior
   // de cada retângulo preserva o destaque colorido do evento, quando houver.
