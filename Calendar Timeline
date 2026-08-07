@@ -16,7 +16,6 @@ const SETTINGS = {
   compactModeFromHours: 72,
   minimumChartWidth: 34,
   compactMinimumChartWidth: 18,
-  freeTimeColor: "#30D158",
   currentEventColor: "#FFFFFF",
   showEventMetadataIcons: true,
   showOverdueReminders: true,
@@ -28,7 +27,10 @@ const SETTINGS = {
   nightEndHour: 6,
   daylightStartHour: 6,
   daylightEndHour: 18,
-  alternateFooterSummary: true,
+  weatherCacheMinutes: 30,
+  maximumTemperatureColor: "#FF453A",
+  minimumTemperatureColor: "#0A84FF",
+  rainLineColor: "#0A84FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
@@ -102,6 +104,9 @@ const windowEnd = new Date(
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
 const widgetFamily = config.runsInWidget ? config.widgetFamily : null;
+const hourlyWeather = isAccessoryFamily(widgetFamily)
+  ? emptyHourlyWeather()
+  : await loadHourlyWeather(astronomy);
 const nightTextures =
   SETTINGS.showNightTexture && !isAccessoryFamily(widgetFamily)
     ? await loadNightTextures()
@@ -414,6 +419,135 @@ async function loadAstronomy() {
     } catch (_) {}
     return offlineLocation;
   }
+}
+
+function emptyHourlyWeather() {
+  return { hours: [], daily: {} };
+}
+
+async function loadHourlyWeather(location) {
+  const fm = FileManager.local();
+  const cachePath = fm.joinPath(
+    fm.documentsDirectory(),
+    "Calendar-Timeline-weather-v1.json"
+  );
+  let cached = null;
+
+  if (fm.fileExists(cachePath)) {
+    try {
+      cached = JSON.parse(fm.readString(cachePath));
+    } catch (_) {
+      cached = null;
+    }
+  }
+
+  const cacheAge = SETTINGS.weatherCacheMinutes * 60 * 1000;
+  const sameLocation =
+    cached &&
+    Math.abs(Number(cached.latitude) - location.latitude) < 0.2 &&
+    Math.abs(Number(cached.longitude) - location.longitude) < 0.2;
+
+  if (
+    sameLocation &&
+    Array.isArray(cached.hours) &&
+    Date.now() - Number(cached.updatedAt || 0) < cacheAge
+  ) {
+    return buildHourlyWeather(cached.hours);
+  }
+
+  try {
+    const query = [
+      `latitude=${encodeURIComponent(location.latitude)}`,
+      `longitude=${encodeURIComponent(location.longitude)}`,
+      "hourly=temperature_2m,precipitation_probability",
+      "temperature_unit=celsius",
+      "timezone=auto",
+      "forecast_days=8",
+    ].join("&");
+    const request = new Request(
+      `https://api.open-meteo.com/v1/forecast?${query}`
+    );
+    request.timeoutInterval = 12;
+    const response = await request.loadJSON();
+    const times = response?.hourly?.time ?? [];
+    const temperatures = response?.hourly?.temperature_2m ?? [];
+    const rainChances =
+      response?.hourly?.precipitation_probability ?? [];
+    const hours = [];
+
+    for (let index = 0; index < times.length; index++) {
+      // A API devolve a hora local da coordenada em ISO 8601. Como a
+      // localização é a do próprio iPhone, o Date preserva a mesma escala
+      // horária usada pela timeline.
+      const timestamp = new Date(String(times[index])).getTime();
+      const temperature = Number(temperatures[index]);
+      if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
+        continue;
+      }
+      hours.push({
+        timestamp,
+        temperature,
+        rainChance: Math.max(
+          0,
+          Math.min(100, Number(rainChances[index]) || 0)
+        ),
+      });
+    }
+
+    const stored = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      updatedAt: Date.now(),
+      hours,
+    };
+    try {
+      fm.writeString(cachePath, JSON.stringify(stored));
+    } catch (_) {}
+    return buildHourlyWeather(hours);
+  } catch (_) {
+    return Array.isArray(cached?.hours)
+      ? buildHourlyWeather(cached.hours)
+      : emptyHourlyWeather();
+  }
+}
+
+function buildHourlyWeather(hours) {
+  const normalized = hours
+    .map((hour) => ({
+      timestamp: Number(hour.timestamp),
+      temperature: Number(hour.temperature),
+      rainChance: Math.max(
+        0,
+        Math.min(100, Number(hour.rainChance) || 0)
+      ),
+    }))
+    .filter(
+      (hour) =>
+        Number.isFinite(hour.timestamp) &&
+        Number.isFinite(hour.temperature)
+    );
+  const daily = {};
+
+  for (const hour of normalized) {
+    const key = dateKey(new Date(hour.timestamp));
+    if (!daily[key]) {
+      daily[key] = {
+        minimum: hour.temperature,
+        maximum: hour.temperature,
+      };
+    } else {
+      daily[key].minimum = Math.min(
+        daily[key].minimum,
+        hour.temperature
+      );
+      daily[key].maximum = Math.max(
+        daily[key].maximum,
+        hour.temperature
+      );
+    }
+  }
+
+  return { hours: normalized, daily };
 }
 
 async function loadNightTextures() {
@@ -1038,13 +1172,7 @@ function renderWidget(items, loadError) {
       timelineHeight()
     )
   );
-  drawFooter(
-    ctx,
-    loadResult.todayEventCount,
-    loadResult.todayReminderCount,
-    loadResult.todayBusyMinutes,
-    loadResult.todayFreeMinutes
-  );
+  drawTemperatureFooter(ctx, hourlyWeather);
 
   return ctx.getImage();
 }
@@ -1203,66 +1331,69 @@ function drawDatePanel(ctx, holidayDates) {
   }
 }
 
-function drawFooter(
-  ctx,
-  eventCount,
-  reminderCount,
-  busyMinutes,
-  freeMinutes
-) {
-  const centerX = CANVAS.width / 2;
-  const footerY = CANVAS.footerTop;
-
-  ctx.setStrokeColor(new Color("#242428"));
-  ctx.setLineWidth(2);
-  ctx.strokeRect(
-    new Rect(CANVAS.marginX, footerY, CANVAS.width - CANVAS.marginX * 2, 1)
+function drawTemperatureFooter(ctx, weather) {
+  const ticks = hourTicks();
+  const byHour = new Map(
+    weather.hours.map((hour) => [hour.timestamp, hour])
+  );
+  const frameHeight = isCompactMode() ? 30 : 34;
+  const frameTop = CANVAS.footerTop + 8;
+  const lineWidth = 2;
+  const gapWidth = 6;
+  const tickXs = ticks.map((tick) => CANVAS.plotLeft + timeToX(tick));
+  const tickSpacing = tickXs.length > 1
+    ? Math.min(
+        ...tickXs
+          .slice(1)
+          .map((x, index) => Math.abs(x - tickXs[index]))
+      )
+    : 50;
+  const frameWidth = Math.max(
+    30,
+    Math.min(isCompactMode() ? 42 : 44, tickSpacing - gapWidth)
   );
 
-  ctx.setFont(Font.blackRoundedSystemFont(isCompactMode() ? 21 : 25));
+  // Mesmas molduras e mesmas coordenadas horizontais da legenda superior.
+  for (const tick of ticks) {
+    const centerX = CANVAS.plotLeft + timeToX(tick);
+    const leftX = centerX - frameWidth / 2;
+    const rightX = centerX + frameWidth / 2 - lineWidth;
+    const bottomY = frameTop + frameHeight - lineWidth;
+    const lineColor = hourGridLineColor(tick);
+    ctx.setFillColor(lineColor);
+    ctx.fillRect(new Rect(leftX, frameTop, lineWidth, frameHeight));
+    ctx.fillRect(new Rect(rightX, frameTop, lineWidth, frameHeight));
+    ctx.fillRect(new Rect(leftX, frameTop, frameWidth, lineWidth));
+    ctx.fillRect(new Rect(leftX, bottomY, frameWidth, lineWidth));
+  }
+
+  const fontSize = isCompactMode() ? 17 : 21;
   ctx.setTextAlignedCenter();
+  ctx.setFont(Font.regularMonospacedSystemFont(fontSize));
 
-  const showTimeSummary =
-    SETTINGS.alternateFooterSummary && now.getMinutes() % 2 === 1;
-  const leftText = showTimeSummary
-    ? `OCUPADO: ${formatDuration(busyMinutes)}`
-    : `EVENTOS: ${eventCount}`;
-  const rightText = showTimeSummary
-    ? `LIVRE: ${formatDuration(freeMinutes)}`
-    : `LEMBRETES: ${reminderCount}`;
-
-  ctx.setTextColor(new Color("#FF453A"));
-  ctx.drawTextInRect(
-    leftText,
-    new Rect(CANVAS.marginX, footerY + 13, centerX - CANVAS.marginX - 28, 31)
-  );
-
-  ctx.setTextColor(new Color("#8E8E93"));
-  ctx.drawTextInRect(
-    "•",
-    new Rect(centerX - 18, footerY + 10, 36, 34)
-  );
-
-  ctx.setTextColor(
-    new Color(showTimeSummary ? SETTINGS.freeTimeColor : "#0A84FF")
-  );
-  ctx.drawTextInRect(
-    rightText,
-    new Rect(
-      centerX + 28,
-      footerY + 13,
-      CANVAS.width - CANVAS.marginX - centerX - 28,
-      31
-    )
-  );
-}
-
-function formatDuration(minutes) {
-  const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
-  const hours = Math.floor(safeMinutes / 60);
-  const remainder = safeMinutes % 60;
-  if (!hours) return `${remainder}MIN`;
-  return remainder ? `${hours}H${String(remainder).padStart(2, "0")}` : `${hours}H`;
+  for (const tick of ticks) {
+    const forecast = byHour.get(floorToHour(tick).getTime());
+    if (!forecast) continue;
+    const statistics = weather.daily[dateKey(tick)];
+    const isMaximum =
+      statistics &&
+      Math.abs(forecast.temperature - statistics.maximum) < 0.05;
+    const isMinimum =
+      statistics &&
+      Math.abs(forecast.temperature - statistics.minimum) < 0.05;
+    const color = isMaximum
+      ? SETTINGS.maximumTemperatureColor
+      : isMinimum
+      ? SETTINGS.minimumTemperatureColor
+      : SETTINGS.secondaryTextColor;
+    const label = `${Math.round(forecast.temperature)}°`;
+    const centerX = CANVAS.plotLeft + timeToX(tick);
+    ctx.setTextColor(new Color(color));
+    ctx.drawTextInRect(
+      label,
+      new Rect(centerX - 24, frameTop + 5, 48, 27)
+    );
+  }
 }
 
 function renderTimelinePanel(items, loadError) {
@@ -1280,6 +1411,7 @@ function renderTimelinePanel(items, loadError) {
   }
   drawHourAxis(ctx, loadResult.items);
   if (SETTINGS.showSolarGlow) drawFixedDaylightGloss(ctx);
+  drawRainProbabilityGlow(ctx, hourlyWeather);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -1309,6 +1441,53 @@ function renderTimelinePanel(items, loadError) {
   }
 
   return ctx.getImage();
+}
+
+function drawRainProbabilityGlow(ctx, weather) {
+  const lineY = timelineHeight() - 3;
+  const maximumGlowHeight =
+    (localPlotBottom() - CANVAS.localPlotTop) * 0.72;
+
+  for (const hour of weather.hours) {
+    if (hour.rainChance <= 0) continue;
+    const start = new Date(hour.timestamp);
+    const end = new Date(hour.timestamp + 60 * 60 * 1000);
+    if (end <= windowStart || start >= windowEnd) continue;
+
+    const x0 = timeToX(start);
+    const x1 = timeToX(end);
+    const width = x1 - x0;
+    if (width <= 0) continue;
+
+    const intensity = hour.rainChance / 100;
+    const glowHeight = Math.max(8, maximumGlowHeight * intensity);
+
+    // O halo nasce na linha inferior e cresce para cima conforme a chance.
+    for (let offset = 0; offset <= glowHeight; offset += 2) {
+      const strength = Math.pow(
+        Math.max(0, 1 - offset / glowHeight),
+        1.45
+      );
+      ctx.setFillColor(
+        new Color(
+          SETTINGS.rainLineColor,
+          (0.04 + 0.25 * intensity) * strength
+        )
+      );
+      ctx.fillRect(new Rect(x0, lineY - offset, width, 2));
+    }
+
+    const coreThickness = 2 + Math.round(intensity * 3);
+    ctx.setFillColor(
+      new Color(
+        SETTINGS.rainLineColor,
+        0.45 + 0.55 * intensity
+      )
+    );
+    ctx.fillRect(
+      new Rect(x0, lineY - coreThickness + 1, width, coreThickness)
+    );
+  }
 }
 
 function drawFixedDaylightGlow(ctx) {
