@@ -28,8 +28,6 @@ const SETTINGS = {
   daylightStartHour: 6,
   daylightEndHour: 18,
   weatherCacheMinutes: 30,
-  maximumTemperatureColor: "#FF453A",
-  minimumTemperatureColor: "#0A84FF",
   rainLineColor: "#0A84FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -1349,37 +1347,32 @@ function drawTemperatureFooter(ctx, weather) {
   const frameHeight = metrics.frameHeight;
   const frameWidth = metrics.frameWidth;
   const lineWidth = metrics.lineWidth;
+  const visibleTemperatures = weather.hours
+    .filter(
+      (hour) =>
+        hour.timestamp >= windowStart.getTime() &&
+        hour.timestamp <= windowEnd.getTime()
+    )
+    .map((hour) => hour.temperature);
+  const heatMinimum = visibleTemperatures.length
+    ? Math.min(...visibleTemperatures)
+    : 0;
+  const heatMaximum = visibleTemperatures.length
+    ? Math.max(...visibleTemperatures)
+    : 1;
   // A legenda superior termina em Y=37 e o grid começa em Y=41: 4 px.
   // Repete exatamente essa distância abaixo do grid.
   const frameTop = 4;
 
-  const stateForTick = (tick) => {
-    const forecast = byHour.get(floorToHour(tick).getTime());
-    const statistics = forecast
-      ? weather.daily[dateKey(tick)]
-      : null;
-    return {
-      forecast,
-      isMaximum: Boolean(
-        forecast &&
-        statistics &&
-        Math.abs(forecast.temperature - statistics.maximum) < 0.05
-      ),
-      isMinimum: Boolean(
-        forecast &&
-        statistics &&
-        Math.abs(forecast.temperature - statistics.minimum) < 0.05
-      ),
-    };
-  };
+  const forecastForTick = (tick) =>
+    byHour.get(floorToHour(tick).getTime());
 
   // Prolonga cada eixo vertical até o centro superior de seu bloco térmico.
   for (const tick of ticks) {
     const centerX = timeToX(tick);
     const hour = tick.getHours();
     const connectorWidth = hour === 0 ? 8 : hour === 12 ? 2 : 1;
-    // O conector conserva a cor do eixo. Assim, vermelho e azul ficam
-    // restritos aos mesmos 34 px ocupados pelos blocos térmicos normais.
+    // O conector conserva a cor do eixo e não interfere no mapa térmico.
     footerCtx.setFillColor(hourGridLineColor(tick));
     footerCtx.fillRect(
       new Rect(
@@ -1394,27 +1387,27 @@ function drawTemperatureFooter(ctx, weather) {
   // Mesmas molduras e mesmas coordenadas horizontais da legenda superior.
   for (const tick of ticks) {
     const centerX = timeToX(tick);
-    // À meia-noite, repete também a largura exata do badge do dia.
-    const tickFrameWidth = tick.getHours() === 0
-      ? isCompactMode() ? 44 : 50
-      : frameWidth;
+    // Todos os blocos térmicos possuem rigorosamente a mesma dimensão.
+    const tickFrameWidth = frameWidth;
     const leftX = centerX - tickFrameWidth / 2;
     const rightX = centerX + tickFrameWidth / 2 - lineWidth;
     const bottomY = frameTop + frameHeight - lineWidth;
-    const state = stateForTick(tick);
-    const thermalColor = state.isMaximum
-      ? SETTINGS.maximumTemperatureColor
-      : state.isMinimum
-      ? SETTINGS.minimumTemperatureColor
+    const forecast = forecastForTick(tick);
+    const heatColor = forecast
+      ? temperatureHeatColor(
+          forecast.temperature,
+          heatMinimum,
+          heatMaximum
+        )
       : null;
-    const lineColor = thermalColor
-      ? new Color(thermalColor)
+    const lineColor = heatColor
+      ? new Color("#FFFFFF", 0.28)
       : new Color("#3A3A3C", 1.0);
 
-    // Somente máxima e mínima recebem preenchimento sólido. A condição
-    // térmica prevalece sobre sábado, domingo, dia da semana e feriado.
-    if (thermalColor) {
-      footerCtx.setFillColor(new Color(thermalColor));
+    // Cada hora recebe uma cor da mesma escala: azul no extremo frio,
+    // passando por ciano, verde, amarelo e laranja, até vermelho no quente.
+    if (heatColor) {
+      footerCtx.setFillColor(new Color(heatColor));
       footerCtx.fillRect(
         new Rect(leftX, frameTop, tickFrameWidth, frameHeight)
       );
@@ -1435,20 +1428,29 @@ function drawTemperatureFooter(ctx, weather) {
   footerCtx.setTextAlignedCenter();
 
   for (const tick of ticks) {
-    const state = stateForTick(tick);
-    const forecast = state.forecast;
+    const forecast = forecastForTick(tick);
     if (!forecast) continue;
     const isNoon = tick.getHours() === 12;
-    const highlighted = state.isMaximum || state.isMinimum || isNoon;
-    const color = highlighted
+    const heatColor = temperatureHeatColor(
+      forecast.temperature,
+      heatMinimum,
+      heatMaximum
+    );
+    const color = isNoon
       ? SETTINGS.primaryTextColor
-      : SETTINGS.secondaryTextColor;
+      : heatMapTextColor(heatColor);
     const label = `${Math.round(forecast.temperature)}°`;
     const centerX = timeToX(tick);
     footerCtx.setFont(
-      highlighted
+      isNoon
         ? Font.blackMonospacedSystemFont(fontSize)
         : Font.regularMonospacedSystemFont(fontSize)
+    );
+    // Uma sombra curta preserva a leitura inclusive nas faixas amarelas.
+    footerCtx.setTextColor(new Color("#000000", 0.72));
+    footerCtx.drawTextInRect(
+      label,
+      new Rect(centerX - 23, frameTop + 6, 48, 27)
     );
     footerCtx.setTextColor(new Color(color));
     footerCtx.drawTextInRect(
@@ -1466,6 +1468,46 @@ function drawTemperatureFooter(ctx, weather) {
       footerHeight
     )
   );
+}
+
+function temperatureHeatColor(temperature, minimum, maximum) {
+  const stops = [
+    [0.00, "#123CFF"],
+    [0.18, "#008CFF"],
+    [0.34, "#00D9E8"],
+    [0.50, "#32E875"],
+    [0.66, "#D7F000"],
+    [0.79, "#FFD400"],
+    [0.90, "#FF8500"],
+    [1.00, "#FF2D1A"],
+  ];
+  const range = maximum - minimum;
+  const position = range < 0.1
+    ? 0.5
+    : Math.max(0, Math.min(1, (temperature - minimum) / range));
+
+  for (let index = 0; index < stops.length - 1; index++) {
+    const [startPosition, startColor] = stops[index];
+    const [endPosition, endColor] = stops[index + 1];
+    if (position <= endPosition) {
+      const localProgress =
+        (position - startPosition) / (endPosition - startPosition);
+      return interpolateHexColor(
+        startColor,
+        endColor,
+        Math.max(0, Math.min(1, localProgress))
+      );
+    }
+  }
+
+  return stops[stops.length - 1][1];
+}
+
+function heatMapTextColor(backgroundColor) {
+  const rgb = hexToRGB(backgroundColor);
+  const luminance =
+    (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+  return luminance > 0.58 ? "#000000" : "#FFFFFF";
 }
 
 function renderTimelinePanel(items, loadError) {
