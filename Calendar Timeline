@@ -1454,13 +1454,31 @@ function drawNightTextureBackground(ctx) {
     const nextDay = addDays(dayStart, 1);
     const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    drawNightTextureSegment(ctx, nightStart, nextDay, "evening");
-    drawNightTextureSegment(ctx, nextDay, nightEnd, "morning");
+    drawNightTextureSegment(
+      ctx,
+      nightStart,
+      nextDay,
+      "evening",
+      dayStart
+    );
+    drawNightTextureSegment(
+      ctx,
+      nextDay,
+      nightEnd,
+      "morning",
+      nextDay
+    );
     dayStart = nextDay;
   }
 }
 
-function drawNightTextureSegment(ctx, segmentStart, segmentEnd, texturePart) {
+function drawNightTextureSegment(
+  ctx,
+  segmentStart,
+  segmentEnd,
+  texturePart,
+  styleDate
+) {
   if (segmentEnd <= windowStart || segmentStart >= windowEnd) return;
 
   const x0 = timeToX(segmentStart);
@@ -1468,8 +1486,8 @@ function drawNightTextureSegment(ctx, segmentStart, segmentEnd, texturePart) {
   if (x1 <= x0) return;
 
   const image = nightTextures[texturePart];
+  const backgroundTop = CANVAS.localPlotTop - 6;
   if (image) {
-    const backgroundTop = CANVAS.localPlotTop - 6;
     ctx.drawImageInRect(
       image,
       new Rect(
@@ -1483,6 +1501,34 @@ function drawNightTextureSegment(ctx, segmentStart, segmentEnd, texturePart) {
     // Reserva offline caso a textura ainda não tenha sido baixada.
     drawNightAtmosphere(ctx, segmentStart, segmentEnd);
   }
+
+  // A fotografia permanece visível, mas recebe a tonalidade correspondente
+  // ao calendário. Feriados prevalecem sobre sábados e domingos.
+  const tint = nightTextureTintForDate(styleDate);
+  if (tint) {
+    ctx.setFillColor(new Color(tint.color, tint.opacity));
+    ctx.fillRect(
+      new Rect(
+        x0,
+        backgroundTop,
+        x1 - x0,
+        localPlotBottom() - backgroundTop
+      )
+    );
+  }
+}
+
+function nightTextureTintForDate(date) {
+  if (loadResult.holidayDates.has(dateKey(date))) {
+    return { color: SETTINGS.holidayAtmosphereColor, opacity: 0.18 };
+  }
+  if (date.getDay() === 0) {
+    return { color: SETTINGS.sundayAtmosphereColor, opacity: 0.16 };
+  }
+  if (date.getDay() === 6) {
+    return { color: SETTINGS.saturdayAtmosphereColor, opacity: 0.15 };
+  }
+  return null;
 }
 
 function drawSkyCycleBackground(ctx) {
