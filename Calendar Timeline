@@ -1555,10 +1555,13 @@ function drawTemperatureFooter(ctx, weather) {
       heatMinimum,
       heatMaximum
     );
-    const color = isNoon
+    const roundedTemperature = Math.round(forecast.temperature);
+    const forceWhiteText =
+      roundedTemperature === 20 || roundedTemperature === 21;
+    const color = isNoon || forceWhiteText
       ? SETTINGS.primaryTextColor
       : heatMapTextColor(heatColor);
-    const label = String(Math.round(forecast.temperature));
+    const label = String(roundedTemperature);
     const centerX = timeToX(tick);
     const textRect = new Rect(centerX - 24, frameTop + 5, 48, 27);
     const outlineColor = color === "#000000" ? "#FFFFFF" : "#000000";
@@ -1586,15 +1589,6 @@ function drawTemperatureFooter(ctx, weather) {
     footerCtx.setTextColor(new Color(color));
     footerCtx.drawTextInRect(label, textRect);
   }
-
-  // Atribuição exigida para exibição dos dados meteorológicos da Foreca.
-  footerCtx.setFont(Font.mediumSystemFont(9));
-  footerCtx.setTextColor(new Color("#FFFFFF", 0.46));
-  footerCtx.setTextAlignedCenter();
-  footerCtx.drawTextInRect(
-    "DADOS: FORECA",
-    new Rect(0, 43, timelineWidth(), 12)
-  );
 
   ctx.drawImageInRect(
     footerCtx.getImage(),
