@@ -2259,12 +2259,10 @@ function drawNightScenes(ctx) {
     const nextDay = addDays(dayStart, 1);
     const nightEnd = dateAtHour(nextDay, SETTINGS.nightEndHour);
 
-    const eveningVisible = intervalIsVisible(nightStart, nextDay);
-    const morningVisible = intervalIsVisible(nextDay, nightEnd);
-
-    if (eveningVisible && morningVisible) {
-      // Quando os dois meios da mesma noite aparecem lado a lado, eles viram
-      // uma única cena: uma Lua maior, centralizada exatamente à meia-noite.
+    if (intervalIsVisible(nightStart, nightEnd)) {
+      // Toda noite é sempre uma única cena entre 18:00 e 06:00. A Lua grande
+      // permanece centralizada à meia-noite mesmo quando somente uma parte
+      // do intervalo está visível; o canvas recorta naturalmente as bordas.
       drawNightSegment(
         ctx,
         nightStart,
@@ -2272,24 +2270,6 @@ function drawNightScenes(ctx) {
         nightStart,
         nightEnd,
         true
-      );
-    } else if (eveningVisible) {
-      drawNightSegment(
-        ctx,
-        nightStart,
-        nextDay,
-        nightStart,
-        nightEnd,
-        false
-      );
-    } else if (morningVisible) {
-      drawNightSegment(
-        ctx,
-        nextDay,
-        nightEnd,
-        nightStart,
-        nightEnd,
-        false
       );
     }
 
