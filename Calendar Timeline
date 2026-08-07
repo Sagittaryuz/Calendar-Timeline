@@ -1424,7 +1424,7 @@ function drawTemperatureFooter(ctx, weather) {
     );
   }
 
-  const fontSize = isCompactMode() ? 17 : 21;
+  const fontSize = isCompactMode() ? 18 : 21;
   footerCtx.setTextAlignedCenter();
 
   for (const tick of ticks) {
@@ -1439,24 +1439,33 @@ function drawTemperatureFooter(ctx, weather) {
     const color = isNoon
       ? SETTINGS.primaryTextColor
       : heatMapTextColor(heatColor);
-    const label = `${Math.round(forecast.temperature)}°`;
+    const label = String(Math.round(forecast.temperature));
     const centerX = timeToX(tick);
-    footerCtx.setFont(
-      isNoon
-        ? Font.blackMonospacedSystemFont(fontSize)
-        : Font.regularMonospacedSystemFont(fontSize)
-    );
-    // Uma sombra curta preserva a leitura inclusive nas faixas amarelas.
-    footerCtx.setTextColor(new Color("#000000", 0.72));
-    footerCtx.drawTextInRect(
-      label,
-      new Rect(centerX - 23, frameTop + 6, 48, 27)
-    );
+    const textRect = new Rect(centerX - 24, frameTop + 5, 48, 27);
+    const outlineColor = color === "#000000" ? "#FFFFFF" : "#000000";
+    footerCtx.setFont(Font.blackRoundedSystemFont(fontSize));
+
+    // Contorno em oito direções: mantém os números legíveis sobre qualquer
+    // trecho do mapa de calor, inclusive amarelo, ciano e vermelho intenso.
+    footerCtx.setTextColor(new Color(outlineColor, 0.82));
+    for (const [offsetX, offsetY] of [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0],            [1, 0],
+      [-1, 1],  [0, 1],  [1, 1],
+    ]) {
+      footerCtx.drawTextInRect(
+        label,
+        new Rect(
+          textRect.x + offsetX,
+          textRect.y + offsetY,
+          textRect.width,
+          textRect.height
+        )
+      );
+    }
+
     footerCtx.setTextColor(new Color(color));
-    footerCtx.drawTextInRect(
-      label,
-      new Rect(centerX - 24, frameTop + 5, 48, 27)
-    );
+    footerCtx.drawTextInRect(label, textRect);
   }
 
   ctx.drawImageInRect(
@@ -1505,9 +1514,19 @@ function temperatureHeatColor(temperature, minimum, maximum) {
 
 function heatMapTextColor(backgroundColor) {
   const rgb = hexToRGB(backgroundColor);
+  const linearChannel = (value) => {
+    const normalized = value / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : Math.pow((normalized + 0.055) / 1.055, 2.4);
+  };
   const luminance =
-    (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-  return luminance > 0.58 ? "#000000" : "#FFFFFF";
+    0.2126 * linearChannel(rgb.r) +
+    0.7152 * linearChannel(rgb.g) +
+    0.0722 * linearChannel(rgb.b);
+  const blackContrast = (luminance + 0.05) / 0.05;
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  return blackContrast >= whiteContrast ? "#000000" : "#FFFFFF";
 }
 
 function renderTimelinePanel(items, loadError) {
