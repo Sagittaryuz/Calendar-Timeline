@@ -1332,6 +1332,15 @@ function drawDatePanel(ctx, holidayDates) {
 }
 
 function drawTemperatureFooter(ctx, weather) {
+  // Assim como a legenda superior, a inferior é renderizada em um canvas
+  // cuja largura é exatamente a largura da timeline. O próprio canvas faz
+  // o recorte nas duas margens e impede qualquer avanço para fora do grid.
+  const footerCtx = new DrawContext();
+  const footerHeight = CANVAS.footerBottom - CANVAS.timelineBottom;
+  footerCtx.size = new Size(timelineWidth(), footerHeight);
+  footerCtx.opaque = false;
+  footerCtx.respectScreenScale = false;
+
   const ticks = hourTicks();
   const byHour = new Map(
     weather.hours.map((hour) => [hour.timestamp, hour])
@@ -1342,7 +1351,7 @@ function drawTemperatureFooter(ctx, weather) {
   const lineWidth = metrics.lineWidth;
   // A legenda superior termina em Y=37 e o grid começa em Y=41: 4 px.
   // Repete exatamente essa distância abaixo do grid.
-  const frameTop = CANVAS.timelineBottom + 4;
+  const frameTop = 4;
 
   const stateForTick = (tick) => {
     const forecast = byHour.get(floorToHour(tick).getTime());
@@ -1366,7 +1375,7 @@ function drawTemperatureFooter(ctx, weather) {
 
   // Prolonga cada eixo vertical até o centro superior de seu bloco térmico.
   for (const tick of ticks) {
-    const centerX = CANVAS.plotLeft + timeToX(tick);
+    const centerX = timeToX(tick);
     const hour = tick.getHours();
     const connectorWidth = hour === 0 ? 8 : hour === 12 ? 2 : 1;
     const state = stateForTick(tick);
@@ -1375,20 +1384,20 @@ function drawTemperatureFooter(ctx, weather) {
       : state.isMinimum
       ? new Color(SETTINGS.minimumTemperatureColor)
       : hourGridLineColor(tick);
-    ctx.setFillColor(connectorColor);
-    ctx.fillRect(
+    footerCtx.setFillColor(connectorColor);
+    footerCtx.fillRect(
       new Rect(
         centerX - connectorWidth / 2,
-        CANVAS.timelineBottom,
+        0,
         connectorWidth,
-        frameTop - CANVAS.timelineBottom
+        frameTop
       )
     );
   }
 
   // Mesmas molduras e mesmas coordenadas horizontais da legenda superior.
   for (const tick of ticks) {
-    const centerX = CANVAS.plotLeft + timeToX(tick);
+    const centerX = timeToX(tick);
     // À meia-noite, repete também a largura exata do badge do dia.
     const tickFrameWidth = tick.getHours() === 0
       ? isCompactMode() ? 44 : 50
@@ -1409,21 +1418,25 @@ function drawTemperatureFooter(ctx, weather) {
     // Somente máxima e mínima recebem preenchimento sólido. A condição
     // térmica prevalece sobre sábado, domingo, dia da semana e feriado.
     if (thermalColor) {
-      ctx.setFillColor(new Color(thermalColor));
-      ctx.fillRect(
+      footerCtx.setFillColor(new Color(thermalColor));
+      footerCtx.fillRect(
         new Rect(leftX, frameTop, tickFrameWidth, frameHeight)
       );
     }
 
-    ctx.setFillColor(lineColor);
-    ctx.fillRect(new Rect(leftX, frameTop, lineWidth, frameHeight));
-    ctx.fillRect(new Rect(rightX, frameTop, lineWidth, frameHeight));
-    ctx.fillRect(new Rect(leftX, frameTop, tickFrameWidth, lineWidth));
-    ctx.fillRect(new Rect(leftX, bottomY, tickFrameWidth, lineWidth));
+    footerCtx.setFillColor(lineColor);
+    footerCtx.fillRect(new Rect(leftX, frameTop, lineWidth, frameHeight));
+    footerCtx.fillRect(new Rect(rightX, frameTop, lineWidth, frameHeight));
+    footerCtx.fillRect(
+      new Rect(leftX, frameTop, tickFrameWidth, lineWidth)
+    );
+    footerCtx.fillRect(
+      new Rect(leftX, bottomY, tickFrameWidth, lineWidth)
+    );
   }
 
   const fontSize = isCompactMode() ? 17 : 21;
-  ctx.setTextAlignedCenter();
+  footerCtx.setTextAlignedCenter();
 
   for (const tick of ticks) {
     const state = stateForTick(tick);
@@ -1435,18 +1448,28 @@ function drawTemperatureFooter(ctx, weather) {
       ? SETTINGS.primaryTextColor
       : SETTINGS.secondaryTextColor;
     const label = `${Math.round(forecast.temperature)}°`;
-    const centerX = CANVAS.plotLeft + timeToX(tick);
-    ctx.setFont(
+    const centerX = timeToX(tick);
+    footerCtx.setFont(
       highlighted
         ? Font.blackMonospacedSystemFont(fontSize)
         : Font.regularMonospacedSystemFont(fontSize)
     );
-    ctx.setTextColor(new Color(color));
-    ctx.drawTextInRect(
+    footerCtx.setTextColor(new Color(color));
+    footerCtx.drawTextInRect(
       label,
       new Rect(centerX - 24, frameTop + 5, 48, 27)
     );
   }
+
+  ctx.drawImageInRect(
+    footerCtx.getImage(),
+    new Rect(
+      CANVAS.plotLeft,
+      CANVAS.timelineBottom,
+      timelineWidth(),
+      footerHeight
+    )
+  );
 }
 
 function renderTimelinePanel(items, loadError) {
