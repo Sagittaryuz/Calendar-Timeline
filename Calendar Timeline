@@ -1369,7 +1369,13 @@ function drawTemperatureFooter(ctx, weather) {
     const centerX = CANVAS.plotLeft + timeToX(tick);
     const hour = tick.getHours();
     const connectorWidth = hour === 0 ? 8 : hour === 12 ? 2 : 1;
-    ctx.setFillColor(hourGridLineColor(tick));
+    const state = stateForTick(tick);
+    const connectorColor = state.isMaximum
+      ? new Color(SETTINGS.maximumTemperatureColor)
+      : state.isMinimum
+      ? new Color(SETTINGS.minimumTemperatureColor)
+      : hourGridLineColor(tick);
+    ctx.setFillColor(connectorColor);
     ctx.fillRect(
       new Rect(
         centerX - connectorWidth / 2,
