@@ -1595,66 +1595,27 @@ function temperatureLegendOpacity(tick, forecast, weather) {
 
   const tickStart = floorToHour(tick);
   const tickEnd = new Date(tickStart.getTime() + 60 * 60 * 1000);
-  const hour = tickStart.getHours();
   const daily = weather.daily[dateKey(tickStart)];
   const isDailyExtreme =
     daily &&
     (Math.abs(forecast.temperature - daily.minimum) < 0.001 ||
       Math.abs(forecast.temperature - daily.maximum) < 0.001);
 
-  const events = loadResult.items.filter(
+  // A mínima e a máxima do dia têm sempre prioridade e ficam opacas.
+  if (isDailyExtreme) return 1.0;
+
+  const isDuringTimedEvent = loadResult.items.some(
     (item) =>
       item.kind === "event" &&
       !item.isAllDay &&
       item.end > windowStart &&
-      item.start < windowEnd
+      item.start < windowEnd &&
+      item.start < tickEnd &&
+      item.end > tickStart
   );
-  const isEventBoundary = events.some((event) => {
-    const startHour = floorToHour(event.start).getTime();
-    const endHour = floorToHour(event.end).getTime();
-    return (
-      tickStart.getTime() === startHour ||
-      tickStart.getTime() === endHour
-    );
-  });
 
-  // O início e o término do evento têm prioridade máxima.
-  if (isEventBoundary) return 1.0;
-
-  let eventOpacity = 0;
-  for (const event of events) {
-    if (event.start >= tickEnd || event.end <= tickStart) continue;
-
-    const duration = Math.max(
-      60 * 1000,
-      event.end.getTime() - event.start.getTime()
-    );
-    const sampleTime = Math.max(
-      event.start.getTime(),
-      Math.min(
-        event.end.getTime(),
-        tickStart.getTime() + 30 * 60 * 1000
-      )
-    );
-    const progress = Math.max(
-      0,
-      Math.min(1, (sampleTime - event.start.getTime()) / duration)
-    );
-    // 75% próximo às extremidades e 50% no centro do compromisso.
-    const edgeProximity = Math.abs(progress - 0.5) * 2;
-    eventOpacity = Math.max(
-      eventOpacity,
-      0.50 + 0.25 * edgeProximity
-    );
-  }
-
-  // Dentro do evento, a transparência do compromisso prevalece sobre
-  // 00:00, 12:00 e sobre as temperaturas mínima e máxima do dia.
-  if (eventOpacity > 0) return eventOpacity;
-
-  if (hour === 0 || hour === 12 || isDailyExtreme) {
-    return 1.0;
-  }
+  // Todos os horários compreendidos pelo evento usam opacidade uniforme.
+  if (isDuringTimedEvent) return 0.75;
 
   return 0.22;
 }
