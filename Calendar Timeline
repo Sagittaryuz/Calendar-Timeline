@@ -1431,6 +1431,14 @@ function drawTemperatureFooter(ctx, weather) {
   const byHour = new Map(
     weather.hours.map((hour) => [hour.timestamp, hour])
   );
+  const rainByHour = new Map(
+    weather.hours.map((hour) => [
+      Number.isFinite(hour.rainStartTimestamp)
+        ? hour.rainStartTimestamp
+        : hour.timestamp,
+      hour,
+    ])
+  );
   const metrics = hourLabelMetrics(ticks);
   const frameHeight = metrics.frameHeight;
   const frameWidth = metrics.frameWidth;
@@ -1454,6 +1462,10 @@ function drawTemperatureFooter(ctx, weather) {
 
   const forecastForTick = (tick) =>
     byHour.get(floorToHour(tick).getTime());
+  const rainForecastForTick = (tick) =>
+    rainByHour.get(floorToHour(tick).getTime());
+  const opacityForTick = (tick, forecast) =>
+    temperatureLegendOpacity(tick, forecast, weather);
 
   // Prolonga cada eixo vertical até o centro superior de seu bloco térmico.
   for (const tick of ticks) {
@@ -1481,6 +1493,9 @@ function drawTemperatureFooter(ctx, weather) {
     const rightX = centerX + tickFrameWidth / 2 - lineWidth;
     const bottomY = frameTop + frameHeight - lineWidth;
     const forecast = forecastForTick(tick);
+    const emphasisOpacity = forecast
+      ? opacityForTick(tick, forecast)
+      : 0.16;
     const heatColor = forecast
       ? temperatureHeatColor(
           forecast.temperature,
@@ -1489,13 +1504,13 @@ function drawTemperatureFooter(ctx, weather) {
         )
       : null;
     const lineColor = heatColor
-      ? new Color("#FFFFFF", 0.28)
+      ? new Color("#FFFFFF", 0.12 + 0.20 * emphasisOpacity)
       : new Color("#3A3A3C", 1.0);
 
     // Cada hora recebe uma cor da mesma escala: azul no extremo frio,
     // passando por ciano, verde, amarelo e laranja, até vermelho no quente.
     if (heatColor) {
-      footerCtx.setFillColor(new Color(heatColor));
+      footerCtx.setFillColor(new Color(heatColor, emphasisOpacity));
       footerCtx.fillRect(
         new Rect(leftX, frameTop, tickFrameWidth, frameHeight)
       );
@@ -1512,6 +1527,19 @@ function drawTemperatureFooter(ctx, weather) {
     );
   }
 
+  // Barras pequenas e verticais representam a possibilidade de chuva.
+  // Elas seguem a mesma hierarquia de opacidade das temperaturas.
+  drawRainProbabilityBars(
+    footerCtx,
+    ticks,
+    forecastForTick,
+    rainForecastForTick,
+    opacityForTick,
+    frameTop,
+    frameHeight,
+    frameWidth
+  );
+
   const fontSize = isCompactMode() ? 18 : 21;
   footerCtx.setTextAlignedCenter();
 
@@ -1519,14 +1547,16 @@ function drawTemperatureFooter(ctx, weather) {
     const forecast = forecastForTick(tick);
     if (!forecast) continue;
     const roundedTemperature = Math.round(forecast.temperature);
+    const emphasisOpacity = opacityForTick(tick, forecast);
     const label = String(roundedTemperature);
     const centerX = timeToX(tick);
     const textRect = new Rect(centerX - 24, frameTop + 5, 48, 27);
     footerCtx.setFont(Font.blackRoundedSystemFont(fontSize));
 
-    // Contorno preto sólido para manter a fonte branca legível sobre todas
-    // as cores do mapa de calor.
-    footerCtx.setTextColor(Color.black());
+    // Fonte branca e contorno preto seguem a opacidade contextual do bloco.
+    footerCtx.setTextColor(
+      new Color("#000000", 0.82 * emphasisOpacity)
+    );
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
       [-1, 0],            [1, 0],
@@ -1543,7 +1573,9 @@ function drawTemperatureFooter(ctx, weather) {
       );
     }
 
-    footerCtx.setTextColor(Color.white());
+    footerCtx.setTextColor(
+      new Color("#FFFFFF", emphasisOpacity)
+    );
     footerCtx.drawTextInRect(label, textRect);
   }
 
@@ -1556,6 +1588,111 @@ function drawTemperatureFooter(ctx, weather) {
       footerHeight
     )
   );
+}
+
+function temperatureLegendOpacity(tick, forecast, weather) {
+  if (!forecast) return 0.16;
+
+  const tickStart = floorToHour(tick);
+  const tickEnd = new Date(tickStart.getTime() + 60 * 60 * 1000);
+  const hour = tickStart.getHours();
+  const daily = weather.daily[dateKey(tickStart)];
+  const isDailyExtreme =
+    daily &&
+    (Math.abs(forecast.temperature - daily.minimum) < 0.001 ||
+      Math.abs(forecast.temperature - daily.maximum) < 0.001);
+
+  const events = loadResult.items.filter(
+    (item) =>
+      item.kind === "event" &&
+      !item.isAllDay &&
+      item.end > windowStart &&
+      item.start < windowEnd
+  );
+  const isEventBoundary = events.some((event) => {
+    const startHour = floorToHour(event.start).getTime();
+    const endHour = floorToHour(event.end).getTime();
+    return (
+      tickStart.getTime() === startHour ||
+      tickStart.getTime() === endHour
+    );
+  });
+
+  // Pontos principais permanecem totalmente opacos.
+  if (
+    hour === 0 ||
+    hour === 12 ||
+    isDailyExtreme ||
+    isEventBoundary
+  ) {
+    return 1.0;
+  }
+
+  let eventOpacity = 0;
+  for (const event of events) {
+    if (event.start >= tickEnd || event.end <= tickStart) continue;
+
+    const duration = Math.max(
+      60 * 1000,
+      event.end.getTime() - event.start.getTime()
+    );
+    const sampleTime = Math.max(
+      event.start.getTime(),
+      Math.min(
+        event.end.getTime(),
+        tickStart.getTime() + 30 * 60 * 1000
+      )
+    );
+    const progress = Math.max(
+      0,
+      Math.min(1, (sampleTime - event.start.getTime()) / duration)
+    );
+    // 75% próximo às extremidades e 50% no centro do compromisso.
+    const edgeProximity = Math.abs(progress - 0.5) * 2;
+    eventOpacity = Math.max(
+      eventOpacity,
+      0.50 + 0.25 * edgeProximity
+    );
+  }
+
+  return eventOpacity > 0 ? eventOpacity : 0.22;
+}
+
+function drawRainProbabilityBars(
+  ctx,
+  ticks,
+  forecastForTick,
+  rainForecastForTick,
+  opacityForTick,
+  frameTop,
+  frameHeight,
+  frameWidth
+) {
+  const maximumBarHeight = isCompactMode() ? 9 : 12;
+  const barWidth = isCompactMode() ? 2 : 3;
+
+  for (const tick of ticks) {
+    const forecast = forecastForTick(tick);
+    const rainForecast = rainForecastForTick(tick);
+    if (!rainForecast || rainForecast.rainChance <= 0) continue;
+
+    const intensity = Math.max(
+      0,
+      Math.min(1, rainForecast.rainChance / 100)
+    );
+    const height = Math.max(2, maximumBarHeight * intensity);
+    const centerX = timeToX(tick);
+    const x = centerX + frameWidth / 2 - barWidth - 4;
+    const y = frameTop + frameHeight - height - 3;
+    const opacity = forecast
+      ? opacityForTick(tick, forecast)
+      : 0.22;
+
+    ctx.setFillColor(
+      new Color(SETTINGS.rainLineColor, opacity)
+    );
+    ctx.fillRect(new Rect(x, y, barWidth, height));
+  }
 }
 
 function temperatureHeatColor(temperature, minimum, maximum) {
@@ -1606,7 +1743,6 @@ function renderTimelinePanel(items, loadError) {
   }
   drawHourAxis(ctx, loadResult.items);
   if (SETTINGS.showSolarGlow) drawFixedDaylightGloss(ctx);
-  drawRainProbabilityGlow(ctx, hourlyWeather);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -1636,56 +1772,6 @@ function renderTimelinePanel(items, loadError) {
   }
 
   return ctx.getImage();
-}
-
-function drawRainProbabilityGlow(ctx, weather) {
-  const lineY = timelineHeight() - 3;
-  const maximumGlowHeight =
-    (localPlotBottom() - CANVAS.localPlotTop) * 0.72;
-
-  for (const hour of weather.hours) {
-    if (hour.rainChance <= 0) continue;
-    const rainStart = Number.isFinite(hour.rainStartTimestamp)
-      ? hour.rainStartTimestamp
-      : hour.timestamp;
-    const start = new Date(rainStart);
-    const end = new Date(rainStart + 60 * 60 * 1000);
-    if (end <= windowStart || start >= windowEnd) continue;
-
-    const x0 = timeToX(start);
-    const x1 = timeToX(end);
-    const width = x1 - x0;
-    if (width <= 0) continue;
-
-    const intensity = hour.rainChance / 100;
-    const glowHeight = Math.max(8, maximumGlowHeight * intensity);
-
-    // O halo nasce na linha inferior e cresce para cima conforme a chance.
-    for (let offset = 0; offset <= glowHeight; offset += 2) {
-      const strength = Math.pow(
-        Math.max(0, 1 - offset / glowHeight),
-        1.45
-      );
-      ctx.setFillColor(
-        new Color(
-          SETTINGS.rainLineColor,
-          (0.04 + 0.25 * intensity) * strength
-        )
-      );
-      ctx.fillRect(new Rect(x0, lineY - offset, width, 2));
-    }
-
-    const coreThickness = 2 + Math.round(intensity * 3);
-    ctx.setFillColor(
-      new Color(
-        SETTINGS.rainLineColor,
-        0.45 + 0.55 * intensity
-      )
-    );
-    ctx.fillRect(
-      new Rect(x0, lineY - coreThickness + 1, width, coreThickness)
-    );
-  }
 }
 
 function drawFixedDaylightGlow(ctx) {
