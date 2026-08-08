@@ -1549,44 +1549,12 @@ function drawTemperatureFooter(ctx, weather) {
   for (const tick of ticks) {
     const forecast = forecastForTick(tick);
     if (!forecast) continue;
-    const isNoon = tick.getHours() === 12;
-    const heatColor = temperatureHeatColor(
-      forecast.temperature,
-      heatMinimum,
-      heatMaximum
-    );
     const roundedTemperature = Math.round(forecast.temperature);
-    const forceWhiteText =
-      roundedTemperature === 20 || roundedTemperature === 21;
-    const color = isNoon || forceWhiteText
-      ? SETTINGS.primaryTextColor
-      : heatMapTextColor(heatColor);
     const label = String(roundedTemperature);
     const centerX = timeToX(tick);
     const textRect = new Rect(centerX - 24, frameTop + 5, 48, 27);
-    const outlineColor = color === "#000000" ? "#FFFFFF" : "#000000";
     footerCtx.setFont(Font.blackRoundedSystemFont(fontSize));
-
-    // Contorno em oito direções: mantém os números legíveis sobre qualquer
-    // trecho do mapa de calor, inclusive amarelo, ciano e vermelho intenso.
-    footerCtx.setTextColor(new Color(outlineColor, 0.82));
-    for (const [offsetX, offsetY] of [
-      [-1, -1], [0, -1], [1, -1],
-      [-1, 0],            [1, 0],
-      [-1, 1],  [0, 1],  [1, 1],
-    ]) {
-      footerCtx.drawTextInRect(
-        label,
-        new Rect(
-          textRect.x + offsetX,
-          textRect.y + offsetY,
-          textRect.width,
-          textRect.height
-        )
-      );
-    }
-
-    footerCtx.setTextColor(new Color(color));
+    footerCtx.setTextColor(Color.black());
     footerCtx.drawTextInRect(label, textRect);
   }
 
@@ -1632,23 +1600,6 @@ function temperatureHeatColor(temperature, minimum, maximum) {
   }
 
   return stops[stops.length - 1][1];
-}
-
-function heatMapTextColor(backgroundColor) {
-  const rgb = hexToRGB(backgroundColor);
-  const linearChannel = (value) => {
-    const normalized = value / 255;
-    return normalized <= 0.03928
-      ? normalized / 12.92
-      : Math.pow((normalized + 0.055) / 1.055, 2.4);
-  };
-  const luminance =
-    0.2126 * linearChannel(rgb.r) +
-    0.7152 * linearChannel(rgb.g) +
-    0.0722 * linearChannel(rgb.b);
-  const blackContrast = (luminance + 0.05) / 0.05;
-  const whiteContrast = 1.05 / (luminance + 0.05);
-  return blackContrast >= whiteContrast ? "#000000" : "#FFFFFF";
 }
 
 function renderTimelinePanel(items, loadError) {
