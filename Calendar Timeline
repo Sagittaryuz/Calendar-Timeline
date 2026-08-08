@@ -1618,15 +1618,8 @@ function temperatureLegendOpacity(tick, forecast, weather) {
     );
   });
 
-  // Pontos principais permanecem totalmente opacos.
-  if (
-    hour === 0 ||
-    hour === 12 ||
-    isDailyExtreme ||
-    isEventBoundary
-  ) {
-    return 1.0;
-  }
+  // O início e o término do evento têm prioridade máxima.
+  if (isEventBoundary) return 1.0;
 
   let eventOpacity = 0;
   for (const event of events) {
@@ -1655,7 +1648,15 @@ function temperatureLegendOpacity(tick, forecast, weather) {
     );
   }
 
-  return eventOpacity > 0 ? eventOpacity : 0.22;
+  // Dentro do evento, a transparência do compromisso prevalece sobre
+  // 00:00, 12:00 e sobre as temperaturas mínima e máxima do dia.
+  if (eventOpacity > 0) return eventOpacity;
+
+  if (hour === 0 || hour === 12 || isDailyExtreme) {
+    return 1.0;
+  }
+
+  return 0.22;
 }
 
 function drawRainProbabilityBars(
