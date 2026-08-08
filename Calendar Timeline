@@ -33,9 +33,6 @@ const SETTINGS = {
   rainLineColor: "#0A84FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
-  saturdayTimelineBackgroundColor: "#071A2E",
-  sundayTimelineBackgroundColor: "#2A0A0D",
-  holidayTimelineBackgroundColor: "#332A00",
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
   fallbackEventColor: "#0A84FF",
@@ -55,9 +52,6 @@ const SETTINGS = {
   daylightGlowColor: "#FFCC66",
   daylightCoreColor: "#FFE34D",
   daylightSkyColor: "#FFD62A",
-  saturdayAtmosphereColor: "#0A84FF",
-  sundayAtmosphereColor: "#FF453A",
-  holidayAtmosphereColor: "#FFCC00",
   nightTextureVersion: "v4",
   nightTextureBaseURL:
     "https://raw.githubusercontent.com/Sagittaryuz/Calendar-Timeline/main/assets",
@@ -1298,30 +1292,15 @@ function timelineBackgroundColorForDate(_date) {
 }
 
 function drawTimelineBackground(ctx) {
-  let dayStart = startOfDay(windowStart);
-
-  while (dayStart < windowEnd) {
-    const nextDay = addDays(dayStart, 1);
-    const visibleStart = new Date(
-      Math.max(dayStart.getTime(), windowStart.getTime())
-    );
-    const visibleEnd = new Date(
-      Math.min(nextDay.getTime(), windowEnd.getTime())
-    );
-    const x0 = CANVAS.plotLeft + Math.max(0, timeToX(visibleStart));
-    const x1 = CANVAS.plotLeft + Math.min(timelineWidth(), timeToX(visibleEnd));
-
-    if (x1 > x0) {
-      ctx.setFillColor(
-        new Color(timelineBackgroundColorForDate(dayStart))
-      );
-      ctx.fillRect(
-        new Rect(x0, CANVAS.timelineTop, x1 - x0, timelineHeight())
-      );
-    }
-
-    dayStart = nextDay;
-  }
+  ctx.setFillColor(new Color(SETTINGS.timelineBackgroundColor));
+  ctx.fillRect(
+    new Rect(
+      CANVAS.plotLeft,
+      CANVAS.timelineTop,
+      timelineWidth(),
+      timelineHeight()
+    )
+  );
 }
 
 function drawIOSDarkGradient(ctx) {
@@ -1856,15 +1835,13 @@ function drawNightTextureBackground(ctx) {
       ctx,
       nightStart,
       nextDay,
-      "evening",
-      dayStart
+      "evening"
     );
     drawNightTextureSegment(
       ctx,
       nextDay,
       nightEnd,
-      "morning",
-      nextDay
+      "morning"
     );
     dayStart = nextDay;
   }
@@ -1874,8 +1851,7 @@ function drawNightTextureSegment(
   ctx,
   segmentStart,
   segmentEnd,
-  texturePart,
-  styleDate
+  texturePart
 ) {
   if (segmentEnd <= windowStart || segmentStart >= windowEnd) return;
 
@@ -1900,23 +1876,6 @@ function drawNightTextureSegment(
     drawNightAtmosphere(ctx, segmentStart, segmentEnd);
   }
 
-  // A fotografia noturna mantém a mesma tonalidade em todos os dias.
-  const tint = nightTextureTintForDate(styleDate);
-  if (tint) {
-    ctx.setFillColor(new Color(tint.color, tint.opacity));
-    ctx.fillRect(
-      new Rect(
-        x0,
-        backgroundTop,
-        x1 - x0,
-        localPlotBottom() - backgroundTop
-      )
-    );
-  }
-}
-
-function nightTextureTintForDate(_date) {
-  return null;
 }
 
 function drawSkyCycleBackground(ctx) {
@@ -2160,43 +2119,6 @@ function drawDaylightGeometry(ctx, x0, x1) {
     }
     ctx.addPath(path);
     ctx.strokePath();
-  }
-}
-
-function drawCalendarDayAtmosphere(ctx) {
-  let dayStart = startOfDay(windowStart);
-
-  while (dayStart < windowEnd) {
-    const nextDay = addDays(dayStart, 1);
-    const visibleStart = new Date(
-      Math.max(dayStart.getTime(), windowStart.getTime())
-    );
-    const visibleEnd = new Date(
-      Math.min(nextDay.getTime(), windowEnd.getTime())
-    );
-    const x0 = Math.max(0, timeToX(visibleStart));
-    const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
-    const isHoliday = loadResult.holidayDates.has(dateKey(dayStart));
-
-    let color = null;
-    let opacity = 0;
-    if (isHoliday) {
-      color = SETTINGS.holidayAtmosphereColor;
-      opacity = 0.18;
-    } else if (dayStart.getDay() === 6) {
-      color = SETTINGS.saturdayAtmosphereColor;
-      opacity = 0.15;
-    } else if (dayStart.getDay() === 0) {
-      color = SETTINGS.sundayAtmosphereColor;
-      opacity = 0.16;
-    }
-
-    if (color && x1 > x0) {
-      ctx.setFillColor(new Color(color, opacity));
-      ctx.fillRect(new Rect(x0, 0, x1 - x0, timelineHeight()));
-    }
-
-    dayStart = nextDay;
   }
 }
 
