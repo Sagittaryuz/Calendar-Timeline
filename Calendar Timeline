@@ -1274,8 +1274,7 @@ function renderWidget(items, loadError) {
   // substitua os textos e charts ao combinar backgroundGradient/backgroundImage.
   drawIOSDarkGradient(ctx);
 
-  // Cada trecho diário recebe sua própria cor: preto nos dias úteis,
-  // azul aos sábados e vermelho aos domingos.
+  // A timeline mantém o mesmo fundo em todos os dias.
   drawTimelineBackground(ctx);
 
   drawDatePanel(ctx, loadResult.holidayDates);
@@ -1294,16 +1293,7 @@ function renderWidget(items, loadError) {
   return ctx.getImage();
 }
 
-function timelineBackgroundColorForDate(date) {
-  if (loadResult.holidayDates.has(dateKey(date))) {
-    return SETTINGS.holidayTimelineBackgroundColor;
-  }
-  if (date.getDay() === 6) {
-    return SETTINGS.saturdayTimelineBackgroundColor;
-  }
-  if (date.getDay() === 0) {
-    return SETTINGS.sundayTimelineBackgroundColor;
-  }
+function timelineBackgroundColorForDate(_date) {
   return SETTINGS.timelineBackgroundColor;
 }
 
@@ -1910,8 +1900,7 @@ function drawNightTextureSegment(
     drawNightAtmosphere(ctx, segmentStart, segmentEnd);
   }
 
-  // A fotografia permanece visível, mas recebe a tonalidade correspondente
-  // ao calendário. Feriados prevalecem sobre sábados e domingos.
+  // A fotografia noturna mantém a mesma tonalidade em todos os dias.
   const tint = nightTextureTintForDate(styleDate);
   if (tint) {
     ctx.setFillColor(new Color(tint.color, tint.opacity));
@@ -1926,16 +1915,7 @@ function drawNightTextureSegment(
   }
 }
 
-function nightTextureTintForDate(date) {
-  if (loadResult.holidayDates.has(dateKey(date))) {
-    return { color: SETTINGS.holidayAtmosphereColor, opacity: 0.18 };
-  }
-  if (date.getDay() === 0) {
-    return { color: SETTINGS.sundayAtmosphereColor, opacity: 0.16 };
-  }
-  if (date.getDay() === 6) {
-    return { color: SETTINGS.saturdayAtmosphereColor, opacity: 0.15 };
-  }
+function nightTextureTintForDate(_date) {
   return null;
 }
 
