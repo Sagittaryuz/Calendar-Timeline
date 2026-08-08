@@ -1554,7 +1554,27 @@ function drawTemperatureFooter(ctx, weather) {
     const centerX = timeToX(tick);
     const textRect = new Rect(centerX - 24, frameTop + 5, 48, 27);
     footerCtx.setFont(Font.blackRoundedSystemFont(fontSize));
+
+    // Contorno preto sólido para manter a fonte branca legível sobre todas
+    // as cores do mapa de calor.
     footerCtx.setTextColor(Color.black());
+    for (const [offsetX, offsetY] of [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0],            [1, 0],
+      [-1, 1],  [0, 1],  [1, 1],
+    ]) {
+      footerCtx.drawTextInRect(
+        label,
+        new Rect(
+          textRect.x + offsetX,
+          textRect.y + offsetY,
+          textRect.width,
+          textRect.height
+        )
+      );
+    }
+
+    footerCtx.setTextColor(Color.white());
     footerCtx.drawTextInRect(label, textRect);
   }
 
