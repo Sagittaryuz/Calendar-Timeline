@@ -243,10 +243,7 @@ async function loadWindow() {
         const hasTime = Boolean(reminder.dueDateIncludesTime);
         const reminderDayStart = normalizedReminderDayStart(reminder);
         const reminderDayEnd = addDays(reminderDayStart, 1);
-        const reminderCutoff = dateAtHour(
-          reminderDayStart,
-          SETTINGS.daylightEndHour
-        );
+        const reminderCutoff = reminderDayEnd;
         const reminderDisplayStart = hasTime
           ? due
           : dateAtHour(reminderDayStart, SETTINGS.daylightStartHour);
@@ -268,9 +265,9 @@ async function loadWindow() {
           ),
         };
 
-        // Lembretes do próprio dia permanecem normais somente até 18:00.
-        // Depois desse limite, se ainda estiverem pendentes, reaparecem como
-        // atrasados até 00:00. Os dois trechos encostam, mas não se sobrepõem.
+        // O lembrete permanece visível desde o horário de início até
+        // 00:00 do próprio dia. Se continuar pendente, ele reaparece no
+        // dia seguinte como atrasado durante todo o dia.
         const segments = [];
         if (reminderDisplayStart < reminderCutoff) {
           segments.push({
@@ -279,22 +276,6 @@ async function loadWindow() {
             end: reminderCutoff,
             isOverdue: false,
           });
-        }
-
-        const isDueToday = dateKey(reminderDayStart) === dateKey(now);
-        if (isDueToday && now >= reminderCutoff) {
-          const overdueStart = new Date(
-            Math.max(reminderCutoff.getTime(), reminderDisplayStart.getTime())
-          );
-          if (overdueStart < reminderDayEnd) {
-            segments.push({
-              ...baseItem,
-              start: overdueStart,
-              end: reminderDayEnd,
-              isAllDay: false,
-              isOverdue: true,
-            });
-          }
         }
 
         return segments;
@@ -316,10 +297,10 @@ async function loadWindow() {
         kind: "reminder",
         title: cleanTitle(reminder.title, "Lembrete"),
         calendarTitle: reminder.calendar?.title ?? "Lembretes",
-        // Nos dias seguintes, um lembrete ainda pendente reaparece apenas no
-        // período diurno, das 06:00 às 18:00, já marcado como atrasado.
-        start: dateAtHour(startOfToday(), SETTINGS.daylightStartHour),
-        end: dateAtHour(startOfToday(), SETTINGS.daylightEndHour),
+        // No dia seguinte, um lembrete ainda pendente reaparece como
+        // atrasado desde 00:00 até 00:00 do dia seguinte.
+        start: startOfToday(),
+        end: addDays(startOfToday(), 1),
         isAllDay: false,
         identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
         priority: Number(reminder.priority) || 0,
