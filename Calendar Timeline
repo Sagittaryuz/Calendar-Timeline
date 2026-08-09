@@ -20,7 +20,7 @@ const SETTINGS = {
   showEventMetadataIcons: true,
   showOverdueReminders: true,
   showMoon: true,
-  showNightTexture: true,
+  showNightTexture: false,
   showSolarGlow: true,
   solarGlowIntensity: 1.0,
   nightStartHour: 18,
@@ -2226,7 +2226,7 @@ function drawNightSegment(
   if (sceneWidth < 18) return;
 
   const sceneHeight = timelineHeight();
-  const nightBackground = new Color("#101114", 1.0);
+  const nightBackground = new Color(SETTINGS.timelineBackgroundColor, 1.0);
   const moon = moonPhaseForDate(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
