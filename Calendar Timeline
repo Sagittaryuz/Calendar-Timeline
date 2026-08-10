@@ -1484,9 +1484,12 @@ function drawTemperatureFooter(ctx, weather) {
           heatMaximum
         )
       : null;
-    const lineColor = heatColor
-      ? new Color("#FFFFFF", 0.12 + 0.20 * emphasisOpacity)
-      : new Color("#3A3A3C", 1.0);
+    const isMidnight = tick.getHours() === 0;
+    const lineColor = isMidnight
+      ? Color.white()
+      : heatColor
+        ? new Color("#FFFFFF", 0.12 + 0.20 * emphasisOpacity)
+        : new Color("#3A3A3C", 1.0);
 
     // Cada hora recebe uma cor da mesma escala: azul no extremo frio,
     // passando por ciano, verde, amarelo e laranja, até vermelho no quente.
@@ -1576,6 +1579,12 @@ function temperatureLegendOpacity(tick, forecast, weather) {
 
   const tickStart = floorToHour(tick);
   const tickEnd = new Date(tickStart.getTime() + 60 * 60 * 1000);
+  const hour = tickStart.getHours();
+
+  // Meia-noite e meio-dia mantêm 75% de opacidade, inclusive quando
+  // coincidirem com a mínima ou a máxima diária.
+  if (hour === 0 || hour === 12) return 0.75;
+
   const daily = weather.daily[dateKey(tickStart)];
   const isDailyExtreme =
     daily &&
