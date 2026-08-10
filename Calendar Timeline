@@ -1581,9 +1581,10 @@ function temperatureLegendOpacity(tick, forecast, weather) {
   const tickEnd = new Date(tickStart.getTime() + 60 * 60 * 1000);
   const hour = tickStart.getHours();
 
-  // Meia-noite e meio-dia mantêm 75% de opacidade, inclusive quando
-  // coincidirem com a mínima ou a máxima diária.
-  if (hour === 0 || hour === 12) return 0.75;
+  // A meia-noite mantém 75% de opacidade; o meio-dia segue a
+  // opacidade comum de 22%, mesmo se coincidir com um extremo diário.
+  if (hour === 0) return 0.75;
+  if (hour === 12) return 0.22;
 
   const daily = weather.daily[dateKey(tickStart)];
   const isDailyExtreme =
