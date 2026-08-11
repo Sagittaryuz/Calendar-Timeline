@@ -1595,18 +1595,31 @@ function temperatureLegendOpacity(tick, forecast, weather) {
   // A mínima e a máxima do dia têm sempre prioridade e ficam opacas.
   if (isDailyExtreme) return 1.0;
 
-  const isDuringTimedEvent = loadResult.items.some(
-    (item) =>
-      item.kind === "event" &&
-      !item.isAllDay &&
-      item.end > windowStart &&
-      item.start < windowEnd &&
-      item.start < tickEnd &&
-      item.end > tickStart
+  const isDuringOrImmediatelyAfterTimedEvent = loadResult.items.some(
+    (item) => {
+      if (
+        item.kind !== "event" ||
+        item.isAllDay ||
+        item.end <= windowStart ||
+        item.start >= windowEnd
+      ) {
+        return false;
+      }
+
+      const isDuringEvent =
+        item.start < tickEnd &&
+        item.end > tickStart;
+      const firstTickAtOrAfterEnd = ceilToHour(item.end);
+      const isFirstTickAfterEvent =
+        tickStart.getTime() === firstTickAtOrAfterEnd.getTime();
+
+      return isDuringEvent || isFirstTickAfterEvent;
+    }
   );
 
-  // Todos os horários compreendidos pelo evento usam opacidade uniforme.
-  if (isDuringTimedEvent) return 0.75;
+  // O evento e a primeira temperatura horária em seu término (ou logo
+  // depois dele) usam a mesma opacidade de destaque.
+  if (isDuringOrImmediatelyAfterTimedEvent) return 0.75;
 
   return 0.22;
 }
