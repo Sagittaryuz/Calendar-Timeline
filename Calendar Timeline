@@ -2639,6 +2639,25 @@ function drawHourLabelFrames(ctx, ticks) {
   }
 }
 
+function drawEventStartLines(ctx, items) {
+  const events = prioritizedEvents(items);
+  const lineWidth = 2;
+  const topY = CANVAS.localPlotTop;
+  const height = localPlotBottom() - topY;
+
+  // A ordem invertida preserva por cima a mesma prioridade visual usada
+  // nos destaques coloridos da legenda superior.
+  for (const event of [...events].reverse()) {
+    const x = timeToX(event.start);
+    if (x < 0 || x > timelineWidth()) continue;
+
+    ctx.setFillColor(new Color(event.color, 1.0));
+    ctx.fillRect(
+      new Rect(x - lineWidth / 2, topY, lineWidth, height)
+    );
+  }
+}
+
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
 
@@ -2660,6 +2679,10 @@ function drawHourAxis(ctx, items) {
       )
     );
   }
+
+  // As linhas de início usam a cor original de cada evento e ficam acima
+  // das linhas horárias comuns, mas atrás dos charts.
+  drawEventStartLines(ctx, items);
 
   // Segundo: retângulos coloridos sobre as linhas.
   drawEventHourHighlights(ctx, items);
