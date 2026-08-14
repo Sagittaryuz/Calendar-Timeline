@@ -126,7 +126,9 @@ widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
 
-if (config.runsInWidget) {
+if (config.runsInWidget || config.runsWithSiri) {
+  // Ao ser chamado pelo Atalhos, recalcula e entrega o widget
+  // silenciosamente, sem abrir a prévia do Scriptable.
   Script.setWidget(widget);
 } else {
   if (loadResult.error) {
