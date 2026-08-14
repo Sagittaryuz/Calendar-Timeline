@@ -189,10 +189,47 @@ async function loadWindow() {
       includeCalendar(event.calendar)
     );
 
-    // A consulta por intervalo pode omitir algumas ocorrências que aparecem
-    // na consulta específica do dia, especialmente em lembretes recorrentes.
-    // Une as duas fontes e elimina apenas a mesma ocorrência, preservando
-    // repetições do mesmo lembrete em datas ou horários diferentes.
+    // O EventKit pode devolver um lembrete recorrente encontrado por
+    // incompleteDueToday() mantendo em dueDate a data-base da série. Nesse
+    // caso, materializamos uma ocorrência de hoje sem alterar o lembrete
+    // original. O horário é preservado; lembretes sem horário usam o dia.
+    const reminderOccurrenceView = (reminder, forcedDayStart = null) => {
+      const hasTime = Boolean(reminder.dueDateIncludesTime);
+      const originalDue = reminder.dueDate;
+      let effectiveDue = originalDue;
+
+      if (forcedDayStart) {
+        effectiveDue = new Date(forcedDayStart);
+        if (hasTime && originalDue) {
+          effectiveDue.setHours(
+            originalDue.getHours(),
+            originalDue.getMinutes(),
+            originalDue.getSeconds(),
+            0
+          );
+        }
+      }
+
+      return {
+        identifier: reminder.identifier,
+        title: reminder.title,
+        calendar: reminder.calendar,
+        priority: reminder.priority,
+        dueDate: effectiveDue,
+        dueDateIncludesTime: hasTime,
+      };
+    };
+
+    // A consulta por intervalo cobre a janela completa. A consulta específica
+    // de hoje é convertida em ocorrências reais de hoje e funciona como fonte
+    // autoritativa para séries recorrentes (inclusive a cada 30 dias).
+    const rangeReminderViews = reminders.map((reminder) =>
+      reminderOccurrenceView(reminder)
+    );
+    const todayOccurrenceViews = todayRemindersRaw.map((reminder) =>
+      reminderOccurrenceView(reminder, startOfToday())
+    );
+
     const reminderOccurrenceKey = (reminder) => {
       const due = reminder.dueDate;
       const dayStart = normalizedReminderDayStart(reminder);
@@ -209,7 +246,10 @@ async function loadWindow() {
     };
 
     const displayReminderMap = new Map();
-    for (const reminder of [...reminders, ...todayRemindersRaw]) {
+    for (const reminder of [
+      ...rangeReminderViews,
+      ...todayOccurrenceViews,
+    ]) {
       if (
         !normalizedReminderDayStart(reminder) ||
         !includeCalendar(reminder.calendar)
