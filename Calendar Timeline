@@ -188,22 +188,42 @@ async function loadWindow() {
     const todayEvents = todayEventsRaw.filter((event) =>
       includeCalendar(event.calendar)
     );
-    const todayReminderMap = new Map();
-    for (const reminder of [...todayRemindersRaw, ...reminders]) {
+
+    // A consulta por intervalo pode omitir algumas ocorrências que aparecem
+    // na consulta específica do dia, especialmente em lembretes recorrentes.
+    // Une as duas fontes e elimina apenas a mesma ocorrência, preservando
+    // repetições do mesmo lembrete em datas ou horários diferentes.
+    const reminderOccurrenceKey = (reminder) => {
+      const due = reminder.dueDate;
       const dayStart = normalizedReminderDayStart(reminder);
+      const sourceIdentifier =
+        reminder.identifier ??
+        `${reminder.calendar?.identifier ?? reminder.calendar?.title ?? ""}-${reminder.title ?? ""}`;
+      const occurrence =
+        Boolean(reminder.dueDateIncludesTime) && due
+          ? due.getTime()
+          : dayStart
+            ? dateKey(dayStart)
+            : "sem-data";
+      return `${sourceIdentifier}::${occurrence}`;
+    };
+
+    const displayReminderMap = new Map();
+    for (const reminder of [...reminders, ...todayRemindersRaw]) {
       if (
-        !dayStart ||
-        !includeCalendar(reminder.calendar) ||
-        dateKey(dayStart) !== dateKey(now)
+        !normalizedReminderDayStart(reminder) ||
+        !includeCalendar(reminder.calendar)
       ) {
         continue;
       }
-      const identifier =
-        reminder.identifier ??
-        `${reminder.calendar?.title ?? ""}-${reminder.title}-${dateKey(dayStart)}`;
-      todayReminderMap.set(identifier, reminder);
+      displayReminderMap.set(reminderOccurrenceKey(reminder), reminder);
     }
-    const todayReminders = [...todayReminderMap.values()];
+
+    const displayReminders = [...displayReminderMap.values()];
+    const todayReminders = displayReminders.filter((reminder) => {
+      const dayStart = normalizedReminderDayStart(reminder);
+      return dayStart && dateKey(dayStart) === dateKey(now);
+    });
 
     const eventItems = events
       .filter((event) => {
@@ -231,7 +251,7 @@ async function loadWindow() {
         ),
       }));
 
-    const reminderItems = reminders
+    const reminderItems = displayReminders
       .filter((reminder) => {
         const dayStart = normalizedReminderDayStart(reminder);
         if (!dayStart || !includeCalendar(reminder.calendar)) return false;
