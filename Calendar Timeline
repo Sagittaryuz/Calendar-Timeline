@@ -1059,9 +1059,15 @@ function prepareTimelineItems(items, referenceDate) {
     ).length;
   }
 
+  // Um evento em andamento já é classificado como "AGORA"; o próximo
+  // compromisso precisa começar depois do instante atual.
   const nextEvent = events
-    .filter((event) => event.start >= referenceDate)
-    .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
+    .filter((event) => event.start > referenceDate)
+    .sort(
+      (a, b) =>
+        a.start.getTime() - b.start.getTime() ||
+        a.end.getTime() - b.end.getTime()
+    )[0];
   if (nextEvent) nextEvent.isNextEvent = true;
   return prepared;
 }
@@ -2822,7 +2828,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     );
 
     ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackRoundedSystemFont(22));
+    ctx.setFont(
+      Font.blackRoundedSystemFont(isCompactMode() ? 18 : 22)
+    );
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
       item.title,
@@ -2858,10 +2866,21 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const statusFontSize = isCompactMode() ? 12 : 15;
   const metadataFontSize = isCompactMode() ? 11 : 15;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
+  // Conflitos precisam continuar identificáveis mesmo em eventos curtos.
+  // Para eles, o pequeno chip "×N" pode ocupar a largura mínima de leitura;
+  // contagens regressivas continuam reservadas aos charts mais largos.
+  const statusMinimumWidth =
+    item.conflictCount > 0 &&
+    !item.isCurrentEvent &&
+    !item.isNextEvent
+      ? 44
+      : isCompactMode()
+        ? 105
+        : 155;
   const statusWidth =
-    statusText && visibleBarWidth >= 155
+    statusText && visibleBarWidth >= statusMinimumWidth
       ? Math.min(
-          visibleBarWidth * 0.45,
+          visibleBarWidth * (item.conflictCount > 0 ? 0.40 : 0.45),
           estimatedTextWidth(statusText, statusFontSize) + 18
         )
       : 0;
