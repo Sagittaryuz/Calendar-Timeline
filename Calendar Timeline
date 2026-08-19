@@ -1695,16 +1695,23 @@ function drawTemperatureFooter(ctx, weather) {
       Math.abs(forecast.temperature - shownMaximum) < 0.001;
     const isMinimum =
       Math.abs(forecast.temperature - shownMinimum) < 0.001;
+    // A fonte principal é sempre totalmente opaca.
     const opacity = 1.0;
-    const labelColor = isMaximum
-      ? "#FF9500"
-      : isMinimum
-        ? "#0A84FF"
-        : "#FFFFFF";
     const centerX = timeToX(tick);
 
     const hour = tick.getHours();
+    const isDayBoundaryTemperature = hour === 0;
     const isNoon = hour === 12;
+    // A temperatura da mudança de dia fica dentro do mesmo quadrado
+    // visual do dia da semana e usa a mesma fonte arredondada, preta e
+    // em negrito do rótulo superior.
+    const labelColor = isDayBoundaryTemperature
+      ? "#000000"
+      : isMaximum
+        ? "#FF9500"
+        : isMinimum
+          ? "#0A84FF"
+          : "#FFFFFF";
     const isSolarBoundary =
       hour === SETTINGS.daylightStartHour ||
       hour === SETTINGS.daylightEndHour;
@@ -1713,10 +1720,17 @@ function drawTemperatureFooter(ctx, weather) {
       hour <= SETTINGS.daylightEndHour;
     const textWidth = isExtendedDetailedMode() ? 36 : 44;
     const temperatureLabel = String(roundedTemperature) + "º";
+    const weekdayBadgeFontSize = isCompactMode()
+      ? 17
+      : isExtendedDetailedMode()
+        ? 18
+        : 21;
     footerCtx.setFont(
-      isDaylightHour || isNoon || isSolarBoundary
-        ? Font.blackMonospacedSystemFont(labelFontSize)
-        : Font.regularMonospacedSystemFont(labelFontSize)
+      isDayBoundaryTemperature
+        ? Font.blackRoundedSystemFont(weekdayBadgeFontSize)
+        : isDaylightHour || isNoon || isSolarBoundary
+          ? Font.blackMonospacedSystemFont(labelFontSize)
+          : Font.regularMonospacedSystemFont(labelFontSize)
     );
     footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
@@ -3488,10 +3502,12 @@ function drawHourAxis(ctx, items) {
           ? Font.blackMonospacedSystemFont(hourFontSize)
           : Font.regularMonospacedSystemFont(hourFontSize)
       );
+      // Todas as horas são totalmente opacas: amarelo durante o dia
+      // e branco durante a noite.
       ctx.setTextColor(
         isDaylightHour
           ? daylightHourColor(tick)
-          : Color.white()
+          : new Color("#FFFFFF", 1.0)
       );
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(
