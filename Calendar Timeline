@@ -13,7 +13,7 @@ const SETTINGS = {
   defaultWindowHours: 24,
   maximumWindowHours: 168, // Até 7 dias.
   refreshSeconds: 60,
-  compactModeFromHours: 72,
+  compactModeFromHours: 36,
   minimumChartWidth: 34,
   compactMinimumChartWidth: 18,
   currentEventColor: "#FFFFFF",
@@ -1138,7 +1138,11 @@ function chooseItems(items, referenceDate, limit) {
 }
 
 function isCompactMode() {
-  return windowHours >= SETTINGS.compactModeFromHours;
+  return windowHours > SETTINGS.compactModeFromHours;
+}
+
+function isExtendedDetailedMode() {
+  return windowHours > 24 && !isCompactMode();
 }
 
 function itemImportance(item) {
@@ -1592,7 +1596,11 @@ function drawTemperatureFooter(ctx, weather) {
     frameWidth
   );
 
-  const fontSize = isCompactMode() ? 18 : 21;
+  const fontSize = isCompactMode()
+    ? 18
+    : isExtendedDetailedMode()
+      ? 17
+      : 21;
   footerCtx.setTextAlignedCenter();
 
   for (const tick of ticks) {
@@ -1822,23 +1830,26 @@ function drawFixedDaylightGlow(ctx) {
     )
   );
 
-  for (const { x0, x1 } of visibleDaylightIntervals()) {
-    const width = x1 - x0;
-    if (width <= 0) continue;
-
-    // Halo superior e queda vertical longa, sem borda rígida.
-    for (let y = lineY - 12; y < glowEndY; y += 2) {
-      const strength =
-        y < lineY
-          ? Math.max(0, 1 - (lineY - y) / 12)
-          : Math.pow(
-              Math.max(0, 1 - (y - lineY) / (glowEndY - lineY)),
-              1.12
-            );
-      const opacity = y < lineY ? 0.12 * strength : 0.25 * strength;
-      ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
-      // O feixe desce perpendicularmente, sempre com a mesma largura.
-      ctx.fillRect(new Rect(x0, y, width, 2));
+  for (const interval of visibleDaylightIntervals()) {
+    // A cortina é dividida em fatias para formar um gradiente linear:
+    // baixa intensidade às 06/18 e máxima intensidade às 12.
+    for (const slice of daylightSlices(interval)) {
+      for (let y = lineY - 12; y < glowEndY; y += 2) {
+        const strength =
+          y < lineY
+            ? Math.max(0, 1 - (lineY - y) / 12)
+            : Math.pow(
+                Math.max(0, 1 - (y - lineY) / (glowEndY - lineY)),
+                1.12
+              );
+        const opacity =
+          (y < lineY ? 0.12 : 0.25) *
+          strength *
+          slice.daylightStrength;
+        ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
+        // O feixe desce perpendicularmente, sem dividir a linha visualmente.
+        ctx.fillRect(new Rect(slice.x, y, slice.width + 1, 2));
+      }
     }
   }
 }
@@ -1849,64 +1860,123 @@ function drawFixedDaylightGloss(ctx) {
   const lowerRadius = 22;
   const coreThickness = 7;
 
-  for (const { x0, x1 } of visibleDaylightIntervals()) {
-    const width = x1 - x0;
+  for (const interval of visibleDaylightIntervals()) {
+    const width = interval.x1 - interval.x0;
     if (width <= 0) continue;
 
-    // Halos circulares projetam a luz para fora e arredondam as laterais.
+    // Os halos nas extremidades permanecem suaves. O corpo contínuo do
+    // brilho recebe a intensidade maior no centro do intervalo diurno.
     for (const [radius, opacity] of [[34, 0.08], [24, 0.13], [15, 0.19]]) {
-      ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
-      ctx.fillEllipse(
-        new Rect(x0 - radius, centerY - radius, radius * 2, radius * 2)
+      const edgeStrength =
+        0.70 + 0.30 * daylightStrengthAtX(interval.x0, interval.x0, interval.x1);
+      ctx.setFillColor(
+        new Color("#FFD62A", solarOpacity(opacity * edgeStrength))
       );
       ctx.fillEllipse(
-        new Rect(x1 - radius, centerY - radius, radius * 2, radius * 2)
+        new Rect(interval.x0 - radius, centerY - radius, radius * 2, radius * 2)
+      );
+      ctx.fillEllipse(
+        new Rect(interval.x1 - radius, centerY - radius, radius * 2, radius * 2)
       );
     }
 
-    // Camadas suaves formam um gloss moderado e contínuo.
-    for (let offset = -upperRadius; offset <= lowerRadius; offset += 2) {
-      const normalized =
-        offset < 0
-          ? Math.abs(offset) / upperRadius
-          : offset / lowerRadius;
-      const strength = Math.pow(Math.max(0, 1 - normalized), 2.0);
-      const sideProjection = 22 * strength;
+    for (const slice of daylightSlices(interval)) {
+      for (let offset = -upperRadius; offset <= lowerRadius; offset += 2) {
+        const normalized =
+          offset < 0
+            ? Math.abs(offset) / upperRadius
+            : offset / lowerRadius;
+        const strength = Math.pow(Math.max(0, 1 - normalized), 2.0);
+        const sideProjection = 22 * strength;
+        fillRoundedRect(
+          ctx,
+          new Rect(
+            slice.x - sideProjection,
+            centerY + offset,
+            slice.width + sideProjection * 2 + 1,
+            2
+          ),
+          1,
+          new Color(
+            "#FFD62A",
+            solarOpacity(0.42 * strength * slice.daylightStrength)
+          )
+        );
+      }
+
       fillRoundedRect(
         ctx,
         new Rect(
-          x0 - sideProjection,
-          centerY + offset,
-          width + sideProjection * 2,
-          2
+          slice.x - 4,
+          centerY - Math.floor(coreThickness / 2),
+          slice.width + 9,
+          coreThickness
         ),
-        1,
-        new Color("#FFD62A", solarOpacity(0.42 * strength))
+        coreThickness / 2,
+        new Color(
+          "#FFE34D",
+          solarOpacity(0.72 * slice.daylightStrength)
+        )
+      );
+      fillRoundedRect(
+        ctx,
+        new Rect(slice.x - 2, centerY - 1, slice.width + 5, 3),
+        1.5,
+        new Color(
+          "#FFF3A0",
+          solarOpacity(0.38 * slice.daylightStrength)
+        )
       );
     }
-
-    fillRoundedRect(
-      ctx,
-      new Rect(
-        x0 - 4,
-        centerY - Math.floor(coreThickness / 2),
-        width + 8,
-        coreThickness
-      ),
-      coreThickness / 2,
-      new Color("#FFE34D", solarOpacity(0.72))
-    );
-    fillRoundedRect(
-      ctx,
-      new Rect(x0 - 2, centerY - 1, width + 4, 3),
-      1.5,
-      new Color("#FFF3A0", solarOpacity(0.38))
-    );
   }
 }
 
 function solarOpacity(value) {
   return Math.min(1, value * SETTINGS.solarGlowIntensity);
+}
+
+function daylightStrengthAtHour(hour) {
+  const start = SETTINGS.daylightStartHour;
+  const end = SETTINGS.daylightEndHour;
+  if (hour < start || hour > end) return 0;
+
+  const progress = (hour - start) / Math.max(1, end - start);
+  // Gradiente triangular linear: 06/18 ficam suaves e 12 é o pico.
+  return 0.28 + 0.72 * (1 - Math.abs(progress * 2 - 1));
+}
+
+function daylightStrengthAtX(x, x0, x1) {
+  if (x1 <= x0) return 0;
+  const progress = Math.max(0, Math.min(1, (x - x0) / (x1 - x0)));
+  return 0.28 + 0.72 * (1 - Math.abs(progress * 2 - 1));
+}
+
+function daylightSlices(interval) {
+  const width = interval.x1 - interval.x0;
+  if (width <= 0) return [];
+
+  const segmentCount = Math.min(
+    72,
+    Math.max(24, Math.ceil(width / 12))
+  );
+  const slices = [];
+
+  for (let index = 0; index < segmentCount; index++) {
+    const x = interval.x0 + (width * index) / segmentCount;
+    const nextX =
+      interval.x0 + (width * (index + 1)) / segmentCount;
+    slices.push({
+      x,
+      width: nextX - x,
+      daylightStrength: daylightStrengthAtX(
+        (x + nextX) / 2,
+        interval.x0,
+        interval.x1
+      ),
+    });
+  }
+
+  return slices;
 }
 
 function visibleDaylightIntervals() {
@@ -2618,10 +2688,16 @@ function hourTicks() {
   const ticks = [];
   let tick = floorToHour(windowStart);
   const finalTick = ceilToHour(windowEnd);
+  const compactEventHours = compactEventHourMarkers();
 
   while (tick <= finalTick) {
     const hour = tick.getHours();
-    if (windowHours <= 24 || hour === 0 || hour === 12) {
+    const isCompactAnchor = [0, 6, 12, 18].includes(hour);
+    const isEventHour = compactEventHours.has(tick.getTime());
+
+    // Até 36 horas, a legenda permanece completa. Acima disso, mantém
+    // 00/06/12/18 e acrescenta as horas que delimitam eventos.
+    if (!isCompactMode() || isCompactAnchor || isEventHour) {
       ticks.push(new Date(tick));
     }
     tick = new Date(tick.getTime() + 60 * 60 * 1000);
@@ -2630,16 +2706,57 @@ function hourTicks() {
   return ticks;
 }
 
+function compactEventHourMarkers() {
+  const markers = new Set();
+  markers.add(floorToHour(windowStart).getTime());
+
+  for (const item of loadResult.items ?? []) {
+    if (
+      item.kind !== "event" ||
+      item.isAllDay ||
+      !item.start ||
+      !item.end
+    ) {
+      continue;
+    }
+
+    const boundaries = [item.start, item.end];
+    for (const boundary of boundaries) {
+      const marker = floorToHour(boundary);
+      if (
+        marker.getTime() >= windowStart.getTime() - 60 * 60 * 1000 &&
+        marker.getTime() <= windowEnd.getTime()
+      ) {
+        markers.add(marker.getTime());
+      }
+    }
+  }
+
+  return markers;
+}
+
 function hourGridLineColor(tick) {
   return tick.getHours() === 0
     ? dayBoundaryLineColor(tick, loadResult.holidayDates)
     : new Color("#3A3A3C", 1.0);
 }
 
+function daylightHourColor(tick) {
+  const hour =
+    tick.getHours() + tick.getMinutes() / 60;
+  const strength = daylightStrengthAtHour(hour);
+  const opacity = 0.55 + 0.45 * strength;
+  return new Color(
+    SETTINGS.daylightCoreColor,
+    solarOpacity(opacity)
+  );
+}
+
 function hourLabelMetrics(ticks) {
-  const frameHeight = isCompactMode() ? 30 : 34;
-  const lineWidth = 2;
-  const gapWidth = 6;
+  const extended = isExtendedDetailedMode();
+  const frameHeight = isCompactMode() ? 30 : extended ? 28 : 34;
+  const lineWidth = extended ? 1 : 2;
+  const gapWidth = extended ? 3 : 6;
   const tickXs = ticks.map((tick) => timeToX(tick));
   const tickSpacing = tickXs.length > 1
     ? Math.min(
@@ -2648,9 +2765,11 @@ function hourLabelMetrics(ticks) {
           .map((x, index) => Math.abs(x - tickXs[index]))
       )
     : 50;
+  const minimumFrameWidth = isCompactMode() ? 30 : extended ? 20 : 30;
+  const maximumFrameWidth = isCompactMode() ? 42 : extended ? 30 : 44;
   const frameWidth = Math.max(
-    30,
-    Math.min(isCompactMode() ? 42 : 44, tickSpacing - gapWidth)
+    minimumFrameWidth,
+    Math.min(maximumFrameWidth, tickSpacing - gapWidth)
   );
 
   return {
@@ -2771,35 +2890,67 @@ function drawHourAxis(ctx, items) {
     if (isMidnight) {
       const weekday = shortWeekday(tick);
       const style = dayBadgeStyle(tick, loadResult.holidayDates);
-      const badgeWidth = isCompactMode() ? 44 : 50;
-      const badgeHeight = isCompactMode() ? 30 : 34;
+      const badgeWidth = isCompactMode()
+        ? 44
+        : isExtendedDetailedMode()
+          ? 44
+          : 50;
+      const badgeHeight = isCompactMode()
+        ? 30
+        : isExtendedDetailedMode()
+          ? 28
+          : 34;
       const badge = new Rect(x - badgeWidth / 2, 3, badgeWidth, badgeHeight);
       ctx.setFillColor(style.background);
       ctx.fillRect(badge);
-      ctx.setFont(Font.blackRoundedSystemFont(isCompactMode() ? 17 : 21));
+      ctx.setFont(
+        Font.blackRoundedSystemFont(
+          isCompactMode()
+            ? 17
+            : isExtendedDetailedMode()
+              ? 18
+              : 21
+        )
+      );
       ctx.setTextColor(style.text);
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(
         weekday,
-        new Rect(x - badgeWidth / 2, isCompactMode() ? 8 : 8, badgeWidth, 25)
+        new Rect(
+          x - badgeWidth / 2,
+          isExtendedDetailedMode() ? 6 : 8,
+          badgeWidth,
+          isExtendedDetailedMode() ? 21 : 25
+        )
       );
-    } else if (windowHours <= 24 || isNoon) {
+    } else {
       const label = String(hour).padStart(2, "0");
       const activeEvent = eventAtTime(tick, items);
-      const hourFontSize = isCompactMode() ? 17 : 21;
+      const isDaylightHour =
+        hour >= SETTINGS.daylightStartHour &&
+        hour <= SETTINGS.daylightEndHour;
+      const hourFontSize = isCompactMode()
+        ? 17
+        : isExtendedDetailedMode()
+          ? 16
+          : 21;
       ctx.setFont(
-        activeEvent || isNoon || isSolarBoundary
+        isDaylightHour || activeEvent || isNoon || isSolarBoundary
           ? Font.blackMonospacedSystemFont(hourFontSize)
           : Font.regularMonospacedSystemFont(hourFontSize)
       );
-      const textColor = isSolarBoundary
-        ? new Color(SETTINGS.daylightCoreColor, solarOpacity(0.72))
+      const textColor = isDaylightHour
+        ? daylightHourColor(tick)
         : activeEvent || isNoon
-        ? Color.white()
-        : new Color(SETTINGS.secondaryTextColor);
+          ? Color.white()
+          : new Color(SETTINGS.secondaryTextColor);
       ctx.setTextColor(textColor);
       ctx.setTextAlignedCenter();
-      ctx.drawTextInRect(label, new Rect(x - 22, 7, 44, 27));
+      ctx.drawTextInRect(
+        label,
+        new Rect(x - (isExtendedDetailedMode() ? 18 : 22), 7,
+          isExtendedDetailedMode() ? 36 : 44, 27)
+      );
     }
   }
 
@@ -2891,14 +3042,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
           estimatedTextWidth(metadataText, metadataFontSize) + 16
         )
       : 0;
-  const availableTextWidth = Math.max(
-    0,
-    visibleBarWidth - 14 - statusWidth - metadataWidth
-  );
-  const visibleTitle =
-    windowHours > 24 || statusWidth > 0
-      ? truncateTitle(title, availableTextWidth, titleFontSize)
-      : title;
+  // O título permanece completo. O DrawContext recorta apenas no
+  // limite da timeline/widget; nunca inserimos reticências.
+  const visibleTitle = title;
   if (!visibleTitle && statusWidth === 0) return;
 
   const textPoint = new Point(
@@ -2906,8 +3052,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     barY + (windowHours > 24 ? 10 : 7)
   );
 
-  // Até 24 horas, mantém o comportamento amplo original. Acima disso,
-  // o título é limitado ao próprio chart e termina em reticências.
+  // O título pode ultrapassar o chart, mas é recortado somente pelas
+  // margens reais do widget, mantendo a leitura contínua da frase.
   if (visibleTitle) {
     ctx.setTextAlignedLeft();
     ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
