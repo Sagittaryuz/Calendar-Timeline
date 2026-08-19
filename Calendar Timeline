@@ -1568,14 +1568,14 @@ function drawTemperatureFooter(ctx, weather) {
 
   const temperatureMinimum = Math.min(...visibleValues);
   const temperatureMaximum = Math.max(...visibleValues);
-  const graphTop = isCompactMode() ? 8 : 6;
-  const graphBottom = isCompactMode() ? 31 : 34;
-  const labelTop = isCompactMode() ? 35 : 36;
+  const graphTop = isCompactMode() ? 7 : 5;
+  const graphBottom = isCompactMode() ? 29 : 31;
+  const labelTop = isCompactMode() ? 31 : 33;
   const labelFontSize = isCompactMode()
-    ? 14
+    ? 17
     : isExtendedDetailedMode()
       ? 16
-      : 19;
+      : 21;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -1618,7 +1618,12 @@ function drawTemperatureFooter(ctx, weather) {
     temperatureMinimum,
     temperatureMaximum
   );
-  drawThermalCurve(footerCtx, smoothPoints);
+  drawThermalCurve(
+    footerCtx,
+    smoothPoints,
+    temperatureMinimum,
+    temperatureMaximum
+  );
 
   footerCtx.setTextAlignedCenter();
   for (const tick of thermalLabelTicks(ticks)) {
@@ -1633,9 +1638,7 @@ function drawTemperatureFooter(ctx, weather) {
       Math.abs(forecast.temperature - temperatureMaximum) < 0.001;
     const isMinimum =
       Math.abs(forecast.temperature - temperatureMinimum) < 0.001;
-    const opacity = isMaximum || isMinimum
-      ? 1.0
-      : temperatureLegendOpacity(tick, forecast, weather);
+    const opacity = 1.0;
     const labelColor = isMaximum
       ? "#FF9500"
       : isMinimum
@@ -1649,7 +1652,21 @@ function drawTemperatureFooter(ctx, weather) {
       22
     );
 
-    footerCtx.setFont(Font.blackRoundedSystemFont(labelFontSize));
+    const hour = tick.getHours();
+    const isNoon = hour === 12;
+    const isSolarBoundary =
+      hour === SETTINGS.daylightStartHour ||
+      hour === SETTINGS.daylightEndHour;
+    const isDaylightHour =
+      hour >= SETTINGS.daylightStartHour &&
+      hour <= SETTINGS.daylightEndHour;
+    const textWidth = isExtendedDetailedMode() ? 36 : 44;
+    const temperatureLabel = String(roundedTemperature) + "º";
+    footerCtx.setFont(
+      isDaylightHour || isNoon || isSolarBoundary
+        ? Font.blackMonospacedSystemFont(labelFontSize)
+        : Font.regularMonospacedSystemFont(labelFontSize)
+    );
     footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
@@ -1657,20 +1674,25 @@ function drawTemperatureFooter(ctx, weather) {
       [-1, 1],  [0, 1],  [1, 1],
     ]) {
       footerCtx.drawTextInRect(
-        String(roundedTemperature),
+        temperatureLabel,
         new Rect(
-          textRect.x + offsetX,
-          textRect.y + offsetY,
-          textRect.width,
-          textRect.height
+          centerX - textWidth / 2 + offsetX,
+          labelTop + offsetY,
+          textWidth,
+          27
         )
       );
     }
 
     footerCtx.setTextColor(new Color(labelColor, opacity));
     footerCtx.drawTextInRect(
-      String(roundedTemperature),
-      textRect
+      temperatureLabel,
+      new Rect(
+        centerX - textWidth / 2,
+        labelTop,
+        textWidth,
+        27
+      )
     );
   }
 
@@ -1689,14 +1711,9 @@ function drawThermalHourGuides(ctx, ticks, graphBottom) {
   for (const tick of ticks) {
     const x = timeToX(tick);
     const hour = tick.getHours();
-    const width = hour === 0 ? 2 : hour === 12 ? 1.5 : 1;
-    const color =
-      hour === 0
-        ? new Color("#FFFFFF", 0.28)
-        : hour === 12
-          ? new Color("#D8D8DC", 0.24)
-          : new Color("#3A3A3C", 0.22);
-    ctx.setFillColor(color);
+    // Estas são as mesmas espessuras e cores do eixo vertical superior.
+    const width = hour === 0 ? 8 : hour === 12 ? 2 : 1;
+    ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(x - width / 2, 0, width, graphBottom)
     );
@@ -1993,38 +2010,56 @@ function drawThermalArea(
           minimum,
           maximum
         ),
-        isCompactMode() ? 0.16 : 0.24
+        isCompactMode() ? 0.30 : 0.42
       )
     );
     ctx.fillPath();
   }
 }
 
-function drawThermalCurve(ctx, points) {
+function drawThermalCurve(
+  ctx,
+  points,
+  minimum,
+  maximum
+) {
   if (points.length < 2) return;
 
-  const path = new Path();
-  path.move(new Point(points[0].x, points[0].y));
-  for (const point of points.slice(1)) {
-    path.addLine(new Point(point.x, point.y));
-  }
-
-  ctx.addPath(path);
-  ctx.setStrokeColor(new Color("#FFF6C7", 0.92));
-  ctx.setLineWidth(isCompactMode() ? 1.5 : 2.2);
-  ctx.strokePath();
-
-  // Um halo estreito mantém a curva legível sobre as barras azuis,
-  // sem transformá-la em um marcador ou em uma caixa horária.
+  // Primeiro um halo escuro/claro para preservar contraste sobre chuva e
+  // preenchimento; depois, a própria curva é segmentada apenas por cor,
+  // mantendo continuidade geométrica.
   const glowPath = new Path();
   glowPath.move(new Point(points[0].x, points[0].y));
   for (const point of points.slice(1)) {
     glowPath.addLine(new Point(point.x, point.y));
   }
   ctx.addPath(glowPath);
-  ctx.setStrokeColor(new Color("#FFE58A", 0.22));
-  ctx.setLineWidth(isCompactMode() ? 4 : 5);
+  ctx.setStrokeColor(new Color("#000000", 0.48));
+  ctx.setLineWidth(isCompactMode() ? 5 : 6);
   ctx.strokePath();
+
+  for (let index = 0; index < points.length - 1; index++) {
+    const first = points[index];
+    const second = points[index + 1];
+    if (second.x <= first.x) continue;
+
+    const path = new Path();
+    path.move(new Point(first.x, first.y));
+    path.addLine(new Point(second.x, second.y));
+    ctx.addPath(path);
+    ctx.setStrokeColor(
+      new Color(
+        thermalTemperatureColor(
+          (first.temperature + second.temperature) / 2,
+          minimum,
+          maximum
+        ),
+        1.0
+      )
+    );
+    ctx.setLineWidth(isCompactMode() ? 2 : 2.6);
+    ctx.strokePath();
+  }
 }
 
 function thermalLabelTicks(ticks) {
