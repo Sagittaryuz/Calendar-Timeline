@@ -1097,62 +1097,96 @@ function chooseItems(items, referenceDate, limit) {
     (item) => item.isAllDay || item.end >= referenceDate
   );
 
-  const byTime = (a, b) => {
-    if (isCompactMode()) {
-      const importanceDifference = itemImportance(b) - itemImportance(a);
-      if (importanceDifference) return importanceDifference;
-    }
-    return (
-      a.start.getTime() - b.start.getTime() ||
-      a.end.getTime() - b.end.getTime()
-    );
-  };
-  const events = relevant
-    .filter((item) => item.kind === "event")
-    .sort(byTime);
-  const reminders = relevant
-    .filter((item) => item.kind === "reminder")
-    .sort(byTime);
+  const byTime = (a, b) =>
+    a.start.getTime() - b.start.getTime() ||
+    a.end.getTime() - b.end.getTime();
 
-  // Cada linha pode receber quantos itens forem necessários, desde que seus
-  // intervalos não se sobreponham. Eventos procuram de cima para baixo;
-  // lembretes procuram de baixo para cima.
-  const rows = Array.from({ length: limit }, () => []);
+  // A concatenação é reiniciada em cada dia. Assim, um evento de amanhã
+  // nunca desloca a posição vertical de um evento de hoje.
+  const byDay = new Map();
+  for (const item of relevant) {
+    const key = dateKey(item.start);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(item);
+  }
+
   const placed = [];
   const hidden = [];
 
-  const placeItem = (item, rowOrder) => {
-    const availableRow = rowOrder.find((row) =>
-      rows[row].every((existing) => !itemsOverlap(item, existing))
+  for (const dayItems of byDay.values()) {
+    const rows = Array.from({ length: limit }, () => []);
+    const events = dayItems
+      .filter((item) => item.kind === "event")
+      .sort(byTime);
+    const reminders = dayItems
+      .filter((item) => item.kind === "reminder")
+      .sort(byTime);
+
+    const placeItem = (item, rowOrder) => {
+      const availableRow = rowOrder.find((row) =>
+        rows[row].every((existing) => !itemsOverlap(item, existing))
+      );
+
+      if (availableRow === undefined) {
+        hidden.push(item);
+        return;
+      }
+
+      const positioned = { ...item, gridRow: availableRow };
+      rows[availableRow].push(positioned);
+      placed.push(positioned);
+    };
+
+    // Eventos concatenam de cima para baixo: 1º evento na primeira linha,
+    // 2º na segunda, e assim por diante. Se a linha preferida estiver
+    // ocupada, tenta imediatamente as linhas superiores; só depois desce.
+    events.forEach((item, index) => {
+      const preferredRow = Math.min(index, limit - 1);
+      const upperRows = [];
+      for (let row = preferredRow - 1; row >= 0; row--) {
+        upperRows.push(row);
+      }
+      const lowerRows = [];
+      for (let row = preferredRow + 1; row < limit; row++) {
+        lowerRows.push(row);
+      }
+      placeItem(
+        item,
+        [preferredRow, ...upperRows, ...lowerRows]
+      );
+    });
+
+    // Lembretes continuam ocupando de baixo para cima. Se coincidirem com
+    // um evento, sobem imediatamente para a próxima linha disponível.
+    const bottomUpRows = Array.from(
+      { length: limit },
+      (_, index) => limit - 1 - index
     );
+    reminders.forEach((item) => placeItem(item, bottomUpRows));
+  }
 
-    if (availableRow === undefined) {
-      hidden.push(item);
-      return;
+  // Excedentes são agrupados somente com itens ocultos do mesmo dia.
+  const overflowByDay = new Map();
+  for (const item of hidden) {
+    const key = dateKey(item.start);
+    if (!overflowByDay.has(key)) overflowByDay.set(key, []);
+    overflowByDay.get(key).push(item);
+  }
+
+  const overflowMarkers = [];
+  for (const hiddenItems of overflowByDay.values()) {
+    for (const group of groupOverflowItems(hiddenItems)) {
+      overflowMarkers.push({
+        kind: "overflow",
+        title: "+" + group.count,
+        start: group.start,
+        end: group.end,
+        gridRow: limit - 1,
+        isOverflow: true,
+        color: SETTINGS.overflowColor,
+      });
     }
-
-    const positioned = { ...item, gridRow: availableRow };
-    rows[availableRow].push(positioned);
-    placed.push(positioned);
-  };
-
-  const topDownRows = Array.from({ length: limit }, (_, index) => index);
-  const bottomUpRows = [...topDownRows].reverse();
-
-  events.forEach((item) => placeItem(item, topDownRows));
-  reminders.forEach((item) => placeItem(item, bottomUpRows));
-
-  // Excedentes realmente coincidentes são agrupados em um único +N.
-  // O indicador permanece na quinta linha, como limite visual do widget.
-  const overflowMarkers = groupOverflowItems(hidden).map((group) => ({
-    kind: "overflow",
-    title: `+${group.count}`,
-    start: group.start,
-    end: group.end,
-    gridRow: limit - 1,
-    isOverflow: true,
-    color: SETTINGS.overflowColor,
-  }));
+  }
 
   return [...placed, ...overflowMarkers];
 }
@@ -1592,7 +1626,7 @@ function drawTemperatureFooter(ctx, weather) {
   );
 
   // As guias originais do grid ficam visíveis por cima das barras azuis.
-  drawThermalHourGuides(footerCtx, ticks, graphBottom);
+  drawThermalHourGuides(footerCtx, ticks, graphBottom, false);
 
   const thermalSamples = buildThermalSamples(sourceHours);
   const curvePoints = thermalSamples
@@ -1626,6 +1660,20 @@ function drawTemperatureFooter(ctx, weather) {
     smoothPoints,
     temperatureMinimum,
     temperatureMaximum
+  );
+
+  // A linha grossa de mudança de dia fica por cima da curva; as demais
+  // linhas permanecem atrás dela.
+  drawThermalDayBoundaryGuides(
+    footerCtx,
+    ticks,
+    graphBottom
+  );
+
+  drawThermalDayBadgeFrames(
+    footerCtx,
+    ticks,
+    labelTop
   );
 
   const labelTicks = thermalLabelTicks(ticks);
@@ -1718,15 +1766,76 @@ function drawTemperatureFooter(ctx, weather) {
   );
 }
 
-function drawThermalHourGuides(ctx, ticks, graphBottom) {
+function drawThermalHourGuides(
+  ctx,
+  ticks,
+  graphBottom,
+  includeDayBoundaries = true
+) {
   for (const tick of ticks) {
-    const x = timeToX(tick);
     const hour = tick.getHours();
-    // Estas são as mesmas espessuras e cores do eixo vertical superior.
+    if (!includeDayBoundaries && hour === 0) continue;
+
+    const x = timeToX(tick);
+    // Mesmas espessuras e cores das linhas do grid superior.
     const width = hour === 0 ? 8 : hour === 12 ? 2 : 1;
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(x - width / 2, 0, width, graphBottom)
+    );
+  }
+}
+
+function drawThermalDayBoundaryGuides(ctx, ticks, graphBottom) {
+  for (const tick of ticks) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(
+      new Rect(x - 4, 0, 8, graphBottom)
+    );
+  }
+}
+
+function drawThermalDayBadgeFrames(ctx, ticks, labelTop) {
+  const badgeWidth = isCompactMode()
+    ? 44
+    : isExtendedDetailedMode()
+      ? 44
+      : 50;
+  const badgeHeight = isCompactMode()
+    ? 30
+    : isExtendedDetailedMode()
+      ? 28
+      : 34;
+  const borderWidth = isCompactMode() ? 2 : 2;
+
+  for (const tick of ticks) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    const style = dayBadgeStyle(tick, loadResult.holidayDates);
+    const frameTop =
+      labelTop + 13.5 - badgeHeight / 2;
+    const left = x - badgeWidth / 2;
+    const right = x + badgeWidth / 2 - borderWidth;
+    const bottom = frameTop + badgeHeight - borderWidth;
+
+    // Apenas a moldura é desenhada; o interior continua transparente para
+    // que a temperatura permaneça legível sobre o fundo do grid.
+    ctx.setFillColor(style.background);
+    ctx.fillRect(
+      new Rect(left, frameTop, borderWidth, badgeHeight)
+    );
+    ctx.fillRect(
+      new Rect(right, frameTop, borderWidth, badgeHeight)
+    );
+    ctx.fillRect(
+      new Rect(left, frameTop, badgeWidth, borderWidth)
+    );
+    ctx.fillRect(
+      new Rect(left, bottom, badgeWidth, borderWidth)
     );
   }
 }
@@ -3123,17 +3232,25 @@ function eventAtTime(date, items) {
 function hourTicks() {
   const ticks = [];
   let tick = floorToHour(windowStart);
+  if (tick.getHours() % 2 !== 0) {
+    tick.setHours(tick.getHours() + 1);
+  }
   const finalTick = ceilToHour(windowEnd);
   const compactEventHours = compactEventHourMarkers();
 
   while (tick <= finalTick) {
     const hour = tick.getHours();
+    const isEvenHour = hour % 2 === 0;
     const isCompactAnchor = [0, 6, 12, 18].includes(hour);
-    const isEventHour = compactEventHours.has(tick.getTime());
+    const isEventHour =
+      isEvenHour && compactEventHours.has(tick.getTime());
 
-    // Até 36 horas, a legenda permanece completa. Acima disso, mantém
-    // 00/06/12/18 e acrescenta as horas que delimitam eventos.
-    if (!isCompactMode() || isCompactAnchor || isEventHour) {
+    // A legenda detalhada usa somente horas pares. No modo resumido,
+    // permanecem as âncoras 00/06/12/18 e limites pares de eventos.
+    if (
+      isEvenHour &&
+      (!isCompactMode() || isCompactAnchor || isEventHour)
+    ) {
       ticks.push(new Date(tick));
     }
     tick = new Date(tick.getTime() + 60 * 60 * 1000);
@@ -3310,9 +3427,7 @@ function drawHourAxis(ctx, items) {
   // Os horários permanecem neutros; a cor dos eventos fica
   // restrita aos charts e às linhas de início dentro do grid.
 
-  // Terceiro: retângulos individuais das horas, sem alterar o dia da semana.
-  drawHourLabelFrames(ctx, ticks);
-
+  // Somente os nomes dos dias recebem quadrado; as horas ficam livres.
   // Quarto: horas e badges acima das cápsulas e das molduras.
   for (const tick of ticks) {
     const x = timeToX(tick);
@@ -3360,7 +3475,7 @@ function drawHourAxis(ctx, items) {
         )
       );
     } else {
-      const label = String(hour).padStart(2, "0");
+      const label = String(hour) + "h";
       const activeEvent = eventAtTime(tick, items);
       const isDaylightHour =
         hour >= SETTINGS.daylightStartHour &&
