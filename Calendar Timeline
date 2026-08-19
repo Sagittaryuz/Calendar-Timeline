@@ -1530,7 +1530,9 @@ function drawTemperatureFooter(ctx, weather) {
   // exatamente a da timeline, portanto todos os pontos permanecem alinhados
   // às divisões horárias e são recortados pelas margens do grid.
   const footerCtx = new DrawContext();
-  const footerHeight = CANVAS.footerBottom - CANVAS.timelineBottom;
+  const thermalFooterOverlap = 8;
+  const footerOriginY = CANVAS.timelineBottom - thermalFooterOverlap;
+  const footerHeight = CANVAS.footerBottom - footerOriginY;
   footerCtx.size = new Size(timelineWidth(), footerHeight);
   footerCtx.opaque = false;
   footerCtx.respectScreenScale = false;
@@ -1558,7 +1560,7 @@ function drawTemperatureFooter(ctx, weather) {
       footerCtx.getImage(),
       new Rect(
         CANVAS.plotLeft,
-        CANVAS.timelineBottom,
+        footerOriginY,
         timelineWidth(),
         footerHeight
       )
@@ -1568,9 +1570,9 @@ function drawTemperatureFooter(ctx, weather) {
 
   const temperatureMinimum = Math.min(...visibleValues);
   const temperatureMaximum = Math.max(...visibleValues);
-  const graphTop = isCompactMode() ? 7 : 5;
-  const graphBottom = isCompactMode() ? 29 : 31;
-  const labelTop = isCompactMode() ? 31 : 33;
+  const graphTop = isCompactMode() ? 7 : 6;
+  const graphBottom = isCompactMode() ? 28 : 29;
+  const labelTop = isCompactMode() ? 30 : 31;
   const labelFontSize = isCompactMode()
     ? 17
     : isExtendedDetailedMode()
@@ -1582,14 +1584,15 @@ function drawTemperatureFooter(ctx, weather) {
   // 3) preenchimento térmico;
   // 4) linha contínua e suave;
   // 5) valores numéricos abaixo do gráfico.
-  drawThermalHourGuides(footerCtx, ticks, graphBottom);
-
   drawThermalRainBars(
     footerCtx,
     sourceHours,
     graphTop,
     graphBottom
   );
+
+  // As guias originais do grid ficam visíveis por cima das barras azuis.
+  drawThermalHourGuides(footerCtx, ticks, graphBottom);
 
   const thermalSamples = buildThermalSamples(sourceHours);
   const curvePoints = thermalSamples
@@ -1625,8 +1628,22 @@ function drawTemperatureFooter(ctx, weather) {
     temperatureMaximum
   );
 
+  const labelTicks = thermalLabelTicks(ticks);
+  const shownForecasts = labelTicks
+    .map((tick) => temperatureAtTimestamp(sourceHours, tick.getTime()))
+    .filter(Boolean);
+  const shownTemperatures = shownForecasts.map(
+    (forecast) => forecast.temperature
+  );
+  const shownMaximum = shownTemperatures.length
+    ? Math.max(...shownTemperatures)
+    : temperatureMaximum;
+  const shownMinimum = shownTemperatures.length
+    ? Math.min(...shownTemperatures)
+    : temperatureMinimum;
+
   footerCtx.setTextAlignedCenter();
-  for (const tick of thermalLabelTicks(ticks)) {
+  for (const tick of labelTicks) {
     const forecast = temperatureAtTimestamp(
       sourceHours,
       tick.getTime()
@@ -1635,9 +1652,9 @@ function drawTemperatureFooter(ctx, weather) {
 
     const roundedTemperature = Math.round(forecast.temperature);
     const isMaximum =
-      Math.abs(forecast.temperature - temperatureMaximum) < 0.001;
+      Math.abs(forecast.temperature - shownMaximum) < 0.001;
     const isMinimum =
-      Math.abs(forecast.temperature - temperatureMinimum) < 0.001;
+      Math.abs(forecast.temperature - shownMinimum) < 0.001;
     const opacity = 1.0;
     const labelColor = isMaximum
       ? "#FF9500"
@@ -1645,12 +1662,6 @@ function drawTemperatureFooter(ctx, weather) {
         ? "#0A84FF"
         : "#FFFFFF";
     const centerX = timeToX(tick);
-    const textRect = new Rect(
-      centerX - (isCompactMode() ? 22 : 28),
-      labelTop,
-      isCompactMode() ? 44 : 56,
-      22
-    );
 
     const hour = tick.getHours();
     const isNoon = hour === 12;
@@ -1700,7 +1711,7 @@ function drawTemperatureFooter(ctx, weather) {
     footerCtx.getImage(),
     new Rect(
       CANVAS.plotLeft,
-      CANVAS.timelineBottom,
+      footerOriginY,
       timelineWidth(),
       footerHeight
     )
@@ -2010,7 +2021,7 @@ function drawThermalArea(
           minimum,
           maximum
         ),
-        isCompactMode() ? 0.30 : 0.42
+        isCompactMode() ? 0.34 : 0.48
       )
     );
     ctx.fillPath();
