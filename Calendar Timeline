@@ -33,6 +33,9 @@ const SETTINGS = {
   rainLineColor: "#0A84FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
+  saturdayTimelineBackgroundColor: "#071A2E",
+  sundayTimelineBackgroundColor: "#2A0A0D",
+  holidayTimelineBackgroundColor: "#3A2A00",
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
   fallbackEventColor: "#0A84FF",
@@ -1340,20 +1343,55 @@ function renderWidget(items, loadError) {
   return ctx.getImage();
 }
 
-function timelineBackgroundColorForDate(_date) {
+function timelineBackgroundColorForDate(
+  date,
+  holidayDates = loadResult.holidayDates
+) {
+  if (holidayDates?.has(dateKey(date))) {
+    return SETTINGS.holidayTimelineBackgroundColor;
+  }
+  if (date.getDay() === 6) {
+    return SETTINGS.saturdayTimelineBackgroundColor;
+  }
+  if (date.getDay() === 0) {
+    return SETTINGS.sundayTimelineBackgroundColor;
+  }
   return SETTINGS.timelineBackgroundColor;
 }
 
 function drawTimelineBackground(ctx) {
-  ctx.setFillColor(new Color(SETTINGS.timelineBackgroundColor));
-  ctx.fillRect(
-    new Rect(
-      CANVAS.plotLeft,
-      CANVAS.timelineTop,
-      timelineWidth(),
-      timelineHeight()
-    )
-  );
+  // Cada dia recebe sua própria faixa. A precedência é feriado > domingo/
+  // sábado > fundo normal, inclusive quando a janela atravessa vários dias.
+  let dayStart = startOfDay(windowStart);
+  const finalDay = startOfDay(windowEnd);
+
+  while (dayStart <= finalDay) {
+    const dayEnd = addDays(dayStart, 1);
+    const visibleStart = new Date(
+      Math.max(dayStart.getTime(), windowStart.getTime())
+    );
+    const visibleEnd = new Date(
+      Math.min(dayEnd.getTime(), windowEnd.getTime())
+    );
+
+    const x0 = Math.max(0, timeToX(visibleStart));
+    const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+    if (x1 > x0) {
+      ctx.setFillColor(
+        new Color(timelineBackgroundColorForDate(dayStart), 1.0)
+      );
+      ctx.fillRect(
+        new Rect(
+          CANVAS.plotLeft + x0,
+          CANVAS.timelineTop,
+          x1 - x0,
+          timelineHeight()
+        )
+      );
+    }
+
+    dayStart = dayEnd;
+  }
 }
 
 function drawIOSDarkGradient(ctx) {
@@ -1784,7 +1822,6 @@ function renderTimelinePanel(items, loadError) {
     drawNightScenes(ctx);
   }
   drawHourAxis(ctx, loadResult.items);
-  if (SETTINGS.showSolarGlow) drawFixedDaylightGloss(ctx);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -1834,20 +1871,18 @@ function drawFixedDaylightGlow(ctx) {
     // A cortina é dividida em fatias para formar um gradiente linear:
     // baixa intensidade às 06/18 e máxima intensidade às 12.
     for (const slice of daylightSlices(interval)) {
-      for (let y = lineY - 12; y < glowEndY; y += 2) {
-        const strength =
-          y < lineY
-            ? Math.max(0, 1 - (lineY - y) / 12)
-            : Math.pow(
-                Math.max(0, 1 - (y - lineY) / (glowEndY - lineY)),
-                1.12
-              );
-        const opacity =
-          (y < lineY ? 0.12 : 0.25) *
-          strength *
-          slice.daylightStrength;
+      const gradientStartY = lineY + 2;
+      for (let y = gradientStartY; y < glowEndY; y += 2) {
+        const strength = Math.pow(
+          Math.max(
+            0,
+            1 - (y - gradientStartY) / Math.max(1, glowEndY - gradientStartY)
+          ),
+          1.12
+        );
+        const opacity = 0.25 * strength * slice.daylightStrength;
         ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
-        // O feixe desce perpendicularmente, sem dividir a linha visualmente.
+        // Somente o gradiente vertical permanece; a linha solar foi removida.
         ctx.fillRect(new Rect(slice.x, y, slice.width + 1, 2));
       }
     }
@@ -2368,7 +2403,13 @@ function drawNightSegment(
   if (sceneWidth < 18) return;
 
   const sceneHeight = timelineHeight();
-  const nightBackground = new Color(SETTINGS.timelineBackgroundColor, 1.0);
+  const nightCenterDate = new Date(
+    (nightStart.getTime() + nightEnd.getTime()) / 2
+  );
+  const nightBackground = new Color(
+    timelineBackgroundColorForDate(nightCenterDate),
+    1.0
+  );
   const moon = moonPhaseForDate(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
@@ -2871,8 +2912,8 @@ function drawHourAxis(ctx, items) {
   // das linhas horárias comuns, mas atrás dos charts.
   drawEventStartLines(ctx, items);
 
-  // Segundo: retângulos coloridos sobre as linhas.
-  drawEventHourHighlights(ctx, items);
+  // Os horários permanecem neutros; a cor dos eventos fica
+  // restrita aos charts e às linhas de início dentro do grid.
 
   // Terceiro: retângulos individuais das horas, sem alterar o dia da semana.
   drawHourLabelFrames(ctx, ticks);
