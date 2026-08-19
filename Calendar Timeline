@@ -533,14 +533,30 @@ async function loadHourlyWeather(location) {
       if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
         continue;
       }
+      const rainChance = Math.max(
+        0,
+        Math.min(100, Number(forecast.precipProb) || 0)
+      );
+      const rainCandidates = [
+        forecast.precip,
+        forecast.precipitation,
+        forecast.precipAmount,
+        forecast.precipAccum,
+        forecast.rain,
+        forecast.rainAmount,
+      ].map(Number);
+      const explicitRain = rainCandidates.find((value) =>
+        Number.isFinite(value)
+      );
       hours.push({
         timestamp,
         // Na Foreca, precipProb representa a hora que termina no timestamp.
         rainStartTimestamp: timestamp - 60 * 60 * 1000,
         temperature,
-        rainChance: Math.max(
+        rainChance,
+        rainMM: Math.max(
           0,
-          Math.min(100, Number(forecast.precipProb) || 0)
+          Number.isFinite(explicitRain) ? explicitRain : 0
         ),
       });
     }
@@ -677,6 +693,7 @@ function buildHourlyWeather(hours) {
         0,
         Math.min(100, Number(hour.rainChance) || 0)
       ),
+      rainMM: Math.max(0, Number(hour.rainMM) || 0),
     }))
     .filter(
       (hour) =>
@@ -1509,9 +1526,9 @@ function drawDatePanel(ctx, holidayDates) {
 }
 
 function drawTemperatureFooter(ctx, weather) {
-  // Assim como a legenda superior, a inferior é renderizada em um canvas
-  // cuja largura é exatamente a largura da timeline. O próprio canvas faz
-  // o recorte nas duas margens e impede qualquer avanço para fora do grid.
+  // A faixa inferior agora é um gráfico térmico contínuo. Sua largura é
+  // exatamente a da timeline, portanto todos os pontos permanecem alinhados
+  // às divisões horárias e são recortados pelas margens do grid.
   const footerCtx = new DrawContext();
   const footerHeight = CANVAS.footerBottom - CANVAS.timelineBottom;
   footerCtx.size = new Size(timelineWidth(), footerHeight);
@@ -1519,149 +1536,128 @@ function drawTemperatureFooter(ctx, weather) {
   footerCtx.respectScreenScale = false;
 
   const ticks = hourTicks();
-  const byHour = new Map(
-    weather.hours.map((hour) => [hour.timestamp, hour])
-  );
-  const rainByHour = new Map(
-    weather.hours.map((hour) => [
-      Number.isFinite(hour.rainStartTimestamp)
-        ? hour.rainStartTimestamp
-        : hour.timestamp,
-      hour,
-    ])
-  );
-  const metrics = hourLabelMetrics(ticks);
-  const frameHeight = metrics.frameHeight;
-  const frameWidth = metrics.frameWidth;
-  const lineWidth = metrics.lineWidth;
-  const visibleTemperatures = weather.hours
+  const sourceHours = [...(weather?.hours ?? [])]
     .filter(
       (hour) =>
-        hour.timestamp >= windowStart.getTime() &&
-        hour.timestamp <= windowEnd.getTime()
+        Number.isFinite(Number(hour.timestamp)) &&
+        Number.isFinite(Number(hour.temperature))
     )
-    .map((hour) => hour.temperature);
-  const heatMinimum = visibleTemperatures.length
-    ? Math.min(...visibleTemperatures)
-    : 0;
-  const heatMaximum = visibleTemperatures.length
-    ? Math.max(...visibleTemperatures)
-    : 1;
-  // A legenda superior termina em Y=37 e o grid começa em Y=41: 4 px.
-  // Repete exatamente essa distância abaixo do grid.
-  const frameTop = 4;
+    .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
 
-  const forecastForTick = (tick) =>
-    byHour.get(floorToHour(tick).getTime());
-  const rainForecastForTick = (tick) =>
-    rainByHour.get(floorToHour(tick).getTime());
-  const opacityForTick = (tick, forecast) =>
-    temperatureLegendOpacity(tick, forecast, weather);
+  const visibleValues = sourceHours
+    .filter(
+      (hour) =>
+        Number(hour.timestamp) >= windowStart.getTime() &&
+        Number(hour.timestamp) <= windowEnd.getTime()
+    )
+    .map((hour) => Number(hour.temperature));
 
-  // Prolonga cada eixo vertical até o centro superior de seu bloco térmico.
-  for (const tick of ticks) {
-    const centerX = timeToX(tick);
-    const hour = tick.getHours();
-    const connectorWidth = hour === 0 ? 8 : hour === 12 ? 2 : 1;
-    // O conector conserva a cor do eixo e não interfere no mapa térmico.
-    footerCtx.setFillColor(hourGridLineColor(tick));
-    footerCtx.fillRect(
+  if (visibleValues.length === 0) {
+    drawThermalHourGuides(footerCtx, ticks, 34);
+    ctx.drawImageInRect(
+      footerCtx.getImage(),
       new Rect(
-        centerX - connectorWidth / 2,
-        0,
-        connectorWidth,
-        frameTop
+        CANVAS.plotLeft,
+        CANVAS.timelineBottom,
+        timelineWidth(),
+        footerHeight
       )
     );
+    return;
   }
 
-  // Mesmas molduras e mesmas coordenadas horizontais da legenda superior.
-  for (const tick of ticks) {
-    const centerX = timeToX(tick);
-    // Todos os blocos térmicos possuem rigorosamente a mesma dimensão.
-    const tickFrameWidth = frameWidth;
-    const leftX = centerX - tickFrameWidth / 2;
-    const rightX = centerX + tickFrameWidth / 2 - lineWidth;
-    const bottomY = frameTop + frameHeight - lineWidth;
-    const forecast = forecastForTick(tick);
-    const emphasisOpacity = forecast
-      ? opacityForTick(tick, forecast)
-      : 0.16;
-    const heatColor = forecast
-      ? temperatureHeatColor(
-          forecast.temperature,
-          heatMinimum,
-          heatMaximum
-        )
-      : null;
-    const isMidnight = tick.getHours() === 0;
-    const lineColor = isMidnight
-      ? Color.white()
-      : heatColor
-        ? new Color("#FFFFFF", 0.12 + 0.20 * emphasisOpacity)
-        : new Color("#3A3A3C", 1.0);
+  const temperatureMinimum = Math.min(...visibleValues);
+  const temperatureMaximum = Math.max(...visibleValues);
+  const graphTop = isCompactMode() ? 8 : 6;
+  const graphBottom = isCompactMode() ? 31 : 34;
+  const labelTop = isCompactMode() ? 35 : 36;
+  const labelFontSize = isCompactMode()
+    ? 14
+    : isExtendedDetailedMode()
+      ? 16
+      : 19;
 
-    // Cada hora recebe uma cor da mesma escala: azul no extremo frio,
-    // passando por ciano, verde, amarelo e laranja, até vermelho no quente.
-    if (heatColor) {
-      footerCtx.setFillColor(new Color(heatColor, emphasisOpacity));
-      footerCtx.fillRect(
-        new Rect(leftX, frameTop, tickFrameWidth, frameHeight)
-      );
-    }
+  // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
+  // 2) chuva atrás da área e da curva térmica;
+  // 3) preenchimento térmico;
+  // 4) linha contínua e suave;
+  // 5) valores numéricos abaixo do gráfico.
+  drawThermalHourGuides(footerCtx, ticks, graphBottom);
 
-    footerCtx.setFillColor(lineColor);
-    footerCtx.fillRect(new Rect(leftX, frameTop, lineWidth, frameHeight));
-    footerCtx.fillRect(new Rect(rightX, frameTop, lineWidth, frameHeight));
-    footerCtx.fillRect(
-      new Rect(leftX, frameTop, tickFrameWidth, lineWidth)
-    );
-    footerCtx.fillRect(
-      new Rect(leftX, bottomY, tickFrameWidth, lineWidth)
-    );
-  }
-
-  // Barras pequenas e verticais representam a possibilidade de chuva.
-  // Elas seguem a mesma hierarquia de opacidade das temperaturas.
-  drawRainProbabilityBars(
+  drawThermalRainBars(
     footerCtx,
-    ticks,
-    forecastForTick,
-    rainForecastForTick,
-    opacityForTick,
-    frameTop,
-    frameHeight,
-    frameWidth
+    sourceHours,
+    graphTop,
+    graphBottom
   );
 
-  const fontSize = isCompactMode()
-    ? 18
-    : isExtendedDetailedMode()
-      ? 17
-      : 21;
-  footerCtx.setTextAlignedCenter();
-
-  for (const tick of ticks) {
-    const forecast = forecastForTick(tick);
-    if (!forecast) continue;
-    const roundedTemperature = Math.round(forecast.temperature);
-    const emphasisOpacity = opacityForTick(tick, forecast);
-    const label = String(roundedTemperature);
-    const centerX = timeToX(tick);
-    const textRect = new Rect(centerX - 24, frameTop + 5, 48, 27);
-    footerCtx.setFont(Font.blackRoundedSystemFont(fontSize));
-
-    // Fonte branca e contorno preto seguem a opacidade contextual do bloco.
-    footerCtx.setTextColor(
-      new Color("#000000", 0.82 * emphasisOpacity)
+  const thermalSamples = buildThermalSamples(sourceHours);
+  const curvePoints = thermalSamples
+    .map((sample) => ({
+      x: timeToX(new Date(sample.timestamp)),
+      y: thermalTemperatureY(
+        sample.temperature,
+        temperatureMinimum,
+        temperatureMaximum,
+        graphTop,
+        graphBottom
+      ),
+      temperature: sample.temperature,
+    }))
+    .filter(
+      (point) =>
+        Number.isFinite(point.x) &&
+        Number.isFinite(point.y)
     );
+
+  const smoothPoints = smoothThermalCurve(curvePoints);
+  drawThermalArea(
+    footerCtx,
+    smoothPoints,
+    graphBottom,
+    temperatureMinimum,
+    temperatureMaximum
+  );
+  drawThermalCurve(footerCtx, smoothPoints);
+
+  footerCtx.setTextAlignedCenter();
+  for (const tick of thermalLabelTicks(ticks)) {
+    const forecast = temperatureAtTimestamp(
+      sourceHours,
+      tick.getTime()
+    );
+    if (!forecast) continue;
+
+    const roundedTemperature = Math.round(forecast.temperature);
+    const isMaximum =
+      Math.abs(forecast.temperature - temperatureMaximum) < 0.001;
+    const isMinimum =
+      Math.abs(forecast.temperature - temperatureMinimum) < 0.001;
+    const opacity = isMaximum || isMinimum
+      ? 1.0
+      : temperatureLegendOpacity(tick, forecast, weather);
+    const labelColor = isMaximum
+      ? "#FF9500"
+      : isMinimum
+        ? "#0A84FF"
+        : "#FFFFFF";
+    const centerX = timeToX(tick);
+    const textRect = new Rect(
+      centerX - (isCompactMode() ? 22 : 28),
+      labelTop,
+      isCompactMode() ? 44 : 56,
+      22
+    );
+
+    footerCtx.setFont(Font.blackRoundedSystemFont(labelFontSize));
+    footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
       [-1, 0],            [1, 0],
       [-1, 1],  [0, 1],  [1, 1],
     ]) {
       footerCtx.drawTextInRect(
-        label,
+        String(roundedTemperature),
         new Rect(
           textRect.x + offsetX,
           textRect.y + offsetY,
@@ -1671,10 +1667,11 @@ function drawTemperatureFooter(ctx, weather) {
       );
     }
 
-    footerCtx.setTextColor(
-      new Color("#FFFFFF", emphasisOpacity)
+    footerCtx.setTextColor(new Color(labelColor, opacity));
+    footerCtx.drawTextInRect(
+      String(roundedTemperature),
+      textRect
     );
-    footerCtx.drawTextInRect(label, textRect);
   }
 
   ctx.drawImageInRect(
@@ -1686,6 +1683,358 @@ function drawTemperatureFooter(ctx, weather) {
       footerHeight
     )
   );
+}
+
+function drawThermalHourGuides(ctx, ticks, graphBottom) {
+  for (const tick of ticks) {
+    const x = timeToX(tick);
+    const hour = tick.getHours();
+    const width = hour === 0 ? 2 : hour === 12 ? 1.5 : 1;
+    const color =
+      hour === 0
+        ? new Color("#FFFFFF", 0.28)
+        : hour === 12
+          ? new Color("#D8D8DC", 0.24)
+          : new Color("#3A3A3C", 0.22);
+    ctx.setFillColor(color);
+    ctx.fillRect(
+      new Rect(x - width / 2, 0, width, graphBottom)
+    );
+  }
+}
+
+function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
+  const rainEntries = sourceHours
+    .map((hour) => ({
+      hour,
+      amount: rainMillimetersForHour(hour),
+      timestamp:
+        Number.isFinite(Number(hour.rainStartTimestamp)) &&
+        Number(hour.rainStartTimestamp) >= windowStart.getTime() - 3600000
+          ? Number(hour.rainStartTimestamp)
+          : Number(hour.timestamp),
+    }))
+    .filter(
+      (entry) =>
+        entry.amount > 0 &&
+        entry.timestamp >= windowStart.getTime() - 3600000 &&
+        entry.timestamp <= windowEnd.getTime()
+    );
+
+  if (!rainEntries.length) return;
+
+  const maximumRain = Math.max(
+    0,
+    ...rainEntries.map((entry) => entry.amount)
+  );
+  if (maximumRain <= 0) return;
+
+  const maximumBarHeight = Math.max(
+    4,
+    graphBottom - graphTop - 2
+  );
+  const barWidth = isCompactMode() ? 2 : 3;
+
+  for (const entry of rainEntries) {
+    const normalized = Math.max(
+      0,
+      Math.min(1, entry.amount / maximumRain)
+    );
+    const height = Math.max(
+      2,
+      maximumBarHeight * normalized
+    );
+    const centerX = timeToX(new Date(entry.timestamp));
+    if (
+      centerX < -barWidth ||
+      centerX > timelineWidth() + barWidth
+    ) {
+      continue;
+    }
+
+    // A barra nasce na base do gráfico e fica atrás do preenchimento
+    // térmico e da curva. O azul é discreto para não competir com a agenda.
+    ctx.setFillColor(
+      new Color(
+        SETTINGS.rainLineColor,
+        isCompactMode() ? 0.40 : 0.48
+      )
+    );
+    ctx.fillRect(
+      new Rect(
+        centerX - barWidth / 2,
+        graphBottom - height,
+        barWidth,
+        height
+      )
+    );
+  }
+}
+
+function rainMillimetersForHour(hour) {
+  const explicit = Number(hour.rainMM);
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return explicit;
+  }
+
+  // Algumas respostas da Foreca fornecem apenas a probabilidade. Ela ainda
+  // merece uma barra discreta, mas nunca domina uma previsão com mm reais.
+  const probability = Math.max(
+    0,
+    Math.min(100, Number(hour.rainChance) || 0)
+  );
+  return probability > 0
+    ? Math.max(0.05, probability / 100)
+    : 0;
+}
+
+function buildThermalSamples(sourceHours) {
+  if (!sourceHours.length) return [];
+
+  const start = windowStart.getTime();
+  const end = windowEnd.getTime();
+  const firstHour = floorToHour(windowStart).getTime();
+  const lastHour = ceilToHour(windowEnd).getTime();
+  const timestamps = [start];
+
+  for (
+    let timestamp = firstHour;
+    timestamp <= lastHour;
+    timestamp += 60 * 60 * 1000
+  ) {
+    if (timestamp > start && timestamp < end) {
+      timestamps.push(timestamp);
+    }
+  }
+  timestamps.push(end);
+
+  return [...new Set(timestamps)]
+    .sort((a, b) => a - b)
+    .map((timestamp) => {
+      const temperature = temperatureAtTimestamp(
+        sourceHours,
+        timestamp
+      );
+      return temperature
+        ? { timestamp, temperature: temperature.temperature }
+        : null;
+    })
+    .filter(Boolean);
+}
+
+function temperatureAtTimestamp(sourceHours, timestamp) {
+  if (!sourceHours.length) return null;
+
+  let previous = null;
+  for (const current of sourceHours) {
+    const currentTimestamp = Number(current.timestamp);
+    if (currentTimestamp === timestamp) {
+      return {
+        timestamp,
+        temperature: Number(current.temperature),
+      };
+    }
+    if (currentTimestamp > timestamp) {
+      if (!previous) {
+        return {
+          timestamp,
+          temperature: Number(current.temperature),
+        };
+      }
+      const span = currentTimestamp - Number(previous.timestamp);
+      const progress = span <= 0
+        ? 0
+        : (timestamp - Number(previous.timestamp)) / span;
+      return {
+        timestamp,
+        temperature:
+          Number(previous.temperature) +
+          (Number(current.temperature) - Number(previous.temperature)) *
+            Math.max(0, Math.min(1, progress)),
+      };
+    }
+    previous = current;
+  }
+
+  return previous
+    ? {
+        timestamp,
+        temperature: Number(previous.temperature),
+      }
+    : null;
+}
+
+function thermalTemperatureY(
+  temperature,
+  minimum,
+  maximum,
+  graphTop,
+  graphBottom
+) {
+  const range = maximum - minimum;
+  const normalized = range < 0.1
+    ? 0.5
+    : Math.max(
+        0,
+        Math.min(1, (temperature - minimum) / range)
+      );
+  return graphBottom - normalized * (graphBottom - graphTop);
+}
+
+function smoothThermalCurve(points) {
+  if (points.length <= 2) return points;
+
+  const smooth = [points[0]];
+  const subdivisions = 8;
+
+  for (let index = 0; index < points.length - 1; index++) {
+    const p0 = points[index - 1] ?? points[index];
+    const p1 = points[index];
+    const p2 = points[index + 1];
+    const p3 = points[index + 2] ?? p2;
+
+    for (let step = 1; step <= subdivisions; step++) {
+      const t = step / subdivisions;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const blend = (a, b, c, d) =>
+        0.5 *
+        ((2 * b) +
+          (-a + c) * t +
+          (2 * a - 5 * b + 4 * c - d) * t2 +
+          (-a + 3 * b - 3 * c + d) * t3);
+      smooth.push({
+        x: blend(p0.x, p1.x, p2.x, p3.x),
+        y: Math.max(
+          0,
+          Math.min(
+            60,
+            blend(p0.y, p1.y, p2.y, p3.y)
+          )
+        ),
+        temperature: blend(
+          p0.temperature,
+          p1.temperature,
+          p2.temperature,
+          p3.temperature
+        ),
+      });
+    }
+  }
+
+  return smooth;
+}
+
+function thermalTemperatureColor(
+  temperature,
+  minimum,
+  maximum
+) {
+  const stops = [
+    [0.00, "#1E5BFF"],
+    [0.24, "#00AEEF"],
+    [0.45, "#39D98A"],
+    [0.64, "#D5E85A"],
+    [0.80, "#FFD34E"],
+    [1.00, "#FF8A00"],
+  ];
+  const range = maximum - minimum;
+  const position = range < 0.1
+    ? 0.5
+    : Math.max(
+        0,
+        Math.min(1, (temperature - minimum) / range)
+      );
+
+  for (let index = 0; index < stops.length - 1; index++) {
+    const [startPosition, startColor] = stops[index];
+    const [endPosition, endColor] = stops[index + 1];
+    if (position <= endPosition) {
+      const localProgress =
+        (position - startPosition) /
+        Math.max(0.0001, endPosition - startPosition);
+      return interpolateHexColor(
+        startColor,
+        endColor,
+        Math.max(0, Math.min(1, localProgress))
+      );
+    }
+  }
+
+  return stops[stops.length - 1][1];
+}
+
+function drawThermalArea(
+  ctx,
+  points,
+  graphBottom,
+  minimum,
+  maximum
+) {
+  if (points.length < 2) return;
+
+  for (let index = 0; index < points.length - 1; index++) {
+    const first = points[index];
+    const second = points[index + 1];
+    if (second.x <= first.x) continue;
+
+    const path = new Path();
+    path.move(new Point(first.x, first.y));
+    path.addLine(new Point(second.x, second.y));
+    path.addLine(new Point(second.x, graphBottom));
+    path.addLine(new Point(first.x, graphBottom));
+    path.closeSubpath();
+
+    ctx.addPath(path);
+    ctx.setFillColor(
+      new Color(
+        thermalTemperatureColor(
+          (first.temperature + second.temperature) / 2,
+          minimum,
+          maximum
+        ),
+        isCompactMode() ? 0.16 : 0.24
+      )
+    );
+    ctx.fillPath();
+  }
+}
+
+function drawThermalCurve(ctx, points) {
+  if (points.length < 2) return;
+
+  const path = new Path();
+  path.move(new Point(points[0].x, points[0].y));
+  for (const point of points.slice(1)) {
+    path.addLine(new Point(point.x, point.y));
+  }
+
+  ctx.addPath(path);
+  ctx.setStrokeColor(new Color("#FFF6C7", 0.92));
+  ctx.setLineWidth(isCompactMode() ? 1.5 : 2.2);
+  ctx.strokePath();
+
+  // Um halo estreito mantém a curva legível sobre as barras azuis,
+  // sem transformá-la em um marcador ou em uma caixa horária.
+  const glowPath = new Path();
+  glowPath.move(new Point(points[0].x, points[0].y));
+  for (const point of points.slice(1)) {
+    glowPath.addLine(new Point(point.x, point.y));
+  }
+  ctx.addPath(glowPath);
+  ctx.setStrokeColor(new Color("#FFE58A", 0.22));
+  ctx.setLineWidth(isCompactMode() ? 4 : 5);
+  ctx.strokePath();
+}
+
+function thermalLabelTicks(ticks) {
+  if (isCompactMode()) {
+    // Preserva o layout resumido acima de 36 h.
+    return ticks.filter((tick) =>
+      [0, 6, 12, 18].includes(tick.getHours())
+    );
+  }
+  return ticks.filter((tick) => tick.getHours() % 2 === 0);
 }
 
 function temperatureLegendOpacity(tick, forecast, weather) {
