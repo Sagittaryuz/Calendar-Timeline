@@ -3729,40 +3729,28 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleTitle = title;
   if (!visibleTitle && statusWidth === 0) return;
 
-  const titleTextY = barY + (windowHours > 24 ? 10 : 7);
-  const titleRegionRight = Math.max(
-    visibleLeft,
-    visibleRight - statusWidth - metadataWidth
-  );
-  const titleCenterX = (visibleLeft + titleRegionRight) / 2;
+  // Mantém a posição horizontal original, começando no limite esquerdo
+  // do chart. Apenas a posição vertical é centralizada no próprio bloco.
+  const titleTextY =
+    barY + Math.max(0, (barHeight - titleFontSize) / 2);
+  const textPoint = new Point(visibleLeft + 7, titleTextY);
 
-  // O título fica centralizado na área útil do chart. Como usamos drawText
-  // (em vez de drawTextInRect), a frase continua inteira e só é recortada
-  // pelas margens reais do widget/timeline.
+  // O título permanece completo. O DrawContext recorta somente nas margens
+  // reais do widget/timeline; nunca inserimos reticências.
   if (visibleTitle) {
-    ctx.setTextAlignedCenter();
+    ctx.setTextAlignedLeft();
     ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
     ctx.setTextColor(new Color("#000000", 0.85));
     ctx.drawText(
       visibleTitle,
-      new Point(titleCenterX + 2, titleTextY + 2)
+      new Point(textPoint.x + 2, textPoint.y + 2)
     );
     ctx.setTextColor(Color.white());
-    ctx.drawText(
-      visibleTitle,
-      new Point(titleCenterX, titleTextY)
-    );
+    ctx.drawText(visibleTitle, textPoint);
 
     if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
-      const titleLeft =
-        titleCenterX -
-        estimatedTextWidth(visibleTitle, titleFontSize) / 2;
-      ctx.setTextAlignedLeft();
       ctx.setTextColor(new Color("#FF453A"));
-      ctx.drawText(
-        priorityPrefix.trim(),
-        new Point(titleLeft, titleTextY)
-      );
+      ctx.drawText(priorityPrefix.trim(), textPoint);
     }
   }
 
