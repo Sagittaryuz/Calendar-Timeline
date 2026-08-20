@@ -1643,10 +1643,10 @@ function drawTemperatureFooter(ctx, weather) {
   const graphBottom = baseGraphBottom + thermalCurveExpansion;
   const contentGraphTop = thermalCurveExpansion;
   const labelFontSize = isCompactMode()
-    ? 23
+    ? 27
     : isExtendedDetailedMode()
-      ? 22
-      : 27;
+      ? 26
+      : 31;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -1810,10 +1810,10 @@ function drawTemperatureFooter(ctx, weather) {
     const textWidth = isExtendedDetailedMode() ? 36 : 44;
     const temperatureLabel = String(roundedTemperature) + "º";
     const weekdayBadgeFontSize = isCompactMode()
-      ? 23
+      ? 27
       : isExtendedDetailedMode()
-        ? 24
-        : 27;
+        ? 28
+        : 31;
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
@@ -1825,8 +1825,8 @@ function drawTemperatureFooter(ctx, weather) {
       ? renderedLabelTop + 1
       : renderedLabelTop;
     const temperatureTextHeight = isDayBoundaryTemperature
-      ? 25
-      : 27;
+      ? 29
+      : 31;
     footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
@@ -2529,10 +2529,10 @@ function drawWeekdayBadgesOnTop(ctx) {
       ? 28
       : 34;
   const fontSize = isCompactMode()
-    ? 21
+    ? 25
     : isExtendedDetailedMode()
-      ? 22
-      : 25;
+      ? 26
+      : 29;
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -2557,7 +2557,7 @@ function drawWeekdayBadgesOnTop(ctx) {
         x - badgeWidth / 2,
         isExtendedDetailedMode() ? 6 : 8,
         badgeWidth,
-        isExtendedDetailedMode() ? 21 : 25
+        isExtendedDetailedMode() ? 25 : 29
       )
     );
   }
@@ -3675,10 +3675,10 @@ function drawHourAxis(ctx, items) {
       ctx.setFont(
         Font.blackRoundedSystemFont(
           isCompactMode()
-            ? 21
+            ? 25
             : isExtendedDetailedMode()
-              ? 22
-              : 25
+              ? 26
+              : 29
         )
       );
       ctx.setTextColor(style.text);
@@ -3689,7 +3689,7 @@ function drawHourAxis(ctx, items) {
           x - badgeWidth / 2,
           isExtendedDetailedMode() ? 6 : 8,
           badgeWidth,
-          isExtendedDetailedMode() ? 21 : 25
+          isExtendedDetailedMode() ? 25 : 29
         )
       );
     } else {
@@ -3698,10 +3698,10 @@ function drawHourAxis(ctx, items) {
         hour >= SETTINGS.daylightStartHour &&
         hour <= SETTINGS.daylightEndHour;
       const hourFontSize = isCompactMode()
-        ? 23
+        ? 27
         : isExtendedDetailedMode()
-          ? 22
-          : 27;
+          ? 26
+          : 31;
 
       // A fonte permanece forte em todo o período. A diferença entre
       // dia e noite fica somente na cor, sempre com opacidade 100%.
@@ -3718,7 +3718,7 @@ function drawHourAxis(ctx, items) {
           x - (isExtendedDetailedMode() ? 18 : 22),
           7,
           isExtendedDetailedMode() ? 36 : 44,
-          27
+          31
         )
       );
     }
