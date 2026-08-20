@@ -1700,17 +1700,20 @@ function drawTemperatureFooter(ctx, weather) {
   // O quadrado inferior é preenchido primeiro; a linha de mudança de dia
   // fica por cima dele e da curva térmica.
   const renderedLabelTop = labelTop + thermalCurveExpansion;
+  // Mantém a posição vertical existente e usa o mesmo eixo para todos os
+  // números da legenda inferior.
+  const temperatureLegendCenterY = renderedLabelTop + 13.5;
   drawThermalDayBadgeFrames(
     footerCtx,
     ticks,
-    renderedLabelTop
+    temperatureLegendCenterY
   );
 
   // A linha termina exatamente no centro do quadrado inferior.
   drawThermalDayBoundaryGuides(
     footerCtx,
     ticks,
-    renderedLabelTop + 13.5
+    temperatureLegendCenterY
   );
 
   const labelTicks = thermalLabelTicks(ticks);
@@ -1807,7 +1810,6 @@ function drawTemperatureFooter(ctx, weather) {
     const isDaylightHour =
       hour >= SETTINGS.daylightStartHour &&
       hour <= SETTINGS.daylightEndHour;
-    const textWidth = isExtendedDetailedMode() ? 36 : 44;
     const temperatureLabel = String(roundedTemperature) + "º";
     const weekdayBadgeFontSize = isCompactMode()
       ? 23
@@ -1821,12 +1823,10 @@ function drawTemperatureFooter(ctx, weather) {
           ? Font.blackMonospacedSystemFont(labelFontSize)
           : Font.regularMonospacedSystemFont(labelFontSize)
     );
-    const temperatureTextTop = isDayBoundaryTemperature
-      ? renderedLabelTop + 1
-      : renderedLabelTop;
-    const temperatureTextHeight = isDayBoundaryTemperature
-      ? 25
-      : 27;
+    const temperatureTextRect = centeredLegendTextRect(
+      centerX,
+      temperatureLegendCenterY
+    );
     footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
@@ -1836,10 +1836,10 @@ function drawTemperatureFooter(ctx, weather) {
       footerCtx.drawTextInRect(
         temperatureLabel,
         new Rect(
-          centerX - textWidth / 2 + offsetX,
-          temperatureTextTop + offsetY,
-          textWidth,
-          temperatureTextHeight
+          temperatureTextRect.x + offsetX,
+          temperatureTextRect.y + offsetY,
+          temperatureTextRect.width,
+          temperatureTextRect.height
         )
       );
     }
@@ -1847,12 +1847,7 @@ function drawTemperatureFooter(ctx, weather) {
     footerCtx.setTextColor(new Color(labelColor, opacity));
     footerCtx.drawTextInRect(
       temperatureLabel,
-      new Rect(
-        centerX - textWidth / 2,
-        temperatureTextTop,
-        textWidth,
-        temperatureTextHeight
-      )
+      temperatureTextRect
     );
   }
 
@@ -1900,33 +1895,13 @@ function drawThermalDayBoundaryGuides(ctx, ticks, lineBottomY) {
 }
 
 
-function drawThermalDayBadgeFrames(ctx, ticks, labelTop) {
-  const badgeWidth = isCompactMode()
-    ? 44
-    : isExtendedDetailedMode()
-      ? 44
-      : 50;
-  const badgeHeight = isCompactMode()
-    ? 30
-    : isExtendedDetailedMode()
-      ? 28
-      : 34;
-
+function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
   for (const tick of ticks) {
     if (tick.getHours() !== 0) continue;
 
     const x = timeToX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const dayLabelTop = labelTop + 1;
-    const dayLabelHeight = 25;
-    const frameTop =
-      dayLabelTop + dayLabelHeight / 2 - badgeHeight / 2;
-    const frame = new Rect(
-      x - badgeWidth / 2,
-      frameTop,
-      badgeWidth,
-      badgeHeight
-    );
+    const frame = legendBadgeRect(x, centerY);
 
     ctx.setFillColor(style.background);
     ctx.fillRect(frame);
@@ -2494,12 +2469,7 @@ function renderTimelinePanel(items, loadError) {
 
 
 function drawTimelineDayBoundariesOnTop(ctx) {
-  const badgeHeight = isCompactMode()
-    ? 30
-    : isExtendedDetailedMode()
-      ? 28
-      : 34;
-  const dayBadgeCenterY = 3 + badgeHeight / 2;
+  const dayBadgeCenterY = topLegendCenterY();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -2518,16 +2488,6 @@ function drawTimelineDayBoundariesOnTop(ctx) {
 }
 
 function drawWeekdayBadgesOnTop(ctx) {
-  const badgeWidth = isCompactMode()
-    ? 44
-    : isExtendedDetailedMode()
-      ? 44
-      : 50;
-  const badgeHeight = isCompactMode()
-    ? 30
-    : isExtendedDetailedMode()
-      ? 28
-      : 34;
   const fontSize = isCompactMode()
     ? 21
     : isExtendedDetailedMode()
@@ -2539,26 +2499,15 @@ function drawWeekdayBadgesOnTop(ctx) {
 
     const x = timeToX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
+    const badge = legendBadgeRect(x, topLegendCenterY());
     ctx.setFillColor(style.background);
-    ctx.fillRect(
-      new Rect(
-        x - badgeWidth / 2,
-        3,
-        badgeWidth,
-        badgeHeight
-      )
-    );
+    ctx.fillRect(badge);
     ctx.setFont(Font.blackRoundedSystemFont(fontSize));
     ctx.setTextColor(style.text);
     ctx.setTextAlignedCenter();
     ctx.drawTextInRect(
       shortWeekday(tick),
-      new Rect(
-        x - badgeWidth / 2,
-        isExtendedDetailedMode() ? 6 : 8,
-        badgeWidth,
-        isExtendedDetailedMode() ? 21 : 25
-      )
+      centeredLegendTextRect(x, topLegendCenterY())
     );
   }
 }
@@ -3132,12 +3081,7 @@ function drawNightSegment(
     16,
     Math.min(maximumMoonSize, proportionalSize, sceneWidth - 8)
   );
-  const dayBadgeHeight = isCompactMode()
-    ? 30
-    : isExtendedDetailedMode()
-      ? 28
-      : 34;
-  const dayAxisTopY = 3 + dayBadgeHeight / 2;
+  const dayAxisTopY = topLegendCenterY();
   const dayAxisBottomY = localPlotBottom();
   const dayAxisCenterY = (dayAxisTopY + dayAxisBottomY) / 2;
   const dayAxisX = timeToX(nightCenterDate);
@@ -3529,9 +3473,57 @@ function daylightHourColor(tick) {
   );
 }
 
+function legendLabelWidth() {
+  if (isCompactMode()) return 52;
+  if (isExtendedDetailedMode()) return 50;
+  return 58;
+}
+
+function legendFrameHeight() {
+  if (isCompactMode()) return 34;
+  if (isExtendedDetailedMode()) return 32;
+  return 38;
+}
+
+function legendTextHeight() {
+  if (isCompactMode()) return 29;
+  if (isExtendedDetailedMode()) return 28;
+  return 31;
+}
+
+function topLegendCenterY() {
+  // Preserva o eixo vertical anterior enquanto a moldura cresce igualmente
+  // para cima e para baixo.
+  if (isCompactMode()) return 18;
+  if (isExtendedDetailedMode()) return 17;
+  return 20;
+}
+
+function centeredLegendTextRect(centerX, centerY) {
+  const width = legendLabelWidth();
+  const height = legendTextHeight();
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  );
+}
+
+function legendBadgeRect(centerX, centerY) {
+  const width = legendLabelWidth();
+  const height = legendFrameHeight();
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  );
+}
+
 function hourLabelMetrics(ticks) {
   const extended = isExtendedDetailedMode();
-  const frameHeight = isCompactMode() ? 30 : extended ? 28 : 34;
+  const frameHeight = legendFrameHeight();
   const lineWidth = extended ? 1 : 2;
   const gapWidth = extended ? 3 : 6;
   const tickXs = ticks.map((tick) => timeToX(tick));
@@ -3541,13 +3533,9 @@ function hourLabelMetrics(ticks) {
           .slice(1)
           .map((x, index) => Math.abs(x - tickXs[index]))
       )
-    : 50;
-  const minimumFrameWidth = isCompactMode() ? 30 : extended ? 20 : 30;
-  const maximumFrameWidth = isCompactMode() ? 42 : extended ? 30 : 44;
-  const frameWidth = Math.max(
-    minimumFrameWidth,
-    Math.min(maximumFrameWidth, tickSpacing - gapWidth)
-  );
+    : legendLabelWidth();
+  // A moldura não encolhe abaixo do necessário para "12h", "23º" ou "DOM".
+  const frameWidth = legendLabelWidth();
 
   return {
     frameHeight,
@@ -3659,17 +3647,7 @@ function drawHourAxis(ctx, items) {
     if (isMidnight) {
       const weekday = shortWeekday(tick);
       const style = dayBadgeStyle(tick, loadResult.holidayDates);
-      const badgeWidth = isCompactMode()
-        ? 44
-        : isExtendedDetailedMode()
-          ? 44
-          : 50;
-      const badgeHeight = isCompactMode()
-        ? 30
-        : isExtendedDetailedMode()
-          ? 28
-          : 34;
-      const badge = new Rect(x - badgeWidth / 2, 3, badgeWidth, badgeHeight);
+      const badge = legendBadgeRect(x, topLegendCenterY());
       ctx.setFillColor(style.background);
       ctx.fillRect(badge);
       ctx.setFont(
@@ -3685,12 +3663,7 @@ function drawHourAxis(ctx, items) {
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(
         weekday,
-        new Rect(
-          x - badgeWidth / 2,
-          isExtendedDetailedMode() ? 6 : 8,
-          badgeWidth,
-          isExtendedDetailedMode() ? 21 : 25
-        )
+        centeredLegendTextRect(x, topLegendCenterY())
       );
     } else {
       const label = String(hour) + "h";
@@ -3714,12 +3687,7 @@ function drawHourAxis(ctx, items) {
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(
         label,
-        new Rect(
-          x - (isExtendedDetailedMode() ? 18 : 22),
-          7,
-          isExtendedDetailedMode() ? 36 : 44,
-          27
-        )
+        centeredLegendTextRect(x, topLegendCenterY())
       );
     }
   }
