@@ -1643,10 +1643,10 @@ function drawTemperatureFooter(ctx, weather) {
   const graphBottom = baseGraphBottom + thermalCurveExpansion;
   const contentGraphTop = thermalCurveExpansion;
   const labelFontSize = isCompactMode()
-    ? 17
+    ? 18
     : isExtendedDetailedMode()
-      ? 16
-      : 21;
+      ? 17
+      : 22;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -1768,11 +1768,13 @@ function drawTemperatureFooter(ctx, weather) {
     const isNoon = hour === 12;
     // Todas as temperaturas são brancas. Somente a máxima e a mínima
     // recebem destaque, respectivamente em vermelho e azul.
-    const labelColor = isMaximum
-      ? "#FF453A"
-      : isMinimum
-        ? "#0A84FF"
-        : "#FFFFFF";
+    const labelColor = isDayBoundaryTemperature
+      ? "#000000"
+      : isMaximum
+        ? "#FF453A"
+        : isMinimum
+          ? "#0A84FF"
+          : "#FFFFFF";
     const isSolarBoundary =
       hour === SETTINGS.daylightStartHour ||
       hour === SETTINGS.daylightEndHour;
@@ -1782,10 +1784,10 @@ function drawTemperatureFooter(ctx, weather) {
     const textWidth = isExtendedDetailedMode() ? 36 : 44;
     const temperatureLabel = String(roundedTemperature) + "º";
     const weekdayBadgeFontSize = isCompactMode()
-      ? 17
+      ? 18
       : isExtendedDetailedMode()
-        ? 18
-        : 21;
+        ? 19
+        : 22;
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
@@ -2406,11 +2408,13 @@ function renderTimelinePanel(items, loadError) {
     return ctx.getImage();
   }
 
-  const usableHeight = localPlotBottom() - CANVAS.localPlotTop;
-  const rowHeight = usableHeight / SETTINGS.maxItems;
+  const chartTop = CANVAS.localPlotTop - 2;
+  const chartBottom = localPlotBottom() - 12;
+  const chartHeight = Math.max(1, chartBottom - chartTop);
+  const rowHeight = chartHeight / SETTINGS.maxItems;
 
   for (let row = 0; row < SETTINGS.maxItems; row++) {
-    const y = CANVAS.localPlotTop + row * rowHeight;
+    const y = chartTop + row * rowHeight;
     const rowItems = items
       .filter((candidate) => candidate.gridRow === row)
       .sort(
@@ -3637,10 +3641,10 @@ function drawHourAxis(ctx, items) {
         hour >= SETTINGS.daylightStartHour &&
         hour <= SETTINGS.daylightEndHour;
       const hourFontSize = isCompactMode()
-        ? 17
+        ? 18
         : isExtendedDetailedMode()
-          ? 16
-          : 21;
+          ? 17
+          : 22;
 
       // A fonte permanece forte em todo o período. A diferença entre
       // dia e noite fica somente na cor, sempre com opacidade 100%.
