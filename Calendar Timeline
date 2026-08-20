@@ -1545,10 +1545,10 @@ function drawDatePanel(ctx, holidayDates) {
     { text: month, bold: true, color: Color.white() },
   ];
   const fullDate = segments.map((segment) => segment.text).join("");
-  const maximumFontSize = isCompactMode() ? 86 : 104;
+  const maximumFontSize = isCompactMode() ? 89 : 107;
   const fontSize = Math.min(
     maximumFontSize,
-    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65) + 4
+    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65) + 7
   );
   const characterWidth = fontSize * 0.61;
   const totalWidth = fullDate.length * characterWidth;
@@ -1717,33 +1717,47 @@ function drawTemperatureFooter(ctx, weather) {
   const labelForecasts = labelTicks.map((tick) =>
     temperatureAtTimestamp(sourceHours, tick.getTime())
   );
-  const shownForecasts = labelForecasts.filter(Boolean);
-  const shownTemperatures = shownForecasts.map(
-    (forecast) => forecast.temperature
-  );
-  const shownMaximum = shownTemperatures.length
-    ? Math.max(...shownTemperatures)
-    : temperatureMaximum;
-  const shownMinimum = shownTemperatures.length
-    ? Math.min(...shownTemperatures)
-    : temperatureMinimum;
 
-  let maximumLabelIndex = -1;
-  let minimumLabelIndex = -1;
-  for (let index = 0; index < labelForecasts.length; index++) {
+  // A máxima e a mínima são calculadas para cada dia completo da previsão,
+  // e não apenas para o trecho atualmente visível da janela.
+  const dailyExtremes = dailyTemperatureExtremes(sourceHours);
+  const dailyLabelExtremes = new Map();
+
+  // Como os valores são exibidos de 2 em 2 horas, a marcação é aplicada
+  // ao rótulo visível mais próximo do horário real da máxima/mínima.
+  for (let index = 0; index < labelTicks.length; index++) {
     const forecast = labelForecasts[index];
     if (!forecast) continue;
 
-    if (
-      maximumLabelIndex < 0 &&
-      Math.abs(forecast.temperature - shownMaximum) < 0.001
-    ) {
-      maximumLabelIndex = index;
+    const dayKey = dateKey(labelTicks[index]);
+    const day = dailyExtremes[dayKey];
+    if (!day) continue;
+
+    const maximumDistance = Math.abs(
+      forecast.temperature - day.maximum
+    );
+    const minimumDistance = Math.abs(
+      forecast.temperature - day.minimum
+    );
+    const current = dailyLabelExtremes.get(dayKey);
+
+    if (!current) {
+      dailyLabelExtremes.set(dayKey, {
+        maximumIndex: index,
+        maximumDistance,
+        minimumIndex: index,
+        minimumDistance,
+      });
+      continue;
     }
-    if (
-      Math.abs(forecast.temperature - shownMinimum) < 0.001
-    ) {
-      minimumLabelIndex = index;
+
+    if (maximumDistance < current.maximumDistance) {
+      current.maximumIndex = index;
+      current.maximumDistance = maximumDistance;
+    }
+    if (minimumDistance < current.minimumDistance) {
+      current.minimumIndex = index;
+      current.minimumDistance = minimumDistance;
     }
   }
 
@@ -1757,8 +1771,13 @@ function drawTemperatureFooter(ctx, weather) {
     if (!forecast) continue;
 
     const roundedTemperature = Math.round(forecast.temperature);
-    const isMaximum = labelIndex === maximumLabelIndex;
-    const isMinimum = labelIndex === minimumLabelIndex;
+    const dayLabelExtremes = dailyLabelExtremes.get(
+      dateKey(tick)
+    );
+    const isMaximum =
+      dayLabelExtremes?.maximumIndex === labelIndex;
+    const isMinimum =
+      dayLabelExtremes?.minimumIndex === labelIndex;
     // A fonte principal é sempre totalmente opaca.
     const opacity = 1.0;
     const centerX = timeToX(tick);
@@ -1768,8 +1787,15 @@ function drawTemperatureFooter(ctx, weather) {
     const isNoon = hour === 12;
     // Todas as temperaturas são brancas. Somente a máxima e a mínima
     // recebem destaque, respectivamente em vermelho e azul.
-    const labelColor = isDayBoundaryTemperature
+    const dayBoundaryTextColor = loadResult.holidayDates.has(
+      dateKey(tick)
+    )
       ? "#000000"
+      : tick.getDay() === 0 || tick.getDay() === 6
+        ? "#FFFFFF"
+        : "#000000";
+    const labelColor = isDayBoundaryTemperature
+      ? dayBoundaryTextColor
       : isMaximum
         ? "#FF453A"
         : isMinimum
@@ -2024,6 +2050,37 @@ function buildThermalSamples(sourceHours) {
         : null;
     })
     .filter(Boolean);
+}
+
+function dailyTemperatureExtremes(sourceHours) {
+  const daily = {};
+
+  for (const hour of sourceHours) {
+    const timestamp = Number(hour.timestamp);
+    const temperature = Number(hour.temperature);
+    if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
+      continue;
+    }
+
+    const key = dateKey(new Date(timestamp));
+    if (!daily[key]) {
+      daily[key] = {
+        minimum: temperature,
+        maximum: temperature,
+      };
+    } else {
+      daily[key].minimum = Math.min(
+        daily[key].minimum,
+        temperature
+      );
+      daily[key].maximum = Math.max(
+        daily[key].maximum,
+        temperature
+      );
+    }
+  }
+
+  return daily;
 }
 
 function temperatureAtTimestamp(sourceHours, timestamp) {
@@ -2409,7 +2466,7 @@ function renderTimelinePanel(items, loadError) {
   }
 
   const chartTop = CANVAS.localPlotTop - 2;
-  const chartBottom = localPlotBottom() - 17;
+  const chartBottom = localPlotBottom() - 18;
   const chartHeight = Math.max(1, chartBottom - chartTop);
   const rowHeight = chartHeight / SETTINGS.maxItems;
 
@@ -3088,7 +3145,7 @@ function drawNightSegment(
   // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
   // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
   // limite inferior visível do grid.
-  const moonY = dayAxisCenterY - moonSize / 2 + 5;
+  const moonY = dayAxisCenterY - moonSize / 2 + 7;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
@@ -3672,8 +3729,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
   const barHeight = item.isOverflow
-    ? isCompactMode() ? 31 : 33
-    : isCompactMode() ? 31 : 35;
+    ? isCompactMode() ? 32 : 34
+    : isCompactMode() ? 32 : 36;
   const barY = centerY - barHeight / 2;
 
   if (item.isOverflow) {
@@ -3692,7 +3749,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
     ctx.setTextAlignedCenter();
     ctx.setFont(
-      Font.blackRoundedSystemFont(isCompactMode() ? 21 : 25)
+      Font.blackRoundedSystemFont(isCompactMode() ? 22 : 26)
     );
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
@@ -3725,9 +3782,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleRight = Math.min(timelineWidth(), x + width);
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
-  const titleFontSize = isCompactMode() ? 20 : windowHours > 24 ? 23 : 27;
-  const statusFontSize = isCompactMode() ? 12 : 15;
-  const metadataFontSize = isCompactMode() ? 11 : 15;
+  const titleFontSize = isCompactMode() ? 21 : windowHours > 24 ? 24 : 28;
+  const statusFontSize = isCompactMode() ? 13 : 16;
+  const metadataFontSize = isCompactMode() ? 12 : 16;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   // Conflitos precisam continuar identificáveis mesmo em eventos curtos.
   // Para eles, o pequeno chip "×N" pode ocupar a largura mínima de leitura;
