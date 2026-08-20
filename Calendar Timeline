@@ -93,7 +93,7 @@ const CANVAS = {
   // Distância espelhada entre a legenda e o grid.
   timelineLegendGap: 7,
   // Deslocamento específico da legenda numérica de temperatura.
-  temperatureLegendVerticalOffset: 5,
+  temperatureLegendVerticalOffset: 7,
   // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
   timelineVerticalOffset: -5,
 };
@@ -1565,7 +1565,9 @@ function drawTemperatureFooter(ctx, weather) {
   // às divisões horárias e são recortados pelas margens do grid.
   const footerCtx = new DrawContext();
   const thermalFooterOverlap = 8;
-  const footerOriginY = CANVAS.timelineBottom - thermalFooterOverlap;
+  const thermalCurveExpansion = 5;
+  const footerOriginY =
+    CANVAS.timelineBottom - thermalFooterOverlap - thermalCurveExpansion;
   const footerHeight = CANVAS.footerBottom - footerOriginY;
   footerCtx.size = new Size(timelineWidth(), footerHeight);
   footerCtx.opaque = false;
@@ -1589,7 +1591,11 @@ function drawTemperatureFooter(ctx, weather) {
     .map((hour) => Number(hour.temperature));
 
   if (visibleValues.length === 0) {
-    drawThermalHourGuides(footerCtx, ticks, 34);
+    drawThermalHourGuides(
+      footerCtx,
+      ticks,
+      34 + thermalCurveExpansion
+    );
     ctx.drawImageInRect(
       footerCtx.getImage(),
       new Rect(
@@ -1604,13 +1610,18 @@ function drawTemperatureFooter(ctx, weather) {
 
   const temperatureMinimum = Math.min(...visibleValues);
   const temperatureMaximum = Math.max(...visibleValues);
-  const footerGridBottom = CANVAS.timelineBottom - footerOriginY;
+  const baseFooterOriginY =
+    footerOriginY + thermalCurveExpansion;
+  const footerGridBottom =
+    CANVAS.timelineBottom - baseFooterOriginY;
   const graphLabelTop =
     footerGridBottom + CANVAS.timelineLegendGap;
-  const graphBottom = Math.max(6, graphLabelTop - 2);
+  const baseGraphBottom = Math.max(6, graphLabelTop - 2);
   const labelTop =
     graphLabelTop + CANVAS.temperatureLegendVerticalOffset;
-  const graphTop = Math.max(0, graphBottom - 14);
+  const graphTop = 0;
+  const graphBottom = baseGraphBottom + thermalCurveExpansion;
+  const contentGraphTop = thermalCurveExpansion;
   const labelFontSize = isCompactMode()
     ? 17
     : isExtendedDetailedMode()
@@ -1625,7 +1636,7 @@ function drawTemperatureFooter(ctx, weather) {
   drawThermalRainBars(
     footerCtx,
     sourceHours,
-    graphTop,
+    contentGraphTop,
     graphBottom
   );
 
@@ -1668,16 +1679,18 @@ function drawTemperatureFooter(ctx, weather) {
 
   // O quadrado inferior é preenchido primeiro; a linha de mudança de dia
   // fica por cima dele e da curva térmica.
+  const renderedLabelTop = labelTop + thermalCurveExpansion;
   drawThermalDayBadgeFrames(
     footerCtx,
     ticks,
-    labelTop
+    renderedLabelTop
   );
 
+  // A linha termina exatamente no centro do quadrado inferior.
   drawThermalDayBoundaryGuides(
     footerCtx,
     ticks,
-    graphBottom
+    renderedLabelTop + 13.5
   );
 
   const labelTicks = thermalLabelTicks(ticks);
@@ -1745,8 +1758,8 @@ function drawTemperatureFooter(ctx, weather) {
           : Font.regularMonospacedSystemFont(labelFontSize)
     );
     const temperatureTextTop = isDayBoundaryTemperature
-      ? labelTop + 1
-      : labelTop;
+      ? renderedLabelTop + 1
+      : renderedLabelTop;
     const temperatureTextHeight = isDayBoundaryTemperature
       ? 25
       : 27;
@@ -1810,14 +1823,14 @@ function drawThermalHourGuides(
   }
 }
 
-function drawThermalDayBoundaryGuides(ctx, ticks, graphBottom) {
+function drawThermalDayBoundaryGuides(ctx, ticks, lineBottomY) {
   for (const tick of ticks) {
     if (tick.getHours() !== 0) continue;
 
     const x = timeToX(tick);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
-      new Rect(x - 4, 0, 8, graphBottom)
+      new Rect(x - 4, 0, 8, lineBottomY)
     );
   }
 }
@@ -2380,6 +2393,13 @@ function renderTimelinePanel(items, loadError) {
 
 
 function drawTimelineDayBoundariesOnTop(ctx) {
+  const badgeHeight = isCompactMode()
+    ? 30
+    : isExtendedDetailedMode()
+      ? 28
+      : 34;
+  const dayBadgeCenterY = 3 + badgeHeight / 2;
+
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
@@ -2388,9 +2408,9 @@ function drawTimelineDayBoundariesOnTop(ctx) {
     ctx.fillRect(
       new Rect(
         x - 4,
-        CANVAS.localPlotTop - 7,
+        dayBadgeCenterY,
         8,
-        localPlotBottom() - CANVAS.localPlotTop + 7
+        localPlotBottom() - dayBadgeCenterY
       )
     );
   }
@@ -2423,7 +2443,7 @@ function drawFixedDaylightGlow(ctx) {
           ),
           1.12
         );
-        const opacity = 0.25 * strength * slice.daylightStrength;
+        const opacity = 0.30 * strength * slice.daylightStrength;
         ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
         // Somente o gradiente vertical permanece; a linha solar foi removida.
         ctx.fillRect(new Rect(slice.x, y, slice.width + 1, 2));
@@ -3551,8 +3571,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
   const barHeight = item.isOverflow
-    ? isCompactMode() ? 30 : 38
-    : isCompactMode() ? 32 : 42;
+    ? isCompactMode() ? 26 : 28
+    : isCompactMode() ? 26 : 30;
   const barY = centerY - barHeight / 2;
 
   if (item.isOverflow) {
