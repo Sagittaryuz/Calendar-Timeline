@@ -78,6 +78,26 @@ const SETTINGS = {
   selectedCalendarIdentifiers: [],
 };
 
+
+const THERMAL_COLOR_STOPS = [
+  [15, "#1261C9"],
+  [18, "#0A84FF"],
+  [20, "#12A9D8"],
+  [22, "#20B7A5"],
+  [24, "#51B866"],
+  [25, "#71B84A"],
+  [26, "#A9C33B"],
+  [27, "#E8C229"],
+  [28, "#F5B51B"],
+  [29, "#FF9500"],
+  [30, "#FF7A00"],
+  [30.5, "#FF6912"],
+  [31, "#FF5A1F"],
+  [31.5, "#FF4930"],
+  [32, "#FF3B30"],
+  [33, "#FF1F1F"],
+];
+
 const CANVAS = {
   width: 1092,
   height: 510,
@@ -2107,24 +2127,6 @@ function smoothThermalCurve(points) {
   return smooth;
 }
 
-const THERMAL_COLOR_STOPS = [
-  [15, "#1261C9"],
-  [18, "#0A84FF"],
-  [20, "#12A9D8"],
-  [22, "#20B7A5"],
-  [24, "#51B866"],
-  [25, "#71B84A"],
-  [26, "#A9C33B"],
-  [27, "#E8C229"],
-  [28, "#F5B51B"],
-  [29, "#FF9500"],
-  [30, "#FF7A00"],
-  [30.5, "#FF6912"],
-  [31, "#FF5A1F"],
-  [31.5, "#FF4930"],
-  [32, "#FF3B30"],
-  [33, "#FF1F1F"],
-];
 
 function thermalSmoothstep(value) {
   const clamped = Math.max(0, Math.min(1, Number(value) || 0));
