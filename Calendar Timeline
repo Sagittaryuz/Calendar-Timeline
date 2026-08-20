@@ -1694,9 +1694,10 @@ function drawTemperatureFooter(ctx, weather) {
   );
 
   const labelTicks = thermalLabelTicks(ticks);
-  const shownForecasts = labelTicks
-    .map((tick) => temperatureAtTimestamp(sourceHours, tick.getTime()))
-    .filter(Boolean);
+  const labelForecasts = labelTicks.map((tick) =>
+    temperatureAtTimestamp(sourceHours, tick.getTime())
+  );
+  const shownForecasts = labelForecasts.filter(Boolean);
   const shownTemperatures = shownForecasts.map(
     (forecast) => forecast.temperature
   );
@@ -1707,8 +1708,28 @@ function drawTemperatureFooter(ctx, weather) {
     ? Math.min(...shownTemperatures)
     : temperatureMinimum;
 
+  let maximumLabelIndex = -1;
+  let minimumLabelIndex = -1;
+  for (let index = 0; index < labelForecasts.length; index++) {
+    const forecast = labelForecasts[index];
+    if (!forecast) continue;
+
+    if (
+      maximumLabelIndex < 0 &&
+      Math.abs(forecast.temperature - shownMaximum) < 0.001
+    ) {
+      maximumLabelIndex = index;
+    }
+    if (
+      Math.abs(forecast.temperature - shownMinimum) < 0.001
+    ) {
+      minimumLabelIndex = index;
+    }
+  }
+
   footerCtx.setTextAlignedCenter();
-  for (const tick of labelTicks) {
+  for (let labelIndex = 0; labelIndex < labelTicks.length; labelIndex++) {
+    const tick = labelTicks[labelIndex];
     const forecast = temperatureAtTimestamp(
       sourceHours,
       tick.getTime()
@@ -1716,10 +1737,8 @@ function drawTemperatureFooter(ctx, weather) {
     if (!forecast) continue;
 
     const roundedTemperature = Math.round(forecast.temperature);
-    const isMaximum =
-      Math.abs(forecast.temperature - shownMaximum) < 0.001;
-    const isMinimum =
-      Math.abs(forecast.temperature - shownMinimum) < 0.001;
+    const isMaximum = labelIndex === maximumLabelIndex;
+    const isMinimum = labelIndex === minimumLabelIndex;
     // A fonte principal é sempre totalmente opaca.
     const opacity = 1.0;
     const centerX = timeToX(tick);
@@ -1727,18 +1746,13 @@ function drawTemperatureFooter(ctx, weather) {
     const hour = tick.getHours();
     const isDayBoundaryTemperature = hour === 0;
     const isNoon = hour === 12;
-    // A temperatura da mudança de dia fica dentro do mesmo quadrado
-    // visual do dia da semana e usa a mesma fonte arredondada, preta,
-    // porém sem negrito.
-    const labelColor = forecast.temperature > 31
+    // Todas as temperaturas são brancas. Somente a máxima e a mínima
+    // recebem destaque, respectivamente em vermelho e azul.
+    const labelColor = isMaximum
       ? "#FF453A"
-      : isDayBoundaryTemperature
-        ? "#000000"
-        : isMaximum
-          ? "#FF9500"
-          : isMinimum
-            ? "#0A84FF"
-            : "#FFFFFF";
+      : isMinimum
+        ? "#0A84FF"
+        : "#FFFFFF";
     const isSolarBoundary =
       hour === SETTINGS.daylightStartHour ||
       hour === SETTINGS.daylightEndHour;
@@ -3058,7 +3072,7 @@ function drawNightSegment(
   // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
   // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
   // limite inferior visível do grid.
-  const moonY = dayAxisCenterY - moonSize / 2;
+  const moonY = dayAxisCenterY - moonSize / 2 + 5;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
@@ -3732,7 +3746,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   // Mantém a posição horizontal original, começando no limite esquerdo
   // do chart. Apenas a posição vertical é centralizada no próprio bloco.
   const titleTextY =
-    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 2);
+    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 3);
   const textPoint = new Point(visibleLeft + 7, titleTextY);
 
   // O título permanece completo. O DrawContext recorta somente nas margens
