@@ -1730,13 +1730,15 @@ function drawTemperatureFooter(ctx, weather) {
     // A temperatura da mudança de dia fica dentro do mesmo quadrado
     // visual do dia da semana e usa a mesma fonte arredondada, preta,
     // porém sem negrito.
-    const labelColor = isDayBoundaryTemperature
-      ? "#000000"
-      : isMaximum
-        ? "#FF9500"
-        : isMinimum
-          ? "#0A84FF"
-          : "#FFFFFF";
+    const labelColor = forecast.temperature > 31
+      ? "#FF453A"
+      : isDayBoundaryTemperature
+        ? "#000000"
+        : isMaximum
+          ? "#FF9500"
+          : isMinimum
+            ? "#0A84FF"
+            : "#FFFFFF";
     const isSolarBoundary =
       hour === SETTINGS.daylightStartHour ||
       hour === SETTINGS.daylightEndHour;
@@ -2096,13 +2098,19 @@ function thermalTemperatureColor(
   minimum,
   maximum
 ) {
+  // O vermelho é reservado para temperaturas realmente quentes,
+  // independentemente da escala relativa da janela exibida.
+  if (Number(temperature) > 31) {
+    return "#FF453A";
+  }
+
   const stops = [
     [0.00, "#1E5BFF"],
     [0.24, "#00AEEF"],
     [0.45, "#39D98A"],
     [0.64, "#D5E85A"],
     [0.80, "#FFD34E"],
-    [1.00, "#FF8A00"],
+    [1.00, "#FF453A"],
   ];
   const range = maximum - minimum;
   const position = range < 0.1
@@ -2155,7 +2163,7 @@ function drawThermalArea(
     ctx.setFillColor(
       new Color(
         thermalTemperatureColor(
-          (first.temperature + second.temperature) / 2,
+          Math.max(first.temperature, second.temperature),
           minimum,
           maximum
         ),
@@ -2199,7 +2207,7 @@ function drawThermalCurve(
     ctx.setStrokeColor(
       new Color(
         thermalTemperatureColor(
-          (first.temperature + second.temperature) / 2,
+          Math.max(first.temperature, second.temperature),
           minimum,
           maximum
         ),
@@ -2309,6 +2317,10 @@ function drawRainProbabilityBars(
 }
 
 function temperatureHeatColor(temperature, minimum, maximum) {
+  if (Number(temperature) > 31) {
+    return "#FF453A";
+  }
+
   const stops = [
     [0.00, "#123CFF"],
     [0.18, "#008CFF"],
@@ -2317,7 +2329,7 @@ function temperatureHeatColor(temperature, minimum, maximum) {
     [0.66, "#D7F000"],
     [0.79, "#FFD400"],
     [0.90, "#FF8500"],
-    [1.00, "#FF2D1A"],
+      [1.00, "#FF453A"],
   ];
   const range = maximum - minimum;
   const position = range < 0.1
@@ -2364,6 +2376,7 @@ function renderTimelinePanel(items, loadError) {
 
   if (items.length === 0) {
     drawTimelineDayBoundariesOnTop(ctx);
+    drawWeekdayBadgesOnTop(ctx);
     return ctx.getImage();
   }
 
@@ -2388,6 +2401,7 @@ function renderTimelinePanel(items, loadError) {
   // A linha de divisão de dia deve prevalecer visualmente sobre todos os
   // objetos da faixa principal, inclusive charts e cenas noturnas.
   drawTimelineDayBoundariesOnTop(ctx);
+  drawWeekdayBadgesOnTop(ctx);
   return ctx.getImage();
 }
 
@@ -2411,6 +2425,52 @@ function drawTimelineDayBoundariesOnTop(ctx) {
         dayBadgeCenterY,
         8,
         localPlotBottom() - dayBadgeCenterY
+      )
+    );
+  }
+}
+
+function drawWeekdayBadgesOnTop(ctx) {
+  const badgeWidth = isCompactMode()
+    ? 44
+    : isExtendedDetailedMode()
+      ? 44
+      : 50;
+  const badgeHeight = isCompactMode()
+    ? 30
+    : isExtendedDetailedMode()
+      ? 28
+      : 34;
+  const fontSize = isCompactMode()
+    ? 17
+    : isExtendedDetailedMode()
+      ? 18
+      : 21;
+
+  for (const tick of hourTicks()) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    const style = dayBadgeStyle(tick, loadResult.holidayDates);
+    ctx.setFillColor(style.background);
+    ctx.fillRect(
+      new Rect(
+        x - badgeWidth / 2,
+        3,
+        badgeWidth,
+        badgeHeight
+      )
+    );
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setTextColor(style.text);
+    ctx.setTextAlignedCenter();
+    ctx.drawTextInRect(
+      shortWeekday(tick),
+      new Rect(
+        x - badgeWidth / 2,
+        isExtendedDetailedMode() ? 6 : 8,
+        badgeWidth,
+        isExtendedDetailedMode() ? 21 : 25
       )
     );
   }
@@ -2985,9 +3045,20 @@ function drawNightSegment(
     16,
     Math.min(maximumMoonSize, proportionalSize, sceneWidth - 8)
   );
-  const moonX = x0 + (sceneWidth - moonSize) / 2;
-  // Centraliza a Lua entre o topo da legenda e o limite inferior do grid.
-  const moonY = (localPlotBottom() - moonSize) / 2;
+  const dayBadgeHeight = isCompactMode()
+    ? 30
+    : isExtendedDetailedMode()
+      ? 28
+      : 34;
+  const dayAxisTopY = 3 + dayBadgeHeight / 2;
+  const dayAxisBottomY = localPlotBottom();
+  const dayAxisCenterY = (dayAxisTopY + dayAxisBottomY) / 2;
+  const dayAxisX = timeToX(nightCenterDate);
+  const moonX = dayAxisX - moonSize / 2;
+  // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
+  // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
+  // limite inferior visível do grid.
+  const moonY = dayAxisCenterY - moonSize / 2;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
@@ -3658,27 +3729,40 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleTitle = title;
   if (!visibleTitle && statusWidth === 0) return;
 
-  const textPoint = new Point(
-    visibleLeft + 7,
-    barY + (windowHours > 24 ? 10 : 7)
+  const titleTextY = barY + (windowHours > 24 ? 10 : 7);
+  const titleRegionRight = Math.max(
+    visibleLeft,
+    visibleRight - statusWidth - metadataWidth
   );
+  const titleCenterX = (visibleLeft + titleRegionRight) / 2;
 
-  // O título pode ultrapassar o chart, mas é recortado somente pelas
-  // margens reais do widget, mantendo a leitura contínua da frase.
+  // O título fica centralizado na área útil do chart. Como usamos drawText
+  // (em vez de drawTextInRect), a frase continua inteira e só é recortada
+  // pelas margens reais do widget/timeline.
   if (visibleTitle) {
-    ctx.setTextAlignedLeft();
+    ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
     ctx.setTextColor(new Color("#000000", 0.85));
     ctx.drawText(
       visibleTitle,
-      new Point(textPoint.x + 2, textPoint.y + 2)
+      new Point(titleCenterX + 2, titleTextY + 2)
     );
     ctx.setTextColor(Color.white());
-    ctx.drawText(visibleTitle, textPoint);
+    ctx.drawText(
+      visibleTitle,
+      new Point(titleCenterX, titleTextY)
+    );
 
     if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
+      const titleLeft =
+        titleCenterX -
+        estimatedTextWidth(visibleTitle, titleFontSize) / 2;
+      ctx.setTextAlignedLeft();
       ctx.setTextColor(new Color("#FF453A"));
-      ctx.drawText(priorityPrefix.trim(), textPoint);
+      ctx.drawText(
+        priorityPrefix.trim(),
+        new Point(titleLeft, titleTextY)
+      );
     }
   }
 
