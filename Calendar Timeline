@@ -1643,10 +1643,10 @@ function drawTemperatureFooter(ctx, weather) {
   const graphBottom = baseGraphBottom + thermalCurveExpansion;
   const contentGraphTop = thermalCurveExpansion;
   const labelFontSize = isCompactMode()
-    ? 19
+    ? 23
     : isExtendedDetailedMode()
-      ? 18
-      : 23;
+      ? 22
+      : 27;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -1810,10 +1810,10 @@ function drawTemperatureFooter(ctx, weather) {
     const textWidth = isExtendedDetailedMode() ? 36 : 44;
     const temperatureLabel = String(roundedTemperature) + "º";
     const weekdayBadgeFontSize = isCompactMode()
-      ? 19
+      ? 23
       : isExtendedDetailedMode()
-        ? 20
-        : 23;
+        ? 24
+        : 27;
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
@@ -2529,10 +2529,10 @@ function drawWeekdayBadgesOnTop(ctx) {
       ? 28
       : 34;
   const fontSize = isCompactMode()
-    ? 17
+    ? 21
     : isExtendedDetailedMode()
-      ? 18
-      : 21;
+      ? 22
+      : 25;
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -3675,10 +3675,10 @@ function drawHourAxis(ctx, items) {
       ctx.setFont(
         Font.blackRoundedSystemFont(
           isCompactMode()
-            ? 17
+            ? 21
             : isExtendedDetailedMode()
-              ? 18
-              : 21
+              ? 22
+              : 25
         )
       );
       ctx.setTextColor(style.text);
@@ -3698,10 +3698,10 @@ function drawHourAxis(ctx, items) {
         hour >= SETTINGS.daylightStartHour &&
         hour <= SETTINGS.daylightEndHour;
       const hourFontSize = isCompactMode()
-        ? 19
+        ? 23
         : isExtendedDetailedMode()
-          ? 18
-          : 23;
+          ? 22
+          : 27;
 
       // A fonte permanece forte em todo o período. A diferença entre
       // dia e noite fica somente na cor, sempre com opacidade 100%.
