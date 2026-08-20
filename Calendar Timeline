@@ -1643,10 +1643,10 @@ function drawTemperatureFooter(ctx, weather) {
   const graphBottom = baseGraphBottom + thermalCurveExpansion;
   const contentGraphTop = thermalCurveExpansion;
   const labelFontSize = isCompactMode()
-    ? 18
+    ? 19
     : isExtendedDetailedMode()
-      ? 17
-      : 22;
+      ? 18
+      : 23;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -1784,10 +1784,10 @@ function drawTemperatureFooter(ctx, weather) {
     const textWidth = isExtendedDetailedMode() ? 36 : 44;
     const temperatureLabel = String(roundedTemperature) + "º";
     const weekdayBadgeFontSize = isCompactMode()
-      ? 18
+      ? 19
       : isExtendedDetailedMode()
-        ? 19
-        : 22;
+        ? 20
+        : 23;
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
@@ -2409,7 +2409,7 @@ function renderTimelinePanel(items, loadError) {
   }
 
   const chartTop = CANVAS.localPlotTop - 2;
-  const chartBottom = localPlotBottom() - 12;
+  const chartBottom = localPlotBottom() - 14;
   const chartHeight = Math.max(1, chartBottom - chartTop);
   const rowHeight = chartHeight / SETTINGS.maxItems;
 
@@ -3641,10 +3641,10 @@ function drawHourAxis(ctx, items) {
         hour >= SETTINGS.daylightStartHour &&
         hour <= SETTINGS.daylightEndHour;
       const hourFontSize = isCompactMode()
-        ? 18
+        ? 19
         : isExtendedDetailedMode()
-          ? 17
-          : 22;
+          ? 18
+          : 23;
 
       // A fonte permanece forte em todo o período. A diferença entre
       // dia e noite fica somente na cor, sempre com opacidade 100%.
@@ -3672,8 +3672,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
   const barHeight = item.isOverflow
-    ? isCompactMode() ? 26 : 28
-    : isCompactMode() ? 26 : 30;
+    ? isCompactMode() ? 28 : 30
+    : isCompactMode() ? 28 : 32;
   const barY = centerY - barHeight / 2;
 
   if (item.isOverflow) {
@@ -3725,7 +3725,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleRight = Math.min(timelineWidth(), x + width);
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
-  const titleFontSize = isCompactMode() ? 15 : windowHours > 24 ? 18 : 22;
+  const titleFontSize = isCompactMode() ? 17 : windowHours > 24 ? 20 : 24;
   const statusFontSize = isCompactMode() ? 12 : 15;
   const metadataFontSize = isCompactMode() ? 11 : 15;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
