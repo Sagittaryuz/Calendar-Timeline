@@ -1545,10 +1545,10 @@ function drawDatePanel(ctx, holidayDates) {
     { text: month, bold: true, color: Color.white() },
   ];
   const fullDate = segments.map((segment) => segment.text).join("");
-  const maximumFontSize = isCompactMode() ? 82 : 100;
+  const maximumFontSize = isCompactMode() ? 84 : 102;
   const fontSize = Math.min(
     maximumFontSize,
-    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65)
+    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65) + 2
   );
   const characterWidth = fontSize * 0.61;
   const totalWidth = fullDate.length * characterWidth;
@@ -2409,7 +2409,7 @@ function renderTimelinePanel(items, loadError) {
   }
 
   const chartTop = CANVAS.localPlotTop - 2;
-  const chartBottom = localPlotBottom() - 14;
+  const chartBottom = localPlotBottom() - 16;
   const chartHeight = Math.max(1, chartBottom - chartTop);
   const rowHeight = chartHeight / SETTINGS.maxItems;
 
@@ -3672,8 +3672,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
   const barHeight = item.isOverflow
-    ? isCompactMode() ? 28 : 30
-    : isCompactMode() ? 28 : 32;
+    ? isCompactMode() ? 30 : 32
+    : isCompactMode() ? 30 : 34;
   const barY = centerY - barHeight / 2;
 
   if (item.isOverflow) {
@@ -3692,7 +3692,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
     ctx.setTextAlignedCenter();
     ctx.setFont(
-      Font.blackRoundedSystemFont(isCompactMode() ? 18 : 22)
+      Font.blackRoundedSystemFont(isCompactMode() ? 20 : 24)
     );
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
@@ -3725,7 +3725,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleRight = Math.min(timelineWidth(), x + width);
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
-  const titleFontSize = isCompactMode() ? 17 : windowHours > 24 ? 20 : 24;
+  const titleFontSize = isCompactMode() ? 19 : windowHours > 24 ? 22 : 26;
   const statusFontSize = isCompactMode() ? 12 : 15;
   const metadataFontSize = isCompactMode() ? 11 : 15;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
