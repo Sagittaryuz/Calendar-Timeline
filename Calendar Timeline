@@ -92,6 +92,8 @@ const CANVAS = {
   localPlotTop: 48,
   // Distância espelhada entre a legenda e o grid.
   timelineLegendGap: 7,
+  // Deslocamento específico da legenda numérica de temperatura.
+  temperatureLegendVerticalOffset: 5,
   // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
   timelineVerticalOffset: -5,
 };
@@ -1603,8 +1605,11 @@ function drawTemperatureFooter(ctx, weather) {
   const temperatureMinimum = Math.min(...visibleValues);
   const temperatureMaximum = Math.max(...visibleValues);
   const footerGridBottom = CANVAS.timelineBottom - footerOriginY;
-  const labelTop = footerGridBottom + CANVAS.timelineLegendGap;
-  const graphBottom = Math.max(6, labelTop - 2);
+  const graphLabelTop =
+    footerGridBottom + CANVAS.timelineLegendGap;
+  const graphBottom = Math.max(6, graphLabelTop - 2);
+  const labelTop =
+    graphLabelTop + CANVAS.temperatureLegendVerticalOffset;
   const graphTop = Math.max(0, graphBottom - 14);
   const labelFontSize = isCompactMode()
     ? 17
