@@ -2110,7 +2110,7 @@ function thermalTemperatureColor(
     [0.45, "#39D98A"],
     [0.64, "#D5E85A"],
     [0.80, "#FFD34E"],
-    [1.00, "#FF453A"],
+    [1.00, "#FF8A00"],
   ];
   const range = maximum - minimum;
   const position = range < 0.1
@@ -2163,7 +2163,7 @@ function drawThermalArea(
     ctx.setFillColor(
       new Color(
         thermalTemperatureColor(
-          Math.max(first.temperature, second.temperature),
+          (first.temperature + second.temperature) / 2,
           minimum,
           maximum
         ),
@@ -2207,7 +2207,7 @@ function drawThermalCurve(
     ctx.setStrokeColor(
       new Color(
         thermalTemperatureColor(
-          Math.max(first.temperature, second.temperature),
+          (first.temperature + second.temperature) / 2,
           minimum,
           maximum
         ),
@@ -2329,7 +2329,7 @@ function temperatureHeatColor(temperature, minimum, maximum) {
     [0.66, "#D7F000"],
     [0.79, "#FFD400"],
     [0.90, "#FF8500"],
-      [1.00, "#FF453A"],
+    [1.00, "#FF2D1A"],
   ];
   const range = maximum - minimum;
   const position = range < 0.1
@@ -3732,7 +3732,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   // Mantém a posição horizontal original, começando no limite esquerdo
   // do chart. Apenas a posição vertical é centralizada no próprio bloco.
   const titleTextY =
-    barY + Math.max(0, (barHeight - titleFontSize) / 2);
+    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 2);
   const textPoint = new Point(visibleLeft + 7, titleTextY);
 
   // O título permanece completo. O DrawContext recorta somente nas margens
