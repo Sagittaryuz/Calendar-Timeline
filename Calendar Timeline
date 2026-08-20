@@ -53,6 +53,10 @@ const SETTINGS = {
   nightGeometryColor: "#8E929C",
   twilightGlowColor: "#FFD166",
   daylightGlowColor: "#FFCC66",
+  // A legenda das horas usa esta escala: amarelo nas bordas e
+  // amarelo-alaranjado no meio-dia.
+  daylightEdgeColor: "#FFE34D",
+  daylightPeakColor: "#FF9500",
   daylightCoreColor: "#FFE34D",
   daylightSkyColor: "#FFD62A",
   nightTextureVersion: "v4",
@@ -86,6 +90,8 @@ const CANVAS = {
   footerTop: 459,
   footerBottom: 510,
   localPlotTop: 48,
+  // Distância espelhada entre a legenda e o grid.
+  timelineLegendGap: 7,
   // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
   timelineVerticalOffset: -5,
 };
@@ -1596,9 +1602,10 @@ function drawTemperatureFooter(ctx, weather) {
 
   const temperatureMinimum = Math.min(...visibleValues);
   const temperatureMaximum = Math.max(...visibleValues);
-  const graphTop = isCompactMode() ? 7 : 6;
-  const graphBottom = isCompactMode() ? 28 : 29;
-  const labelTop = isCompactMode() ? 30 : 31;
+  const footerGridBottom = CANVAS.timelineBottom - footerOriginY;
+  const labelTop = footerGridBottom + CANVAS.timelineLegendGap;
+  const graphBottom = Math.max(6, labelTop - 2);
+  const graphTop = Math.max(0, graphBottom - 14);
   const labelFontSize = isCompactMode()
     ? 17
     : isExtendedDetailedMode()
@@ -1703,8 +1710,8 @@ function drawTemperatureFooter(ctx, weather) {
     const isDayBoundaryTemperature = hour === 0;
     const isNoon = hour === 12;
     // A temperatura da mudança de dia fica dentro do mesmo quadrado
-    // visual do dia da semana e usa a mesma fonte arredondada, preta e
-    // em negrito do rótulo superior.
+    // visual do dia da semana e usa a mesma fonte arredondada, preta,
+    // porém sem negrito.
     const labelColor = isDayBoundaryTemperature
       ? "#000000"
       : isMaximum
@@ -1727,11 +1734,17 @@ function drawTemperatureFooter(ctx, weather) {
         : 21;
     footerCtx.setFont(
       isDayBoundaryTemperature
-        ? Font.blackRoundedSystemFont(weekdayBadgeFontSize)
+        ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
         : isDaylightHour || isNoon || isSolarBoundary
           ? Font.blackMonospacedSystemFont(labelFontSize)
           : Font.regularMonospacedSystemFont(labelFontSize)
     );
+    const temperatureTextTop = isDayBoundaryTemperature
+      ? labelTop + 1
+      : labelTop;
+    const temperatureTextHeight = isDayBoundaryTemperature
+      ? 25
+      : 27;
     footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
@@ -1742,9 +1755,9 @@ function drawTemperatureFooter(ctx, weather) {
         temperatureLabel,
         new Rect(
           centerX - textWidth / 2 + offsetX,
-          labelTop + offsetY,
+          temperatureTextTop + offsetY,
           textWidth,
-          27
+          temperatureTextHeight
         )
       );
     }
@@ -1754,9 +1767,9 @@ function drawTemperatureFooter(ctx, weather) {
       temperatureLabel,
       new Rect(
         centerX - textWidth / 2,
-        labelTop,
+        temperatureTextTop,
         textWidth,
-        27
+        temperatureTextHeight
       )
     );
   }
@@ -1822,8 +1835,10 @@ function drawThermalDayBadgeFrames(ctx, ticks, labelTop) {
 
     const x = timeToX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
+    const dayLabelTop = labelTop + 1;
+    const dayLabelHeight = 25;
     const frameTop =
-      labelTop + 13.5 - badgeHeight / 2;
+      dayLabelTop + dayLabelHeight / 2 - badgeHeight / 2;
     const frame = new Rect(
       x - badgeWidth / 2,
       frameTop,
@@ -3314,9 +3329,21 @@ function hourGridLineColor(tick) {
 }
 
 function daylightHourColor(tick) {
-  // A legenda superior usa somente duas cores e sempre em 100%:
-  // amarelo no período diurno e branco no período noturno.
-  return new Color(SETTINGS.daylightCoreColor, 1.0);
+  const hour = tick.getHours() + tick.getMinutes() / 60;
+  const strength = daylightStrengthAtHour(hour);
+  const edgeStrength = 0.28;
+  const peakProgress = Math.max(
+    0,
+    Math.min(1, (strength - edgeStrength) / (1 - edgeStrength))
+  );
+  return new Color(
+    interpolateHexColor(
+      SETTINGS.daylightEdgeColor,
+      SETTINGS.daylightPeakColor,
+      peakProgress
+    ),
+    1.0
+  );
 }
 
 function hourLabelMetrics(ticks) {
@@ -3445,10 +3472,6 @@ function drawHourAxis(ctx, items) {
     const x = timeToX(tick);
     const hour = tick.getHours();
     const isMidnight = hour === 0;
-    const isNoon = hour === 12;
-    const isSolarBoundary =
-      hour === SETTINGS.daylightStartHour ||
-      hour === SETTINGS.daylightEndHour;
 
     if (isMidnight) {
       const weekday = shortWeekday(tick);
@@ -3490,20 +3513,16 @@ function drawHourAxis(ctx, items) {
       const label = String(hour) + "h";
       const isDaylightHour =
         hour >= SETTINGS.daylightStartHour &&
-        hour < SETTINGS.daylightEndHour;
+        hour <= SETTINGS.daylightEndHour;
       const hourFontSize = isCompactMode()
         ? 17
         : isExtendedDetailedMode()
           ? 16
           : 21;
 
-      ctx.setFont(
-        isDaylightHour || isNoon || isSolarBoundary
-          ? Font.blackMonospacedSystemFont(hourFontSize)
-          : Font.regularMonospacedSystemFont(hourFontSize)
-      );
-      // Todas as horas são totalmente opacas: amarelo durante o dia
-      // e branco durante a noite.
+      // A fonte permanece forte em todo o período. A diferença entre
+      // dia e noite fica somente na cor, sempre com opacidade 100%.
+      ctx.setFont(Font.blackMonospacedSystemFont(hourFontSize));
       ctx.setTextColor(
         isDaylightHour
           ? daylightHourColor(tick)
