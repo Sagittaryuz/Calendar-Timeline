@@ -1767,6 +1767,13 @@ function drawTemperatureFooter(ctx, weather) {
   // A máxima e a mínima são calculadas para cada dia completo da previsão,
   // e não apenas para o trecho atualmente visível da janela.
   const dailyExtremes = dailyTemperatureExtremes(sourceHours);
+  // Se o extremo ocorrer em uma hora ímpar, associa-o ao rótulo par
+  // visível mais próximo do mesmo dia. Extremos fora da janela não são
+  // substituídos por outra temperatura visível.
+  const dailyExtremeLabels = dailyTemperatureExtremeLabels(
+    dailyExtremes,
+    labelTicks
+  );
   footerCtx.setTextAlignedCenter();
   for (let labelIndex = 0; labelIndex < labelTicks.length; labelIndex++) {
     const tick = labelTicks[labelIndex];
@@ -1777,12 +1784,13 @@ function drawTemperatureFooter(ctx, weather) {
     if (!forecast) continue;
 
     const roundedTemperature = Math.round(forecast.temperature);
-    const dayExtreme = dailyExtremes[dateKey(tick)];
+    const dayExtremeLabel =
+      dailyExtremeLabels[dateKey(tick)];
     const tickTimestamp = tick.getTime();
     const isMaximum =
-      dayExtreme?.maximumTimestamp === tickTimestamp;
+      dayExtremeLabel?.maximumTimestamp === tickTimestamp;
     const isMinimum =
-      dayExtreme?.minimumTimestamp === tickTimestamp;
+      dayExtremeLabel?.minimumTimestamp === tickTimestamp;
     // A fonte principal é sempre totalmente opaca.
     const opacity = 1.0;
     const centerX = timeToX(tick);
@@ -2063,6 +2071,58 @@ function dailyTemperatureExtremes(sourceHours) {
   }
 
   return daily;
+}
+
+function dailyTemperatureExtremeLabels(dailyExtremes, labelTicks) {
+  const labels = {};
+  const visibleStart = windowStart.getTime();
+  const visibleEnd = windowEnd.getTime();
+
+  for (const [dayKey, extreme] of Object.entries(dailyExtremes)) {
+    const candidates = labelTicks.filter(
+      (tick) => dateKey(tick) === dayKey
+    );
+    if (candidates.length === 0) continue;
+
+    const nearestVisibleLabel = (extremeTimestamp) => {
+      if (
+        !Number.isFinite(extremeTimestamp) ||
+        extremeTimestamp < visibleStart ||
+        extremeTimestamp > visibleEnd
+      ) {
+        return null;
+      }
+
+      let nearest = null;
+      let nearestDistance = Infinity;
+      for (const tick of candidates) {
+        const distance = Math.abs(
+          tick.getTime() - extremeTimestamp
+        );
+        // Em empates de horas ímpares, prefere o próximo rótulo par.
+        if (
+          distance < nearestDistance ||
+          (distance === nearestDistance &&
+            (!nearest || tick.getTime() > nearest.getTime()))
+        ) {
+          nearest = tick;
+          nearestDistance = distance;
+        }
+      }
+      return nearest?.getTime() ?? null;
+    };
+
+    labels[dayKey] = {
+      maximumTimestamp: nearestVisibleLabel(
+        Number(extreme.maximumTimestamp)
+      ),
+      minimumTimestamp: nearestVisibleLabel(
+        Number(extreme.minimumTimestamp)
+      ),
+    };
+  }
+
+  return labels;
 }
 
 function temperatureAtTimestamp(sourceHours, timestamp) {
