@@ -1760,6 +1760,11 @@ function drawTemperatureFooter(ctx, weather) {
   // A máxima e a mínima são calculadas para cada dia completo da previsão,
   // e não apenas para o trecho atualmente visível da janela.
   const dailyExtremes = dailyTemperatureExtremes(sourceHours);
+  const dailyLegendExtremes = dailyTemperatureLegendExtremes(
+    sourceHours,
+    labelTicks,
+    dailyExtremes
+  );
   footerCtx.setTextAlignedCenter();
   for (let labelIndex = 0; labelIndex < labelTicks.length; labelIndex++) {
     const tick = labelTicks[labelIndex];
@@ -1770,7 +1775,7 @@ function drawTemperatureFooter(ctx, weather) {
     if (!forecast) continue;
 
     const roundedTemperature = Math.round(forecast.temperature);
-    const dayExtreme = dailyExtremes[dateKey(tick)];
+    const dayExtreme = dailyLegendExtremes[dateKey(tick)];
     const tickTimestamp = tick.getTime();
     const isMaximum =
       dayExtreme?.maximumTimestamp === tickTimestamp;
@@ -1814,9 +1819,7 @@ function drawTemperatureFooter(ctx, weather) {
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
-        : isDaylightHour || isNoon || isSolarBoundary
-          ? Font.blackMonospacedSystemFont(labelFontSize)
-          : Font.regularMonospacedSystemFont(labelFontSize)
+        : Font.blackMonospacedSystemFont(labelFontSize)
     );
     const temperatureTextRect = centeredLegendTextRect(
       centerX,
@@ -2056,6 +2059,92 @@ function dailyTemperatureExtremes(sourceHours) {
   }
 
   return daily;
+}
+
+function dailyTemperatureLegendExtremes(
+  sourceHours,
+  labelTicks,
+  dailyExtremes
+) {
+  const result = {};
+  const oneHour = 60 * 60 * 1000;
+
+  for (const [dayKey, extreme] of Object.entries(dailyExtremes)) {
+    const candidates = labelTicks
+      .filter((tick) => dateKey(tick) === dayKey)
+      .map((tick) => {
+        const forecast = temperatureAtTimestamp(
+          sourceHours,
+          tick.getTime()
+        );
+        return forecast
+          ? {
+              timestamp: tick.getTime(),
+              temperature: Number(forecast.temperature),
+            }
+          : null;
+      })
+      .filter(Boolean);
+
+    const chooseAdjacentEvenHour = (
+      extremeTimestamp,
+      extremeTemperature
+    ) => {
+      return candidates
+        // Uma máxima/mínima em hora ímpar pode migrar somente para uma
+        // das duas horas pares adjacentes. Extremos fora da área visível
+        // não promovem outra temperatura distante.
+        .filter(
+          (candidate) =>
+            Math.abs(candidate.timestamp - extremeTimestamp) <= oneHour
+        )
+        .sort((first, second) => {
+          const firstTemperatureDistance = Math.abs(
+            first.temperature - extremeTemperature
+          );
+          const secondTemperatureDistance = Math.abs(
+            second.temperature - extremeTemperature
+          );
+          if (
+            firstTemperatureDistance !== secondTemperatureDistance
+          ) {
+            return (
+              firstTemperatureDistance -
+              secondTemperatureDistance
+            );
+          }
+
+          const firstTimeDistance = Math.abs(
+            first.timestamp - extremeTimestamp
+          );
+          const secondTimeDistance = Math.abs(
+            second.timestamp - extremeTimestamp
+          );
+          if (firstTimeDistance !== secondTimeDistance) {
+            return firstTimeDistance - secondTimeDistance;
+          }
+
+          // Em empate completo, preserva a hora anterior.
+          return first.timestamp - second.timestamp;
+        })[0] ?? null;
+    };
+
+    const maximum = chooseAdjacentEvenHour(
+      extreme.maximumTimestamp,
+      extreme.maximum
+    );
+    const minimum = chooseAdjacentEvenHour(
+      extreme.minimumTimestamp,
+      extreme.minimum
+    );
+
+    result[dayKey] = {
+      maximumTimestamp: maximum?.timestamp ?? null,
+      minimumTimestamp: minimum?.timestamp ?? null,
+    };
+  }
+
+  return result;
 }
 
 function temperatureAtTimestamp(sourceHours, timestamp) {
