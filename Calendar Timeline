@@ -1790,13 +1790,13 @@ function drawTemperatureFooter(ctx, weather) {
     const isNoon = hour === 12;
     // Todas as temperaturas são brancas. Somente a máxima e a mínima
     // recebem destaque, respectivamente em vermelho e azul.
-    const dayBoundaryTextColor = loadResult.holidayDates.has(
-      dateKey(tick)
-    )
-      ? "#000000"
-      : tick.getDay() === 0 || tick.getDay() === 6
-        ? "#FFFFFF"
-        : "#000000";
+    const isSpecialDayBoundary =
+      loadResult.holidayDates.has(dateKey(tick)) ||
+      tick.getDay() === 0 ||
+      tick.getDay() === 6;
+    const dayBoundaryTextColor = isSpecialDayBoundary
+      ? "#FFFFFF"
+      : "#000000";
     const labelColor = isDayBoundaryTemperature
       ? dayBoundaryTextColor
       : isMaximum
@@ -1818,7 +1818,9 @@ function drawTemperatureFooter(ctx, weather) {
         : 27;
     footerCtx.setFont(
       isDayBoundaryTemperature
-        ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
+        ? isSpecialDayBoundary
+          ? Font.blackRoundedSystemFont(weekdayBadgeFontSize)
+          : Font.regularRoundedSystemFont(weekdayBadgeFontSize)
         : Font.blackMonospacedSystemFont(labelFontSize)
     );
     const temperatureTextRect = centeredLegendTextRect(
@@ -3158,10 +3160,10 @@ function drawNightSegment(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
 
-  const maximumMoonSize = mergedNight ? 128 : 96;
+  const maximumMoonSize = mergedNight ? 156 : 132;
   const proportionalSize = mergedNight
-    ? sceneWidth * 0.30
-    : sceneWidth * 0.44;
+    ? sceneWidth * 0.38
+    : sceneWidth * 0.50;
   const moonSize = Math.max(
     16,
     Math.min(maximumMoonSize, proportionalSize, sceneWidth - 8)
@@ -3174,7 +3176,7 @@ function drawNightSegment(
   // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
   // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
   // limite inferior visível do grid.
-  const moonY = dayAxisCenterY - moonSize / 2 + 7;
+  const moonY = dayAxisCenterY - moonSize / 2;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
