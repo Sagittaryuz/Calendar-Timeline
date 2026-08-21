@@ -1586,7 +1586,12 @@ function drawDatePanel(ctx, holidayDates) {
     maximumFontSize,
     (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65) + 7
   );
-  const characterWidth = fontSize * 0.61;
+  // Reduz somente o espaçamento horizontal total do título em 4 px,
+  // mantendo as mesmas fontes e o alinhamento central.
+  const characterWidth = Math.max(
+    1,
+    fontSize * 0.61 - 4 / Math.max(1, fullDate.length)
+  );
   const totalWidth = fullDate.length * characterWidth;
   const startX = (CANVAS.width - totalWidth) / 2;
 
@@ -3509,7 +3514,8 @@ function daylightHourColor(tick) {
 }
 
 function legendLabelWidth() {
-  if (isCompactMode()) return 52;
+  // No modo de 36–168 horas, a moldura precisa comportar "DOM" inteiro.
+  if (isCompactMode()) return 58;
   if (isExtendedDetailedMode()) return 50;
   return 58;
 }
