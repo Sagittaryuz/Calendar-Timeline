@@ -1760,11 +1760,6 @@ function drawTemperatureFooter(ctx, weather) {
   // A máxima e a mínima são calculadas para cada dia completo da previsão,
   // e não apenas para o trecho atualmente visível da janela.
   const dailyExtremes = dailyTemperatureExtremes(sourceHours);
-  const dailyLegendExtremes = dailyTemperatureLegendExtremes(
-    sourceHours,
-    labelTicks,
-    dailyExtremes
-  );
   footerCtx.setTextAlignedCenter();
   for (let labelIndex = 0; labelIndex < labelTicks.length; labelIndex++) {
     const tick = labelTicks[labelIndex];
@@ -1775,7 +1770,7 @@ function drawTemperatureFooter(ctx, weather) {
     if (!forecast) continue;
 
     const roundedTemperature = Math.round(forecast.temperature);
-    const dayExtreme = dailyLegendExtremes[dateKey(tick)];
+    const dayExtreme = dailyExtremes[dateKey(tick)];
     const tickTimestamp = tick.getTime();
     const isMaximum =
       dayExtreme?.maximumTimestamp === tickTimestamp;
@@ -1790,13 +1785,13 @@ function drawTemperatureFooter(ctx, weather) {
     const isNoon = hour === 12;
     // Todas as temperaturas são brancas. Somente a máxima e a mínima
     // recebem destaque, respectivamente em vermelho e azul.
-    const isSpecialDayBoundary =
-      loadResult.holidayDates.has(dateKey(tick)) ||
-      tick.getDay() === 0 ||
-      tick.getDay() === 6;
-    const dayBoundaryTextColor = isSpecialDayBoundary
-      ? "#FFFFFF"
-      : "#000000";
+    const dayBoundaryTextColor = loadResult.holidayDates.has(
+      dateKey(tick)
+    )
+      ? "#000000"
+      : tick.getDay() === 0 || tick.getDay() === 6
+        ? "#FFFFFF"
+        : "#000000";
     const labelColor = isDayBoundaryTemperature
       ? dayBoundaryTextColor
       : isMaximum
@@ -1818,10 +1813,10 @@ function drawTemperatureFooter(ctx, weather) {
         : 27;
     footerCtx.setFont(
       isDayBoundaryTemperature
-        ? isSpecialDayBoundary
-          ? Font.blackRoundedSystemFont(weekdayBadgeFontSize)
-          : Font.regularRoundedSystemFont(weekdayBadgeFontSize)
-        : Font.blackMonospacedSystemFont(labelFontSize)
+        ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
+        : isDaylightHour || isNoon || isSolarBoundary
+          ? Font.blackMonospacedSystemFont(labelFontSize)
+          : Font.regularMonospacedSystemFont(labelFontSize)
     );
     const temperatureTextRect = centeredLegendTextRect(
       centerX,
@@ -2061,92 +2056,6 @@ function dailyTemperatureExtremes(sourceHours) {
   }
 
   return daily;
-}
-
-function dailyTemperatureLegendExtremes(
-  sourceHours,
-  labelTicks,
-  dailyExtremes
-) {
-  const result = {};
-  const oneHour = 60 * 60 * 1000;
-
-  for (const [dayKey, extreme] of Object.entries(dailyExtremes)) {
-    const candidates = labelTicks
-      .filter((tick) => dateKey(tick) === dayKey)
-      .map((tick) => {
-        const forecast = temperatureAtTimestamp(
-          sourceHours,
-          tick.getTime()
-        );
-        return forecast
-          ? {
-              timestamp: tick.getTime(),
-              temperature: Number(forecast.temperature),
-            }
-          : null;
-      })
-      .filter(Boolean);
-
-    const chooseAdjacentEvenHour = (
-      extremeTimestamp,
-      extremeTemperature
-    ) => {
-      return candidates
-        // Uma máxima/mínima em hora ímpar pode migrar somente para uma
-        // das duas horas pares adjacentes. Extremos fora da área visível
-        // não promovem outra temperatura distante.
-        .filter(
-          (candidate) =>
-            Math.abs(candidate.timestamp - extremeTimestamp) <= oneHour
-        )
-        .sort((first, second) => {
-          const firstTemperatureDistance = Math.abs(
-            first.temperature - extremeTemperature
-          );
-          const secondTemperatureDistance = Math.abs(
-            second.temperature - extremeTemperature
-          );
-          if (
-            firstTemperatureDistance !== secondTemperatureDistance
-          ) {
-            return (
-              firstTemperatureDistance -
-              secondTemperatureDistance
-            );
-          }
-
-          const firstTimeDistance = Math.abs(
-            first.timestamp - extremeTimestamp
-          );
-          const secondTimeDistance = Math.abs(
-            second.timestamp - extremeTimestamp
-          );
-          if (firstTimeDistance !== secondTimeDistance) {
-            return firstTimeDistance - secondTimeDistance;
-          }
-
-          // Em empate completo, preserva a hora anterior.
-          return first.timestamp - second.timestamp;
-        })[0] ?? null;
-    };
-
-    const maximum = chooseAdjacentEvenHour(
-      extreme.maximumTimestamp,
-      extreme.maximum
-    );
-    const minimum = chooseAdjacentEvenHour(
-      extreme.minimumTimestamp,
-      extreme.minimum
-    );
-
-    result[dayKey] = {
-      maximumTimestamp: maximum?.timestamp ?? null,
-      minimumTimestamp: minimum?.timestamp ?? null,
-    };
-  }
-
-  return result;
 }
 
 function temperatureAtTimestamp(sourceHours, timestamp) {
@@ -3160,10 +3069,10 @@ function drawNightSegment(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
 
-  const maximumMoonSize = mergedNight ? 156 : 132;
+  const maximumMoonSize = mergedNight ? 128 : 96;
   const proportionalSize = mergedNight
-    ? sceneWidth * 0.38
-    : sceneWidth * 0.50;
+    ? sceneWidth * 0.30
+    : sceneWidth * 0.44;
   const moonSize = Math.max(
     16,
     Math.min(maximumMoonSize, proportionalSize, sceneWidth - 8)
@@ -3176,7 +3085,7 @@ function drawNightSegment(
   // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
   // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
   // limite inferior visível do grid.
-  const moonY = dayAxisCenterY - moonSize / 2;
+  const moonY = dayAxisCenterY - moonSize / 2 + 7;
 
   // Estrelas reais de cinco pontas ao redor do ícone.
   const starScale = Math.max(0.55, moonSize / 96);
@@ -4222,8 +4131,15 @@ function titleDayColor(date, holidayDates) {
 }
 
 function titleWeekday(date) {
-  // Todas as legendas de dia usam sempre três letras.
-  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
+  const weekdays = [
+    "Domingo",
+    "Segunda",
+    "Terça",
+    "Quarta",
+    "Quinta",
+    "Sexta",
+    "Sábado",
+  ];
   return weekdays[date.getDay()];
 }
 
