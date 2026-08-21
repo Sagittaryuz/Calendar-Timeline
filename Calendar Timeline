@@ -4222,15 +4222,8 @@ function titleDayColor(date, holidayDates) {
 }
 
 function titleWeekday(date) {
-  const weekdays = [
-    "Domingo",
-    "Segunda",
-    "Terça",
-    "Quarta",
-    "Quinta",
-    "Sexta",
-    "Sábado",
-  ];
+  // Todas as legendas de dia usam sempre três letras.
+  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
   return weekdays[date.getDay()];
 }
 
