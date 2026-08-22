@@ -1477,10 +1477,9 @@ function timelineBackgroundColorForDate(
 }
 
 function drawTimelineBackground(ctx) {
-  // Cada dia recebe sua própria faixa. A precedência é feriado > domingo/
-  // sábado > fundo normal, inclusive quando a janela atravessa vários dias.
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
+  const coloredHeight = thermalBandBottomY();
 
   while (dayStart <= finalDay) {
     const dayEnd = addDays(dayStart, 1);
@@ -1490,9 +1489,9 @@ function drawTimelineBackground(ctx) {
     const visibleEnd = new Date(
       Math.min(dayEnd.getTime(), windowEnd.getTime())
     );
-
     const x0 = Math.max(0, timeToX(visibleStart));
     const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+
     if (x1 > x0) {
       ctx.setFillColor(
         new Color(timelineBackgroundColorForDate(dayStart), 1.0)
@@ -1502,11 +1501,10 @@ function drawTimelineBackground(ctx) {
           CANVAS.plotLeft + x0,
           CANVAS.timelineTop,
           x1 - x0,
-          timelineHeight()
+          coloredHeight
         )
       );
     }
-
     dayStart = dayEnd;
   }
 }
@@ -2656,7 +2654,6 @@ function drawWeatherConditionStrip(ctx, weather) {
   ctx.setFillColor(new Color("#FFFFFF", 0.14));
   ctx.fillRect(new Rect(0, bottom - 1, timelineWidth(), 1));
 
-  // Estrelas discretas somente no trecho noturno da faixa.
   let nightDay = addDays(startOfDay(windowStart), -1);
   const finalDay = addDays(startOfDay(windowEnd), 1);
   while (nightDay <= finalDay) {
@@ -2695,42 +2692,6 @@ function drawWeatherConditionStrip(ctx, weather) {
       );
     }
     nightDay = addDays(nightDay, 1);
-  }
-
-  // Sol no centro do período diurno.
-  let day = startOfDay(windowStart);
-  const lastDay = startOfDay(windowEnd);
-  while (day <= lastDay) {
-    const noon = dateAtHour(day, 12);
-    const x = timeToX(noon);
-    if (x > -40 && x < timelineWidth() + 40) {
-      drawWeatherSun(
-        ctx,
-        x,
-        bottom / 2,
-        isCompactMode() ? 11 : 14
-      );
-    }
-    day = addDays(day, 1);
-  }
-
-  // Nuvens permanecem somente nesta linha meteorológica.
-  for (const entry of weatherConditionTicks(weather)) {
-    const hour = entry.tick.getHours();
-    if (hour === 0 || hour === 12) continue;
-    const x = timeToX(entry.tick);
-    const cloudiness = Number(entry.forecast?.cloudiness ?? 0);
-    const rainChance = Number(entry.forecast?.rainChance ?? 0);
-    const scale =
-      (isCompactMode() ? 0.48 : 0.58) *
-      (0.88 + Math.min(0.28, cloudiness / 360));
-    drawStripCloud(
-      ctx,
-      x,
-      bottom / 2 + 1,
-      scale,
-      rainChance >= 35
-    );
   }
 }
 
@@ -3138,8 +3099,8 @@ function renderTimelinePanel(items, loadError) {
   // atrás da curva térmica e dos charts de agenda.
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx);
-    drawCloudDensitySignalLine(ctx, hourlyWeather);
   }
+  drawCloudDensitySignalLine(ctx, hourlyWeather);
   drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
@@ -3221,7 +3182,6 @@ function drawWeekdayBadgesOnTop(ctx) {
 }
 
 function drawFixedDaylightGlow(ctx) {
-  // O núcleo sobe 6 px em relação à posição anterior.
   const lineY = weatherStripBottomY() - 7;
   const glowEndY = timelineChartBottom();
 
@@ -3249,164 +3209,245 @@ function drawFixedDaylightGlow(ctx) {
     }
 
     const lineWidth = interval.x1 - interval.x0;
-    if (lineWidth > 0) {
+    if (lineWidth <= 0) continue;
+
+    for (const halo of [
+      [18, 0.08],
+      [12, 0.13],
+      [8, 0.22],
+    ]) {
+      const height = halo[0];
+      const opacity = halo[1];
       fillRoundedRect(
         ctx,
-        new Rect(interval.x0, lineY - 1, lineWidth, 3),
-        1.5,
+        new Rect(
+          interval.x0 - height / 2,
+          lineY - height / 2,
+          lineWidth + height,
+          height
+        ),
+        height / 2,
         new Color(
           "#FFD000",
-          Math.min(
-            1.0,
-            0.98 * SETTINGS.solarGlowIntensity
-          )
+          opacity * SETTINGS.solarGlowIntensity
         )
       );
     }
+
+    fillRoundedRect(
+      ctx,
+      new Rect(interval.x0, lineY - 2, lineWidth, 4),
+      2,
+      new Color(
+        "#FFD000",
+        Math.min(1.0, 0.99 * SETTINGS.solarGlowIntensity)
+      )
+    );
   }
+}
+
+function cloudDensityMouthPath(marker, lineY) {
+  const path = new Path();
+
+  if (marker.shape === "trapezoid") {
+    path.move(
+      new Point(marker.x - marker.width / 2, lineY)
+    );
+    path.addLine(
+      new Point(
+        marker.x - marker.width * 0.28,
+        lineY - marker.height / 2
+      )
+    );
+    path.addLine(
+      new Point(
+        marker.x + marker.width * 0.28,
+        lineY - marker.height / 2
+      )
+    );
+    path.addLine(
+      new Point(marker.x + marker.width / 2, lineY)
+    );
+    path.addLine(
+      new Point(
+        marker.x + marker.width * 0.28,
+        lineY + marker.height / 2
+      )
+    );
+    path.addLine(
+      new Point(
+        marker.x - marker.width * 0.28,
+        lineY + marker.height / 2
+      )
+    );
+  } else {
+    path.move(
+      new Point(marker.x - marker.width / 2, lineY)
+    );
+    path.addLine(
+      new Point(marker.x, lineY - marker.height / 2)
+    );
+    path.addLine(
+      new Point(marker.x + marker.width / 2, lineY)
+    );
+    path.addLine(
+      new Point(marker.x, lineY + marker.height / 2)
+    );
+  }
+
+  path.closeSubpath();
+  return path;
 }
 
 function drawCloudDensitySignalLine(ctx, weather) {
   const lineY = weatherStripBottomY() - 2;
-  const lineThickness = 3;
+  const lineThickness = 5;
   const sourceHours = weather?.hours ?? [];
+  const sampleStepHours = isCompactMode() ? 6 : 2;
+  const minimumSpacing = isCompactMode() ? 16 : 22;
+  const candidates = [];
 
-  for (const interval of visibleDaylightIntervals()) {
-    const candidates = sourceHours
-      .map((forecast) => {
-        const timestamp = Number(forecast.timestamp);
-        const date = new Date(timestamp);
-        const cloudiness = Math.max(
-          0,
-          Math.min(100, Number(forecast.cloudiness) || 0)
-        );
-        return {
-          timestamp,
-          x: timeToX(date),
-          cloudiness,
-          hour: date.getHours(),
-        };
-      })
-      .filter(
-        (entry) =>
-          Number.isFinite(entry.timestamp) &&
-          entry.x >= interval.x0 &&
-          entry.x <= interval.x1 &&
-          entry.hour >= SETTINGS.daylightStartHour &&
-          entry.hour <= SETTINGS.daylightEndHour &&
-          entry.cloudiness >= 55
+  for (const forecast of sourceHours) {
+    const timestamp = Number(forecast.timestamp);
+    if (
+      !Number.isFinite(timestamp) ||
+      timestamp < windowStart.getTime() ||
+      timestamp > windowEnd.getTime()
+    ) {
+      continue;
+    }
+
+    const date = new Date(timestamp);
+    if (date.getHours() % sampleStepHours !== 0) continue;
+
+    const cloudiness = Math.max(
+      0,
+      Math.min(100, Number(forecast.cloudiness) || 0)
+    );
+    if (cloudiness < 15) continue;
+
+    const x = timeToX(date);
+    if (x < -30 || x > timelineWidth() + 30) continue;
+
+    candidates.push({
+      timestamp,
+      x,
+      cloudiness,
+    });
+  }
+
+  candidates.sort((first, second) => first.x - second.x);
+  const markers = [];
+
+  for (const candidate of candidates) {
+    const previous = markers[markers.length - 1];
+    if (
+      previous &&
+      candidate.x - previous.x < minimumSpacing
+    ) {
+      if (candidate.cloudiness > previous.cloudiness) {
+        markers[markers.length - 1] = candidate;
+      }
+      continue;
+    }
+
+    const strength = Math.max(
+      0,
+      Math.min(1, (candidate.cloudiness - 15) / 85)
+    );
+    markers.push({
+      x: candidate.x,
+      cloudiness: candidate.cloudiness,
+      width: 13 + strength * 25,
+      height: 6 + strength * 12,
+      shape:
+        candidate.cloudiness >= 72
+          ? "ellipse"
+          : candidate.cloudiness >= 40
+            ? "trapezoid"
+            : "diamond",
+    });
+  }
+
+  const drawPolygonMouth = (marker) => {
+    const path = cloudDensityMouthPath(marker, lineY);
+    ctx.addPath(path);
+    ctx.setFillColor(
+      new Color(
+        "#FFFFFF",
+        0.10 + (marker.cloudiness / 100) * 0.25
       )
-      .sort((first, second) => first.x - second.x);
+    );
+    ctx.fillPath();
 
-    // Mantém somente picos separados, evitando símbolos amontoados.
-    const markers = [];
-    for (let index = 0; index < candidates.length; index++) {
-      const candidate = candidates[index];
-      const previous = candidates[index - 1];
-      const next = candidates[index + 1];
-      const isLocalPeak =
-        (!previous || candidate.cloudiness >= previous.cloudiness) &&
-        (!next || candidate.cloudiness >= next.cloudiness);
-      const isFarEnough =
-        markers.length === 0 ||
-        candidate.x - markers[markers.length - 1].x >= 26;
+    ctx.addPath(cloudDensityMouthPath(marker, lineY));
+    ctx.setStrokeColor(new Color("#FFFFFF", 0.98));
+    ctx.setLineWidth(lineThickness);
+    ctx.strokePath();
+  };
 
-      if (isLocalPeak && isFarEnough) {
-        const width =
-          18 + ((candidate.cloudiness - 55) / 45) * 18;
-        markers.push({
-          ...candidate,
-          width,
-          height: 8 + ((candidate.cloudiness - 55) / 45) * 7,
-          diamond: candidate.cloudiness >= 80,
-        });
-      }
+  const drawMouth = (marker) => {
+    if (marker.shape !== "ellipse") {
+      drawPolygonMouth(marker);
+      return;
     }
 
-    // Linha branca inteiriça, interrompida somente pelas formas.
-    let cursorX = interval.x0;
-    ctx.setFillColor(new Color("#FFFFFF", 0.86));
-    for (const marker of markers) {
-      const gapLeft = marker.x - marker.width / 2 - 2;
-      const gapRight = marker.x + marker.width / 2 + 2;
+    const rect = new Rect(
+      marker.x - marker.width / 2,
+      lineY - marker.height / 2,
+      marker.width,
+      marker.height
+    );
+    ctx.setFillColor(
+      new Color(
+        "#FFFFFF",
+        0.10 + (marker.cloudiness / 100) * 0.25
+      )
+    );
+    ctx.fillEllipse(rect);
+    ctx.setStrokeColor(new Color("#FFFFFF", 0.98));
+    ctx.setLineWidth(lineThickness);
+    ctx.strokeEllipse(rect);
+  };
 
-      if (gapLeft > cursorX) {
-        ctx.fillRect(
-          new Rect(
-            cursorX,
-            lineY - lineThickness / 2,
-            gapLeft - cursorX,
-            lineThickness
-          )
-        );
-      }
+  let cursorX = 0;
+  ctx.setFillColor(new Color("#FFFFFF", 0.98));
 
-      if (marker.diamond) {
-        const path = new Path();
-        path.move(
-          new Point(marker.x, lineY - marker.height / 2)
-        );
-        path.addLine(
-          new Point(marker.x + marker.width / 2, lineY)
-        );
-        path.addLine(
-          new Point(marker.x, lineY + marker.height / 2)
-        );
-        path.addLine(
-          new Point(marker.x - marker.width / 2, lineY)
-        );
-        path.closeSubpath();
+  for (const marker of markers) {
+    const left = Math.max(
+      0,
+      marker.x - marker.width / 2 - 2
+    );
+    const right = Math.min(
+      timelineWidth(),
+      marker.x + marker.width / 2 + 2
+    );
 
-        ctx.addPath(path);
-        ctx.setFillColor(new Color("#FFFFFF", 0.24));
-        ctx.fillPath();
-
-        const outline = new Path();
-        outline.move(
-          new Point(marker.x, lineY - marker.height / 2)
-        );
-        outline.addLine(
-          new Point(marker.x + marker.width / 2, lineY)
-        );
-        outline.addLine(
-          new Point(marker.x, lineY + marker.height / 2)
-        );
-        outline.addLine(
-          new Point(marker.x - marker.width / 2, lineY)
-        );
-        outline.closeSubpath();
-        ctx.addPath(outline);
-        ctx.setStrokeColor(new Color("#FFFFFF", 0.94));
-        ctx.setLineWidth(lineThickness);
-        ctx.strokePath();
-      } else {
-        const ellipse = new Rect(
-          marker.x - marker.width / 2,
-          lineY - marker.height / 2,
-          marker.width,
-          marker.height
-        );
-        ctx.setFillColor(new Color("#FFFFFF", 0.22));
-        ctx.fillEllipse(ellipse);
-        ctx.setStrokeColor(new Color("#FFFFFF", 0.94));
-        ctx.setLineWidth(lineThickness);
-        ctx.strokeEllipse(ellipse);
-      }
-
-      cursorX = Math.max(cursorX, gapRight);
-      ctx.setFillColor(new Color("#FFFFFF", 0.86));
-    }
-
-    if (cursorX < interval.x1) {
+    if (left > cursorX) {
       ctx.fillRect(
         new Rect(
           cursorX,
           lineY - lineThickness / 2,
-          interval.x1 - cursorX,
+          left - cursorX,
           lineThickness
         )
       );
     }
+
+    drawMouth(marker);
+    cursorX = Math.max(cursorX, right);
+    ctx.setFillColor(new Color("#FFFFFF", 0.98));
+  }
+
+  if (cursorX < timelineWidth()) {
+    ctx.fillRect(
+      new Rect(
+        cursorX,
+        lineY - lineThickness / 2,
+        timelineWidth() - cursorX,
+        lineThickness
+      )
+    );
   }
 }
 
