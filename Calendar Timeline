@@ -3047,7 +3047,7 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 21, y - 22);
+    const labelY = Math.max(graphTop - 23, y - 24);
     const hour = evenTick.getHours();
     const isNight =
       hour > SETTINGS.daylightEndHour ||
@@ -3079,15 +3079,9 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 27, y - 29);
+    const labelY = Math.max(graphTop - 29, y - 31);
     const isWeekend =
       date.getDay() === 0 || date.getDay() === 6;
-
-    ctx.setFillColor(new Color(entry.color, 1.0));
-    ctx.fillEllipse(new Rect(x - 4, y - 4, 8, 8));
-    ctx.setStrokeColor(Color.white());
-    ctx.setLineWidth(1.5);
-    ctx.strokeEllipse(new Rect(x - 4, y - 4, 8, 8));
 
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
@@ -3198,7 +3192,7 @@ function drawWeekdayBadgesOnTop(ctx) {
 }
 
 function drawFixedDaylightGlow(ctx) {
-  const lineY = weatherStripBottomY() - 7;
+  const lineY = weatherStripBottomY() - 3;
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
@@ -4115,7 +4109,7 @@ function drawMoonPhase(
         )
       : Color.white();
     ctx.setStrokeColor(borderColor);
-    ctx.setLineWidth(1);
+    ctx.setLineWidth(4);
     ctx.strokeEllipse(moonRect);
   };
 
