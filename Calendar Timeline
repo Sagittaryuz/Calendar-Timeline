@@ -2938,8 +2938,8 @@ function drawVisibleDailyExtremes(
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
   const visibleEnd = windowEnd.getTime();
-  const normalFontSize = isCompactMode() ? 14 : 17;
-  const extremeFontSize = isCompactMode() ? 19 : 23;
+  const normalFontSize = isCompactMode() ? 16 : 19;
+  const extremeFontSize = isCompactMode() ? 21 : 25;
   const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
@@ -3068,17 +3068,13 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 17, y - 18);
+    const labelY = Math.max(graphTop - 19, y - 20);
     const hour = evenTick.getHours();
-    const isSolarBoundary =
-      hour === SETTINGS.daylightStartHour ||
-      hour === SETTINGS.daylightEndHour;
     const isNight =
       hour > SETTINGS.daylightEndHour ||
       hour < SETTINGS.daylightStartHour;
-    const labelColor = isSolarBoundary
-      ? daylightHourColor(evenTick)
-      : isNight && isSecondaryNightLegendHour(hour)
+    const labelColor =
+      isNight && isSecondaryNightLegendHour(hour)
         ? secondaryNightLegendColor()
         : Color.white();
 
@@ -3104,7 +3100,7 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 23, y - 25);
+    const labelY = Math.max(graphTop - 25, y - 27);
     const isWeekend =
       date.getDay() === 0 || date.getDay() === 6;
 
@@ -3139,7 +3135,10 @@ function renderTimelinePanel(items, loadError) {
   drawHourAxis(ctx, items);
   // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
   // atrás da curva térmica e dos charts de agenda.
-  if (SETTINGS.showSolarGlow) drawFixedDaylightGlow(ctx);
+  if (SETTINGS.showSolarGlow) {
+    drawFixedDaylightGlow(ctx);
+    drawCloudDensitySignalLine(ctx, hourlyWeather);
+  }
   drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
@@ -3221,26 +3220,26 @@ function drawWeekdayBadgesOnTop(ctx) {
 }
 
 function drawFixedDaylightGlow(ctx) {
-  const lineY = weatherStripBottomY() - 1;
+  // O núcleo sobe 6 px em relação à posição anterior.
+  const lineY = weatherStripBottomY() - 7;
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
-    // O gradiente continua variando suavemente ao longo do dia.
     for (const slice of daylightSlices(interval)) {
       for (let y = lineY + 2; y < glowEndY; y += 2) {
         const verticalProgress =
           (y - lineY) / Math.max(1, glowEndY - lineY);
         const verticalStrength = Math.pow(
           Math.max(0, 1 - verticalProgress),
-          1.15
+          1.12
         );
         const opacity =
-          0.25 *
+          0.34 *
           verticalStrength *
           slice.daylightStrength *
           SETTINGS.solarGlowIntensity;
         ctx.setFillColor(
-          new Color("#FFD62A", Math.min(0.34, opacity))
+          new Color("#FFD000", Math.min(0.48, opacity))
         );
         ctx.fillRect(
           new Rect(slice.x, y, slice.width + 1, 2)
@@ -3248,8 +3247,6 @@ function drawFixedDaylightGlow(ctx) {
       }
     }
 
-    // O núcleo solar é desenhado uma única vez por período diurno.
-    // Assim não existem emendas ou variações entre as fatias do gradiente.
     const lineWidth = interval.x1 - interval.x0;
     if (lineWidth > 0) {
       fillRoundedRect(
@@ -3257,11 +3254,155 @@ function drawFixedDaylightGlow(ctx) {
         new Rect(interval.x0, lineY - 1, lineWidth, 3),
         1.5,
         new Color(
-          "#FFE45C",
+          "#FFD000",
           Math.min(
-            0.96,
-            0.90 * SETTINGS.solarGlowIntensity
+            1.0,
+            0.98 * SETTINGS.solarGlowIntensity
           )
+        )
+      );
+    }
+  }
+}
+
+function drawCloudDensitySignalLine(ctx, weather) {
+  const lineY = weatherStripBottomY() - 2;
+  const lineThickness = 3;
+  const sourceHours = weather?.hours ?? [];
+
+  for (const interval of visibleDaylightIntervals()) {
+    const candidates = sourceHours
+      .map((forecast) => {
+        const timestamp = Number(forecast.timestamp);
+        const date = new Date(timestamp);
+        const cloudiness = Math.max(
+          0,
+          Math.min(100, Number(forecast.cloudiness) || 0)
+        );
+        return {
+          timestamp,
+          x: timeToX(date),
+          cloudiness,
+          hour: date.getHours(),
+        };
+      })
+      .filter(
+        (entry) =>
+          Number.isFinite(entry.timestamp) &&
+          entry.x >= interval.x0 &&
+          entry.x <= interval.x1 &&
+          entry.hour >= SETTINGS.daylightStartHour &&
+          entry.hour <= SETTINGS.daylightEndHour &&
+          entry.cloudiness >= 55
+      )
+      .sort((first, second) => first.x - second.x);
+
+    // Mantém somente picos separados, evitando símbolos amontoados.
+    const markers = [];
+    for (let index = 0; index < candidates.length; index++) {
+      const candidate = candidates[index];
+      const previous = candidates[index - 1];
+      const next = candidates[index + 1];
+      const isLocalPeak =
+        (!previous || candidate.cloudiness >= previous.cloudiness) &&
+        (!next || candidate.cloudiness >= next.cloudiness);
+      const isFarEnough =
+        markers.length === 0 ||
+        candidate.x - markers[markers.length - 1].x >= 26;
+
+      if (isLocalPeak && isFarEnough) {
+        const width =
+          18 + ((candidate.cloudiness - 55) / 45) * 18;
+        markers.push({
+          ...candidate,
+          width,
+          height: 8 + ((candidate.cloudiness - 55) / 45) * 7,
+          diamond: candidate.cloudiness >= 80,
+        });
+      }
+    }
+
+    // Linha branca inteiriça, interrompida somente pelas formas.
+    let cursorX = interval.x0;
+    ctx.setFillColor(new Color("#FFFFFF", 0.86));
+    for (const marker of markers) {
+      const gapLeft = marker.x - marker.width / 2 - 2;
+      const gapRight = marker.x + marker.width / 2 + 2;
+
+      if (gapLeft > cursorX) {
+        ctx.fillRect(
+          new Rect(
+            cursorX,
+            lineY - lineThickness / 2,
+            gapLeft - cursorX,
+            lineThickness
+          )
+        );
+      }
+
+      if (marker.diamond) {
+        const path = new Path();
+        path.move(
+          new Point(marker.x, lineY - marker.height / 2)
+        );
+        path.addLine(
+          new Point(marker.x + marker.width / 2, lineY)
+        );
+        path.addLine(
+          new Point(marker.x, lineY + marker.height / 2)
+        );
+        path.addLine(
+          new Point(marker.x - marker.width / 2, lineY)
+        );
+        path.closeSubpath();
+
+        ctx.addPath(path);
+        ctx.setFillColor(new Color("#FFFFFF", 0.24));
+        ctx.fillPath();
+
+        const outline = new Path();
+        outline.move(
+          new Point(marker.x, lineY - marker.height / 2)
+        );
+        outline.addLine(
+          new Point(marker.x + marker.width / 2, lineY)
+        );
+        outline.addLine(
+          new Point(marker.x, lineY + marker.height / 2)
+        );
+        outline.addLine(
+          new Point(marker.x - marker.width / 2, lineY)
+        );
+        outline.closeSubpath();
+        ctx.addPath(outline);
+        ctx.setStrokeColor(new Color("#FFFFFF", 0.94));
+        ctx.setLineWidth(lineThickness);
+        ctx.strokePath();
+      } else {
+        const ellipse = new Rect(
+          marker.x - marker.width / 2,
+          lineY - marker.height / 2,
+          marker.width,
+          marker.height
+        );
+        ctx.setFillColor(new Color("#FFFFFF", 0.22));
+        ctx.fillEllipse(ellipse);
+        ctx.setStrokeColor(new Color("#FFFFFF", 0.94));
+        ctx.setLineWidth(lineThickness);
+        ctx.strokeEllipse(ellipse);
+      }
+
+      cursorX = Math.max(cursorX, gapRight);
+      ctx.setFillColor(new Color("#FFFFFF", 0.86));
+    }
+
+    if (cursorX < interval.x1) {
+      ctx.fillRect(
+        new Rect(
+          cursorX,
+          lineY - lineThickness / 2,
+          interval.x1 - cursorX,
+          lineThickness
         )
       );
     }
@@ -3894,39 +4035,44 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
 
 function drawMoonPhase(ctx, moon, x, y, size) {
   const moonRect = new Rect(x, y, size, size);
+  const drawOuterBorder = () => {
+    ctx.setStrokeColor(new Color("#FFFFFF", 0.96));
+    // Mesma espessura da linha vertical de mudança do dia.
+    ctx.setLineWidth(8);
+    ctx.strokeEllipse(moonRect);
+  };
 
   if (moon.phase === "new") {
     ctx.setFillColor(new Color("#232329", 0.92));
     ctx.fillEllipse(moonRect);
-    ctx.setStrokeColor(new Color(SETTINGS.nightMoonColor, 0.72));
-    ctx.setLineWidth(Math.max(2, size * 0.035));
-    ctx.strokeEllipse(moonRect);
     drawMoonCraters(ctx, x, y, size, 0.26);
+    drawOuterBorder();
     return;
   }
 
   ctx.setFillColor(new Color(SETTINGS.nightMoonShadowColor, 0.92));
   ctx.fillEllipse(moonRect);
 
-  // Luz suave deslocada para criar volume semelhante ao ícone de referência.
   ctx.setFillColor(new Color(SETTINGS.nightMoonColor, 0.96));
   ctx.fillEllipse(
     new Rect(x, y, size * 0.84, size * 0.86)
   );
   drawMoonCraters(ctx, x, y, size, 0.42);
 
-  if (moon.phase === "full") return;
+  if (moon.phase !== "full") {
+    const cutoutOffset = moon.phase === "waxing" ? -0.30 : 0.30;
+    fillEllipseWithTimelineDayColors(
+      ctx,
+      new Rect(
+        x + size * cutoutOffset,
+        y - size * 0.02,
+        size,
+        size
+      )
+    );
+  }
 
-  const cutoutOffset = moon.phase === "waxing" ? -0.30 : 0.30;
-  fillEllipseWithTimelineDayColors(
-    ctx,
-    new Rect(
-      x + size * cutoutOffset,
-      y - size * 0.02,
-      size,
-      size
-    )
-  );
+  drawOuterBorder();
 }
 
 function drawMoonCraters(ctx, x, y, size, opacity) {
