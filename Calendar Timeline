@@ -2970,8 +2970,6 @@ function drawVisibleDailyExtremes(
   );
   const suppressedEvenTimestamps = new Set();
 
-  // Quando o extremo cai numa hora ímpar, reserva seu espaço retirando
-  // os dois rótulos pares imediatamente adjacentes.
   for (const entry of visibleExtremes) {
     const date = new Date(entry.timestamp);
     if (date.getHours() % 2 === 0) continue;
@@ -2984,8 +2982,6 @@ function drawVisibleDailyExtremes(
     suppressedEvenTimestamps.add(nextEven.getTime());
   }
 
-  // Em 24/36 horas, mostra todas as temperaturas pares. Acima de 36 horas,
-  // preserva as âncoras do modo resumido para evitar sobreposição ilegível.
   const evenTicks = [];
   let tick = floorToHour(windowStart);
   if (tick.getHours() % 2 !== 0) {
@@ -3004,6 +3000,11 @@ function drawVisibleDailyExtremes(
       tick.getTime() + 2 * 60 * 60 * 1000
     );
   }
+
+  const resolvedTextColor = (value, opacity = 1.0) =>
+    typeof value === "string"
+      ? new Color(value, opacity)
+      : value;
 
   const drawTemperatureText = (
     label,
@@ -3030,7 +3031,12 @@ function drawVisibleDailyExtremes(
         ]
       : [[1, 1]];
 
-    ctx.setTextColor(new Color(outlineColor, strongOutline ? 1.0 : 0.86));
+    ctx.setTextColor(
+      resolvedTextColor(
+        outlineColor,
+        strongOutline ? 1.0 : 0.86
+      )
+    );
     for (const [offsetX, offsetY] of offsets) {
       ctx.drawTextInRect(
         label,
@@ -3043,11 +3049,10 @@ function drawVisibleDailyExtremes(
       );
     }
 
-    ctx.setTextColor(new Color(fillColor, 1.0));
+    ctx.setTextColor(resolvedTextColor(fillColor, 1.0));
     ctx.drawTextInRect(label, rect);
   };
 
-  // Temperaturas regulares: sempre brancas e somente nas horas pares.
   for (const evenTick of evenTicks) {
     const forecast = temperatureAtTimestamp(
       sourceHours,
@@ -3064,18 +3069,31 @@ function drawVisibleDailyExtremes(
       graphBottom
     );
     const labelY = Math.max(graphTop - 17, y - 18);
+    const hour = evenTick.getHours();
+    const isSolarBoundary =
+      hour === SETTINGS.daylightStartHour ||
+      hour === SETTINGS.daylightEndHour;
+    const isNight =
+      hour > SETTINGS.daylightEndHour ||
+      hour < SETTINGS.daylightStartHour;
+    const labelColor = isSolarBoundary
+      ? daylightHourColor(evenTick)
+      : isNight && isSecondaryNightLegendHour(hour)
+        ? secondaryNightLegendColor()
+        : Color.white();
+
     drawTemperatureText(
       String(Math.round(forecast.temperature)) + "º",
       x,
       labelY,
       normalFontSize,
-      "#FFFFFF",
+      labelColor,
       "#000000",
       false
     );
   }
 
-  // Extremos verdadeiros do dia são desenhados por último e maiores.
+  // Máxima e mínima continuam com suas cores próprias.
   for (const entry of visibleExtremes) {
     const date = new Date(entry.timestamp);
     const x = timeToX(date);
@@ -3117,9 +3135,11 @@ function renderTimelinePanel(items, loadError) {
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
-  if (SETTINGS.showSolarGlow) drawFixedDaylightGlow(ctx);
   drawWeatherRainCurtains(ctx, hourlyWeather);
   drawHourAxis(ctx, items);
+  // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
+  // atrás da curva térmica e dos charts de agenda.
+  if (SETTINGS.showSolarGlow) drawFixedDaylightGlow(ctx);
   drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
