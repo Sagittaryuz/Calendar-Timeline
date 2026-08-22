@@ -1807,13 +1807,17 @@ function drawTemperatureFooter(ctx, weather) {
       : tick.getDay() === 0 || tick.getDay() === 6
         ? "#FFFFFF"
         : "#000000";
+    const isSecondaryNightHour =
+      isSecondaryNightLegendHour(hour);
     const labelColor = isDayBoundaryTemperature
       ? dayBoundaryTextColor
       : isMaximum
         ? "#FF453A"
         : isMinimum
           ? "#0A84FF"
-          : "#FFFFFF";
+          : isSecondaryNightHour
+            ? SETTINGS.secondaryTextColor
+            : "#FFFFFF";
     const isSolarBoundary =
       hour === SETTINGS.daylightStartHour ||
       hour === SETTINGS.daylightEndHour;
@@ -1829,9 +1833,11 @@ function drawTemperatureFooter(ctx, weather) {
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
-        : isDaylightHour || isNoon || isSolarBoundary
-          ? Font.blackMonospacedSystemFont(labelFontSize)
-          : Font.regularMonospacedSystemFont(labelFontSize)
+        : isSecondaryNightHour
+          ? Font.regularMonospacedSystemFont(labelFontSize)
+          : isDaylightHour || isNoon || isSolarBoundary
+            ? Font.blackMonospacedSystemFont(labelFontSize)
+            : Font.regularMonospacedSystemFont(labelFontSize)
     );
     const temperatureTextRect = centeredLegendTextRect(
       centerX,
@@ -3575,6 +3581,14 @@ function daylightHourColor(tick) {
   );
 }
 
+function isSecondaryNightLegendHour(hour) {
+  return [2, 4, 20, 22].includes(hour);
+}
+
+function secondaryNightLegendColor() {
+  return new Color(SETTINGS.secondaryTextColor, 1.0);
+}
+
 function legendLabelWidth() {
   // No modo de 36–168 horas, a moldura precisa comportar "DOM" inteiro.
   if (isCompactMode()) return 58;
@@ -3807,13 +3821,21 @@ function drawHourAxis(ctx, items) {
           ? 22
           : 27;
 
-      // A fonte permanece forte em todo o período. A diferença entre
-      // dia e noite fica somente na cor, sempre com opacidade 100%.
-      ctx.setFont(Font.blackMonospacedSystemFont(hourFontSize));
+      const isSecondaryNightHour =
+        isSecondaryNightLegendHour(hour);
+      // 2h, 4h, 20h e 22h repetem exatamente a tipografia e o cinza
+      // usados pelas temperaturas correspondentes na legenda inferior.
+      ctx.setFont(
+        isSecondaryNightHour
+          ? Font.regularMonospacedSystemFont(hourFontSize)
+          : Font.blackMonospacedSystemFont(hourFontSize)
+      );
       ctx.setTextColor(
         isDaylightHour
           ? daylightHourColor(tick)
-          : new Color("#FFFFFF", 1.0)
+          : isSecondaryNightHour
+            ? secondaryNightLegendColor()
+            : new Color("#FFFFFF", 1.0)
       );
       ctx.setTextAlignedCenter();
       ctx.drawTextInRect(
