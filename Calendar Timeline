@@ -593,6 +593,11 @@ async function loadHourlyWeather(location) {
           0,
           Number.isFinite(explicitRain) ? explicitRain : 0
         ),
+        symbol: String(forecast.symbol ?? ""),
+        cloudiness: Math.max(
+          0,
+          Math.min(100, Number(forecast.cloudiness) || 0)
+        ),
       });
     }
 
@@ -765,6 +770,16 @@ function buildHourlyWeather(hours) {
         Math.min(100, Number(hour.rainChance) || 0)
       ),
       rainMM: Math.max(0, Number(hour.rainMM) || 0),
+      symbol: String(hour.symbol ?? ""),
+      cloudiness: Math.max(
+        0,
+        Math.min(
+          100,
+          Number.isFinite(Number(hour.cloudiness))
+            ? Number(hour.cloudiness)
+            : Math.max(12, Number(hour.rainChance) || 0)
+        )
+      ),
     }))
     .filter(
       (hour) =>
@@ -1427,14 +1442,10 @@ function renderWidget(items, loadError) {
   ctx.opaque = true;
   ctx.respectScreenScale = false;
 
-  // O fundo é desenhado na própria imagem. Isso evita que o Scriptable
-  // substitua os textos e charts ao combinar backgroundGradient/backgroundImage.
   drawIOSDarkGradient(ctx);
-
-  // A timeline mantém o mesmo fundo em todos os dias.
   drawTimelineBackground(ctx);
-
   drawDatePanel(ctx, loadResult.holidayDates);
+
   const timelineImage = renderTimelinePanel(items, loadError);
   ctx.drawImageInRect(
     timelineImage,
@@ -1445,7 +1456,6 @@ function renderWidget(items, loadError) {
       timelineHeight()
     )
   );
-  drawTemperatureFooter(ctx, hourlyWeather);
 
   return ctx.getImage();
 }
@@ -2195,6 +2205,8 @@ function smoothThermalCurve(points) {
 
   const smooth = [points[0]];
   const subdivisions = 8;
+  const minimumY = Math.min(...points.map((point) => point.y));
+  const maximumY = Math.max(...points.map((point) => point.y));
 
   for (let index = 0; index < points.length - 1; index++) {
     const p0 = points[index - 1] ?? points[index];
@@ -2215,9 +2227,9 @@ function smoothThermalCurve(points) {
       smooth.push({
         x: blend(p0.x, p1.x, p2.x, p3.x),
         y: Math.max(
-          0,
+          minimumY,
           Math.min(
-            60,
+            maximumY,
             blend(p0.y, p1.y, p2.y, p3.y)
           )
         ),
@@ -2487,54 +2499,504 @@ function temperatureHeatColor(
   );
 }
 
+
+function weatherStripBottomY() {
+  return isCompactMode() ? 40 : 52;
+}
+
+function thermalBandTopY() {
+  return thermalBandBottomY() - (isCompactMode() ? 21 : 30);
+}
+
+function thermalBandBottomY() {
+  return (
+    bottomLegendCenterY() -
+    legendFrameHeight() / 2 -
+    2
+  );
+}
+
+function bottomLegendCenterY() {
+  return timelineHeight() - legendFrameHeight() / 2 - 2;
+}
+
+function timelineChartTop() {
+  return weatherStripBottomY() + 5;
+}
+
+function timelineChartBottom() {
+  return thermalBandTopY() - 5;
+}
+
+function drawBottomHourLegend(ctx) {
+  const centerY = bottomLegendCenterY();
+  const hourFontSize = isCompactMode()
+    ? 18
+    : isExtendedDetailedMode()
+      ? 20
+      : 22;
+
+  ctx.setTextAlignedCenter();
+  for (const tick of hourTicks()) {
+    const hour = tick.getHours();
+    if (hour === 0) continue;
+
+    const isDaylightHour =
+      hour >= SETTINGS.daylightStartHour &&
+      hour <= SETTINGS.daylightEndHour;
+    const isSecondaryNightHour =
+      isSecondaryNightLegendHour(hour);
+
+    ctx.setFont(
+      isSecondaryNightHour
+        ? Font.regularMonospacedSystemFont(hourFontSize)
+        : Font.blackMonospacedSystemFont(hourFontSize)
+    );
+    ctx.setTextColor(
+      isDaylightHour
+        ? daylightHourColor(tick)
+        : isSecondaryNightHour
+          ? secondaryNightLegendColor()
+          : Color.white()
+    );
+    ctx.drawTextInRect(
+      String(hour) + "h",
+      centeredLegendTextRect(timeToX(tick), centerY)
+    );
+  }
+}
+
+function weatherForecastNearest(hours, timestamp) {
+  let nearest = null;
+  let distance = Infinity;
+  for (const hour of hours ?? []) {
+    const candidateTime = Number(hour.timestamp);
+    if (!Number.isFinite(candidateTime)) continue;
+    const candidateDistance = Math.abs(candidateTime - timestamp);
+    if (candidateDistance < distance) {
+      nearest = hour;
+      distance = candidateDistance;
+    }
+  }
+  return distance <= 90 * 60 * 1000 ? nearest : null;
+}
+
+function weatherConditionTicks(weather) {
+  const stepHours = isCompactMode() ? 6 : 2;
+  const ticks = [];
+  let tick = floorToHour(windowStart);
+  const remainder = tick.getHours() % stepHours;
+  if (remainder !== 0) {
+    tick.setHours(tick.getHours() + stepHours - remainder);
+  }
+
+  while (tick <= windowEnd) {
+    const forecast = weatherForecastNearest(
+      weather?.hours ?? [],
+      tick.getTime()
+    );
+    const hour = tick.getHours();
+    const isAnchor = hour === 0 || hour === 12;
+    const isCloudy =
+      Number(forecast?.cloudiness ?? 0) >= 18 ||
+      Number(forecast?.rainChance ?? 0) >= 15 ||
+      Number(forecast?.rainMM ?? 0) > 0;
+
+    if (isAnchor || isCloudy) {
+      ticks.push({ tick: new Date(tick), forecast });
+    }
+    tick = new Date(tick.getTime() + stepHours * 60 * 60 * 1000);
+  }
+  return ticks;
+}
+
+function drawWeatherConditionStrip(ctx, weather) {
+  const bottom = weatherStripBottomY();
+  ctx.setFillColor(new Color("#07101A", 0.66));
+  ctx.fillRect(new Rect(0, 0, timelineWidth(), bottom));
+  ctx.setFillColor(new Color("#FFFFFF", 0.14));
+  ctx.fillRect(new Rect(0, bottom - 1, timelineWidth(), 1));
+
+  // Estrelas discretas somente no trecho noturno da faixa.
+  let nightDay = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+  while (nightDay <= finalDay) {
+    const start = dateAtHour(nightDay, SETTINGS.nightStartHour);
+    const end = dateAtHour(addDays(nightDay, 1), SETTINGS.nightEndHour);
+    if (intervalIsVisible(start, end)) {
+      const x0 = timeToX(start);
+      const x1 = timeToX(end);
+      const width = x1 - x0;
+      for (const [fraction, y, radius] of [
+        [0.10, 10, 2.2],
+        [0.24, 28, 1.6],
+        [0.72, 12, 1.8],
+        [0.88, 30, 2.2],
+      ]) {
+        drawFivePointStar(
+          ctx,
+          x0 + width * fraction,
+          y,
+          radius,
+          new Color(SETTINGS.nightStarColor, 0.66)
+        );
+      }
+
+      const centerTime = (start.getTime() + end.getTime()) / 2;
+      const moonSize = isCompactMode() ? 25 : 34;
+      const moonX = timeToX(new Date(centerTime)) - moonSize / 2;
+      const moonY = Math.max(3, (bottom - moonSize) / 2);
+      drawMoonPhase(
+        ctx,
+        moonPhaseForDate(new Date(centerTime)),
+        moonX,
+        moonY,
+        moonSize
+      );
+    }
+    nightDay = addDays(nightDay, 1);
+  }
+
+  // Sol no centro do período diurno.
+  let day = startOfDay(windowStart);
+  const lastDay = startOfDay(windowEnd);
+  while (day <= lastDay) {
+    const noon = dateAtHour(day, 12);
+    const x = timeToX(noon);
+    if (x > -40 && x < timelineWidth() + 40) {
+      drawWeatherSun(
+        ctx,
+        x,
+        bottom / 2,
+        isCompactMode() ? 11 : 14
+      );
+    }
+    day = addDays(day, 1);
+  }
+
+  // Nuvens permanecem somente nesta linha meteorológica.
+  for (const entry of weatherConditionTicks(weather)) {
+    const hour = entry.tick.getHours();
+    if (hour === 0 || hour === 12) continue;
+    const x = timeToX(entry.tick);
+    const cloudiness = Number(entry.forecast?.cloudiness ?? 0);
+    const rainChance = Number(entry.forecast?.rainChance ?? 0);
+    const scale =
+      (isCompactMode() ? 0.48 : 0.58) *
+      (0.88 + Math.min(0.28, cloudiness / 360));
+    drawStripCloud(
+      ctx,
+      x,
+      bottom / 2 + 1,
+      scale,
+      rainChance >= 35
+    );
+  }
+}
+
+function drawWeatherSun(ctx, centerX, centerY, radius) {
+  ctx.setFillColor(new Color("#FFD43B", 0.98));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - radius,
+      centerY - radius,
+      radius * 2,
+      radius * 2
+    )
+  );
+  ctx.setStrokeColor(new Color("#FFD43B", 0.94));
+  ctx.setLineWidth(Math.max(2, radius * 0.14));
+  for (let index = 0; index < 8; index++) {
+    const angle = (Math.PI * 2 * index) / 8;
+    const inner = radius * 1.35;
+    const outer = radius * 1.85;
+    const path = new Path();
+    path.move(
+      new Point(
+        centerX + Math.cos(angle) * inner,
+        centerY + Math.sin(angle) * inner
+      )
+    );
+    path.addLine(
+      new Point(
+        centerX + Math.cos(angle) * outer,
+        centerY + Math.sin(angle) * outer
+      )
+    );
+    ctx.addPath(path);
+    ctx.strokePath();
+  }
+}
+
+function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
+  const width = 82 * scale;
+  const height = 34 * scale;
+  const x = centerX - width / 2;
+  const y = centerY - height / 2;
+
+  ctx.setFillColor(
+    new Color(rainy ? "#D7DCE3" : "#EEF1F5", rainy ? 0.88 : 0.78)
+  );
+  ctx.fillEllipse(
+    new Rect(x, y + 11 * scale, 38 * scale, 20 * scale)
+  );
+  ctx.fillEllipse(
+    new Rect(x + 17 * scale, y, 31 * scale, 31 * scale)
+  );
+  ctx.fillEllipse(
+    new Rect(x + 39 * scale, y + 8 * scale, 40 * scale, 24 * scale)
+  );
+  ctx.fillRect(
+    new Rect(x + 8 * scale, y + 17 * scale, 63 * scale, 15 * scale)
+  );
+
+  ctx.setFillColor(new Color("#7B8490", rainy ? 0.52 : 0.34));
+  ctx.fillRect(
+    new Rect(x + 10 * scale, y + 27 * scale, 59 * scale, 3 * scale)
+  );
+}
+
+function drawWeatherRainCurtains(ctx, weather) {
+  const top = weatherStripBottomY() - 4;
+  const bottom = timelineChartBottom();
+  const hours = weather?.hours ?? [];
+
+  for (let index = 0; index < hours.length; index++) {
+    const forecast = hours[index];
+    const timestamp =
+      Number.isFinite(Number(forecast.rainStartTimestamp))
+        ? Number(forecast.rainStartTimestamp)
+        : Number(forecast.timestamp);
+    if (
+      !Number.isFinite(timestamp) ||
+      timestamp < windowStart.getTime() - 3600000 ||
+      timestamp > windowEnd.getTime()
+    ) {
+      continue;
+    }
+
+    const amount = rainMillimetersForHour(forecast);
+    const chance = Math.max(
+      0,
+      Math.min(100, Number(forecast.rainChance) || 0)
+    );
+    if (amount <= 0 && chance < 20) continue;
+
+    const centerX = timeToX(new Date(timestamp));
+    const hourWidth =
+      timelineWidth() / Math.max(1, windowHours);
+    const spread = Math.max(8, hourWidth * 0.72);
+    const strength = Math.max(
+      0.18,
+      Math.min(1, Math.max(chance / 100, amount / 8))
+    );
+    const streakCount = Math.max(
+      2,
+      Math.min(8, Math.round(2 + strength * 6))
+    );
+
+    for (let streak = 0; streak < streakCount; streak++) {
+      const fraction = (streak + 0.5) / streakCount - 0.5;
+      const x =
+        centerX +
+        fraction * spread +
+        ((index + streak) % 3 - 1) * 2;
+      const length =
+        (bottom - top) *
+        (0.28 + 0.56 * strength) *
+        (0.78 + ((index + streak) % 4) * 0.07);
+      const startY = top + ((index * 11 + streak * 17) % 24);
+      const endY = Math.min(bottom, startY + length);
+      const path = new Path();
+      path.move(new Point(x + 3, startY));
+      path.addLine(new Point(x - 3, endY));
+      ctx.addPath(path);
+      ctx.setStrokeColor(
+        new Color(
+          SETTINGS.rainLineColor,
+          0.16 + 0.30 * strength
+        )
+      );
+      ctx.setLineWidth(isCompactMode() ? 1 : 1.5);
+      ctx.strokePath();
+    }
+  }
+}
+
+function drawCompactThermalBand(ctx, weather) {
+  const sourceHours = [...(weather?.hours ?? [])]
+    .filter(
+      (hour) =>
+        Number.isFinite(Number(hour.timestamp)) &&
+        Number.isFinite(Number(hour.temperature))
+    )
+    .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+  const visibleHours = sourceHours.filter(
+    (hour) =>
+      Number(hour.timestamp) >= windowStart.getTime() &&
+      Number(hour.timestamp) <= windowEnd.getTime()
+  );
+  if (!visibleHours.length) return;
+
+  const visibleValues = visibleHours.map((hour) =>
+    Number(hour.temperature)
+  );
+  const minimum = Math.min(...visibleValues);
+  const maximum = Math.max(...visibleValues);
+  const graphTop = thermalBandTopY();
+  const graphBottom = thermalBandBottomY();
+
+  const curvePoints = buildThermalSamples(sourceHours)
+    .map((sample) => ({
+      x: timeToX(new Date(sample.timestamp)),
+      y: thermalTemperatureY(
+        sample.temperature,
+        minimum,
+        maximum,
+        graphTop,
+        graphBottom
+      ),
+      temperature: sample.temperature,
+    }))
+    .filter(
+      (point) =>
+        Number.isFinite(point.x) &&
+        Number.isFinite(point.y)
+    );
+
+  const smoothPoints = smoothThermalCurve(curvePoints);
+  drawThermalArea(
+    ctx,
+    smoothPoints,
+    graphBottom,
+    minimum,
+    maximum
+  );
+  drawThermalCurve(
+    ctx,
+    smoothPoints,
+    minimum,
+    maximum
+  );
+  drawVisibleDailyExtremes(
+    ctx,
+    sourceHours,
+    minimum,
+    maximum,
+    graphTop,
+    graphBottom
+  );
+}
+
+function drawVisibleDailyExtremes(
+  ctx,
+  sourceHours,
+  minimum,
+  maximum,
+  graphTop,
+  graphBottom
+) {
+  const daily = dailyTemperatureExtremes(sourceHours);
+  const visibleStart = windowStart.getTime();
+  const visibleEnd = windowEnd.getTime();
+  const fontSize = isCompactMode() ? 16 : 19;
+
+  for (const extreme of Object.values(daily)) {
+    const entries = [
+      {
+        timestamp: Number(extreme.minimumTimestamp),
+        temperature: Number(extreme.minimum),
+        color: "#0A84FF",
+      },
+      {
+        timestamp: Number(extreme.maximumTimestamp),
+        temperature: Number(extreme.maximum),
+        color: "#FF453A",
+      },
+    ];
+
+    for (const entry of entries) {
+      if (
+        !Number.isFinite(entry.timestamp) ||
+        entry.timestamp < visibleStart ||
+        entry.timestamp > visibleEnd
+      ) {
+        continue;
+      }
+
+      const x = timeToX(new Date(entry.timestamp));
+      const y = thermalTemperatureY(
+        entry.temperature,
+        minimum,
+        maximum,
+        graphTop,
+        graphBottom
+      );
+      const label = String(Math.round(entry.temperature)) + "º";
+      const labelY = Math.max(graphTop - 20, y - 22);
+
+      ctx.setFillColor(new Color(entry.color, 1.0));
+      ctx.fillEllipse(new Rect(x - 4, y - 4, 8, 8));
+      ctx.setStrokeColor(Color.white());
+      ctx.setLineWidth(1.5);
+      ctx.strokeEllipse(new Rect(x - 4, y - 4, 8, 8));
+
+      ctx.setTextAlignedCenter();
+      ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
+      ctx.setTextColor(new Color("#000000", 0.88));
+      ctx.drawTextInRect(
+        label,
+        new Rect(x - 31 + 1, labelY + 1, 62, 22)
+      );
+      ctx.setTextColor(new Color(entry.color, 1.0));
+      ctx.drawTextInRect(
+        label,
+        new Rect(x - 31, labelY, 62, 22)
+      );
+    }
+  }
+}
+
 function renderTimelinePanel(items, loadError) {
   const ctx = new DrawContext();
   ctx.size = new Size(timelineWidth(), timelineHeight());
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // As camadas atmosféricas permanecem atrás dos eventos. O núcleo do brilho
-  // solar é desenhado depois do grid para formar uma faixa única e contínua.
-  if (SETTINGS.showNightTexture) drawNightTextureBackground(ctx);
+  // Weathergraph: clima em uma faixa estreita, agenda no centro,
+  // curva térmica compacta e horas na base.
+  drawWeatherConditionStrip(ctx, hourlyWeather);
   if (SETTINGS.showSolarGlow) drawFixedDaylightGlow(ctx);
-  if (SETTINGS.showMoon && !isCompactMode()) {
-    drawNightScenes(ctx);
-  }
+  drawWeatherRainCurtains(ctx, hourlyWeather);
   drawHourAxis(ctx, loadResult.items);
+  drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
     drawPermissionState(ctx);
-    return ctx.getImage();
-  }
+  } else {
+    const chartTop = timelineChartTop();
+    const chartBottom = timelineChartBottom();
+    const chartHeight = Math.max(1, chartBottom - chartTop);
+    const rowHeight = chartHeight / SETTINGS.maxItems;
 
-  if (items.length === 0) {
-    drawTimelineDayBoundariesOnTop(ctx);
-    drawWeekdayBadgesOnTop(ctx);
-    return ctx.getImage();
-  }
+    for (let row = 0; row < SETTINGS.maxItems; row++) {
+      const y = chartTop + row * rowHeight;
+      const rowItems = items
+        .filter((candidate) => candidate.gridRow === row)
+        .sort(
+          (a, b) =>
+            Number(a.isOverflow) - Number(b.isOverflow) ||
+            a.start.getTime() - b.start.getTime()
+        );
 
-  const chartTop = CANVAS.localPlotTop - 2;
-  const chartBottom = localPlotBottom() - 18;
-  const chartHeight = Math.max(1, chartBottom - chartTop);
-  const rowHeight = chartHeight / SETTINGS.maxItems;
-
-  for (let row = 0; row < SETTINGS.maxItems; row++) {
-    const y = chartTop + row * rowHeight;
-    const rowItems = items
-      .filter((candidate) => candidate.gridRow === row)
-      .sort(
-        (a, b) =>
-          Number(a.isOverflow) - Number(b.isOverflow) ||
-          a.start.getTime() - b.start.getTime()
+      rowItems.forEach((item) =>
+        drawTimelineItem(ctx, item, y, rowHeight)
       );
-
-    rowItems.forEach((item) =>
-      drawTimelineItem(ctx, item, y, rowHeight)
-    );
+    }
   }
 
-  // A linha de divisão de dia deve prevalecer visualmente sobre todos os
-  // objetos da faixa principal, inclusive charts e cenas noturnas.
+  drawBottomHourLegend(ctx);
+  // As divisões de dia e seus badges prevalecem sobre todas as camadas.
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
   return ctx.getImage();
@@ -2542,7 +3004,8 @@ function renderTimelinePanel(items, loadError) {
 
 
 function drawTimelineDayBoundariesOnTop(ctx) {
-  const dayBadgeCenterY = topLegendCenterY();
+  const lineTop = weatherStripBottomY();
+  const lineBottom = bottomLegendCenterY();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -2552,9 +3015,9 @@ function drawTimelineDayBoundariesOnTop(ctx) {
     ctx.fillRect(
       new Rect(
         x - 4,
-        dayBadgeCenterY,
+        lineTop,
         8,
-        localPlotBottom() - dayBadgeCenterY
+        Math.max(1, lineBottom - lineTop)
       )
     );
   }
@@ -2562,17 +3025,18 @@ function drawTimelineDayBoundariesOnTop(ctx) {
 
 function drawWeekdayBadgesOnTop(ctx) {
   const fontSize = isCompactMode()
-    ? 21
+    ? 18
     : isExtendedDetailedMode()
-      ? 22
-      : 25;
+      ? 20
+      : 22;
+  const centerY = bottomLegendCenterY();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
     const x = timeToX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const badge = dayLegendBadgeRect(x, topLegendCenterY());
+    const badge = dayLegendBadgeRect(x, centerY);
     ctx.setFillColor(style.background);
     ctx.fillRect(badge);
     ctx.setFont(Font.blackRoundedSystemFont(fontSize));
@@ -2580,43 +3044,52 @@ function drawWeekdayBadgesOnTop(ctx) {
     ctx.setTextAlignedCenter();
     ctx.drawTextInRect(
       shortWeekday(tick),
-      centeredDayLegendTextRect(x, topLegendCenterY())
+      centeredDayLegendTextRect(x, centerY)
     );
   }
 }
 
 function drawFixedDaylightGlow(ctx) {
-  const lineY = 40;
-  const lineThickness = 9;
-  const rowHeight =
-    (localPlotBottom() - CANVAS.localPlotTop) / SETTINGS.maxItems;
-  const glowEndY = Math.max(
-    lineY + lineThickness,
-    Math.min(
-      timelineHeight(),
-      // Centro da quinta linha visual de eventos e lembretes.
-      CANVAS.localPlotTop + rowHeight * 4.5
-    )
-  );
+  const lineY = weatherStripBottomY() - 1;
+  const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
-    // A cortina é dividida em fatias para formar um gradiente linear:
-    // baixa intensidade às 06/18 e máxima intensidade às 12.
     for (const slice of daylightSlices(interval)) {
-      const gradientStartY = lineY + 2;
-      for (let y = gradientStartY; y < glowEndY; y += 2) {
-        const strength = Math.pow(
-          Math.max(
-            0,
-            1 - (y - gradientStartY) / Math.max(1, glowEndY - gradientStartY)
-          ),
-          1.12
+      // Cortina vertical: discreta às 06/18 e máxima às 12.
+      for (let y = lineY + 2; y < glowEndY; y += 2) {
+        const verticalProgress =
+          (y - lineY) / Math.max(1, glowEndY - lineY);
+        const verticalStrength = Math.pow(
+          Math.max(0, 1 - verticalProgress),
+          1.15
         );
-        const opacity = 0.30 * strength * slice.daylightStrength;
-        ctx.setFillColor(new Color("#FFD62A", solarOpacity(opacity)));
-        // Somente o gradiente vertical permanece; a linha solar foi removida.
-        ctx.fillRect(new Rect(slice.x, y, slice.width + 1, 2));
+        const opacity =
+          0.25 *
+          verticalStrength *
+          slice.daylightStrength *
+          SETTINGS.solarGlowIntensity;
+        ctx.setFillColor(
+          new Color("#FFD62A", Math.min(0.34, opacity))
+        );
+        ctx.fillRect(
+          new Rect(slice.x, y, slice.width + 1, 2)
+        );
       }
+
+      // Núcleo contínuo do sol na base da faixa meteorológica.
+      ctx.setFillColor(
+        new Color(
+          "#FFE45C",
+          Math.min(
+            0.98,
+            (0.54 + 0.36 * slice.daylightStrength) *
+              SETTINGS.solarGlowIntensity
+          )
+        )
+      );
+      ctx.fillRect(
+        new Rect(slice.x, lineY - 1, slice.width + 1, 3)
+      );
     }
   }
 }
@@ -3739,11 +4212,9 @@ function drawHourLabelFrames(ctx, ticks) {
 function drawEventStartLines(ctx, items) {
   const events = prioritizedEvents(items);
   const lineWidth = 2;
-  const topY = CANVAS.localPlotTop;
-  const height = localPlotBottom() - topY;
+  const topY = timelineChartTop();
+  const height = timelineChartBottom() - topY;
 
-  // A ordem invertida preserva por cima a mesma prioridade visual usada
-  // nos destaques coloridos da legenda superior.
   for (const event of [...events].reverse()) {
     const x = timeToX(event.start);
     if (x < 0 || x > timelineWidth()) continue;
@@ -3758,8 +4229,9 @@ function drawEventStartLines(ctx, items) {
 
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
+  const gridTop = weatherStripBottomY();
+  const gridBottom = thermalBandBottomY();
 
-  // Primeiro: linhas do grid.
   for (const tick of ticks) {
     const x = timeToX(tick);
     const hour = tick.getHours();
@@ -3771,87 +4243,23 @@ function drawHourAxis(ctx, items) {
     ctx.strokeRect(
       new Rect(
         x,
-        CANVAS.localPlotTop - 7,
+        gridTop,
         1,
-        localPlotBottom() - CANVAS.localPlotTop + 7
+        Math.max(1, gridBottom - gridTop)
       )
     );
   }
 
-  // As linhas de início usam a cor original de cada evento e ficam acima
-  // das linhas horárias comuns, mas atrás dos charts.
+  // As linhas de início permanecem coloridas e atrás dos charts.
   drawEventStartLines(ctx, items);
-
-  // Os horários permanecem neutros; a cor dos eventos fica restrita aos
-  // charts e às linhas de início dentro do grid.
-  for (const tick of ticks) {
-    const x = timeToX(tick);
-    const hour = tick.getHours();
-    const isMidnight = hour === 0;
-
-    if (isMidnight) {
-      const weekday = shortWeekday(tick);
-      const style = dayBadgeStyle(tick, loadResult.holidayDates);
-      const badge = dayLegendBadgeRect(x, topLegendCenterY());
-      ctx.setFillColor(style.background);
-      ctx.fillRect(badge);
-      ctx.setFont(
-        Font.blackRoundedSystemFont(
-          isCompactMode()
-            ? 21
-            : isExtendedDetailedMode()
-              ? 22
-              : 25
-        )
-      );
-      ctx.setTextColor(style.text);
-      ctx.setTextAlignedCenter();
-      ctx.drawTextInRect(
-        weekday,
-        centeredDayLegendTextRect(x, topLegendCenterY())
-      );
-    } else {
-      const label = String(hour) + "h";
-      const isDaylightHour =
-        hour >= SETTINGS.daylightStartHour &&
-        hour <= SETTINGS.daylightEndHour;
-      const hourFontSize = isCompactMode()
-        ? 23
-        : isExtendedDetailedMode()
-          ? 22
-          : 27;
-
-      const isSecondaryNightHour =
-        isSecondaryNightLegendHour(hour);
-      // 2h, 4h, 20h e 22h repetem exatamente a tipografia e o cinza
-      // usados pelas temperaturas correspondentes na legenda inferior.
-      ctx.setFont(
-        isSecondaryNightHour
-          ? Font.regularMonospacedSystemFont(hourFontSize)
-          : Font.blackMonospacedSystemFont(hourFontSize)
-      );
-      ctx.setTextColor(
-        isDaylightHour
-          ? daylightHourColor(tick)
-          : isSecondaryNightHour
-            ? secondaryNightLegendColor()
-            : new Color("#FFFFFF", 1.0)
-      );
-      ctx.setTextAlignedCenter();
-      ctx.drawTextInRect(
-        label,
-        centeredLegendTextRect(x, topLegendCenterY())
-      );
-    }
-  }
 }
 
 function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
   const barHeight = item.isOverflow
-    ? isCompactMode() ? 32 : 34
-    : isCompactMode() ? 32 : 36;
+    ? isCompactMode() ? 25 : 28
+    : isCompactMode() ? 26 : 30;
   const barY = centerY - barHeight / 2;
 
   if (item.isOverflow) {
@@ -3864,18 +4272,18 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     fillRoundedRect(
       ctx,
       new Rect(markerX, barY, markerWidth, barHeight),
-      6,
+      5,
       color
     );
 
     ctx.setTextAlignedCenter();
     ctx.setFont(
-      Font.blackRoundedSystemFont(isCompactMode() ? 22 : 26)
+      Font.blackRoundedSystemFont(isCompactMode() ? 18 : 21)
     );
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
       item.title,
-      new Rect(markerX, barY + 6, markerWidth, 27)
+      new Rect(markerX, barY + 3, markerWidth, barHeight - 3)
     );
     return;
   }
@@ -3903,13 +4311,10 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const visibleRight = Math.min(timelineWidth(), x + width);
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
-  const titleFontSize = isCompactMode() ? 21 : windowHours > 24 ? 24 : 28;
-  const statusFontSize = isCompactMode() ? 13 : 16;
-  const metadataFontSize = isCompactMode() ? 12 : 16;
+  const titleFontSize = isCompactMode() ? 17 : windowHours > 24 ? 20 : 22;
+  const statusFontSize = isCompactMode() ? 11 : 13;
+  const metadataFontSize = isCompactMode() ? 10 : 13;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
-  // Conflitos precisam continuar identificáveis mesmo em eventos curtos.
-  // Para eles, o pequeno chip "×N" pode ocupar a largura mínima de leitura;
-  // contagens regressivas continuam reservadas aos charts mais largos.
   const statusMinimumWidth =
     item.conflictCount > 0 &&
     !item.isCurrentEvent &&
@@ -3932,19 +4337,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
           estimatedTextWidth(metadataText, metadataFontSize) + 16
         )
       : 0;
-  // O título permanece completo. O DrawContext recorta apenas no
-  // limite da timeline/widget; nunca inserimos reticências.
   const visibleTitle = title;
   if (!visibleTitle && statusWidth === 0) return;
 
-  // Mantém a posição horizontal original, começando no limite esquerdo
-  // do chart. Apenas a posição vertical é centralizada no próprio bloco.
   const titleTextY =
-    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 3);
+    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 2);
   const textPoint = new Point(visibleLeft + 7, titleTextY);
 
-  // O título permanece completo. O DrawContext recorta somente nas margens
-  // reais do widget/timeline; nunca inserimos reticências.
   if (visibleTitle) {
     ctx.setTextAlignedLeft();
     ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
@@ -3970,9 +4369,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       statusText,
       new Rect(
         visibleRight - statusWidth,
-        barY + (isCompactMode() ? 8 : 10),
+        barY + 5,
         statusWidth,
-        barHeight - 8
+        barHeight - 5
       )
     );
   }
@@ -3985,9 +4384,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       metadataText,
       new Rect(
         visibleRight - statusWidth - metadataWidth,
-        barY + 9,
+        barY + 5,
         metadataWidth,
-        barHeight - 8
+        barHeight - 5
       )
     );
   }
