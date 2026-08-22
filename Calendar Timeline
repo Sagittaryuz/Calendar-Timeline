@@ -2938,61 +2938,173 @@ function drawVisibleDailyExtremes(
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
   const visibleEnd = windowEnd.getTime();
-  const fontSize = isCompactMode() ? 16 : 19;
+  const normalFontSize = isCompactMode() ? 14 : 17;
+  const extremeFontSize = isCompactMode() ? 19 : 23;
+  const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
-    const entries = [
+    extremeEntries.push(
       {
         timestamp: Number(extreme.minimumTimestamp),
         temperature: Number(extreme.minimum),
         color: "#0A84FF",
+        kind: "minimum",
       },
       {
         timestamp: Number(extreme.maximumTimestamp),
         temperature: Number(extreme.maximum),
         color: "#FF453A",
-      },
-    ];
-
-    for (const entry of entries) {
-      if (
-        !Number.isFinite(entry.timestamp) ||
-        entry.timestamp < visibleStart ||
-        entry.timestamp > visibleEnd
-      ) {
-        continue;
+        kind: "maximum",
       }
+    );
+  }
 
-      const x = timeToX(new Date(entry.timestamp));
-      const y = thermalTemperatureY(
-        entry.temperature,
-        minimum,
-        maximum,
-        graphTop,
-        graphBottom
-      );
-      const label = String(Math.round(entry.temperature)) + "º";
-      const labelY = Math.max(graphTop - 20, y - 22);
+  const visibleExtremes = extremeEntries.filter(
+    (entry) =>
+      Number.isFinite(entry.timestamp) &&
+      entry.timestamp >= visibleStart &&
+      entry.timestamp <= visibleEnd
+  );
+  const exactExtremeTimestamps = new Set(
+    visibleExtremes.map((entry) => entry.timestamp)
+  );
+  const suppressedEvenTimestamps = new Set();
 
-      ctx.setFillColor(new Color(entry.color, 1.0));
-      ctx.fillEllipse(new Rect(x - 4, y - 4, 8, 8));
-      ctx.setStrokeColor(Color.white());
-      ctx.setLineWidth(1.5);
-      ctx.strokeEllipse(new Rect(x - 4, y - 4, 8, 8));
+  // Quando o extremo cai numa hora ímpar, reserva seu espaço retirando
+  // os dois rótulos pares imediatamente adjacentes.
+  for (const entry of visibleExtremes) {
+    const date = new Date(entry.timestamp);
+    if (date.getHours() % 2 === 0) continue;
 
-      ctx.setTextAlignedCenter();
-      ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
-      ctx.setTextColor(new Color("#000000", 0.88));
+    const previousEven = new Date(date);
+    previousEven.setHours(date.getHours() - 1, 0, 0, 0);
+    const nextEven = new Date(date);
+    nextEven.setHours(date.getHours() + 1, 0, 0, 0);
+    suppressedEvenTimestamps.add(previousEven.getTime());
+    suppressedEvenTimestamps.add(nextEven.getTime());
+  }
+
+  // Em 24/36 horas, mostra todas as temperaturas pares. Acima de 36 horas,
+  // preserva as âncoras do modo resumido para evitar sobreposição ilegível.
+  const evenTicks = [];
+  let tick = floorToHour(windowStart);
+  if (tick.getHours() % 2 !== 0) {
+    tick.setHours(tick.getHours() + 1);
+  }
+  const tickStepHours = isCompactMode() ? 6 : 2;
+  while (tick <= windowEnd) {
+    if (
+      tick.getHours() % tickStepHours === 0 &&
+      !suppressedEvenTimestamps.has(tick.getTime()) &&
+      !exactExtremeTimestamps.has(tick.getTime())
+    ) {
+      evenTicks.push(new Date(tick));
+    }
+    tick = new Date(
+      tick.getTime() + 2 * 60 * 60 * 1000
+    );
+  }
+
+  const drawTemperatureText = (
+    label,
+    x,
+    y,
+    fontSize,
+    fillColor,
+    outlineColor,
+    strongOutline
+  ) => {
+    const rect = new Rect(
+      x - 34,
+      y,
+      68,
+      fontSize + 8
+    );
+    ctx.setTextAlignedCenter();
+    ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
+
+    const offsets = strongOutline
+      ? [
+          [-2, 0], [2, 0], [0, -2], [0, 2],
+          [-1, -1], [1, -1], [-1, 1], [1, 1],
+        ]
+      : [[1, 1]];
+
+    ctx.setTextColor(new Color(outlineColor, strongOutline ? 1.0 : 0.86));
+    for (const [offsetX, offsetY] of offsets) {
       ctx.drawTextInRect(
         label,
-        new Rect(x - 31 + 1, labelY + 1, 62, 22)
-      );
-      ctx.setTextColor(new Color(entry.color, 1.0));
-      ctx.drawTextInRect(
-        label,
-        new Rect(x - 31, labelY, 62, 22)
+        new Rect(
+          rect.x + offsetX,
+          rect.y + offsetY,
+          rect.width,
+          rect.height
+        )
       );
     }
+
+    ctx.setTextColor(new Color(fillColor, 1.0));
+    ctx.drawTextInRect(label, rect);
+  };
+
+  // Temperaturas regulares: sempre brancas e somente nas horas pares.
+  for (const evenTick of evenTicks) {
+    const forecast = temperatureAtTimestamp(
+      sourceHours,
+      evenTick.getTime()
+    );
+    if (!forecast) continue;
+
+    const x = timeToX(evenTick);
+    const y = thermalTemperatureY(
+      forecast.temperature,
+      minimum,
+      maximum,
+      graphTop,
+      graphBottom
+    );
+    const labelY = Math.max(graphTop - 17, y - 18);
+    drawTemperatureText(
+      String(Math.round(forecast.temperature)) + "º",
+      x,
+      labelY,
+      normalFontSize,
+      "#FFFFFF",
+      "#000000",
+      false
+    );
+  }
+
+  // Extremos verdadeiros do dia são desenhados por último e maiores.
+  for (const entry of visibleExtremes) {
+    const date = new Date(entry.timestamp);
+    const x = timeToX(date);
+    const y = thermalTemperatureY(
+      entry.temperature,
+      minimum,
+      maximum,
+      graphTop,
+      graphBottom
+    );
+    const labelY = Math.max(graphTop - 23, y - 25);
+    const isWeekend =
+      date.getDay() === 0 || date.getDay() === 6;
+
+    ctx.setFillColor(new Color(entry.color, 1.0));
+    ctx.fillEllipse(new Rect(x - 4, y - 4, 8, 8));
+    ctx.setStrokeColor(Color.white());
+    ctx.setLineWidth(1.5);
+    ctx.strokeEllipse(new Rect(x - 4, y - 4, 8, 8));
+
+    drawTemperatureText(
+      String(Math.round(entry.temperature)) + "º",
+      x,
+      labelY,
+      extremeFontSize,
+      entry.color,
+      isWeekend ? "#FFFFFF" : "#000000",
+      isWeekend
+    );
   }
 }
 
@@ -3093,8 +3205,8 @@ function drawFixedDaylightGlow(ctx) {
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
+    // O gradiente continua variando suavemente ao longo do dia.
     for (const slice of daylightSlices(interval)) {
-      // Cortina vertical: discreta às 06/18 e máxima às 12.
       for (let y = lineY + 2; y < glowEndY; y += 2) {
         const verticalProgress =
           (y - lineY) / Math.max(1, glowEndY - lineY);
@@ -3114,20 +3226,23 @@ function drawFixedDaylightGlow(ctx) {
           new Rect(slice.x, y, slice.width + 1, 2)
         );
       }
+    }
 
-      // Núcleo contínuo do sol na base da faixa meteorológica.
-      ctx.setFillColor(
+    // O núcleo solar é desenhado uma única vez por período diurno.
+    // Assim não existem emendas ou variações entre as fatias do gradiente.
+    const lineWidth = interval.x1 - interval.x0;
+    if (lineWidth > 0) {
+      fillRoundedRect(
+        ctx,
+        new Rect(interval.x0, lineY - 1, lineWidth, 3),
+        1.5,
         new Color(
           "#FFE45C",
           Math.min(
-            0.98,
-            (0.54 + 0.36 * slice.daylightStrength) *
-              SETTINGS.solarGlowIntensity
+            0.96,
+            0.90 * SETTINGS.solarGlowIntensity
           )
         )
-      );
-      ctx.fillRect(
-        new Rect(slice.x, lineY - 1, slice.width + 1, 3)
       );
     }
   }
