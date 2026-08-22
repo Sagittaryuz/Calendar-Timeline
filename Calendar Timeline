@@ -2654,6 +2654,9 @@ function drawWeatherConditionStrip(ctx, weather) {
   ctx.setFillColor(new Color("#FFFFFF", 0.14));
   ctx.fillRect(new Rect(0, bottom - 1, timelineWidth(), 1));
 
+  // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
+  drawDayBoundaryOriginsBehindMoon(ctx, bottom);
+
   let nightDay = addDays(startOfDay(windowStart), -1);
   const finalDay = addDays(startOfDay(windowEnd), 1);
   while (nightDay <= finalDay) {
@@ -2709,6 +2712,25 @@ function drawWeatherConditionStrip(ctx, weather) {
       );
     }
     day = addDays(day, 1);
+  }
+}
+
+function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
+  const moonCenterY = stripBottom / 2;
+
+  for (const tick of hourTicks()) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(
+      new Rect(
+        x - 4,
+        moonCenterY,
+        8,
+        Math.max(1, stripBottom - moonCenterY)
+      )
+    );
   }
 }
 
