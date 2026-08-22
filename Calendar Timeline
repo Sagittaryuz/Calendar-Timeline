@@ -2690,7 +2690,8 @@ function drawWeatherConditionStrip(ctx, weather) {
         moonPhaseForDate(new Date(centerTime)),
         moonX,
         moonY,
-        moonSize
+        moonSize,
+        new Date(centerTime)
       );
     }
     nightDay = addDays(nightDay, 1);
@@ -3068,7 +3069,7 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 19, y - 20);
+    const labelY = Math.max(graphTop - 21, y - 22);
     const hour = evenTick.getHours();
     const isNight =
       hour > SETTINGS.daylightEndHour ||
@@ -3100,7 +3101,7 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 25, y - 27);
+    const labelY = Math.max(graphTop - 27, y - 29);
     const isWeekend =
       date.getDay() === 0 || date.getDay() === 6;
 
@@ -3966,7 +3967,14 @@ function drawNightSegment(
     );
   }
 
-  drawMoonPhase(ctx, moon, moonX, moonY, moonSize);
+  drawMoonPhase(
+    ctx,
+    moon,
+    moonX,
+    moonY,
+    moonSize,
+    nightCenterDate
+  );
 
   // Nuvens brancas sobrepostas nas laterais, seguindo a referência visual.
   const cloudScale = moonSize / 96;
@@ -4033,12 +4041,24 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
   }
 }
 
-function drawMoonPhase(ctx, moon, x, y, size) {
+function drawMoonPhase(
+  ctx,
+  moon,
+  x,
+  y,
+  size,
+  borderDate = null
+) {
   const moonRect = new Rect(x, y, size, size);
   const drawOuterBorder = () => {
-    ctx.setStrokeColor(new Color("#FFFFFF", 0.96));
-    // Mesma espessura da linha vertical de mudança do dia.
-    ctx.setLineWidth(8);
+    const borderColor = borderDate
+      ? dayBoundaryLineColor(
+          borderDate,
+          loadResult.holidayDates
+        )
+      : Color.white();
+    ctx.setStrokeColor(borderColor);
+    ctx.setLineWidth(1);
     ctx.strokeEllipse(moonRect);
   };
 
