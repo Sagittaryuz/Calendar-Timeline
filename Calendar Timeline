@@ -2693,6 +2693,23 @@ function drawWeatherConditionStrip(ctx, weather) {
     }
     nightDay = addDays(nightDay, 1);
   }
+
+  // Sol centralizado no período diurno, como na versão anterior.
+  let day = startOfDay(windowStart);
+  const lastDay = startOfDay(windowEnd);
+  while (day <= lastDay) {
+    const noon = dateAtHour(day, 12);
+    const x = timeToX(noon);
+    if (x > -40 && x < timelineWidth() + 40) {
+      drawWeatherSun(
+        ctx,
+        x,
+        bottom / 2,
+        isCompactMode() ? 11 : 14
+      );
+    }
+    day = addDays(day, 1);
+  }
 }
 
 function drawWeatherSun(ctx, centerX, centerY, radius) {
@@ -3100,7 +3117,6 @@ function renderTimelinePanel(items, loadError) {
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx);
   }
-  drawCloudDensitySignalLine(ctx, hourlyWeather);
   drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
