@@ -3102,17 +3102,14 @@ function drawVisibleDailyExtremes(
       graphBottom
     );
     const labelY = Math.max(graphTop - 29, y - 31);
-    const isWeekend =
-      date.getDay() === 0 || date.getDay() === 6;
-
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
       x,
       labelY,
       extremeFontSize,
       entry.color,
-      isWeekend ? "#FFFFFF" : "#000000",
-      isWeekend
+      "#FFFFFF",
+      true
     );
   }
 }
@@ -3214,7 +3211,7 @@ function drawWeekdayBadgesOnTop(ctx) {
 }
 
 function drawFixedDaylightGlow(ctx) {
-  const lineY = weatherStripBottomY() - 3;
+  const lineY = weatherStripBottomY() - 1;
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
