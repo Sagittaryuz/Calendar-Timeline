@@ -1205,14 +1205,6 @@ function chooseItems(items, referenceDate, limit) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
-    // Mantém eventos e lembretes com horário em ordem cronológica.
-    // Eventos de dia inteiro entram somente depois de todos eles.
-    const displayItems = [...dayItems].sort(
-      (a, b) =>
-        Number(isAllDayEvent(a)) - Number(isAllDayEvent(b)) ||
-        byTime(a, b)
-    );
-
     const placeItem = (item, rowOrder) => {
       const availableRow = rowOrder.find((row) =>
         rows[row].every((existing) => !itemsOverlap(item, existing))
@@ -1228,9 +1220,13 @@ function chooseItems(items, referenceDate, limit) {
       placed.push(positioned);
     };
 
-    displayItems.forEach((item, index) => {
-      // Cada item tenta ocupar a próxima posição vertical da lista.
-      // Se ela estiver em conflito, procura outra linha disponível.
+    // Eventos e lembretes com horário aparecem primeiro, em ordem
+    // cronológica, ocupando as linhas de cima para baixo.
+    const regularItems = [...dayItems]
+      .filter((item) => !isAllDayEvent(item))
+      .sort(byTime);
+
+    regularItems.forEach((item, index) => {
       const preferredRow = Math.min(index, limit - 1);
       const upperRows = [];
       for (let row = preferredRow - 1; row >= 0; row--) {
@@ -1242,6 +1238,21 @@ function chooseItems(items, referenceDate, limit) {
       }
 
       placeItem(item, [preferredRow, ...upperRows, ...lowerRows]);
+    });
+
+    // Eventos de dia inteiro continuam sendo os últimos na ordem de
+    // exibição, mas ocupam as linhas disponíveis de baixo para cima:
+    // quinta, quarta, terceira, segunda e primeira.
+    const allDayEvents = [...dayItems]
+      .filter(isAllDayEvent)
+      .sort(byTime);
+    const bottomUpRows = Array.from(
+      { length: limit },
+      (_, index) => limit - 1 - index
+    );
+
+    allDayEvents.forEach((item) => {
+      placeItem(item, bottomUpRows);
     });
   }
 
