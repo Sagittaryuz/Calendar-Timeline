@@ -1202,12 +1202,15 @@ function chooseItems(items, referenceDate, limit) {
 
   for (const dayItems of byDay.values()) {
     const rows = Array.from({ length: limit }, () => []);
-    const chronologicalItems = [...dayItems].sort(byTime);
-    const allDayEvents = chronologicalItems.filter(
-      (item) => item.kind === "event" && item.isAllDay
-    );
-    const regularItems = chronologicalItems.filter(
-      (item) => !(item.kind === "event" && item.isAllDay)
+    const isAllDayEvent = (item) =>
+      item.kind === "event" && item.isAllDay;
+
+    // Mantém eventos e lembretes com horário em ordem cronológica.
+    // Eventos de dia inteiro entram somente depois de todos eles.
+    const displayItems = [...dayItems].sort(
+      (a, b) =>
+        Number(isAllDayEvent(a)) - Number(isAllDayEvent(b)) ||
+        byTime(a, b)
     );
 
     const placeItem = (item, rowOrder) => {
@@ -1225,32 +1228,16 @@ function chooseItems(items, referenceDate, limit) {
       placed.push(positioned);
     };
 
-    // Eventos de dia inteiro têm prioridade absoluta na última linha.
-    // Se houver mais de um no mesmo dia, somente os que não se sobrepõem
-    // reutilizam essa linha; os demais entram no contador de excedentes.
-    allDayEvents.forEach((item) => {
-      placeItem(item, [limit - 1]);
-    });
-
-    // Quando existe evento de dia inteiro, a quinta linha fica reservada.
-    const lastRegularRow =
-      allDayEvents.length > 0 ? limit - 2 : limit - 1;
-
-    regularItems.forEach((item, index) => {
-      if (lastRegularRow < 0) {
-        hidden.push(item);
-        return;
-      }
-
-      // A ordem visual padrão continua sendo primeira linha, segunda,
-      // terceira... dentro das linhas disponíveis para itens com horário.
-      const preferredRow = Math.min(index, lastRegularRow);
+    displayItems.forEach((item, index) => {
+      // Cada item tenta ocupar a próxima posição vertical da lista.
+      // Se ela estiver em conflito, procura outra linha disponível.
+      const preferredRow = Math.min(index, limit - 1);
       const upperRows = [];
       for (let row = preferredRow - 1; row >= 0; row--) {
         upperRows.push(row);
       }
       const lowerRows = [];
-      for (let row = preferredRow + 1; row <= lastRegularRow; row++) {
+      for (let row = preferredRow + 1; row < limit; row++) {
         lowerRows.push(row);
       }
 
