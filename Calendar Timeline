@@ -2537,6 +2537,12 @@ function thermalBandTopY() {
   return thermalBandBottomY() - (isCompactMode() ? 21 : 30);
 }
 
+function thermalTemperatureLabelTopY() {
+  // A legenda numérica pertence ao módulo térmico. Esta reserva inclui
+  // as fontes maiores de máxima/mínima e impede que os charts a atravessem.
+  return thermalBandTopY() - (isCompactMode() ? 30 : 32);
+}
+
 function thermalBandBottomY() {
   return (
     bottomLegendCenterY() -
@@ -2554,7 +2560,9 @@ function timelineChartTop() {
 }
 
 function timelineChartBottom() {
-  return thermalBandTopY() - 5;
+  // Mantém exatamente o início atual da agenda e reduz somente seu limite
+  // inferior, reservando uma margem real antes da legenda térmica.
+  return thermalTemperatureLabelTopY() - 5;
 }
 
 function timelineRowHeight() {
@@ -2566,14 +2574,21 @@ function timelineRowHeight() {
 }
 
 function timelineBarHeight(item) {
-  if (item?.isOverflow) {
-    return isCompactMode() ? 29 : 34;
-  }
-  return isCompactMode()
-    ? 30
-    : isExtendedDetailedMode()
-      ? 35
-      : 38;
+  const preferredHeight = item?.isOverflow
+    ? isCompactMode()
+      ? 29
+      : 34
+    : isCompactMode()
+      ? 30
+      : isExtendedDetailedMode()
+        ? 35
+        : 38;
+
+  // Ao comprimir as cinco linhas, preserva uma separação mínima entre charts.
+  return Math.min(
+    preferredHeight,
+    Math.max(22, timelineRowHeight() - 4)
+  );
 }
 
 function timelineBarVerticalRect(item) {
@@ -3249,7 +3264,10 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 23, y - 24);
+    const labelY = Math.max(
+      thermalTemperatureLabelTopY() + 4,
+      y - 24
+    );
     const hour = evenTick.getHours();
     const isNight =
       hour > SETTINGS.daylightEndHour ||
@@ -3281,7 +3299,10 @@ function drawVisibleDailyExtremes(
       graphTop,
       graphBottom
     );
-    const labelY = Math.max(graphTop - 29, y - 31);
+    const labelY = Math.max(
+      thermalTemperatureLabelTopY() + 2,
+      y - 31
+    );
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
       x,
