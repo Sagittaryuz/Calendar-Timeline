@@ -30,7 +30,7 @@ const SETTINGS = {
   weatherCacheMinutes: 30,
   forecaBaseURL: "https://fnw-us.foreca.com",
   forecaTokenHours: 24,
-  rainLineColor: "#0A84FF",
+  rainLineColor: "#64D2FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
@@ -2832,19 +2832,20 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
 }
 
 function drawWeatherRainCurtains(ctx, weather) {
-  const top = weatherStripBottomY() - 4;
+  const top = weatherStripBottomY();
   const bottom = timelineChartBottom();
   const hours = weather?.hours ?? [];
 
-  for (let index = 0; index < hours.length; index++) {
-    const forecast = hours[index];
+  for (const forecast of hours) {
+    // Na Foreca, a previsão de precipitação corresponde à hora que termina
+    // no timestamp. A barra fica, portanto, sobre a linha da hora inicial.
     const timestamp =
       Number.isFinite(Number(forecast.rainStartTimestamp))
         ? Number(forecast.rainStartTimestamp)
         : Number(forecast.timestamp);
     if (
       !Number.isFinite(timestamp) ||
-      timestamp < windowStart.getTime() - 3600000 ||
+      timestamp < windowStart.getTime() - 60 * 60 * 1000 ||
       timestamp > windowEnd.getTime()
     ) {
       continue;
@@ -2857,44 +2858,34 @@ function drawWeatherRainCurtains(ctx, weather) {
     );
     if (amount <= 0 && chance < 20) continue;
 
-    const centerX = timeToX(new Date(timestamp));
-    const hourWidth =
-      timelineWidth() / Math.max(1, windowHours);
-    const spread = Math.max(8, hourWidth * 0.72);
+    const x = timeToX(new Date(timestamp));
+    if (x < -8 || x > timelineWidth() + 8) continue;
+
     const strength = Math.max(
       0.18,
       Math.min(1, Math.max(chance / 100, amount / 8))
     );
-    const streakCount = Math.max(
-      2,
-      Math.min(8, Math.round(2 + strength * 6))
-    );
+    const barWidth = isCompactMode()
+      ? 3
+      : 5 + Math.round(strength * 2);
+    const opacity = 0.52 + strength * 0.36;
 
-    for (let streak = 0; streak < streakCount; streak++) {
-      const fraction = (streak + 0.5) / streakCount - 0.5;
-      const x =
-        centerX +
-        fraction * spread +
-        ((index + streak) % 3 - 1) * 2;
-      const length =
-        (bottom - top) *
-        (0.28 + 0.56 * strength) *
-        (0.78 + ((index + streak) % 4) * 0.07);
-      const startY = top + ((index * 11 + streak * 17) % 24);
-      const endY = Math.min(bottom, startY + length);
-      const path = new Path();
-      path.move(new Point(x + 3, startY));
-      path.addLine(new Point(x - 3, endY));
-      ctx.addPath(path);
-      ctx.setStrokeColor(
-        new Color(
-          SETTINGS.rainLineColor,
-          0.16 + 0.30 * strength
-        )
-      );
-      ctx.setLineWidth(isCompactMode() ? 1 : 1.5);
-      ctx.strokePath();
-    }
+    // Uma única barra por hora, perpendicular e centralizada exatamente
+    // sobre a divisão horária. Eventos e lembretes continuam acima dela.
+    ctx.setFillColor(
+      new Color(
+        SETTINGS.rainLineColor,
+        Math.min(0.88, opacity)
+      )
+    );
+    ctx.fillRect(
+      new Rect(
+        x - barWidth / 2,
+        top,
+        barWidth,
+        Math.max(1, bottom - top)
+      )
+    );
   }
 }
 
@@ -3158,13 +3149,14 @@ function renderTimelinePanel(items, loadError) {
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
-  drawWeatherRainCurtains(ctx, hourlyWeather);
   drawHourAxis(ctx, items);
   // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
   // atrás da curva térmica e dos charts de agenda.
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
+  // A chuva fica acima do gradiente solar e das linhas comuns do grid.
+  drawWeatherRainCurtains(ctx, hourlyWeather);
   drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
