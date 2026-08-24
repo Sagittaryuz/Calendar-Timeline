@@ -3224,12 +3224,12 @@ function drawFixedDaylightGlow(ctx) {
           1.12
         );
         const opacity =
-          0.34 *
+          0.56 *
           verticalStrength *
           slice.daylightStrength *
           SETTINGS.solarGlowIntensity;
         ctx.setFillColor(
-          new Color("#FFD000", Math.min(0.48, opacity))
+          new Color("#FFD000", Math.min(0.78, opacity))
         );
         ctx.fillRect(
           new Rect(slice.x, y, slice.width + 1, 2)
@@ -3241,9 +3241,9 @@ function drawFixedDaylightGlow(ctx) {
     if (lineWidth <= 0) continue;
 
     for (const halo of [
-      [18, 0.08],
-      [12, 0.13],
-      [8, 0.22],
+      [24, 0.14],
+      [16, 0.24],
+      [10, 0.36],
     ]) {
       const height = halo[0];
       const opacity = halo[1];
