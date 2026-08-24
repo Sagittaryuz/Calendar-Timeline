@@ -2832,13 +2832,18 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
 }
 
 function drawWeatherRainCurtains(ctx, weather) {
-  const top = weatherStripBottomY();
-  const bottom = timelineChartBottom();
+  const chartTop = timelineChartTop();
+  const chartBottom = timelineChartBottom();
+  const rowHeight =
+    (chartBottom - chartTop) / Math.max(1, SETTINGS.maxItems);
+  const firstDropY = chartTop + (isCompactMode() ? 7 : 10);
+  const maximumDropY = Math.min(
+    chartBottom,
+    chartTop + rowHeight * 2 - (isCompactMode() ? 4 : 7)
+  );
   const hours = weather?.hours ?? [];
 
   for (const forecast of hours) {
-    // Na Foreca, a previsão de precipitação corresponde à hora que termina
-    // no timestamp. A barra fica, portanto, sobre a linha da hora inicial.
     const timestamp =
       Number.isFinite(Number(forecast.rainStartTimestamp))
         ? Number(forecast.rainStartTimestamp)
@@ -2856,37 +2861,92 @@ function drawWeatherRainCurtains(ctx, weather) {
       0,
       Math.min(100, Number(forecast.rainChance) || 0)
     );
-    if (amount <= 0 && chance < 20) continue;
+
+    // Probabilidades pequenas deixavam o grid inteiro azul. Sem volume
+    // previsto, a gota só aparece quando a chance já é realmente relevante.
+    const hasRelevantRain = amount >= 0.10 || chance >= 45;
+    if (!hasRelevantRain) continue;
 
     const x = timeToX(new Date(timestamp));
-    if (x < -8 || x > timelineWidth() + 8) continue;
+    if (x < -12 || x > timelineWidth() + 12) continue;
 
     const strength = Math.max(
-      0.18,
-      Math.min(1, Math.max(chance / 100, amount / 8))
+      0.20,
+      Math.min(1, Math.max(chance / 100, amount / 6))
     );
-    const barWidth = isCompactMode()
-      ? 3
-      : 5 + Math.round(strength * 2);
-    const opacity = 0.52 + strength * 0.36;
+    const dropCount =
+      strength >= 0.75
+        ? 3
+        : strength >= 0.45
+          ? 2
+          : 1;
+    const dropSize =
+      (isCompactMode() ? 7 : 10) +
+      strength * (isCompactMode() ? 3 : 5);
+    const opacity = Math.min(0.96, 0.68 + strength * 0.28);
 
-    // Uma única barra por hora, perpendicular e centralizada exatamente
-    // sobre a divisão horária. Eventos e lembretes continuam acima dela.
-    ctx.setFillColor(
-      new Color(
-        SETTINGS.rainLineColor,
-        Math.min(0.88, opacity)
-      )
-    );
-    ctx.fillRect(
-      new Rect(
-        x - barWidth / 2,
-        top,
-        barWidth,
-        Math.max(1, bottom - top)
-      )
-    );
+    for (let index = 0; index < dropCount; index++) {
+      const progress =
+        dropCount === 1
+          ? 0
+          : index / Math.max(1, dropCount - 1);
+      const y =
+        firstDropY +
+        (maximumDropY - firstDropY) * progress;
+      drawHourlyRainDrop(
+        ctx,
+        x,
+        y,
+        dropSize * (1 - index * 0.07),
+        opacity
+      );
+    }
   }
+}
+
+function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
+  const radius = size * 0.36;
+  const bodyCenterY = centerY + size * 0.10;
+  const tipY = centerY - size * 0.55;
+  const shoulderY = bodyCenterY - radius * 0.18;
+  const color = new Color(SETTINGS.rainLineColor, opacity);
+
+  // Ponta superior espessa.
+  const tip = new Path();
+  tip.move(new Point(centerX, tipY));
+  tip.addLine(
+    new Point(centerX - radius * 0.82, shoulderY)
+  );
+  tip.addLine(
+    new Point(centerX + radius * 0.82, shoulderY)
+  );
+  tip.closeSubpath();
+  ctx.addPath(tip);
+  ctx.setFillColor(color);
+  ctx.fillPath();
+
+  // Corpo arredondado da gota.
+  ctx.setFillColor(color);
+  ctx.fillEllipse(
+    new Rect(
+      centerX - radius,
+      bodyCenterY - radius,
+      radius * 2,
+      radius * 2
+    )
+  );
+
+  // Pequeno reflexo melhora a leitura sem transformar a gota em outra linha.
+  const highlightRadius = Math.max(1, radius * 0.20);
+  ctx.setFillColor(new Color("#DDF7FF", opacity * 0.76));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - radius * 0.35,
+      bodyCenterY - radius * 0.42,
+      highlightRadius,
+      highlightRadius
+    )
+  );
 }
 
 function drawCompactThermalBand(ctx, weather) {
