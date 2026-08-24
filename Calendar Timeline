@@ -2856,15 +2856,20 @@ function drawWeatherRainCurtains(ctx, weather) {
       continue;
     }
 
-    const amount = rainMillimetersForHour(forecast);
+    const explicitAmount = Math.max(
+      0,
+      Number(forecast.rainMM) || 0
+    );
     const chance = Math.max(
       0,
       Math.min(100, Number(forecast.rainChance) || 0)
     );
 
-    // Probabilidades pequenas deixavam o grid inteiro azul. Sem volume
-    // previsto, a gota só aparece quando a chance já é realmente relevante.
-    const hasRelevantRain = amount >= 0.10 || chance >= 45;
+    // A função de apoio converte qualquer probabilidade em um volume visual.
+    // Aqui usamos apenas milímetros realmente fornecidos pela Foreca, evitando
+    // que 10% ou 20% de chance preencham todas as horas com gotas.
+    const hasRelevantRain =
+      explicitAmount >= 0.10 || chance >= 45;
     if (!hasRelevantRain) continue;
 
     const x = timeToX(new Date(timestamp));
@@ -2872,12 +2877,15 @@ function drawWeatherRainCurtains(ctx, weather) {
 
     const strength = Math.max(
       0.20,
-      Math.min(1, Math.max(chance / 100, amount / 6))
+      Math.min(
+        1,
+        Math.max(chance / 100, explicitAmount / 6)
+      )
     );
     const dropCount =
-      strength >= 0.75
+      strength >= 0.80
         ? 3
-        : strength >= 0.45
+        : strength >= 0.55
           ? 2
           : 1;
     const dropSize =
