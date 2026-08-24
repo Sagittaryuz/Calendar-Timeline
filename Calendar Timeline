@@ -583,6 +583,13 @@ async function loadHourlyWeather(location) {
       const explicitRain = rainCandidates.find((value) =>
         Number.isFinite(value)
       );
+      const cloudinessSource = forecast.cloudiness;
+      const rawCloudiness =
+        cloudinessSource === null ||
+        cloudinessSource === undefined ||
+        cloudinessSource === ""
+          ? NaN
+          : Number(cloudinessSource);
       hours.push({
         timestamp,
         // Na Foreca, precipProb representa a hora que termina no timestamp.
@@ -594,10 +601,11 @@ async function loadHourlyWeather(location) {
           Number.isFinite(explicitRain) ? explicitRain : 0
         ),
         symbol: String(forecast.symbol ?? ""),
-        cloudiness: Math.max(
-          0,
-          Math.min(100, Number(forecast.cloudiness) || 0)
-        ),
+        // Ausência de cloudiness não significa céu limpo. O valor nulo
+        // preserva essa diferença para a camada visual das nuvens.
+        cloudiness: Number.isFinite(rawCloudiness)
+          ? Math.max(0, Math.min(100, rawCloudiness))
+          : null,
       });
     }
 
@@ -761,26 +769,29 @@ async function loadForecaToken(credentials) {
 
 function buildHourlyWeather(hours) {
   const normalized = hours
-    .map((hour) => ({
-      timestamp: Number(hour.timestamp),
-      rainStartTimestamp: Number(hour.rainStartTimestamp),
-      temperature: Number(hour.temperature),
-      rainChance: Math.max(
-        0,
-        Math.min(100, Number(hour.rainChance) || 0)
-      ),
-      rainMM: Math.max(0, Number(hour.rainMM) || 0),
-      symbol: String(hour.symbol ?? ""),
-      cloudiness: Math.max(
-        0,
-        Math.min(
-          100,
-          Number.isFinite(Number(hour.cloudiness))
-            ? Number(hour.cloudiness)
-            : Math.max(12, Number(hour.rainChance) || 0)
-        )
-      ),
-    }))
+    .map((hour) => {
+      const cloudinessSource = hour?.cloudiness;
+      const cloudiness =
+        cloudinessSource === null ||
+        cloudinessSource === undefined ||
+        cloudinessSource === "" ||
+        !Number.isFinite(Number(cloudinessSource))
+          ? null
+          : Math.max(0, Math.min(100, Number(cloudinessSource)));
+
+      return {
+        timestamp: Number(hour.timestamp),
+        rainStartTimestamp: Number(hour.rainStartTimestamp),
+        temperature: Number(hour.temperature),
+        rainChance: Math.max(
+          0,
+          Math.min(100, Number(hour.rainChance) || 0)
+        ),
+        rainMM: Math.max(0, Number(hour.rainMM) || 0),
+        symbol: String(hour.symbol ?? ""),
+        cloudiness,
+      };
+    })
     .filter(
       (hour) =>
         Number.isFinite(hour.timestamp) &&
@@ -2677,6 +2688,10 @@ function drawWeatherConditionStrip(ctx, weather) {
   // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
   drawDayBoundaryOriginsBehindMoon(ctx, bottom);
 
+  // As formas de nuvem ocupam somente a faixa meteorológica. Lua e sol são
+  // desenhados depois, permanecendo visualmente acima delas.
+  drawCloudCoverageForms(ctx, weather, bottom);
+
   let nightDay = addDays(startOfDay(windowStart), -1);
   const finalDay = addDays(startOfDay(windowEnd), 1);
   while (nightDay <= finalDay) {
@@ -3148,7 +3163,7 @@ function renderTimelinePanel(items, loadError) {
   // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
   // atrás da curva térmica e dos charts de agenda.
   if (SETTINGS.showSolarGlow) {
-    drawFixedDaylightGlow(ctx);
+    drawFixedDaylightGlow(ctx, hourlyWeather);
   }
   drawCompactThermalBand(ctx, hourlyWeather);
 
@@ -3230,12 +3245,17 @@ function drawWeekdayBadgesOnTop(ctx) {
   }
 }
 
-function drawFixedDaylightGlow(ctx) {
+function drawFixedDaylightGlow(ctx, weather) {
   const lineY = weatherStripBottomY() - 1;
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
-    for (const slice of daylightSlices(interval)) {
+    const slices = daylightSlices(interval, weather);
+    if (slices.length === 0) continue;
+
+    // A irradiação continua amarela, mas perde intensidade de forma suave
+    // conforme a nebulosidade prevista aumenta.
+    for (const slice of slices) {
       for (let y = lineY + 2; y < glowEndY; y += 2) {
         const verticalProgress =
           (y - lineY) / Math.max(1, glowEndY - lineY);
@@ -3255,248 +3275,402 @@ function drawFixedDaylightGlow(ctx) {
           new Rect(slice.x, y, slice.width + 1, 2)
         );
       }
-    }
 
-    const lineWidth = interval.x1 - interval.x0;
-    if (lineWidth <= 0) continue;
+      // Halos e núcleo são desenhados depois das nuvens. Pequenas
+      // sobreposições entre as fatias eliminam emendas perceptíveis.
+      for (const [height, opacity] of [
+        [24, 0.14],
+        [16, 0.24],
+        [10, 0.36],
+      ]) {
+        ctx.setFillColor(
+          new Color(
+            "#FFD000",
+            Math.min(
+              1,
+              opacity *
+                slice.daylightStrength *
+                SETTINGS.solarGlowIntensity
+            )
+          )
+        );
+        ctx.fillRect(
+          new Rect(
+            slice.x - 1,
+            lineY - height / 2,
+            slice.width + 3,
+            height
+          )
+        );
+      }
 
-    for (const halo of [
-      [24, 0.14],
-      [16, 0.24],
-      [10, 0.36],
-    ]) {
-      const height = halo[0];
-      const opacity = halo[1];
-      fillRoundedRect(
-        ctx,
-        new Rect(
-          interval.x0 - height / 2,
-          lineY - height / 2,
-          lineWidth + height,
-          height
-        ),
-        height / 2,
+      ctx.setFillColor(
         new Color(
           "#FFD000",
-          opacity * SETTINGS.solarGlowIntensity
+          Math.min(
+            1,
+            (0.22 + 0.77 * slice.daylightStrength) *
+              SETTINGS.solarGlowIntensity
+          )
         )
+      );
+      ctx.fillRect(
+        new Rect(slice.x - 1, lineY - 2, slice.width + 3, 4)
       );
     }
 
-    fillRoundedRect(
-      ctx,
-      new Rect(interval.x0, lineY - 2, lineWidth, 4),
-      2,
-      new Color(
-        "#FFD000",
-        Math.min(1.0, 0.99 * SETTINGS.solarGlowIntensity)
-      )
-    );
-  }
-}
-
-function cloudDensityMouthPath(marker, lineY) {
-  const path = new Path();
-
-  if (marker.shape === "trapezoid") {
-    path.move(
-      new Point(marker.x - marker.width / 2, lineY)
-    );
-    path.addLine(
-      new Point(
-        marker.x - marker.width * 0.28,
-        lineY - marker.height / 2
-      )
-    );
-    path.addLine(
-      new Point(
-        marker.x + marker.width * 0.28,
-        lineY - marker.height / 2
-      )
-    );
-    path.addLine(
-      new Point(marker.x + marker.width / 2, lineY)
-    );
-    path.addLine(
-      new Point(
-        marker.x + marker.width * 0.28,
-        lineY + marker.height / 2
-      )
-    );
-    path.addLine(
-      new Point(
-        marker.x - marker.width * 0.28,
-        lineY + marker.height / 2
-      )
-    );
-  } else {
-    path.move(
-      new Point(marker.x - marker.width / 2, lineY)
-    );
-    path.addLine(
-      new Point(marker.x, lineY - marker.height / 2)
-    );
-    path.addLine(
-      new Point(marker.x + marker.width / 2, lineY)
-    );
-    path.addLine(
-      new Point(marker.x, lineY + marker.height / 2)
-    );
-  }
-
-  path.closeSubpath();
-  return path;
-}
-
-function drawCloudDensitySignalLine(ctx, weather) {
-  const lineY = weatherStripBottomY() - 2;
-  const lineThickness = 5;
-  const sourceHours = weather?.hours ?? [];
-  const sampleStepHours = isCompactMode() ? 6 : 2;
-  const minimumSpacing = isCompactMode() ? 16 : 22;
-  const candidates = [];
-
-  for (const forecast of sourceHours) {
-    const timestamp = Number(forecast.timestamp);
-    if (
-      !Number.isFinite(timestamp) ||
-      timestamp < windowStart.getTime() ||
-      timestamp > windowEnd.getTime()
-    ) {
-      continue;
+    // Somente 06:00 e 18:00 recebem a projeção circular das extremidades.
+    for (const endpointX of [interval.x0, interval.x1]) {
+      const endpointDate = timelineDateAtX(endpointX);
+      const visibility = solarVisibilityAtTimestamp(
+        weather,
+        endpointDate.getTime()
+      );
+      for (const [radius, opacity] of [
+        [12, 0.10],
+        [8, 0.18],
+        [5, 0.28],
+      ]) {
+        ctx.setFillColor(
+          new Color(
+            "#FFD000",
+            Math.min(
+              1,
+              opacity * visibility * SETTINGS.solarGlowIntensity
+            )
+          )
+        );
+        ctx.fillEllipse(
+          new Rect(
+            endpointX - radius,
+            lineY - radius,
+            radius * 2,
+            radius * 2
+          )
+        );
+      }
     }
+  }
+}
 
-    const date = new Date(timestamp);
-    if (date.getHours() % sampleStepHours !== 0) continue;
+function clampWeatherPercentage(value) {
+  return Math.max(0, Math.min(100, Number(value)));
+}
 
-    const cloudiness = Math.max(
+function cloudinessEvidenceForForecast(forecast) {
+  if (!forecast) return null;
+
+  const source = forecast.cloudiness;
+  const hasExplicitCloudiness =
+    source !== null &&
+    source !== undefined &&
+    source !== "" &&
+    Number.isFinite(Number(source));
+  const rainChance = clampWeatherPercentage(
+    Number(forecast.rainChance) || 0
+  );
+  const rainMM = Math.max(0, Number(forecast.rainMM) || 0);
+
+  let cloudiness = hasExplicitCloudiness
+    ? clampWeatherPercentage(source)
+    : null;
+
+  // Chuva não substitui a nebulosidade fornecida pela Foreca; serve apenas
+  // como evidência complementar quando o campo estiver ausente ou incoerente.
+  const rainEvidence =
+    rainMM > 0
+      ? Math.min(96, 58 + rainMM * 7)
+      : rainChance >= 35
+        ? Math.min(90, 35 + rainChance * 0.55)
+        : null;
+
+  if (rainEvidence !== null) {
+    cloudiness =
+      cloudiness === null
+        ? rainEvidence
+        : Math.max(cloudiness, rainEvidence);
+  }
+
+  return cloudiness;
+}
+
+function interpolatedCloudinessAt(hours, timestamp) {
+  let previous = null;
+  let next = null;
+
+  for (const forecast of hours ?? []) {
+    const candidateTime = Number(forecast.timestamp);
+    if (!Number.isFinite(candidateTime)) continue;
+
+    if (candidateTime <= timestamp) previous = forecast;
+    if (candidateTime >= timestamp) {
+      next = forecast;
+      break;
+    }
+  }
+
+  const previousValue = cloudinessEvidenceForForecast(previous);
+  const nextValue = cloudinessEvidenceForForecast(next);
+  const previousTime = Number(previous?.timestamp);
+  const nextTime = Number(next?.timestamp);
+  const maximumDistance = 90 * 60 * 1000;
+
+  if (
+    previousValue !== null &&
+    nextValue !== null &&
+    Number.isFinite(previousTime) &&
+    Number.isFinite(nextTime) &&
+    nextTime > previousTime &&
+    nextTime - previousTime <= 3 * 60 * 60 * 1000
+  ) {
+    const progress = Math.max(
       0,
-      Math.min(100, Number(forecast.cloudiness) || 0)
+      Math.min(1, (timestamp - previousTime) / (nextTime - previousTime))
     );
-    if (cloudiness < 15) continue;
+    const smoothProgress = progress * progress * (3 - 2 * progress);
+    return (
+      previousValue +
+      (nextValue - previousValue) * smoothProgress
+    );
+  }
 
-    const x = timeToX(date);
-    if (x < -30 || x > timelineWidth() + 30) continue;
+  if (
+    previousValue !== null &&
+    Number.isFinite(previousTime) &&
+    Math.abs(timestamp - previousTime) <= maximumDistance
+  ) {
+    return previousValue;
+  }
 
-    candidates.push({
-      timestamp,
-      x,
-      cloudiness,
+  if (
+    nextValue !== null &&
+    Number.isFinite(nextTime) &&
+    Math.abs(nextTime - timestamp) <= maximumDistance
+  ) {
+    return nextValue;
+  }
+
+  return null;
+}
+
+function smoothedCloudinessAt(weather, timestamp) {
+  const offsets = [-60 * 60 * 1000, 0, 60 * 60 * 1000];
+  const weights = [0.25, 0.50, 0.25];
+  let total = 0;
+  let totalWeight = 0;
+
+  for (let index = 0; index < offsets.length; index++) {
+    const value = interpolatedCloudinessAt(
+      weather?.hours ?? [],
+      timestamp + offsets[index]
+    );
+    if (value === null) continue;
+    total += value * weights[index];
+    totalWeight += weights[index];
+  }
+
+  return totalWeight > 0 ? total / totalWeight : null;
+}
+
+function solarVisibilityAtTimestamp(weather, timestamp) {
+  const cloudiness = smoothedCloudinessAt(weather, timestamp);
+  if (cloudiness === null) return 1;
+
+  const stops = [
+    [0, 1.00],
+    [20, 1.00],
+    [40, 0.85],
+    [60, 0.65],
+    [80, 0.45],
+    [100, 0.25],
+  ];
+
+  for (let index = 0; index < stops.length - 1; index++) {
+    const [startCloud, startVisibility] = stops[index];
+    const [endCloud, endVisibility] = stops[index + 1];
+    if (cloudiness > endCloud) continue;
+
+    const localProgress = Math.max(
+      0,
+      Math.min(
+        1,
+        (cloudiness - startCloud) /
+          Math.max(1, endCloud - startCloud)
+      )
+    );
+    const smoothProgress =
+      localProgress * localProgress * (3 - 2 * localProgress);
+    return (
+      startVisibility +
+      (endVisibility - startVisibility) * smoothProgress
+    );
+  }
+
+  return stops[stops.length - 1][1];
+}
+
+function timelineDateAtX(x) {
+  const duration = windowEnd.getTime() - windowStart.getTime();
+  const progress = x / Math.max(1, timelineWidth());
+  return new Date(windowStart.getTime() + duration * progress);
+}
+
+function drawCloudCoverageForms(ctx, weather, stripBottom) {
+  if (!Array.isArray(weather?.hours) || weather.hours.length === 0) {
+    return;
+  }
+
+  const width = timelineWidth();
+  const sampleStep = isCompactMode() ? 8 : 6;
+  const threshold = 28;
+  const samples = [];
+
+  for (let x = 0; x <= width + sampleStep; x += sampleStep) {
+    const timestamp = timelineDateAtX(Math.min(width, x)).getTime();
+    samples.push({
+      x: Math.min(width, x),
+      cloudiness: smoothedCloudinessAt(weather, timestamp),
     });
   }
 
-  candidates.sort((first, second) => first.x - second.x);
-  const markers = [];
+  let segment = [];
+  const flushSegment = () => {
+    if (segment.length >= 2) {
+      drawAmorphousCloudSegment(ctx, segment, stripBottom);
+    }
+    segment = [];
+  };
 
-  for (const candidate of candidates) {
-    const previous = markers[markers.length - 1];
+  for (const sample of samples) {
     if (
-      previous &&
-      candidate.x - previous.x < minimumSpacing
+      sample.cloudiness !== null &&
+      sample.cloudiness >= threshold
     ) {
-      if (candidate.cloudiness > previous.cloudiness) {
-        markers[markers.length - 1] = candidate;
-      }
+      segment.push(sample);
+    } else {
+      flushSegment();
+    }
+  }
+  flushSegment();
+}
+
+function drawAmorphousCloudSegment(ctx, samples, stripBottom) {
+  const centerY = Math.min(stripBottom - 7, stripBottom * 0.67);
+  const topPoints = [];
+  const bottomPoints = [];
+  let totalCloudiness = 0;
+
+  for (let index = 0; index < samples.length; index++) {
+    const sample = samples[index];
+    const normalized = Math.max(
+      0,
+      Math.min(1, (sample.cloudiness - 28) / 72)
+    );
+    const edgeDistance = Math.min(
+      index,
+      samples.length - 1 - index
+    );
+    const edgeTaper =
+      0.48 + 0.52 * Math.min(1, edgeDistance / 2);
+    const wobble =
+      Math.sin(sample.x * 0.105) * (0.8 + normalized * 1.2) +
+      Math.sin(sample.x * 0.043 + 1.7) * 0.8;
+    const centerShift =
+      Math.sin(sample.x * 0.031 + 0.9) * (0.5 + normalized);
+    const halfHeight =
+      (2.2 + normalized * 6.2 + wobble * 0.42) * edgeTaper;
+    const localCenter = centerY + centerShift;
+
+    topPoints.push(
+      new Point(sample.x, localCenter - Math.max(1.4, halfHeight))
+    );
+    bottomPoints.push(
+      new Point(sample.x, localCenter + Math.max(1.4, halfHeight))
+    );
+    totalCloudiness += sample.cloudiness;
+  }
+
+  const averageCloudiness =
+    totalCloudiness / Math.max(1, samples.length);
+  const path = new Path();
+  path.move(topPoints[0]);
+  for (let index = 1; index < topPoints.length; index++) {
+    path.addLine(topPoints[index]);
+  }
+  for (let index = bottomPoints.length - 1; index >= 0; index--) {
+    path.addLine(bottomPoints[index]);
+  }
+  path.closeSubpath();
+
+  ctx.addPath(path);
+  ctx.setFillColor(
+    new Color(
+      "#FFFFFF",
+      0.08 + (averageCloudiness / 100) * 0.16
+    )
+  );
+  ctx.fillPath();
+
+  ctx.addPath(path);
+  ctx.setStrokeColor(new Color("#FFFFFF", 0.94));
+  ctx.setLineWidth(isCompactMode() ? 2.6 : 3.4);
+  ctx.strokePath();
+
+  // Em maior densidade surgem aberturas irregulares, alternando elipses e
+  // losangos. Em céu pouco nublado, a forma permanece pequena e isolada.
+  let lastMarkerX = -Infinity;
+  for (let index = 1; index < samples.length - 1; index++) {
+    const sample = samples[index];
+    if (
+      sample.cloudiness < 48 ||
+      sample.x - lastMarkerX < (isCompactMode() ? 24 : 31)
+    ) {
       continue;
     }
 
     const strength = Math.max(
       0,
-      Math.min(1, (candidate.cloudiness - 15) / 85)
+      Math.min(1, (sample.cloudiness - 48) / 52)
     );
-    markers.push({
-      x: candidate.x,
-      cloudiness: candidate.cloudiness,
-      width: 13 + strength * 25,
-      height: 6 + strength * 12,
-      shape:
-        candidate.cloudiness >= 72
-          ? "ellipse"
-          : candidate.cloudiness >= 40
-            ? "trapezoid"
-            : "diamond",
-    });
-  }
+    const markerWidth = 11 + strength * 17;
+    const markerHeight = 5 + strength * 9;
+    const fillAlpha = 0.09 + strength * 0.16;
 
-  const drawPolygonMouth = (marker) => {
-    const path = cloudDensityMouthPath(marker, lineY);
-    ctx.addPath(path);
-    ctx.setFillColor(
-      new Color(
-        "#FFFFFF",
-        0.10 + (marker.cloudiness / 100) * 0.25
-      )
-    );
-    ctx.fillPath();
-
-    ctx.addPath(cloudDensityMouthPath(marker, lineY));
-    ctx.setStrokeColor(new Color("#FFFFFF", 0.98));
-    ctx.setLineWidth(lineThickness);
-    ctx.strokePath();
-  };
-
-  const drawMouth = (marker) => {
-    if (marker.shape !== "ellipse") {
-      drawPolygonMouth(marker);
-      return;
-    }
-
-    const rect = new Rect(
-      marker.x - marker.width / 2,
-      lineY - marker.height / 2,
-      marker.width,
-      marker.height
-    );
-    ctx.setFillColor(
-      new Color(
-        "#FFFFFF",
-        0.10 + (marker.cloudiness / 100) * 0.25
-      )
-    );
-    ctx.fillEllipse(rect);
-    ctx.setStrokeColor(new Color("#FFFFFF", 0.98));
-    ctx.setLineWidth(lineThickness);
-    ctx.strokeEllipse(rect);
-  };
-
-  let cursorX = 0;
-  ctx.setFillColor(new Color("#FFFFFF", 0.98));
-
-  for (const marker of markers) {
-    const left = Math.max(
-      0,
-      marker.x - marker.width / 2 - 2
-    );
-    const right = Math.min(
-      timelineWidth(),
-      marker.x + marker.width / 2 + 2
-    );
-
-    if (left > cursorX) {
-      ctx.fillRect(
-        new Rect(
-          cursorX,
-          lineY - lineThickness / 2,
-          left - cursorX,
-          lineThickness
-        )
+    if ((index + Math.round(sample.x / 10)) % 2 === 0) {
+      const rect = new Rect(
+        sample.x - markerWidth / 2,
+        centerY - markerHeight / 2,
+        markerWidth,
+        markerHeight
       );
+      ctx.setFillColor(new Color("#FFFFFF", fillAlpha));
+      ctx.fillEllipse(rect);
+      ctx.setStrokeColor(new Color("#FFFFFF", 0.98));
+      ctx.setLineWidth(isCompactMode() ? 2.2 : 3);
+      ctx.strokeEllipse(rect);
+    } else {
+      const diamond = new Path();
+      diamond.move(new Point(sample.x - markerWidth / 2, centerY));
+      diamond.addLine(
+        new Point(sample.x, centerY - markerHeight / 2)
+      );
+      diamond.addLine(
+        new Point(sample.x + markerWidth / 2, centerY)
+      );
+      diamond.addLine(
+        new Point(sample.x, centerY + markerHeight / 2)
+      );
+      diamond.closeSubpath();
+      ctx.addPath(diamond);
+      ctx.setFillColor(new Color("#FFFFFF", fillAlpha));
+      ctx.fillPath();
+      ctx.addPath(diamond);
+      ctx.setStrokeColor(new Color("#FFFFFF", 0.98));
+      ctx.setLineWidth(isCompactMode() ? 2.2 : 3);
+      ctx.strokePath();
     }
 
-    drawMouth(marker);
-    cursorX = Math.max(cursorX, right);
-    ctx.setFillColor(new Color("#FFFFFF", 0.98));
-  }
-
-  if (cursorX < timelineWidth()) {
-    ctx.fillRect(
-      new Rect(
-        cursorX,
-        lineY - lineThickness / 2,
-        timelineWidth() - cursorX,
-        lineThickness
-      )
-    );
+    lastMarkerX = sample.x;
   }
 }
 
@@ -3597,13 +3771,15 @@ function daylightStrengthAtX(x, x0, x1) {
   return 0.28 + 0.72 * (1 - Math.abs(progress * 2 - 1));
 }
 
-function daylightSlices(interval) {
+function daylightSlices(interval, weather = null) {
   const width = interval.x1 - interval.x0;
   if (width <= 0) return [];
 
+  // Fatias estreitas deixam tanto o brilho quanto a atenuação por nuvens
+  // contínuos, sem blocos perceptíveis entre uma hora e outra.
   const segmentCount = Math.min(
-    72,
-    Math.max(24, Math.ceil(width / 12))
+    260,
+    Math.max(48, Math.ceil(width / 4))
   );
   const slices = [];
 
@@ -3611,14 +3787,24 @@ function daylightSlices(interval) {
     const x = interval.x0 + (width * index) / segmentCount;
     const nextX =
       interval.x0 + (width * (index + 1)) / segmentCount;
+    const centerX = (x + nextX) / 2;
+    const daylightStrength = daylightStrengthAtX(
+      centerX,
+      interval.x0,
+      interval.x1
+    );
+    const solarVisibility = weather
+      ? solarVisibilityAtTimestamp(
+          weather,
+          timelineDateAtX(centerX).getTime()
+        )
+      : 1;
+
     slices.push({
       x,
       width: nextX - x,
-      daylightStrength: daylightStrengthAtX(
-        (x + nextX) / 2,
-        interval.x0,
-        interval.x1
-      ),
+      solarVisibility,
+      daylightStrength: daylightStrength * solarVisibility,
     });
   }
 
