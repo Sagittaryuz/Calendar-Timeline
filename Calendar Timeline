@@ -2832,84 +2832,173 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
 }
 
 function drawWeatherRainCurtains(ctx, weather) {
+  const visibleForecasts = [...(weather?.hours ?? [])]
+    .map((forecast) => ({
+      forecast,
+      timestamp:
+        Number.isFinite(Number(forecast.rainStartTimestamp))
+          ? Number(forecast.rainStartTimestamp)
+          : Number(forecast.timestamp),
+      rainMM: Math.max(0, Number(forecast.rainMM) || 0),
+      chance: Math.max(
+        0,
+        Math.min(100, Number(forecast.rainChance) || 0)
+      ),
+    }))
+    .filter(
+      (entry) =>
+        Number.isFinite(entry.timestamp) &&
+        entry.timestamp >=
+          windowStart.getTime() - 60 * 60 * 1000 &&
+        entry.timestamp <= windowEnd.getTime()
+    );
+
+  if (!visibleForecasts.length) return;
+
+  const maximumVisibleRain = Math.max(
+    0,
+    ...visibleForecasts.map((entry) => entry.rainMM)
+  );
   const chartTop = timelineChartTop();
   const chartBottom = timelineChartBottom();
   const rowHeight =
     (chartBottom - chartTop) / Math.max(1, SETTINGS.maxItems);
-  const firstDropY = chartTop + (isCompactMode() ? 7 : 10);
-  const maximumDropY = Math.min(
-    chartBottom,
-    chartTop + rowHeight * 2 - (isCompactMode() ? 4 : 7)
+  const rainBaseY = thermalBandBottomY();
+  const maximumColumnHeight = Math.max(
+    10,
+    rainBaseY -
+      Math.max(chartTop, chartBottom - rowHeight * 2)
   );
-  const hours = weather?.hours ?? [];
+  const hourWidth = Math.abs(
+    timeToX(
+      new Date(windowStart.getTime() + 60 * 60 * 1000)
+    ) - timeToX(windowStart)
+  );
 
-  for (const forecast of hours) {
-    const timestamp =
-      Number.isFinite(Number(forecast.rainStartTimestamp))
-        ? Number(forecast.rainStartTimestamp)
-        : Number(forecast.timestamp);
-    if (
-      !Number.isFinite(timestamp) ||
-      timestamp < windowStart.getTime() - 60 * 60 * 1000 ||
-      timestamp > windowEnd.getTime()
-    ) {
-      continue;
-    }
+  for (const entry of visibleForecasts) {
+    const hasMeasuredRain = entry.rainMM >= 0.10;
+    const hasRelevantProbability = entry.chance >= 45;
+    if (!hasMeasuredRain && !hasRelevantProbability) continue;
 
-    const explicitAmount = Math.max(
-      0,
-      Number(forecast.rainMM) || 0
+    const x = timeToX(new Date(entry.timestamp));
+    if (x < -14 || x > timelineWidth() + 14) continue;
+
+    const probabilityStrength = entry.chance / 100;
+    const absoluteVolumeStrength = Math.min(
+      1,
+      Math.sqrt(entry.rainMM / 8)
     );
-    const chance = Math.max(
-      0,
-      Math.min(100, Number(forecast.rainChance) || 0)
-    );
-
-    // A função de apoio converte qualquer probabilidade em um volume visual.
-    // Aqui usamos apenas milímetros realmente fornecidos pela Foreca, evitando
-    // que 10% ou 20% de chance preencham todas as horas com gotas.
-    const hasRelevantRain =
-      explicitAmount >= 0.10 || chance >= 45;
-    if (!hasRelevantRain) continue;
-
-    const x = timeToX(new Date(timestamp));
-    if (x < -12 || x > timelineWidth() + 12) continue;
-
+    const relativeVolumeStrength =
+      maximumVisibleRain > 0
+        ? (entry.rainMM / maximumVisibleRain) *
+          Math.min(0.88, 0.30 + maximumVisibleRain / 8)
+        : 0;
     const strength = Math.max(
-      0.20,
+      hasMeasuredRain ? 0.18 : 0.10,
       Math.min(
         1,
-        Math.max(chance / 100, explicitAmount / 6)
+        absoluteVolumeStrength,
+        relativeVolumeStrength,
+        probabilityStrength
+      ),
+      Math.min(
+        1,
+        Math.max(
+          absoluteVolumeStrength,
+          relativeVolumeStrength,
+          probabilityStrength *
+            (hasMeasuredRain ? 0.72 : 0.34)
+        )
       )
     );
+    const easedStrength =
+      strength * strength * (3 - 2 * strength);
+    const columnHeight = Math.max(
+      isCompactMode() ? 7 : 10,
+      maximumColumnHeight * easedStrength
+    );
+    const columnWidth = Math.max(
+      isCompactMode() ? 2.5 : 3.5,
+      Math.min(
+        isCompactMode() ? 5.5 : 7.5,
+        hourWidth * (0.12 + strength * 0.08)
+      )
+    );
+    const columnOpacity = Math.min(
+      0.90,
+      0.46 + strength * 0.42
+    );
+
+    drawHourlyRainColumn(
+      ctx,
+      x,
+      rainBaseY,
+      columnHeight,
+      columnWidth,
+      columnOpacity
+    );
+
     const dropCount =
-      strength >= 0.80
+      strength >= 0.78
         ? 3
-        : strength >= 0.55
+        : strength >= 0.48
           ? 2
           : 1;
     const dropSize =
-      (isCompactMode() ? 7 : 10) +
-      strength * (isCompactMode() ? 3 : 5);
-    const opacity = Math.min(0.96, 0.68 + strength * 0.28);
+      (isCompactMode() ? 6.5 : 8.5) +
+      strength * (isCompactMode() ? 2.5 : 4);
+    const dropGap = dropSize * 0.92;
+    const groupWidth = (dropCount - 1) * dropGap;
+    const dropY =
+      weatherStripBottomY() -
+      (isCompactMode() ? 9 : 11) -
+      strength * 3;
 
     for (let index = 0; index < dropCount; index++) {
-      const progress =
-        dropCount === 1
-          ? 0
-          : index / Math.max(1, dropCount - 1);
-      const y =
-        firstDropY +
-        (maximumDropY - firstDropY) * progress;
       drawHourlyRainDrop(
         ctx,
-        x,
-        y,
-        dropSize * (1 - index * 0.07),
-        opacity
+        x - groupWidth / 2 + index * dropGap,
+        dropY,
+        dropSize * (1 - Math.abs(index - (dropCount - 1) / 2) * 0.05),
+        Math.min(0.98, 0.72 + strength * 0.25)
       );
     }
   }
+}
+
+function drawHourlyRainColumn(
+  ctx,
+  centerX,
+  baseY,
+  height,
+  width,
+  opacity
+) {
+  const topY = baseY - height;
+
+  // Halo discreto: a coluna permanece legível sobre o gradiente térmico,
+  // mas não compete com os charts de agenda.
+  ctx.setFillColor(
+    new Color(SETTINGS.rainLineColor, opacity * 0.18)
+  );
+  fillRoundedRect(
+    ctx,
+    new Rect(
+      centerX - width * 1.15,
+      topY,
+      width * 2.3,
+      height
+    ),
+    width,
+    new Color(SETTINGS.rainLineColor, opacity * 0.18)
+  );
+
+  fillRoundedRect(
+    ctx,
+    new Rect(centerX - width / 2, topY, width, height),
+    width / 2,
+    new Color(SETTINGS.rainLineColor, opacity)
+  );
 }
 
 function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
@@ -2919,7 +3008,6 @@ function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
   const shoulderY = bodyCenterY - radius * 0.18;
   const color = new Color(SETTINGS.rainLineColor, opacity);
 
-  // Ponta superior espessa.
   const tip = new Path();
   tip.move(new Point(centerX, tipY));
   tip.addLine(
@@ -2933,7 +3021,6 @@ function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
   ctx.setFillColor(color);
   ctx.fillPath();
 
-  // Corpo arredondado da gota.
   ctx.setFillColor(color);
   ctx.fillEllipse(
     new Rect(
@@ -2944,7 +3031,6 @@ function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
     )
   );
 
-  // Pequeno reflexo melhora a leitura sem transformar a gota em outra linha.
   const highlightRadius = Math.max(1, radius * 0.20);
   ctx.setFillColor(new Color("#DDF7FF", opacity * 0.76));
   ctx.fillEllipse(
@@ -3223,9 +3309,10 @@ function renderTimelinePanel(items, loadError) {
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
-  // A chuva fica acima do gradiente solar e das linhas comuns do grid.
-  drawWeatherRainCurtains(ctx, hourlyWeather);
   drawCompactThermalBand(ctx, hourlyWeather);
+  // As colunas de precipitação atravessam a curva térmica; os charts da
+  // agenda continuam sendo desenhados depois e permanecem prioritários.
+  drawWeatherRainCurtains(ctx, hourlyWeather);
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -3582,7 +3669,7 @@ function drawCloudCoverageForms(ctx, weather, stripBottom) {
 
   const width = timelineWidth();
   const sampleStep = isCompactMode() ? 8 : 6;
-  const threshold = 28;
+  const threshold = 24;
   const samples = [];
 
   for (let x = 0; x <= width + sampleStep; x += sampleStep) {
@@ -3624,7 +3711,7 @@ function drawAmorphousCloudSegment(ctx, samples, stripBottom) {
     const sample = samples[index];
     const normalized = Math.max(
       0,
-      Math.min(1, (sample.cloudiness - 28) / 72)
+      Math.min(1, (sample.cloudiness - 24) / 76)
     );
     const edgeDistance = Math.min(
       index,
@@ -3672,8 +3759,17 @@ function drawAmorphousCloudSegment(ctx, samples, stripBottom) {
   ctx.fillPath();
 
   ctx.addPath(path);
-  ctx.setStrokeColor(new Color("#FFFFFF", 0.94));
-  ctx.setLineWidth(isCompactMode() ? 2.6 : 3.4);
+  ctx.setStrokeColor(
+    new Color(
+      "#FFFFFF",
+      0.72 + Math.min(1, averageCloudiness / 100) * 0.27
+    )
+  );
+  ctx.setLineWidth(
+    (isCompactMode() ? 1.9 : 2.5) +
+      Math.min(1, averageCloudiness / 100) *
+        (isCompactMode() ? 1.8 : 2.6)
+  );
   ctx.strokePath();
 
   // Em maior densidade surgem aberturas irregulares, alternando elipses e
@@ -3682,7 +3778,7 @@ function drawAmorphousCloudSegment(ctx, samples, stripBottom) {
   for (let index = 1; index < samples.length - 1; index++) {
     const sample = samples[index];
     if (
-      sample.cloudiness < 48 ||
+      sample.cloudiness < 45 ||
       sample.x - lastMarkerX < (isCompactMode() ? 24 : 31)
     ) {
       continue;
@@ -3690,7 +3786,7 @@ function drawAmorphousCloudSegment(ctx, samples, stripBottom) {
 
     const strength = Math.max(
       0,
-      Math.min(1, (sample.cloudiness - 48) / 52)
+      Math.min(1, (sample.cloudiness - 45) / 55)
     );
     const markerWidth = 11 + strength * 17;
     const markerHeight = 5 + strength * 9;
