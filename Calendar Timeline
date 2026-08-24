@@ -1203,6 +1203,12 @@ function chooseItems(items, referenceDate, limit) {
   for (const dayItems of byDay.values()) {
     const rows = Array.from({ length: limit }, () => []);
     const chronologicalItems = [...dayItems].sort(byTime);
+    const allDayEvents = chronologicalItems.filter(
+      (item) => item.kind === "event" && item.isAllDay
+    );
+    const regularItems = chronologicalItems.filter(
+      (item) => !(item.kind === "event" && item.isAllDay)
+    );
 
     const placeItem = (item, rowOrder) => {
       const availableRow = rowOrder.find((row) =>
@@ -1219,16 +1225,32 @@ function chooseItems(items, referenceDate, limit) {
       placed.push(positioned);
     };
 
-    chronologicalItems.forEach((item, index) => {
-      // A ordem visual padrão é primeira linha, segunda, terceira...
-      // Se a linha preferida estiver ocupada, procura outra sem conflito.
-      const preferredRow = Math.min(index, limit - 1);
+    // Eventos de dia inteiro têm prioridade absoluta na última linha.
+    // Se houver mais de um no mesmo dia, somente os que não se sobrepõem
+    // reutilizam essa linha; os demais entram no contador de excedentes.
+    allDayEvents.forEach((item) => {
+      placeItem(item, [limit - 1]);
+    });
+
+    // Quando existe evento de dia inteiro, a quinta linha fica reservada.
+    const lastRegularRow =
+      allDayEvents.length > 0 ? limit - 2 : limit - 1;
+
+    regularItems.forEach((item, index) => {
+      if (lastRegularRow < 0) {
+        hidden.push(item);
+        return;
+      }
+
+      // A ordem visual padrão continua sendo primeira linha, segunda,
+      // terceira... dentro das linhas disponíveis para itens com horário.
+      const preferredRow = Math.min(index, lastRegularRow);
       const upperRows = [];
       for (let row = preferredRow - 1; row >= 0; row--) {
         upperRows.push(row);
       }
       const lowerRows = [];
-      for (let row = preferredRow + 1; row < limit; row++) {
+      for (let row = preferredRow + 1; row <= lastRegularRow; row++) {
         lowerRows.push(row);
       }
 
