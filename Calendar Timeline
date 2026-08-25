@@ -2932,15 +2932,15 @@ function drawWeatherRainCurtains(ctx, weather) {
       maximumColumnHeight * easedStrength
     );
     const columnWidth = Math.max(
-      isCompactMode() ? 2.5 : 3.5,
+      isCompactMode() ? 4 : 5.5,
       Math.min(
-        isCompactMode() ? 5.5 : 7.5,
-        hourWidth * (0.12 + strength * 0.08)
+        isCompactMode() ? 8 : 11,
+        hourWidth * (0.18 + strength * 0.10)
       )
     );
     const columnOpacity = Math.min(
-      0.90,
-      0.46 + strength * 0.42
+      0.98,
+      0.64 + strength * 0.34
     );
 
     drawHourlyRainColumn(
@@ -2959,8 +2959,8 @@ function drawWeatherRainCurtains(ctx, weather) {
           ? 2
           : 1;
     const dropSize =
-      (isCompactMode() ? 6.5 : 8.5) +
-      strength * (isCompactMode() ? 2.5 : 4);
+      (isCompactMode() ? 8.5 : 11.5) +
+      strength * (isCompactMode() ? 3.5 : 5.5);
     const dropGap = dropSize * 0.92;
     const groupWidth = (dropCount - 1) * dropGap;
     const dropY =
@@ -2974,7 +2974,7 @@ function drawWeatherRainCurtains(ctx, weather) {
         x - groupWidth / 2 + index * dropGap,
         dropY,
         dropSize * (1 - Math.abs(index - (dropCount - 1) / 2) * 0.05),
-        Math.min(0.98, 0.72 + strength * 0.25)
+        Math.min(1.0, 0.86 + strength * 0.14)
       );
     }
   }
@@ -2990,21 +2990,17 @@ function drawHourlyRainColumn(
 ) {
   const topY = baseY - height;
 
-  // Halo discreto: a coluna permanece legível sobre o gradiente térmico,
-  // mas não compete com os charts de agenda.
-  ctx.setFillColor(
-    new Color(SETTINGS.rainLineColor, opacity * 0.18)
-  );
+  // Halo mais nítido mantém a precipitação visível sobre qualquer fundo.
   fillRoundedRect(
     ctx,
     new Rect(
-      centerX - width * 1.15,
+      centerX - width * 1.20,
       topY,
-      width * 2.3,
+      width * 2.4,
       height
     ),
     width,
-    new Color(SETTINGS.rainLineColor, opacity * 0.18)
+    new Color(SETTINGS.rainLineColor, opacity * 0.26)
   );
 
   fillRoundedRect(
@@ -3016,19 +3012,19 @@ function drawHourlyRainColumn(
 }
 
 function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
-  const radius = size * 0.36;
+  const radius = size * 0.44;
   const bodyCenterY = centerY + size * 0.10;
-  const tipY = centerY - size * 0.55;
-  const shoulderY = bodyCenterY - radius * 0.18;
+  const tipY = centerY - size * 0.60;
+  const shoulderY = bodyCenterY - radius * 0.15;
   const color = new Color(SETTINGS.rainLineColor, opacity);
 
   const tip = new Path();
   tip.move(new Point(centerX, tipY));
   tip.addLine(
-    new Point(centerX - radius * 0.82, shoulderY)
+    new Point(centerX - radius, shoulderY)
   );
   tip.addLine(
-    new Point(centerX + radius * 0.82, shoulderY)
+    new Point(centerX + radius, shoulderY)
   );
   tip.closeSubpath();
   ctx.addPath(tip);
@@ -3417,11 +3413,12 @@ function drawFixedDaylightGlow(ctx, weather) {
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
-    const slices = daylightSlices(interval, weather);
+    // A luz solar é uniforme em relação às nuvens. Mantém apenas a
+    // progressão natural do amanhecer ao meio-dia e ao entardecer.
+    const slices = daylightSlices(interval);
     if (slices.length === 0) continue;
 
-    // A irradiação continua amarela, mas perde intensidade de forma suave
-    // conforme a nebulosidade prevista aumenta.
+    // A irradiação amarela não sofre mais atenuação pela nebulosidade.
     for (const slice of slices) {
       for (let y = lineY + 2; y < glowEndY; y += 2) {
         const verticalProgress =
@@ -3488,11 +3485,7 @@ function drawFixedDaylightGlow(ctx, weather) {
 
     // Somente 06:00 e 18:00 recebem a projeção circular das extremidades.
     for (const endpointX of [interval.x0, interval.x1]) {
-      const endpointDate = timelineDateAtX(endpointX);
-      const visibility = solarVisibilityAtTimestamp(
-        weather,
-        endpointDate.getTime()
-      );
+      const visibility = 1;
       for (const [radius, opacity] of [
         [12, 0.10],
         [8, 0.18],
