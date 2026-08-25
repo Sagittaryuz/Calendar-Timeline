@@ -2880,10 +2880,11 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
   // do iOS possuem margem interna própria.
   const fontSize = Math.round(size * 1.24);
   const solarGlyphs = new Set(["☀️", "🌤️"]);
+  // Os glifos solares do AppleColorEmoji ficam visualmente acima do
+  // centro geométrico da caixa. A compensação proporcional os alinha à Lua
+  // nos modos compacto e normal, preservando o mesmo eixo horizontal.
   const verticalOffset = solarGlyphs.has(glyph)
-    ? isCompactMode()
-      ? 2
-      : 3
+    ? Math.round(size * 0.2)
     : 0;
   let font;
   try {
