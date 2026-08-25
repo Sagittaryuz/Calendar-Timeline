@@ -2703,9 +2703,8 @@ function drawWeatherConditionStrip(ctx, weather) {
   // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
   drawDayBoundaryOriginsBehindMoon(ctx, bottom);
 
-  // As formas de nuvem ocupam somente a faixa meteorológica. Lua e sol são
-  // desenhados depois, permanecendo visualmente acima delas.
-  drawCloudCoverageForms(ctx, weather, bottom);
+  // A nebulosidade continua disponível para os cálculos meteorológicos,
+  // mas não possui representação visual nesta faixa.
 
   let nightDay = addDays(startOfDay(windowStart), -1);
   const finalDay = addDays(startOfDay(windowEnd), 1);
