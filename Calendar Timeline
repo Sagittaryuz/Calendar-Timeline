@@ -3930,8 +3930,24 @@ function drawFixedDaylightGlow(ctx, weather) {
         );
       }
 
-      // O próprio gradiente contínuo fornece a intensidade do brilho no
-      // topo; não há retângulos sobrepostos com bordas rígidas.
+      // Linha solar única sobre a borda do grid. Ela fica exatamente em
+      // lineY; o preenchimento abaixo continua sem faixas adicionais.
+      ctx.setFillColor(
+        new Color(
+          "#FFD000",
+          Math.min(
+            1,
+            (0.22 + 0.77 * slice.daylightStrength) *
+              SETTINGS.solarGlowIntensity
+          )
+        )
+      );
+      ctx.fillRect(
+        new Rect(slice.x - 1, lineY, slice.width + 3, 1)
+      );
+
+      // O gradiente contínuo fornece a intensidade abaixo da linha, sem
+      // retângulos sobrepostos com bordas rígidas.
     }
 
     // Somente 06:00 e 18:00 recebem a projeção circular das extremidades.
