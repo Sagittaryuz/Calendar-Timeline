@@ -505,6 +505,15 @@ function emptyHourlyWeather() {
   return { hours: [], daily: {} };
 }
 
+function firstFiniteWeatherNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
 async function loadHourlyWeather(location) {
   const fm = FileManager.local();
   const cachePath = fm.joinPath(
@@ -573,28 +582,37 @@ async function loadHourlyWeather(location) {
       if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
         continue;
       }
+      const rainChanceValue = firstFiniteWeatherNumber(
+        forecast.precipProb,
+        forecast.precipitationProbability,
+        forecast.precipProbability,
+        forecast.pp
+      );
       const rainChance = Math.max(
         0,
-        Math.min(100, Number(forecast.precipProb) || 0)
+        Math.min(100, rainChanceValue ?? 0)
       );
-      const rainCandidates = [
+
+      // A API pode fornecer o acumulado horário com nomes diferentes,
+      // dependendo do produto/feed. O precipRate fica como último fallback,
+      // pois representa uma taxa e não necessariamente um acumulado.
+      const explicitRain = firstFiniteWeatherNumber(
         forecast.precip,
         forecast.precipitation,
         forecast.precipAmount,
         forecast.precipAccum,
+        forecast.precipitationAmount,
+        forecast.precipitationSum,
         forecast.rain,
         forecast.rainAmount,
-      ].map(Number);
-      const explicitRain = rainCandidates.find((value) =>
-        Number.isFinite(value)
+        forecast.pr,
+        forecast.precipRate
       );
-      const cloudinessSource = forecast.cloudiness;
-      const rawCloudiness =
-        cloudinessSource === null ||
-        cloudinessSource === undefined ||
-        cloudinessSource === ""
-          ? NaN
-          : Number(cloudinessSource);
+      const rawCloudiness = firstFiniteWeatherNumber(
+        forecast.cloudiness,
+        forecast.cloudCover,
+        forecast.c
+      );
       hours.push({
         timestamp,
         // Na Foreca, precipProb representa a hora que termina no timestamp.
@@ -823,7 +841,20 @@ function buildHourlyWeather(hours) {
     }
   }
 
-  return { hours: normalized, daily };
+  const dailyRainTotals = {};
+  for (const hour of normalized) {
+    const key = dateKey(new Date(hour.timestamp));
+    dailyRainTotals[key] =
+      (dailyRainTotals[key] || 0) + Math.max(0, hour.rainMM);
+  }
+
+  const enrichedHours = normalized.map((hour) => ({
+    ...hour,
+    dailyRainMM:
+      dailyRainTotals[dateKey(new Date(hour.timestamp))] || 0,
+  }));
+
+  return { hours: enrichedHours, daily };
 }
 
 async function loadNightTextures() {
@@ -2552,6 +2583,15 @@ function weatherIconCenterY() {
   return Math.round(weatherStripBottomY() / 2);
 }
 
+function weatherIconIntersectsTimeline(centerX, halfWidth) {
+  // A própria borda do DrawContext faz o recorte; este teste apenas impede
+  // trabalho com ícones completamente fora da janela e preserva os parciais.
+  return (
+    centerX + halfWidth > 0 &&
+    centerX - halfWidth < timelineWidth()
+  );
+}
+
 // A linha solar nasce no primeiro pixel útil do grid, abaixo da faixa fixa
 // dos ícones. Assim o halo não interfere no alinhamento óptico dos astros.
 function solarLineY() {
@@ -2699,7 +2739,11 @@ function weatherConditionTicks(weather) {
     tick.setHours(tick.getHours() + 1);
   }
 
-  while (tick <= windowEnd) {
+  const iconDisplayEnd = new Date(
+    windowEnd.getTime() + stepHours * 60 * 60 * 1000
+  );
+
+  while (tick <= iconDisplayEnd) {
     const forecast = weatherForecastNearest(
       weather?.hours ?? [],
       tick.getTime()
@@ -2829,6 +2873,10 @@ function weatherEmojiForForecast(forecast, date) {
 
 function rainEvidenceForForecast(forecast) {
   const rainMM = Math.max(0, Number(forecast?.rainMM) || 0);
+  const dailyRainMM = Math.max(
+    0,
+    Number(forecast?.dailyRainMM) || 0
+  );
   const rainChance = Math.max(
     0,
     Math.min(100, Number(forecast?.rainChance) || 0)
@@ -2853,6 +2901,12 @@ function rainEvidenceForForecast(forecast) {
   // A medição horária é a evidência mais forte.
   const measuredRain = rainMM >= SETTINGS.rainEvidenceMinMM;
 
+  // Uma garoa pode vir distribuída em várias horas. Se existe uma parcela
+  // positiva nesta hora e o total diário confirma chuva, ela continua visível.
+  const dailyAggregateRain =
+    rainMM > 0 &&
+    dailyRainMM >= SETTINGS.rainEvidenceMinMM;
+
   // Probabilidade isolada só aparece com uma margem significativa e,
   // quando disponível, alguma cobertura de nuvens.
   const probabilityRain =
@@ -2867,10 +2921,15 @@ function rainEvidenceForForecast(forecast) {
       rainChance >= SETTINGS.rainSymbolMinChance);
 
   return {
-    hasRain: measuredRain || probabilityRain || symbolicRain,
+    hasRain:
+      measuredRain ||
+      dailyAggregateRain ||
+      probabilityRain ||
+      symbolicRain,
     rainMM,
     rainChance,
     cloudiness,
+    dailyRainMM,
   };
 }
 
@@ -2990,6 +3049,10 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
 
   for (const entry of ticks) {
     const centerX = timeToX(entry.tick);
+    if (!weatherIconIntersectsTimeline(centerX, iconSize)) {
+      continue;
+    }
+
     const eclipse =
       entry.eclipse ?? eclipseForDate(entry.tick);
 
@@ -3354,6 +3417,12 @@ function drawWeatherRainCurtains(ctx, weather) {
     if (!rainEvidence.hasRain) continue;
     const hasMeasuredRain =
       entry.rainMM >= SETTINGS.rainEvidenceMinMM;
+    const hasDailyAggregateRain =
+      entry.rainMM > 0 &&
+      Number(entry.forecast?.dailyRainMM) >=
+        SETTINGS.rainEvidenceMinMM;
+    const hasMeasuredOrAggregateRain =
+      hasMeasuredRain || hasDailyAggregateRain;
 
     const x = timeToX(new Date(entry.timestamp));
     if (x < -14 || x > timelineWidth() + 14) continue;
@@ -3369,7 +3438,7 @@ function drawWeatherRainCurtains(ctx, weather) {
           Math.min(0.88, 0.30 + maximumVisibleRain / 8)
         : 0;
     const strength = Math.max(
-      hasMeasuredRain ? 0.18 : 0.10,
+      hasMeasuredOrAggregateRain ? 0.18 : 0.10,
       Math.min(
         1,
         absoluteVolumeStrength,
@@ -3382,7 +3451,7 @@ function drawWeatherRainCurtains(ctx, weather) {
           absoluteVolumeStrength,
           relativeVolumeStrength,
           probabilityStrength *
-            (hasMeasuredRain ? 0.72 : 0.34)
+            (hasMeasuredOrAggregateRain ? 0.72 : 0.34)
         )
       )
     );
