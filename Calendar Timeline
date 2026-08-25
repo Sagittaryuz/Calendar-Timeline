@@ -3328,6 +3328,8 @@ function drawWeatherRainCurtains(ctx, weather) {
 
     const rainEvidence = rainEvidenceForForecast(entry.forecast);
     if (!rainEvidence.hasRain) continue;
+    const hasMeasuredRain =
+      entry.rainMM >= SETTINGS.rainEvidenceMinMM;
 
     const x = timeToX(new Date(entry.timestamp));
     if (x < -14 || x > timelineWidth() + 14) continue;
