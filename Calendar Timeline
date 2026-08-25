@@ -2542,6 +2542,22 @@ function weatherStripBottomY() {
   return isCompactMode() ? 40 : 52;
 }
 
+// A faixa superior pertence exclusivamente aos astros e ícones de clima.
+// Todos compartilham o mesmo centro horizontal e a mesma caixa visual.
+function weatherIconSize() {
+  return isCompactMode() ? 25 : 34;
+}
+
+function weatherIconCenterY() {
+  return Math.round(weatherStripBottomY() / 2);
+}
+
+// A linha solar nasce no primeiro pixel útil do grid, abaixo da faixa fixa
+// dos ícones. Assim o halo não interfere no alinhamento óptico dos astros.
+function solarLineY() {
+  return timelineChartTop();
+}
+
 function thermalBandTopY() {
   return thermalBandBottomY() - (isCompactMode() ? 21 : 30);
 }
@@ -2956,9 +2972,10 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   const ticks = weatherConditionTicks(weather);
   if (ticks.length === 0) return;
 
-  // Todos os ícones compartilham exatamente a mesma caixa visual da Lua.
-  const iconSize = isCompactMode() ? 25 : 34;
-  const centerY = Math.round(stripBottom / 2);
+  // Todos os ícones compartilham exatamente a mesma caixa visual da Lua
+  // e o mesmo eixo horizontal fixo, independentemente da linha solar.
+  const iconSize = weatherIconSize();
+  const centerY = weatherIconCenterY();
   const lunarGlyphs = new Set([
     "🌑", "🌒", "🌓", "🌔",
     "🌕", "🌖", "🌗", "🌘",
@@ -3174,9 +3191,9 @@ function drawWeatherConditionStrip(ctx, weather) {
       }
 
       const centerTime = (start.getTime() + end.getTime()) / 2;
-      const moonSize = isCompactMode() ? 25 : 34;
+      const moonSize = weatherIconSize();
       const moonX = timeToX(new Date(centerTime)) - moonSize / 2;
-      const moonY = Math.max(3, (bottom - moonSize) / 2);
+      const moonY = weatherIconCenterY() - moonSize / 2;
 
       drawMoonPhase(
         ctx,
@@ -3193,7 +3210,7 @@ function drawWeatherConditionStrip(ctx, weather) {
 }
 
 function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
-  const moonCenterY = stripBottom / 2;
+  const moonCenterY = weatherIconCenterY();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -3804,7 +3821,7 @@ function drawWeekdayBadgesOnTop(ctx) {
 }
 
 function drawFixedDaylightGlow(ctx, weather) {
-  const lineY = weatherStripBottomY() - 1;
+  const lineY = solarLineY();
   const glowEndY = timelineChartBottom();
 
   for (const interval of visibleDaylightIntervals()) {
@@ -3856,7 +3873,7 @@ function drawFixedDaylightGlow(ctx, weather) {
         ctx.fillRect(
           new Rect(
             slice.x - 1,
-            lineY - height / 2,
+            lineY,
             slice.width + 3,
             height
           )
@@ -3874,7 +3891,7 @@ function drawFixedDaylightGlow(ctx, weather) {
         )
       );
       ctx.fillRect(
-        new Rect(slice.x - 1, lineY - 2, slice.width + 3, 4)
+        new Rect(slice.x - 1, lineY, slice.width + 3, 4)
       );
     }
 
@@ -3898,7 +3915,7 @@ function drawFixedDaylightGlow(ctx, weather) {
         ctx.fillEllipse(
           new Rect(
             endpointX - radius,
-            lineY - radius,
+            lineY,
             radius * 2,
             radius * 2
           )
@@ -5430,7 +5447,7 @@ function drawEventStartLines(ctx, items) {
 
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
-  const gridTop = weatherStripBottomY();
+  const gridTop = solarLineY();
   const gridBottom = thermalBandBottomY();
 
   for (const tick of ticks) {
