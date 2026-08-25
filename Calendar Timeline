@@ -2665,9 +2665,7 @@ function weatherForecastNearest(hours, timestamp) {
 }
 
 function weatherConditionTicks(weather) {
-  // Os ícones meteorológicos são sempre amostrados de duas em duas horas.
-  // Chuva continua usando todos os registros horários em outra camada.
-  const stepHours = 2;
+  const stepHours = isCompactMode() ? 6 : 2;
   const ticks = [];
   let tick = floorToHour(windowStart);
   const remainder = tick.getHours() % stepHours;
@@ -2680,133 +2678,19 @@ function weatherConditionTicks(weather) {
       weather?.hours ?? [],
       tick.getTime()
     );
-    if (forecast) {
+    const hour = tick.getHours();
+    const isAnchor = hour === 0 || hour === 12;
+    const isCloudy =
+      Number(forecast?.cloudiness ?? 0) >= 18 ||
+      Number(forecast?.rainChance ?? 0) >= 15 ||
+      Number(forecast?.rainMM ?? 0) > 0;
+
+    if (isAnchor || isCloudy) {
       ticks.push({ tick: new Date(tick), forecast });
     }
     tick = new Date(tick.getTime() + stepHours * 60 * 60 * 1000);
   }
   return ticks;
-}
-
-function weatherSymbolGroup(forecast) {
-  const symbol = String(forecast?.symbol ?? "").toLocaleLowerCase();
-  const match = symbol.match(/[dn]?(\\d{3})/);
-  if (!match) return null;
-  const code = Number(match[1]);
-  return Number.isFinite(code) ? Math.floor(code / 100) : null;
-}
-
-function weatherEmojiForForecast(forecast, date) {
-  const symbol = String(forecast?.symbol ?? "").toLocaleLowerCase();
-  const group = weatherSymbolGroup(forecast);
-  const hour = date.getHours();
-  const isNight =
-    hour >= SETTINGS.nightStartHour ||
-    hour < SETTINGS.nightEndHour;
-  const rainMM = Math.max(0, Number(forecast?.rainMM) || 0);
-  const rainChance = Math.max(
-    0,
-    Math.min(100, Number(forecast?.rainChance) || 0)
-  );
-  const cloudiness = Number.isFinite(Number(forecast?.cloudiness))
-    ? Math.max(0, Math.min(100, Number(forecast.cloudiness)))
-    : 0;
-
-  if (
-    symbol.includes("thunder") ||
-    symbol.includes("storm") ||
-    group === 6
-  ) {
-    return "⛈️";
-  }
-  if (
-    symbol.includes("snow") ||
-    symbol.includes("sleet") ||
-    group === 7 ||
-    group === 8
-  ) {
-    return group === 8 ? "❄️" : "🌨️";
-  }
-  if (
-    symbol.includes("fog") ||
-    symbol.includes("mist") ||
-    group === 9
-  ) {
-    return "🌫️";
-  }
-  if (
-    rainMM >= 0.10 ||
-    rainChance >= 45 ||
-    group === 4 ||
-    group === 5
-  ) {
-    return "🌧️";
-  }
-  if (cloudiness >= 82 || group === 3) return "☁️";
-  if (cloudiness >= 48 || group === 2) {
-    return isNight ? "☁️" : "⛅";
-  }
-  if (cloudiness >= 18 || group === 1) {
-    return isNight ? "☁️" : "🌤️";
-  }
-  return isNight ? "🌙" : "☀️";
-}
-
-function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
-  const ticks = weatherConditionTicks(weather);
-  if (!ticks.length) return;
-
-  const twoHourWidth = Math.abs(
-    timeToX(
-      new Date(windowStart.getTime() + 2 * 60 * 60 * 1000)
-    ) - timeToX(windowStart)
-  );
-  const iconSize = Math.max(
-    9,
-    Math.min(
-      isExtendedDetailedMode() ? 20 : 22,
-      twoHourWidth * 0.44
-    )
-  );
-  const cellWidth = Math.max(12, twoHourWidth * 0.92);
-  const iconY = stripBottom / 2 - iconSize * 0.72;
-
-  ctx.setTextAlignedCenter();
-  try {
-    ctx.setFont(new Font("AppleColorEmoji", iconSize));
-  } catch (_) {
-    ctx.setFont(Font.systemFont(iconSize));
-  }
-
-  for (const { tick, forecast } of ticks) {
-    const x = timeToX(tick);
-    if (x < -cellWidth / 2 || x > timelineWidth() + cellWidth / 2) {
-      continue;
-    }
-
-    const icon = weatherEmojiForForecast(forecast, tick);
-    const hour = tick.getHours();
-    const isClearAstronomyIcon = icon === "☀️" || icon === "🌙";
-
-    // O sol principal já representa 12h e a lua de fase real representa 00h.
-    // Evita duplicação exatamente nesses dois centros astronômicos.
-    if (
-      isClearAstronomyIcon &&
-      (hour === 0 || hour === 12)
-    ) {
-      continue;
-    }
-
-    ctx.drawTextInRect(
-      icon,
-      new Rect(
-        x - cellWidth / 2,
-        iconY,
-        cellWidth,
-        iconSize + 8
-      )
-    );
-  }
 }
 
 function drawWeatherConditionStrip(ctx, weather) {
@@ -2821,10 +2705,6 @@ function drawWeatherConditionStrip(ctx, weather) {
 
   // A nebulosidade continua disponível para os cálculos meteorológicos,
   // mas não possui representação visual nesta faixa.
-
-  // Condições meteorológicas coloridas a cada duas horas. São desenhadas
-  // antes dos astros para que as luas de fase real continuem prioritárias.
-  drawHourlyWeatherIcons(ctx, weather, bottom);
 
   let nightDay = addDays(startOfDay(windowStart), -1);
   const finalDay = addDays(startOfDay(windowEnd), 1);
