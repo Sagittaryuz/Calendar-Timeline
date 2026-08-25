@@ -30,6 +30,11 @@ const SETTINGS = {
   weatherCacheMinutes: 30,
   forecaBaseURL: "https://fnw-us.foreca.com",
   forecaTokenHours: 24,
+  // Margem visual para não transformar uma probabilidade isolada em chuva.
+  rainEvidenceMinMM: 0.10,
+  rainEvidenceMinChance: 55,
+  rainEvidenceMinCloudiness: 40,
+  rainSymbolMinChance: 35,
   rainLineColor: "#64D2FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -1967,6 +1972,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   const rainEntries = sourceHours
     .map((hour) => ({
       hour,
+      evidence: rainEvidenceForForecast(hour),
       amount: rainMillimetersForHour(hour),
       timestamp:
         Number.isFinite(Number(hour.rainStartTimestamp)) &&
@@ -1976,6 +1982,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     }))
     .filter(
       (entry) =>
+        entry.evidence.hasRain &&
         entry.amount > 0 &&
         entry.timestamp >= windowStart.getTime() - 3600000 &&
         entry.timestamp <= windowEnd.getTime() &&
@@ -1995,7 +2002,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     4,
     graphBottom - graphTop - 2
   );
-  const barWidth = isCompactMode() ? 2 : 3;
+  const barWidth = isCompactMode() ? 4 : 5;
 
   for (const entry of rainEntries) {
     const normalized = Math.max(
@@ -2784,13 +2791,7 @@ function weatherEmojiForForecast(forecast, date) {
     return "🌫️";
   }
 
-  if (
-    rainMM >= 0.10 ||
-    rainChance >= 45 ||
-    symbolGroup === 4 ||
-    symbolGroup === 5 ||
-    symbol.includes("rain")
-  ) {
+  if (rainEvidenceForForecast(forecast).hasRain) {
     return "🌧️";
   }
 
@@ -2810,11 +2811,58 @@ function weatherEmojiForForecast(forecast, date) {
   return "☀️";
 }
 
+function rainEvidenceForForecast(forecast) {
+  const rainMM = Math.max(0, Number(forecast?.rainMM) || 0);
+  const rainChance = Math.max(
+    0,
+    Math.min(100, Number(forecast?.rainChance) || 0)
+  );
+  const cloudiness =
+    forecast?.cloudiness === null ||
+    forecast?.cloudiness === undefined ||
+    forecast?.cloudiness === "" ||
+    !Number.isFinite(Number(forecast.cloudiness))
+      ? null
+      : Math.max(
+          0,
+          Math.min(100, Number(forecast.cloudiness) || 0)
+        );
+  const symbol = String(forecast?.symbol ?? "").toLowerCase();
+  const symbolGroup = weatherSymbolGroup(forecast);
+  const symbolIndicatesRain =
+    symbol.includes("rain") ||
+    symbolGroup === 4 ||
+    symbolGroup === 5;
+
+  // A medição horária é a evidência mais forte.
+  const measuredRain = rainMM >= SETTINGS.rainEvidenceMinMM;
+
+  // Probabilidade isolada só aparece com uma margem significativa e,
+  // quando disponível, alguma cobertura de nuvens.
+  const probabilityRain =
+    rainChance >= SETTINGS.rainEvidenceMinChance &&
+    (cloudiness === null ||
+      cloudiness >= SETTINGS.rainEvidenceMinCloudiness);
+
+  // O símbolo só prevalece quando os campos numéricos o corroboram.
+  const symbolicRain =
+    symbolIndicatesRain &&
+    (rainMM >= SETTINGS.rainEvidenceMinMM ||
+      rainChance >= SETTINGS.rainSymbolMinChance);
+
+  return {
+    hasRain: measuredRain || probabilityRain || symbolicRain,
+    rainMM,
+    rainChance,
+    cloudiness,
+  };
+}
+
 function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
   // O parâmetro size representa o mesmo diâmetro usado pela Lua vetorial.
   // A fonte recebe uma pequena compensação óptica porque os glifos coloridos
   // do iOS possuem margem interna própria.
-  const fontSize = Math.round(size * 1.12);
+  const fontSize = Math.round(size * 1.24);
   let font;
   try {
     font = new Font("AppleColorEmoji", fontSize);
@@ -2910,7 +2958,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
 
   // Todos os ícones compartilham exatamente a mesma caixa visual da Lua.
   const iconSize = isCompactMode() ? 25 : 34;
-  const centerY = stripBottom / 2;
+  const centerY = Math.round(stripBottom / 2);
   const lunarGlyphs = new Set([
     "🌑", "🌒", "🌓", "🌔",
     "🌕", "🌖", "🌗", "🌘",
@@ -3278,9 +3326,8 @@ function drawWeatherRainCurtains(ctx, weather) {
       continue;
     }
 
-    const hasMeasuredRain = entry.rainMM >= 0.10;
-    const hasRelevantProbability = entry.chance >= 45;
-    if (!hasMeasuredRain && !hasRelevantProbability) continue;
+    const rainEvidence = rainEvidenceForForecast(entry.forecast);
+    if (!rainEvidence.hasRain) continue;
 
     const x = timeToX(new Date(entry.timestamp));
     if (x < -14 || x > timelineWidth() + 14) continue;
@@ -3319,11 +3366,13 @@ function drawWeatherRainCurtains(ctx, weather) {
       isCompactMode() ? 7 : 10,
       maximumColumnHeight * easedStrength
     );
+    const hourWidthLimit =
+      hourWidth * (windowHours > 24 ? 0.82 : 0.38);
     const columnWidth = Math.max(
-      isCompactMode() ? 4 : 5.5,
+      2.5,
       Math.min(
-        isCompactMode() ? 8 : 11,
-        hourWidth * (0.18 + strength * 0.10)
+        isCompactMode() ? 8 : 12,
+        hourWidthLimit
       )
     );
     const columnOpacity = Math.min(
@@ -3340,31 +3389,6 @@ function drawWeatherRainCurtains(ctx, weather) {
       columnOpacity
     );
 
-    const dropCount =
-      strength >= 0.78
-        ? 3
-        : strength >= 0.48
-          ? 2
-          : 1;
-    const dropSize =
-      (isCompactMode() ? 8.5 : 11.5) +
-      strength * (isCompactMode() ? 3.5 : 5.5);
-    const dropGap = dropSize * 0.92;
-    const groupWidth = (dropCount - 1) * dropGap;
-    const dropY =
-      weatherStripBottomY() -
-      (isCompactMode() ? 9 : 11) -
-      strength * 3;
-
-    for (let index = 0; index < dropCount; index++) {
-      drawHourlyRainDrop(
-        ctx,
-        x - groupWidth / 2 + index * dropGap,
-        dropY,
-        dropSize * (1 - Math.abs(index - (dropCount - 1) / 2) * 0.05),
-        Math.min(1.0, 0.86 + strength * 0.14)
-      );
-    }
   }
 }
 
@@ -3377,66 +3401,47 @@ function drawHourlyRainColumn(
   opacity
 ) {
   const topY = baseY - height;
+  const haloWidth = width * 1.65;
 
-  // Halo mais nítido mantém a precipitação visível sobre qualquer fundo.
-  fillRoundedRect(
-    ctx,
+  // Halo retangular discreto + núcleo claro para manter a barra legível
+  // sobre o gradiente solar e a curva térmica.
+  ctx.setFillColor(
+    new Color(
+      SETTINGS.rainLineColor,
+      Math.min(0.34, opacity * 0.30)
+    )
+  );
+  ctx.fillRect(
     new Rect(
-      centerX - width * 1.20,
+      centerX - haloWidth / 2,
       topY,
-      width * 2.4,
+      haloWidth,
       height
-    ),
-    width,
-    new Color(SETTINGS.rainLineColor, opacity * 0.26)
-  );
-
-  fillRoundedRect(
-    ctx,
-    new Rect(centerX - width / 2, topY, width, height),
-    width / 2,
-    new Color(SETTINGS.rainLineColor, opacity)
-  );
-}
-
-function drawHourlyRainDrop(ctx, centerX, centerY, size, opacity) {
-  const radius = size * 0.44;
-  const bodyCenterY = centerY + size * 0.10;
-  const tipY = centerY - size * 0.60;
-  const shoulderY = bodyCenterY - radius * 0.15;
-  const color = new Color(SETTINGS.rainLineColor, opacity);
-
-  const tip = new Path();
-  tip.move(new Point(centerX, tipY));
-  tip.addLine(
-    new Point(centerX - radius, shoulderY)
-  );
-  tip.addLine(
-    new Point(centerX + radius, shoulderY)
-  );
-  tip.closeSubpath();
-  ctx.addPath(tip);
-  ctx.setFillColor(color);
-  ctx.fillPath();
-
-  ctx.setFillColor(color);
-  ctx.fillEllipse(
-    new Rect(
-      centerX - radius,
-      bodyCenterY - radius,
-      radius * 2,
-      radius * 2
     )
   );
 
-  const highlightRadius = Math.max(1, radius * 0.20);
-  ctx.setFillColor(new Color("#DDF7FF", opacity * 0.76));
-  ctx.fillEllipse(
+  ctx.setFillColor(new Color(SETTINGS.rainLineColor, opacity));
+  ctx.fillRect(
     new Rect(
-      centerX - radius * 0.35,
-      bodyCenterY - radius * 0.42,
-      highlightRadius,
-      highlightRadius
+      centerX - width / 2,
+      topY,
+      width,
+      height
+    )
+  );
+
+  ctx.setFillColor(
+    new Color(
+      "#DDF7FF",
+      Math.min(0.92, opacity * 0.58)
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      centerX - Math.max(1, width * 0.16),
+      topY,
+      Math.max(1, width * 0.24),
+      height
     )
   );
 }
@@ -4884,13 +4889,18 @@ function drawMoonPhase(
 ) {
   const moonRect = new Rect(x, y, size, size);
   const drawOuterBorder = () => {
-    const borderColor = borderDate
-      ? dayBoundaryLineColor(
-          borderDate,
-          loadResult.holidayDates
-        )
-      : Color.white();
-    ctx.setStrokeColor(borderColor);
+    const isDayBoundary =
+      borderDate instanceof Date &&
+      borderDate.getHours() === 0 &&
+      borderDate.getMinutes() === 0;
+    if (!isDayBoundary) return;
+
+    ctx.setStrokeColor(
+      dayBoundaryLineColor(
+        borderDate,
+        loadResult.holidayDates
+      )
+    );
     ctx.setLineWidth(4);
     ctx.strokeEllipse(moonRect);
   };
