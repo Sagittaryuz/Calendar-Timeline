@@ -2811,11 +2811,15 @@ function weatherEmojiForForecast(forecast, date) {
 }
 
 function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
+  // O parâmetro size representa o mesmo diâmetro usado pela Lua vetorial.
+  // A fonte recebe uma pequena compensação óptica porque os glifos coloridos
+  // do iOS possuem margem interna própria.
+  const fontSize = Math.round(size * 1.12);
   let font;
   try {
-    font = new Font("AppleColorEmoji", size);
+    font = new Font("AppleColorEmoji", fontSize);
   } catch (_) {
-    font = Font.systemFont(size);
+    font = Font.systemFont(fontSize);
   }
 
   ctx.setTextAlignedCenter();
@@ -2836,73 +2840,95 @@ function drawWeatherEclipseIcon(
   centerX,
   centerY,
   size,
-  eclipse
+  eclipse,
+  date
 ) {
-  drawWeatherGlyph(
-    ctx,
-    eclipse.type === "solar" ? "🌑" : "🌕",
-    centerX,
-    centerY,
+  const rect = new Rect(
+    centerX - size / 2,
+    centerY - size / 2,
+    size,
     size
   );
 
-  ctx.setStrokeColor(
-    new Color(
-      eclipse.type === "solar" ? "#FFD000" : "#B8A7FF",
-      0.96
-    )
-  );
-  ctx.setLineWidth(Math.max(1, size * 0.09));
+  if (eclipse.type === "lunar") {
+    // O eclipse lunar preserva integralmente o desenho já usado nas fases.
+    drawMoonPhase(
+      ctx,
+      { phase: "full", name: "ECLIPSE LUNAR" },
+      rect.x,
+      rect.y,
+      size,
+      date
+    );
+
+    // Sombra terrestre parcial, sem substituir crateras ou contorno lunar.
+    ctx.setFillColor(new Color("#6E1721", 0.48));
+    ctx.fillEllipse(
+      new Rect(
+        rect.x + size * 0.30,
+        rect.y - size * 0.02,
+        size,
+        size
+      )
+    );
+    ctx.setStrokeColor(new Color("#B8A7FF", 0.96));
+    ctx.setLineWidth(4);
+    ctx.strokeEllipse(rect);
+    return;
+  }
+
+  // Eclipse solar criado no mesmo quadro e diâmetro dos demais astros.
+  ctx.setStrokeColor(new Color("#FFD000", 0.98));
+  ctx.setLineWidth(Math.max(4, size * 0.13));
   ctx.strokeEllipse(
     new Rect(
-      centerX - size * 0.48,
-      centerY - size * 0.48,
-      size * 0.96,
-      size * 0.96
+      rect.x + size * 0.06,
+      rect.y + size * 0.06,
+      size * 0.88,
+      size * 0.88
     )
   );
+  ctx.setFillColor(new Color("#111116", 1.0));
+  ctx.fillEllipse(
+    new Rect(
+      rect.x + size * 0.12,
+      rect.y + size * 0.12,
+      size * 0.76,
+      size * 0.76
+    )
+  );
+  ctx.setStrokeColor(
+    dayBoundaryLineColor(date, loadResult.holidayDates)
+  );
+  ctx.setLineWidth(4);
+  ctx.strokeEllipse(rect);
 }
 
 function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   const ticks = weatherConditionTicks(weather);
   if (ticks.length === 0) return;
 
-  const tickXs = ticks.map((entry) => timeToX(entry.tick));
-  const spacing =
-    tickXs.length > 1
-      ? Math.min(
-          ...tickXs
-            .slice(1)
-            .map((x, index) => Math.abs(x - tickXs[index]))
-        )
-      : timelineWidth();
-
-  const iconSize = Math.max(
-    8,
-    Math.min(
-      windowHours <= 24 ? 19 : 15,
-      spacing * 0.66
-    )
-  );
-  const centerY = Math.max(
-    iconSize / 2 + 1,
-    Math.min(
-      stripBottom - iconSize / 2 - 1,
-      stripBottom * 0.24
-    )
-  );
+  // Todos os ícones compartilham exatamente a mesma caixa visual da Lua.
+  const iconSize = isCompactMode() ? 25 : 34;
+  const centerY = stripBottom / 2;
+  const lunarGlyphs = new Set([
+    "🌑", "🌒", "🌓", "🌔",
+    "🌕", "🌖", "🌗", "🌘",
+  ]);
 
   for (const entry of ticks) {
+    const centerX = timeToX(entry.tick);
     const eclipse =
       entry.eclipse ?? eclipseForDate(entry.tick);
 
     if (eclipse) {
       drawWeatherEclipseIcon(
         ctx,
-        timeToX(entry.tick),
+        centerX,
         centerY,
         iconSize,
-        eclipse
+        eclipse,
+        entry.tick
       );
       continue;
     }
@@ -2911,20 +2937,32 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       entry.forecast,
       entry.tick
     );
-    if (glyph) {
-      drawWeatherGlyph(
+    if (!glyph) continue;
+
+    if (lunarGlyphs.has(glyph)) {
+      // Toda Lua horária usa o mesmo desenho vetorial, crateras, recorte e
+      // contorno das fases lunares que já existiam no widget.
+      drawMoonPhase(
         ctx,
-        glyph,
-        timeToX(entry.tick),
-        centerY,
-        iconSize
+        moonPhaseForDate(entry.tick),
+        centerX - iconSize / 2,
+        centerY - iconSize / 2,
+        iconSize,
+        entry.tick
       );
+      continue;
     }
+
+    drawWeatherGlyph(
+      ctx,
+      glyph,
+      centerX,
+      centerY,
+      iconSize
+    );
   }
 }
 
-// Detector aproximado: só sinaliza quando Lua nova/cheia está próxima
-// da linha dos nodos, evitando marcar todo ciclo lunar como eclipse.
 function eclipseForDate(date) {
   const julianDay =
     date.getTime() / 86400000 + 2440587.5;
