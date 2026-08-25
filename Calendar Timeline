@@ -3839,7 +3839,9 @@ function drawFixedDaylightGlow(ctx, weather) {
 
     // A irradiação amarela não sofre mais atenuação pela nebulosidade.
     for (const slice of slices) {
-      for (let y = lineY + 2; y < glowEndY; y += 2) {
+      // Uma faixa de um pixel por vez, sem sobreposição, mantém o
+      // gradiente contínuo e elimina as bordas horizontais.
+      for (let y = lineY + 1; y < glowEndY; y += 1) {
         const verticalProgress =
           (y - lineY) / Math.max(1, glowEndY - lineY);
         const verticalStrength = Math.pow(
@@ -3855,51 +3857,12 @@ function drawFixedDaylightGlow(ctx, weather) {
           new Color("#FFD000", Math.min(0.78, opacity))
         );
         ctx.fillRect(
-          new Rect(slice.x, y, slice.width + 1, 2)
+          new Rect(slice.x, y, slice.width + 1, 1)
         );
       }
 
-      // Halos e núcleo são desenhados depois das nuvens. Pequenas
-      // sobreposições entre as fatias eliminam emendas perceptíveis.
-      for (const [height, opacity] of [
-        [24, 0.14],
-        [16, 0.24],
-        [10, 0.36],
-      ]) {
-        ctx.setFillColor(
-          new Color(
-            "#FFD000",
-            Math.min(
-              1,
-              opacity *
-                slice.daylightStrength *
-                SETTINGS.solarGlowIntensity
-            )
-          )
-        );
-        ctx.fillRect(
-          new Rect(
-            slice.x - 1,
-            lineY,
-            slice.width + 3,
-            height
-          )
-        );
-      }
-
-      ctx.setFillColor(
-        new Color(
-          "#FFD000",
-          Math.min(
-            1,
-            (0.22 + 0.77 * slice.daylightStrength) *
-              SETTINGS.solarGlowIntensity
-          )
-        )
-      );
-      ctx.fillRect(
-        new Rect(slice.x - 1, lineY, slice.width + 3, 4)
-      );
+      // O próprio gradiente contínuo fornece a intensidade do brilho no
+      // topo; não há retângulos sobrepostos com bordas rígidas.
     }
 
     // Somente 06:00 e 18:00 recebem a projeção circular das extremidades.
