@@ -1978,7 +1978,9 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       (entry) =>
         entry.amount > 0 &&
         entry.timestamp >= windowStart.getTime() - 3600000 &&
-        entry.timestamp <= windowEnd.getTime()
+        entry.timestamp <= windowEnd.getTime() &&
+        (windowHours <= 24 ||
+          new Date(entry.timestamp).getHours() % 2 === 0)
     );
 
   if (!rainEntries.length) return;
