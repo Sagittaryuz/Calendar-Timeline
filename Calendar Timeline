@@ -2879,6 +2879,12 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
   // A fonte recebe uma pequena compensação óptica porque os glifos coloridos
   // do iOS possuem margem interna própria.
   const fontSize = Math.round(size * 1.24);
+  const solarGlyphs = new Set(["☀️", "🌤️"]);
+  const verticalOffset = solarGlyphs.has(glyph)
+    ? isCompactMode()
+      ? 2
+      : 3
+    : 0;
   let font;
   try {
     font = new Font("AppleColorEmoji", fontSize);
@@ -2892,7 +2898,7 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
     glyph,
     new Rect(
       centerX - size,
-      centerY - size,
+      centerY - size + verticalOffset,
       size * 2,
       size * 2
     )
