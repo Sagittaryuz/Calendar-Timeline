@@ -2665,12 +2665,13 @@ function weatherForecastNearest(hours, timestamp) {
 }
 
 function weatherConditionTicks(weather) {
-  const stepHours = isCompactMode() ? 6 : 2;
+  // Em 24 horas há um ícone por hora; em janelas maiores, somente horas pares.
+  const stepHours = windowHours <= 24 ? 1 : 2;
   const ticks = [];
   let tick = floorToHour(windowStart);
-  const remainder = tick.getHours() % stepHours;
-  if (remainder !== 0) {
-    tick.setHours(tick.getHours() + stepHours - remainder);
+
+  if (stepHours === 2 && tick.getHours() % 2 !== 0) {
+    tick.setHours(tick.getHours() + 1);
   }
 
   while (tick <= windowEnd) {
@@ -2678,19 +2679,370 @@ function weatherConditionTicks(weather) {
       weather?.hours ?? [],
       tick.getTime()
     );
-    const hour = tick.getHours();
-    const isAnchor = hour === 0 || hour === 12;
-    const isCloudy =
-      Number(forecast?.cloudiness ?? 0) >= 18 ||
-      Number(forecast?.rainChance ?? 0) >= 15 ||
-      Number(forecast?.rainMM ?? 0) > 0;
+    const eclipse = eclipseForDate(tick);
 
-    if (isAnchor || isCloudy) {
-      ticks.push({ tick: new Date(tick), forecast });
+    if (forecast || eclipse) {
+      ticks.push({
+        tick: new Date(tick),
+        forecast,
+        eclipse,
+      });
     }
-    tick = new Date(tick.getTime() + stepHours * 60 * 60 * 1000);
+
+    tick = new Date(
+      tick.getTime() + stepHours * 60 * 60 * 1000
+    );
   }
+
   return ticks;
+}
+
+function weatherSymbolGroup(forecast) {
+  const symbol = String(forecast?.symbol ?? "").toLowerCase();
+  const match = symbol.match(/[dn]?(\\d{1,3})/);
+
+  if (!match) {
+    if (symbol.includes("wind")) return 10;
+    if (symbol.includes("fog") || symbol.includes("mist")) return 9;
+    return null;
+  }
+
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) return null;
+  return numeric >= 100 ? Math.floor(numeric / 100) : numeric;
+}
+
+function isNightWeatherHour(date) {
+  const hour = date.getHours();
+  return hour >= SETTINGS.nightStartHour || hour < SETTINGS.nightEndHour;
+}
+
+function lunarPhaseEmojiForDate(date) {
+  const synodicMonth = 29.530588853;
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14, 0);
+  const elapsedDays =
+    (date.getTime() - knownNewMoon) / 86400000;
+  const fraction =
+    ((elapsedDays / synodicMonth) % 1 + 1) % 1;
+
+  if (fraction < 0.0625 || fraction >= 0.9375) return "🌑";
+  if (fraction < 0.1875) return "🌒";
+  if (fraction < 0.3125) return "🌓";
+  if (fraction < 0.4375) return "🌔";
+  if (fraction < 0.5625) return "🌕";
+  if (fraction < 0.6875) return "🌖";
+  if (fraction < 0.8125) return "🌗";
+  return "🌘";
+}
+
+function weatherEmojiForForecast(forecast, date) {
+  const symbolGroup = weatherSymbolGroup(forecast);
+  const symbol = String(forecast?.symbol ?? "").toLowerCase();
+  const rainMM = Math.max(0, Number(forecast?.rainMM) || 0);
+  const rainChance = Math.max(
+    0,
+    Math.min(100, Number(forecast?.rainChance) || 0)
+  );
+  const cloudiness =
+    forecast?.cloudiness === null ||
+    forecast?.cloudiness === undefined
+      ? null
+      : Math.max(
+          0,
+          Math.min(100, Number(forecast.cloudiness) || 0)
+        );
+  const night = isNightWeatherHour(date);
+
+  if (
+    symbolGroup === 10 ||
+    symbol.includes("wind") ||
+    symbol.includes("storm")
+  ) {
+    return "💨";
+  }
+
+  if (symbolGroup === 6 || symbol.includes("thunder")) {
+    return "⛈️";
+  }
+
+  if (
+    symbolGroup === 7 ||
+    symbolGroup === 8 ||
+    symbol.includes("snow") ||
+    symbol.includes("sleet")
+  ) {
+    return symbolGroup === 8 ? "🌨️" : "❄️";
+  }
+
+  if (
+    symbolGroup === 9 ||
+    symbol.includes("fog") ||
+    symbol.includes("mist")
+  ) {
+    return "🌫️";
+  }
+
+  if (
+    rainMM >= 0.10 ||
+    rainChance >= 45 ||
+    symbolGroup === 4 ||
+    symbolGroup === 5 ||
+    symbol.includes("rain")
+  ) {
+    return "🌧️";
+  }
+
+  if (night) {
+    if (cloudiness !== null && cloudiness >= 78) return "☁️";
+    return lunarPhaseEmojiForDate(date);
+  }
+
+  if (cloudiness !== null && cloudiness >= 82) return "☁️";
+  if (
+    (cloudiness !== null && cloudiness >= 42) ||
+    symbolGroup === 2
+  ) {
+    return "🌤️";
+  }
+
+  return "☀️";
+}
+
+function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
+  let font;
+  try {
+    font = new Font("AppleColorEmoji", size);
+  } catch (_) {
+    font = Font.systemFont(size);
+  }
+
+  ctx.setTextAlignedCenter();
+  ctx.setFont(font);
+  ctx.drawTextInRect(
+    glyph,
+    new Rect(
+      centerX - size,
+      centerY - size,
+      size * 2,
+      size * 2
+    )
+  );
+}
+
+function drawWeatherEclipseIcon(
+  ctx,
+  centerX,
+  centerY,
+  size,
+  eclipse
+) {
+  drawWeatherGlyph(
+    ctx,
+    eclipse.type === "solar" ? "🌑" : "🌕",
+    centerX,
+    centerY,
+    size
+  );
+
+  ctx.setStrokeColor(
+    new Color(
+      eclipse.type === "solar" ? "#FFD000" : "#B8A7FF",
+      0.96
+    )
+  );
+  ctx.setLineWidth(Math.max(1, size * 0.09));
+  ctx.strokeEllipse(
+    new Rect(
+      centerX - size * 0.48,
+      centerY - size * 0.48,
+      size * 0.96,
+      size * 0.96
+    )
+  );
+}
+
+function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
+  const ticks = weatherConditionTicks(weather);
+  if (ticks.length === 0) return;
+
+  const tickXs = ticks.map((entry) => timeToX(entry.tick));
+  const spacing =
+    tickXs.length > 1
+      ? Math.min(
+          ...tickXs
+            .slice(1)
+            .map((x, index) => Math.abs(x - tickXs[index]))
+        )
+      : timelineWidth();
+
+  const iconSize = Math.max(
+    8,
+    Math.min(
+      windowHours <= 24 ? 19 : 15,
+      spacing * 0.66
+    )
+  );
+  const centerY = Math.max(
+    iconSize / 2 + 1,
+    Math.min(
+      stripBottom - iconSize / 2 - 1,
+      stripBottom * 0.24
+    )
+  );
+
+  for (const entry of ticks) {
+    const eclipse =
+      entry.eclipse ?? eclipseForDate(entry.tick);
+
+    if (eclipse) {
+      drawWeatherEclipseIcon(
+        ctx,
+        timeToX(entry.tick),
+        centerY,
+        iconSize,
+        eclipse
+      );
+      continue;
+    }
+
+    const glyph = weatherEmojiForForecast(
+      entry.forecast,
+      entry.tick
+    );
+    if (glyph) {
+      drawWeatherGlyph(
+        ctx,
+        glyph,
+        timeToX(entry.tick),
+        centerY,
+        iconSize
+      );
+    }
+  }
+}
+
+// Detector aproximado: só sinaliza quando Lua nova/cheia está próxima
+// da linha dos nodos, evitando marcar todo ciclo lunar como eclipse.
+function eclipseForDate(date) {
+  const julianDay =
+    date.getTime() / 86400000 + 2440587.5;
+  const centuries = (julianDay - 2451545.0) / 36525;
+
+  const sunLongitude = normalizeDegrees(
+    280.46646 +
+      36000.76983 * centuries +
+      0.0003032 * centuries * centuries
+  );
+  const meanMoonLongitude = normalizeDegrees(
+    218.3164477 +
+      481267.88123421 * centuries -
+      0.0015786 * centuries * centuries
+  );
+  const meanElongation = normalizeDegrees(
+    297.8501921 +
+      445267.1114034 * centuries
+  );
+  const moonAnomaly = normalizeDegrees(
+    134.9633964 +
+      477198.8675055 * centuries
+  );
+  const sunAnomaly = normalizeDegrees(
+    357.5291092 +
+      35999.0502909 * centuries
+  );
+  const argumentLatitude = normalizeDegrees(
+    93.272095 +
+      483202.0175233 * centuries
+  );
+
+  const moonLongitude = normalizeDegrees(
+    meanMoonLongitude +
+      6.289 * sinDegrees(moonAnomaly) +
+      1.274 *
+        sinDegrees(2 * meanElongation - moonAnomaly) +
+      0.658 * sinDegrees(2 * meanElongation) -
+      0.214 * sinDegrees(2 * moonAnomaly) -
+      0.186 * sinDegrees(sunAnomaly) -
+      0.059 *
+        sinDegrees(
+          2 * meanElongation - 2 * moonAnomaly
+        ) -
+      0.057 *
+        sinDegrees(
+          2 * meanElongation -
+            sunAnomaly -
+            moonAnomaly
+        ) +
+      0.053 *
+        sinDegrees(2 * meanElongation + moonAnomaly) +
+      0.046 *
+        sinDegrees(2 * meanElongation - sunAnomaly) +
+      0.041 *
+        sinDegrees(sunAnomaly - moonAnomaly) -
+      0.035 * sinDegrees(meanElongation) -
+      0.031 *
+        sinDegrees(sunAnomaly + moonAnomaly) -
+      0.015 *
+        sinDegrees(
+          2 * argumentLatitude - 2 * meanElongation
+        ) +
+      0.011 *
+        sinDegrees(
+          2 * meanElongation -
+            moonAnomaly -
+            sunAnomaly
+        )
+  );
+
+  const moonLatitude =
+    5.128 * sinDegrees(argumentLatitude) +
+    0.280 *
+      sinDegrees(moonAnomaly + argumentLatitude) +
+    0.277 *
+      sinDegrees(moonAnomaly - argumentLatitude) +
+    0.173 *
+      sinDegrees(
+        2 * meanElongation - argumentLatitude
+      ) +
+    0.055 *
+      sinDegrees(
+        2 * meanElongation -
+          moonAnomaly +
+          argumentLatitude
+      ) +
+    0.046 *
+      sinDegrees(
+        2 * meanElongation -
+          moonAnomaly -
+          argumentLatitude
+      ) +
+    0.033 *
+      sinDegrees(2 * meanElongation + argumentLatitude) +
+    0.017 *
+      sinDegrees(moonAnomaly + argumentLatitude);
+
+  const phaseAngle = normalizeDegrees(
+    moonLongitude - sunLongitude
+  );
+  const distanceFromNew = Math.min(
+    phaseAngle,
+    360 - phaseAngle
+  );
+  const distanceFromFull = Math.abs(phaseAngle - 180);
+
+  if (
+    distanceFromNew <= 4.5 &&
+    Math.abs(moonLatitude) <= 1.6
+  ) {
+    return { type: "solar" };
+  }
+  if (
+    distanceFromFull <= 4.5 &&
+    Math.abs(moonLatitude) <= 1.6
+  ) {
+    return { type: "lunar" };
+  }
+  return null;
 }
 
 function drawWeatherConditionStrip(ctx, weather) {
@@ -2703,18 +3055,21 @@ function drawWeatherConditionStrip(ctx, weather) {
   // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
   drawDayBoundaryOriginsBehindMoon(ctx, bottom);
 
-  // A nebulosidade continua disponível para os cálculos meteorológicos,
-  // mas não possui representação visual nesta faixa.
+  // O sol central fixo foi removido. Cada horário recebe seu próprio ícone.
+  drawHourlyWeatherIcons(ctx, weather, bottom);
 
   let nightDay = addDays(startOfDay(windowStart), -1);
   const finalDay = addDays(startOfDay(windowEnd), 1);
+
   while (nightDay <= finalDay) {
     const start = dateAtHour(nightDay, SETTINGS.nightStartHour);
     const end = dateAtHour(addDays(nightDay, 1), SETTINGS.nightEndHour);
+
     if (intervalIsVisible(start, end)) {
       const x0 = timeToX(start);
       const x1 = timeToX(end);
       const width = x1 - x0;
+
       for (const [fraction, y, radius] of [
         [0.10, 10, 2.2],
         [0.24, 28, 1.6],
@@ -2734,6 +3089,7 @@ function drawWeatherConditionStrip(ctx, weather) {
       const moonSize = isCompactMode() ? 25 : 34;
       const moonX = timeToX(new Date(centerTime)) - moonSize / 2;
       const moonY = Math.max(3, (bottom - moonSize) / 2);
+
       drawMoonPhase(
         ctx,
         moonPhaseForDate(new Date(centerTime)),
@@ -2743,24 +3099,8 @@ function drawWeatherConditionStrip(ctx, weather) {
         new Date(centerTime)
       );
     }
-    nightDay = addDays(nightDay, 1);
-  }
 
-  // Sol centralizado no período diurno, como na versão anterior.
-  let day = startOfDay(windowStart);
-  const lastDay = startOfDay(windowEnd);
-  while (day <= lastDay) {
-    const noon = dateAtHour(day, 12);
-    const x = timeToX(noon);
-    if (x > -40 && x < timelineWidth() + 40) {
-      drawWeatherSun(
-        ctx,
-        x,
-        bottom / 2,
-        isCompactMode() ? 11 : 14
-      );
-    }
-    day = addDays(day, 1);
+    nightDay = addDays(nightDay, 1);
   }
 }
 
@@ -2890,6 +3230,14 @@ function drawWeatherRainCurtains(ctx, weather) {
   );
 
   for (const entry of visibleForecasts) {
+    // Em janelas acima de 24 h, chuva aparece somente nas horas pares.
+    if (
+      windowHours > 24 &&
+      new Date(entry.timestamp).getHours() % 2 !== 0
+    ) {
+      continue;
+    }
+
     const hasMeasuredRain = entry.rainMM >= 0.10;
     const hasRelevantProbability = entry.chance >= 45;
     if (!hasMeasuredRain && !hasRelevantProbability) continue;
@@ -4758,10 +5106,13 @@ function eventAtTime(date, items) {
 
 function hourTicks() {
   const ticks = [];
+  const showEveryHour = windowHours <= 24;
   let tick = floorToHour(windowStart);
-  if (tick.getHours() % 2 !== 0) {
+
+  if (!showEveryHour && tick.getHours() % 2 !== 0) {
     tick.setHours(tick.getHours() + 1);
   }
+
   const finalTick = ceilToHour(windowEnd);
   const compactEventHours = compactEventHourMarkers();
 
@@ -4772,14 +5123,14 @@ function hourTicks() {
     const isEventHour =
       isEvenHour && compactEventHours.has(tick.getTime());
 
-    // A legenda detalhada usa somente horas pares. No modo resumido,
-    // permanecem as âncoras 00/06/12/18 e limites pares de eventos.
     if (
-      isEvenHour &&
-      (!isCompactMode() || isCompactAnchor || isEventHour)
+      showEveryHour ||
+      (isEvenHour &&
+        (!isCompactMode() || isCompactAnchor || isEventHour))
     ) {
       ticks.push(new Date(tick));
     }
+
     tick = new Date(tick.getTime() + 60 * 60 * 1000);
   }
 
