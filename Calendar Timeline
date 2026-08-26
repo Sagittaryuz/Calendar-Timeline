@@ -2750,7 +2750,11 @@ function weatherConditionTicks(weather) {
     );
     const eclipse = eclipseForDate(tick);
 
-    if (forecast || eclipse) {
+    const isSolarBoundary =
+      tick.getHours() === SETTINGS.daylightStartHour ||
+      tick.getHours() === SETTINGS.daylightEndHour;
+
+    if (forecast || eclipse || isSolarBoundary) {
       ticks.push({
         tick: new Date(tick),
         forecast,
@@ -2821,6 +2825,14 @@ function weatherEmojiForForecast(forecast, date) {
           Math.min(100, Number(forecast.cloudiness) || 0)
         );
   const night = isNightWeatherHour(date);
+
+  if (date.getHours() === SETTINGS.daylightStartHour) {
+    return "🌅";
+  }
+
+  if (date.getHours() === SETTINGS.daylightEndHour) {
+    return "🌇";
+  }
 
   if (
     symbolGroup === 10 ||
@@ -2938,7 +2950,12 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
   // A fonte recebe uma pequena compensação óptica porque os glifos coloridos
   // do iOS possuem margem interna própria.
   const fontSize = Math.round(size * 1.24);
-  const solarGlyphs = new Set(["☀️", "🌤️"]);
+  const solarGlyphs = new Set([
+    "☀️",
+    "🌤️",
+    "🌅",
+    "🌇",
+  ]);
   // Os glifos solares do AppleColorEmoji ficam visualmente acima do
   // centro geométrico da caixa. A compensação proporcional os alinha à Lua
   // nos modos compacto e normal, preservando o mesmo eixo horizontal.
