@@ -35,7 +35,7 @@ const SETTINGS = {
   rainEvidenceMinChance: 55,
   rainEvidenceMinCloudiness: 40,
   rainSymbolMinChance: 35,
-  rainLineColor: "#64D2FF",
+  rainLineColor: "#0A4F9E",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   saturdayTimelineBackgroundColor: "#071A2E",
@@ -2016,9 +2016,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         entry.evidence.hasRain &&
         entry.amount > 0 &&
         entry.timestamp >= windowStart.getTime() - 3600000 &&
-        entry.timestamp <= windowEnd.getTime() &&
-        (windowHours <= 24 ||
-          new Date(entry.timestamp).getHours() % 2 === 0)
+        entry.timestamp <= windowEnd.getTime()
     );
 
   if (!rainEntries.length) return;
@@ -3941,7 +3939,7 @@ function drawHourlyRainColumn(
 
   ctx.setFillColor(
     new Color(
-      "#DDF7FF",
+      "#2E78BF",
       Math.min(0.92, opacity * 0.58)
     )
   );
