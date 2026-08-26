@@ -2104,7 +2104,7 @@ function buildThermalSamples(sourceHours) {
     let timestamp = firstHour;
     timestamp <= lastHour;
     timestamp += hourlyStepMilliseconds
-  )
+  ) {
     if (timestamp > start && timestamp < end) {
       timestamps.push(timestamp);
     }
