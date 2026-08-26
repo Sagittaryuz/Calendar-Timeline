@@ -3943,7 +3943,7 @@ function drawFixedDaylightGlow(ctx, weather) {
         )
       );
       ctx.fillRect(
-        new Rect(slice.x - 1, lineY, slice.width + 3, 1)
+        new Rect(slice.x - 1, lineY, slice.width + 3, 3)
       );
 
       // O gradiente contínuo fornece a intensidade abaixo da linha, sem
