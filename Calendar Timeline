@@ -3807,13 +3807,8 @@ function drawWeatherRainCurtains(ctx, weather) {
   );
 
   for (const entry of visibleForecasts) {
-    // Em janelas acima de 24 h, chuva aparece somente nas horas pares.
-    if (
-      windowHours > 24 &&
-      new Date(entry.timestamp).getHours() % 2 !== 0
-    ) {
-      continue;
-    }
+    // As barras de chuva aparecem em todas as horas previstas,
+    // inclusive nas horas ímpares e em janelas acima de 24 h.
 
     const rainEvidence = rainEvidenceForForecast(entry.forecast);
     if (!rainEvidence.hasRain) continue;
