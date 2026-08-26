@@ -2869,8 +2869,9 @@ function weatherEmojiForForecast(forecast, date) {
     return "🌧️";
   }
 
+  // À noite, a Lua permanece visível. A condição meteorológica é
+  // desenhada como uma sobreposição sobre a fase lunar.
   if (night) {
-    if (cloudiness !== null && cloudiness >= 78) return "☁️";
     return lunarPhaseEmojiForDate(date);
   }
 
@@ -3362,6 +3363,124 @@ function drawWeatherWind(ctx, centerX, centerY, size) {
 }
 
 
+function moonWeatherOverlayKind(forecast, date) {
+  if (!forecast || !isNightWeatherHour(date)) return null;
+
+  const symbol = String(forecast.symbol ?? "").toLowerCase();
+  const symbolGroup = weatherSymbolGroup(forecast);
+
+  if (
+    symbolGroup === 6 ||
+    symbol.includes("thunder") ||
+    symbol.includes("storm")
+  ) return "storm";
+  if (
+    symbolGroup === 7 ||
+    symbolGroup === 8 ||
+    symbol.includes("snow") ||
+    symbol.includes("sleet")
+  ) return "snow";
+  if (
+    symbolGroup === 9 ||
+    symbol.includes("fog") ||
+    symbol.includes("mist")
+  ) return "fog";
+  if (symbolGroup === 10 || symbol.includes("wind")) return "wind";
+  if (rainEvidenceForForecast(forecast).hasRain) return "rain";
+
+  const cloudiness =
+    forecast.cloudiness === null ||
+    forecast.cloudiness === undefined ||
+    forecast.cloudiness === ""
+      ? null
+      : Number(forecast.cloudiness);
+
+  if (
+    (cloudiness !== null &&
+      Number.isFinite(cloudiness) &&
+      cloudiness >= 42) ||
+    symbolGroup === 2
+  ) return "cloud";
+
+  return null;
+}
+
+function drawMoonWeatherOverlay(
+  ctx,
+  forecast,
+  date,
+  centerX,
+  centerY,
+  size
+) {
+  const kind = moonWeatherOverlayKind(forecast, date);
+  if (!kind) return;
+
+  const cloudScale = (size / 82) * 0.82;
+  const cloudCenterY = centerY + size * 0.19;
+  const cloudy =
+    kind === "cloud" ||
+    kind === "rain" ||
+    kind === "storm" ||
+    kind === "snow";
+
+  if (cloudy) {
+    drawStripCloud(
+      ctx,
+      centerX,
+      cloudCenterY,
+      cloudScale,
+      kind !== "cloud"
+    );
+  }
+
+  if (kind === "rain" || kind === "storm") {
+    drawWeatherRainDrops(
+      ctx,
+      centerX,
+      centerY + size * 0.05,
+      size * 0.76
+    );
+  }
+
+  if (kind === "storm") {
+    drawWeatherLightning(
+      ctx,
+      centerX,
+      centerY + size * 0.02,
+      size * 0.76
+    );
+  }
+
+  if (kind === "snow") {
+    drawWeatherSnowflake(
+      ctx,
+      centerX,
+      centerY + size * 0.32,
+      size * 0.16,
+      "#64D2FF"
+    );
+  }
+
+  if (kind === "fog") {
+    drawWeatherFog(
+      ctx,
+      centerX,
+      centerY + size * 0.12,
+      size * 0.72
+    );
+  }
+
+  if (kind === "wind") {
+    drawWeatherWind(
+      ctx,
+      centerX,
+      centerY + size * 0.08,
+      size * 0.72
+    );
+  }
+}
+
 function drawWeatherEclipseIcon(
   ctx,
   centerX,
@@ -3481,6 +3600,14 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         centerY - iconSize / 2,
         iconSize,
         entry.tick
+      );
+      drawMoonWeatherOverlay(
+        ctx,
+        entry.forecast,
+        entry.tick,
+        centerX,
+        centerY,
+        iconSize
       );
       continue;
     }
@@ -5298,6 +5425,21 @@ function drawNightSegment(
     moonY,
     moonSize,
     nightCenterDate
+  );
+
+  // A Lua maior também recebe a condição meteorológica do horário central
+  // da noite, mantendo nuvens, chuva e demais indicativos visíveis.
+  const moonForecast = weatherForecastNearest(
+    hourlyWeather?.hours ?? [],
+    nightCenterDate.getTime()
+  );
+  drawMoonWeatherOverlay(
+    ctx,
+    moonForecast,
+    nightCenterDate,
+    dayAxisX,
+    moonY + moonSize / 2,
+    moonSize
   );
 
   // Nuvens brancas sobrepostas nas laterais, seguindo a referência visual.
