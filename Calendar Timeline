@@ -2095,13 +2095,16 @@ function buildThermalSamples(sourceHours) {
   const end = windowEnd.getTime();
   const firstHour = floorToHour(windowStart).getTime();
   const lastHour = ceilToHour(windowEnd).getTime();
+  const hourlyStepMilliseconds = 60 * 60 * 1000;
   const timestamps = [start];
 
+  // A curva recebe um ponto a cada hora, mesmo quando a legenda textual
+  // mostra apenas as horas pares.
   for (
     let timestamp = firstHour;
     timestamp <= lastHour;
-    timestamp += 60 * 60 * 1000
-  ) {
+    timestamp += hourlyStepMilliseconds
+  )
     if (timestamp > start && timestamp < end) {
       timestamps.push(timestamp);
     }
@@ -2460,13 +2463,13 @@ function drawThermalCurve(
 }
 
 function thermalLabelTicks(ticks) {
-  if (isCompactMode()) {
-    // Preserva o layout resumido acima de 36 h.
-    return ticks.filter((tick) =>
-      [0, 6, 12, 18].includes(tick.getHours())
-    );
+  if (windowHours >= 24) {
+    // A partir de 24 h, os textos aparecem somente nas horas pares.
+    return ticks.filter((tick) => tick.getHours() % 2 === 0);
   }
-  return ticks.filter((tick) => tick.getHours() % 2 === 0);
+
+  // Em janelas menores, mantém a leitura hora a hora.
+  return ticks;
 }
 
 function temperatureLegendOpacity(tick, forecast, weather) {
