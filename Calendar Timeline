@@ -4327,15 +4327,15 @@ function drawFixedDaylightGlow(ctx, weather) {
           (y - lineY) / Math.max(1, glowEndY - lineY);
         const verticalStrength = Math.pow(
           Math.max(0, 1 - verticalProgress),
-          1.12
+          1.05
         );
         const opacity =
-          0.56 *
+          0.78 *
           verticalStrength *
           slice.daylightStrength *
           SETTINGS.solarGlowIntensity;
         ctx.setFillColor(
-          new Color("#FFD000", Math.min(0.78, opacity))
+          new Color("#FFD000", Math.min(0.92, opacity))
         );
         ctx.fillRect(
           new Rect(slice.x, y, slice.width + 1, 1)
