@@ -2576,7 +2576,7 @@ function weatherStripBottomY() {
 // A faixa superior pertence exclusivamente aos astros e ícones de clima.
 // Todos compartilham o mesmo centro horizontal e a mesma caixa visual.
 function weatherIconSize() {
-  return isCompactMode() ? 25 : 34;
+  return isCompactMode() ? 30 : 40;
 }
 
 function weatherIconCenterY() {
@@ -2945,6 +2945,11 @@ function rainEvidenceForForecast(forecast) {
   };
 }
 
+function weatherSunRadius(size) {
+  // Mantém o mesmo disco redondo em Sol, nascer e pôr do sol.
+  return size * 0.28;
+}
+
 function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
   // Os glifos desta faixa são desenhados em vetor para que nuvens, Sol e Lua
   // compartilhem o mesmo centro óptico, sem depender das margens do emoji.
@@ -2961,7 +2966,7 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
   }
 
   if (glyph === "☀️") {
-    drawWeatherSun(ctx, centerX, centerY, size * 0.22);
+    drawWeatherSun(ctx, centerX, centerY, weatherSunRadius(size));
     return;
   }
 
@@ -2970,7 +2975,7 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
       ctx,
       centerX - size * 0.18,
       centerY - size * 0.16,
-      size * 0.18
+      weatherSunRadius(size * 0.78)
     );
     drawStripCloud(
       ctx,
@@ -3105,6 +3110,35 @@ function drawWeatherHalfSun(
   );
 }
 
+function drawWeatherWaveLine(
+  ctx,
+  centerX,
+  baseY,
+  width,
+  amplitude,
+  color,
+  lineWidth
+) {
+  const path = new Path();
+  const segments = 10;
+
+  for (let index = 0; index <= segments; index++) {
+    const progress = index / segments;
+    const x = centerX - width / 2 + width * progress;
+    const y = baseY + Math.sin(progress * Math.PI * 2) * amplitude;
+    if (index === 0) {
+      path.move(new Point(x, y));
+    } else {
+      path.addLine(new Point(x, y));
+    }
+  }
+
+  ctx.setStrokeColor(new Color(color, 0.96));
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
 function drawSunriseSunsetGlyph(
   ctx,
   centerX,
@@ -3114,12 +3148,13 @@ function drawSunriseSunsetGlyph(
 ) {
   const backgroundColor = "#07101A";
   const sunrise = kind === "sunrise";
-  const sunColor = sunrise ? "#FFB800" : "#FF7A00";
+  const sunColor = "#FFD43B";
   const horizonColor = sunrise ? "#64D2FF" : "#FF453A";
-  const radius = size * 0.20;
+  const radius = weatherSunRadius(size);
   const sunCenterY = centerY + (sunrise ? size * 0.05 : -size * 0.03);
 
   if (sunrise) {
+    // Raios amarelos acima do mesmo disco usado pelo Sol principal.
     for (let index = 0; index < 5; index++) {
       const angle = Math.PI + Math.PI * (index + 1) / 6;
       const inner = radius * 1.30;
@@ -3130,12 +3165,13 @@ function drawSunriseSunsetGlyph(
         sunCenterY + Math.sin(angle) * inner,
         centerX + Math.cos(angle) * outer,
         sunCenterY + Math.sin(angle) * outer,
-        horizonColor,
-        Math.max(1.5, size * 0.055)
+        sunColor,
+        Math.max(1.2, size * 0.045)
       );
     }
   }
 
+  // O mesmo círculo do Sol é recortado pela metade.
   drawWeatherHalfSun(
     ctx,
     centerX,
@@ -3147,26 +3183,38 @@ function drawSunriseSunsetGlyph(
 
   const horizonLines = sunrise
     ? [
-        [0.22, 0.80],
-        [0.36, 0.56],
-        [0.48, 0.32],
+        [0.25, 0.80],
+        [0.40, 0.56],
+        [0.53, 0.32],
       ]
     : [
-        [0.18, 0.78],
-        [0.33, 0.52],
-        [0.46, 0.28],
+        [0.23, 0.78],
+        [0.39, 0.52],
+        [0.53, 0.28],
       ];
 
   for (const [offset, width] of horizonLines) {
-    drawWeatherPathSegment(
-      ctx,
-      centerX - size * width / 2,
-      centerY + size * offset,
-      centerX + size * width / 2,
-      centerY + size * offset,
-      horizonColor,
-      Math.max(1.6, size * 0.065)
-    );
+    if (sunrise) {
+      drawWeatherPathSegment(
+        ctx,
+        centerX - size * width / 2,
+        centerY + size * offset,
+        centerX + size * width / 2,
+        centerY + size * offset,
+        horizonColor,
+        Math.max(1.4, size * 0.05)
+      );
+    } else {
+      drawWeatherWaveLine(
+        ctx,
+        centerX,
+        centerY + size * offset,
+        size * width,
+        size * 0.025,
+        horizonColor,
+        Math.max(1.4, size * 0.05)
+      );
+    }
   }
 }
 
@@ -3639,7 +3687,8 @@ function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
 }
 
 function drawWeatherSun(ctx, centerX, centerY, radius) {
-  ctx.setFillColor(new Color("#FFD43B", 0.98));
+  const sunColor = new Color("#FFD43B", 0.98);
+  ctx.setFillColor(sunColor);
   ctx.fillEllipse(
     new Rect(
       centerX - radius,
@@ -3648,10 +3697,12 @@ function drawWeatherSun(ctx, centerX, centerY, radius) {
       radius * 2
     )
   );
+
+  // Raios finos e regulares deixam o Sol redondo, maior e visualmente limpo.
   ctx.setStrokeColor(new Color("#FFD43B", 0.94));
-  ctx.setLineWidth(Math.max(2, radius * 0.14));
-  for (let index = 0; index < 8; index++) {
-    const angle = (Math.PI * 2 * index) / 8;
+  ctx.setLineWidth(Math.max(1.2, radius * 0.10));
+  for (let index = 0; index < 12; index++) {
+    const angle = (Math.PI * 2 * index) / 12;
     const inner = radius * 1.35;
     const outer = radius * 1.85;
     const path = new Path();
