@@ -2678,9 +2678,10 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
-  const hourFontSize = isCompactMode()
-    ? 18
-    : isExtendedDetailedMode()
+  // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
+  // aumentamos levemente a fonte sem alterar o modo de 24 h.
+  const hourFontSize =
+    windowHours > 24 && isCompactMode()
       ? 20
       : 22;
 
