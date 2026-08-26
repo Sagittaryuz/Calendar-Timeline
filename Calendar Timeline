@@ -3660,18 +3660,35 @@ function drawWeatherConditionStrip(ctx, weather) {
       }
 
       const centerTime = (start.getTime() + end.getTime()) / 2;
+      const moonDate = new Date(centerTime);
+      const moonCenterX = timeToX(moonDate);
+      const moonCenterY = weatherIconCenterY();
       const moonSize = weatherIconSize();
-      const moonX = timeToX(new Date(centerTime)) - moonSize / 2;
-      const moonY = weatherIconCenterY() - moonSize / 2;
+      const moonX = moonCenterX - moonSize / 2;
+      const moonY = moonCenterY - moonSize / 2;
+      const nightEclipse = eclipseForDate(moonDate);
 
-      drawMoonPhase(
-        ctx,
-        moonPhaseForDate(new Date(centerTime)),
-        moonX,
-        moonY,
-        moonSize,
-        new Date(centerTime)
-      );
+      // A Lua sobre a barra de 00:00 também precisa refletir o eclipse.
+      // Sem este teste, o desenho normal feito aqui cobria o eclipse horário.
+      if (nightEclipse?.type === "lunar") {
+        drawWeatherEclipseIcon(
+          ctx,
+          moonCenterX,
+          moonCenterY,
+          moonSize,
+          nightEclipse,
+          moonDate
+        );
+      } else {
+        drawMoonPhase(
+          ctx,
+          moonPhaseForDate(moonDate),
+          moonX,
+          moonY,
+          moonSize,
+          moonDate
+        );
+      }
     }
 
     nightDay = addDays(nightDay, 1);
