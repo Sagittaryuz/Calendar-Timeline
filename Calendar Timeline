@@ -2946,22 +2946,96 @@ function rainEvidenceForForecast(forecast) {
 }
 
 function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
-  // O parâmetro size representa o mesmo diâmetro usado pela Lua vetorial.
-  // A fonte recebe uma pequena compensação óptica porque os glifos coloridos
-  // do iOS possuem margem interna própria.
+  // Os glifos desta faixa são desenhados em vetor para que nuvens, Sol e Lua
+  // compartilhem o mesmo centro óptico, sem depender das margens do emoji.
+  if (glyph === "🌅") {
+    // Equivalente visual do SF Symbol sunrise.fill da referência enviada.
+    drawSunriseSunsetGlyph(ctx, centerX, centerY, size, "sunrise");
+    return;
+  }
+
+  if (glyph === "🌇") {
+    // Equivalente visual do SF Symbol sunset.fill da referência enviada.
+    drawSunriseSunsetGlyph(ctx, centerX, centerY, size, "sunset");
+    return;
+  }
+
+  if (glyph === "☀️") {
+    drawWeatherSun(ctx, centerX, centerY, size * 0.22);
+    return;
+  }
+
+  if (glyph === "🌤️") {
+    drawWeatherSun(
+      ctx,
+      centerX - size * 0.18,
+      centerY - size * 0.16,
+      size * 0.18
+    );
+    drawStripCloud(
+      ctx,
+      centerX + size * 0.05,
+      centerY + size * 0.08,
+      size / 64,
+      false
+    );
+    return;
+  }
+
+  if (glyph === "☁️") {
+    drawStripCloud(ctx, centerX, centerY, size / 64, false);
+    return;
+  }
+
+  if (glyph === "🌧️") {
+    drawStripCloud(ctx, centerX, centerY, size / 64, true);
+    drawWeatherRainDrops(ctx, centerX, centerY, size);
+    return;
+  }
+
+  if (glyph === "⛈️") {
+    drawStripCloud(ctx, centerX, centerY, size / 64, true);
+    drawWeatherRainDrops(ctx, centerX, centerY, size);
+    drawWeatherLightning(ctx, centerX, centerY, size);
+    return;
+  }
+
+  if (glyph === "🌨️") {
+    drawStripCloud(ctx, centerX, centerY, size / 64, true);
+    drawWeatherSnowflake(
+      ctx,
+      centerX,
+      centerY + size * 0.33,
+      size * 0.18,
+      "#64D2FF"
+    );
+    return;
+  }
+
+  if (glyph === "❄️") {
+    drawWeatherSnowflake(ctx, centerX, centerY, size * 0.34, "#64D2FF");
+    return;
+  }
+
+  if (glyph === "🌫️") {
+    drawWeatherFog(ctx, centerX, centerY, size);
+    return;
+  }
+
+  if (glyph === "💨") {
+    drawWeatherWind(ctx, centerX, centerY, size);
+    return;
+  }
+
+  // Reserva para algum glifo futuro que ainda não tenha desenho vetorial.
   const fontSize = Math.round(size * 1.24);
-  const solarGlyphs = new Set([
-    "☀️",
-    "🌤️",
-    "🌅",
-    "🌇",
-  ]);
-  // Os glifos solares do AppleColorEmoji ficam visualmente acima do
-  // centro geométrico da caixa. A compensação proporcional os alinha à Lua
-  // nos modos compacto e normal, preservando o mesmo eixo horizontal.
+  const solarGlyphs = new Set(["☀️", "🌤️", "🌅", "🌇"]);
+  const cloudGlyphs = new Set(["☁️", "🌧️", "🌨️", "⛈️"]);
   const verticalOffset = solarGlyphs.has(glyph)
     ? Math.round(size * 0.2)
-    : 0;
+    : cloudGlyphs.has(glyph)
+      ? Math.round(size * 0.06)
+      : 0;
   let font;
   try {
     font = new Font("AppleColorEmoji", fontSize);
@@ -2971,6 +3045,7 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
 
   ctx.setTextAlignedCenter();
   ctx.setFont(font);
+  ctx.setTextColor(new Color("#FFFFFF", 0.96));
   ctx.drawTextInRect(
     glyph,
     new Rect(
@@ -2981,6 +3056,254 @@ function drawWeatherGlyph(ctx, glyph, centerX, centerY, size) {
     )
   );
 }
+
+function drawWeatherPathSegment(
+  ctx,
+  x1,
+  y1,
+  x2,
+  y2,
+  color,
+  lineWidth
+) {
+  ctx.setStrokeColor(new Color(color, 0.96));
+  ctx.setLineWidth(lineWidth);
+  const path = new Path();
+  path.move(new Point(x1, y1));
+  path.addLine(new Point(x2, y2));
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
+function drawWeatherHalfSun(
+  ctx,
+  centerX,
+  centerY,
+  radius,
+  fillColor,
+  backgroundColor
+) {
+  ctx.setFillColor(new Color(fillColor, 0.98));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - radius,
+      centerY - radius,
+      radius * 2,
+      radius * 2
+    )
+  );
+
+  // O recorte inferior transforma o disco em semicírculo, como na referência.
+  ctx.setFillColor(new Color(backgroundColor, 1.0));
+  ctx.fillRect(
+    new Rect(
+      centerX - radius - 2,
+      centerY,
+      radius * 2 + 4,
+      radius + 3
+    )
+  );
+}
+
+function drawSunriseSunsetGlyph(
+  ctx,
+  centerX,
+  centerY,
+  size,
+  kind
+) {
+  const backgroundColor = "#07101A";
+  const sunrise = kind === "sunrise";
+  const sunColor = sunrise ? "#FFB800" : "#FF7A00";
+  const horizonColor = sunrise ? "#64D2FF" : "#FF453A";
+  const radius = size * 0.20;
+  const sunCenterY = centerY + (sunrise ? size * 0.05 : -size * 0.03);
+
+  if (sunrise) {
+    for (let index = 0; index < 5; index++) {
+      const angle = Math.PI + Math.PI * (index + 1) / 6;
+      const inner = radius * 1.30;
+      const outer = radius * 1.82;
+      drawWeatherPathSegment(
+        ctx,
+        centerX + Math.cos(angle) * inner,
+        sunCenterY + Math.sin(angle) * inner,
+        centerX + Math.cos(angle) * outer,
+        sunCenterY + Math.sin(angle) * outer,
+        horizonColor,
+        Math.max(1.5, size * 0.055)
+      );
+    }
+  }
+
+  drawWeatherHalfSun(
+    ctx,
+    centerX,
+    sunCenterY,
+    radius,
+    sunColor,
+    backgroundColor
+  );
+
+  const horizonLines = sunrise
+    ? [
+        [0.22, 0.80],
+        [0.36, 0.56],
+        [0.48, 0.32],
+      ]
+    : [
+        [0.18, 0.78],
+        [0.33, 0.52],
+        [0.46, 0.28],
+      ];
+
+  for (const [offset, width] of horizonLines) {
+    drawWeatherPathSegment(
+      ctx,
+      centerX - size * width / 2,
+      centerY + size * offset,
+      centerX + size * width / 2,
+      centerY + size * offset,
+      horizonColor,
+      Math.max(1.6, size * 0.065)
+    );
+  }
+}
+
+function drawWeatherRainDrops(ctx, centerX, centerY, size) {
+  const lineWidth = Math.max(1.5, size * 0.06);
+  const startY = centerY + size * 0.27;
+  const endY = centerY + size * 0.48;
+
+  for (let index = -1; index <= 1; index++) {
+    const x = centerX + index * size * 0.20;
+    drawWeatherPathSegment(
+      ctx,
+      x,
+      startY,
+      x - size * 0.045,
+      endY,
+      "#64D2FF",
+      lineWidth
+    );
+  }
+}
+
+function drawWeatherLightning(ctx, centerX, centerY, size) {
+  const path = new Path();
+  path.move(
+    new Point(
+      centerX + size * 0.04,
+      centerY + size * 0.18
+    )
+  );
+  path.addLine(
+    new Point(
+      centerX - size * 0.08,
+      centerY + size * 0.39
+    )
+  );
+  path.addLine(
+    new Point(
+      centerX + size * 0.01,
+      centerY + size * 0.36
+    )
+  );
+  path.addLine(
+    new Point(
+      centerX - size * 0.04,
+      centerY + size * 0.55
+    )
+  );
+  path.addLine(
+    new Point(
+      centerX + size * 0.15,
+      centerY + size * 0.29
+    )
+  );
+  path.addLine(
+    new Point(
+      centerX + size * 0.05,
+      centerY + size * 0.32
+    )
+  );
+  path.addLine(
+    new Point(
+      centerX + size * 0.04,
+      centerY + size * 0.18
+    )
+  );
+  ctx.setFillColor(new Color("#FFD60A", 0.98));
+  ctx.addPath(path);
+  ctx.fillPath();
+}
+
+function drawWeatherSnowflake(
+  ctx,
+  centerX,
+  centerY,
+  radius,
+  color
+) {
+  const lineWidth = Math.max(1.2, radius * 0.18);
+  for (let index = 0; index < 3; index++) {
+    const angle = Math.PI * index / 3;
+    const x1 = centerX - Math.cos(angle) * radius;
+    const y1 = centerY - Math.sin(angle) * radius;
+    const x2 = centerX + Math.cos(angle) * radius;
+    const y2 = centerY + Math.sin(angle) * radius;
+    drawWeatherPathSegment(
+      ctx,
+      x1,
+      y1,
+      x2,
+      y2,
+      color,
+      lineWidth
+    );
+  }
+}
+
+function drawWeatherFog(ctx, centerX, centerY, size) {
+  const lineWidth = Math.max(1.5, size * 0.06);
+  const lines = [
+    [-0.28, 0.70],
+    [0.00, 0.56],
+    [0.25, 0.78],
+  ];
+  for (const [offset, width] of lines) {
+    drawWeatherPathSegment(
+      ctx,
+      centerX - size * width / 2,
+      centerY + size * offset,
+      centerX + size * width / 2,
+      centerY + size * offset,
+      "#9BD8FF",
+      lineWidth
+    );
+  }
+}
+
+function drawWeatherWind(ctx, centerX, centerY, size) {
+  const lineWidth = Math.max(1.5, size * 0.06);
+  const lines = [
+    [-0.24, 0.68],
+    [0.00, 0.86],
+    [0.24, 0.54],
+  ];
+  for (const [offset, width] of lines) {
+    drawWeatherPathSegment(
+      ctx,
+      centerX - size * width / 2,
+      centerY + size * offset,
+      centerX + size * width / 2,
+      centerY + size * offset,
+      "#9BD8FF",
+      lineWidth
+    );
+  }
+}
+
 
 function drawWeatherEclipseIcon(
   ctx,
