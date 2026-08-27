@@ -35,6 +35,8 @@ const SETTINGS = {
   rainEvidenceMinChance: 55,
   rainEvidenceMinCloudiness: 40,
   rainSymbolMinChance: 35,
+  cloudEvidenceMinCloudiness: 32,
+  denseCloudMinCloudiness: 78,
   rainLineColor: "#0A4F9E",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
@@ -3358,87 +3360,101 @@ function drawWeatherWind(ctx, centerX, centerY, size) {
 }
 
 
-function moonWeatherOverlayKind(forecast, date) {
-  if (!forecast || !isNightWeatherHour(date)) return null;
+function weatherOverlayState(forecast) {
+  if (!forecast) {
+    return {
+      cloud: false,
+      denseCloud: false,
+      rain: false,
+      storm: false,
+      snow: false,
+      fog: false,
+      wind: false,
+    };
+  }
 
   const symbol = String(forecast.symbol ?? "").toLowerCase();
   const symbolGroup = weatherSymbolGroup(forecast);
+  const rainEvidence = rainEvidenceForForecast(forecast);
+  const cloudinessSource = forecast.cloudiness;
+  const cloudiness =
+    cloudinessSource === null ||
+    cloudinessSource === undefined ||
+    cloudinessSource === "" ||
+    !Number.isFinite(Number(cloudinessSource))
+      ? null
+      : Math.max(0, Math.min(100, Number(cloudinessSource)));
 
-  if (
+  const storm =
     symbolGroup === 6 ||
     symbol.includes("thunder") ||
-    symbol.includes("storm")
-  ) return "storm";
-  if (
+    symbol.includes("storm");
+  const snow =
     symbolGroup === 7 ||
     symbolGroup === 8 ||
     symbol.includes("snow") ||
-    symbol.includes("sleet")
-  ) return "snow";
-  if (
+    symbol.includes("sleet");
+  const fog =
     symbolGroup === 9 ||
     symbol.includes("fog") ||
-    symbol.includes("mist")
-  ) return "fog";
-  if (symbolGroup === 10 || symbol.includes("wind")) return "wind";
-  if (rainEvidenceForForecast(forecast).hasRain) return "rain";
-
-  const cloudiness =
-    forecast.cloudiness === null ||
-    forecast.cloudiness === undefined ||
-    forecast.cloudiness === ""
-      ? null
-      : Number(forecast.cloudiness);
-
-  if (
+    symbol.includes("mist");
+  const wind =
+    symbolGroup === 10 ||
+    symbol.includes("wind");
+  const rain = storm || rainEvidence.hasRain;
+  const symbolHasCloud =
+    symbolGroup !== null &&
+    symbolGroup >= 2 &&
+    symbolGroup <= 6;
+  const cloud =
+    rain ||
+    snow ||
+    symbolHasCloud ||
     (cloudiness !== null &&
-      Number.isFinite(cloudiness) &&
-      cloudiness >= 32) ||
-    (symbolGroup !== null && symbolGroup >= 2 && symbolGroup <= 5)
-  ) return "cloud";
+      cloudiness >= SETTINGS.cloudEvidenceMinCloudiness);
+  const denseCloud =
+    rain ||
+    storm ||
+    snow ||
+    [3, 4, 5, 6].includes(symbolGroup) ||
+    (cloudiness !== null &&
+      cloudiness >= SETTINGS.denseCloudMinCloudiness);
 
-  return null;
+  return {
+    cloud,
+    denseCloud,
+    rain,
+    storm,
+    snow,
+    fog,
+    wind,
+  };
 }
 
-function drawMoonWeatherOverlay(
+function drawCelestialWeatherOverlay(
   ctx,
   forecast,
-  date,
   centerX,
   centerY,
   size
 ) {
-  const kind = moonWeatherOverlayKind(forecast, date);
-  if (!kind) return;
+  const state = weatherOverlayState(forecast);
 
-  const cloudiness = Math.max(
-    0,
-    Math.min(100, Number(forecast?.cloudiness) || 0)
-  );
-  const denseCloud =
-    cloudiness >= 78 ||
-    [3, 4, 5].includes(weatherSymbolGroup(forecast));
-  const cloudScale =
-    (size / 82) * (denseCloud ? 1.02 : 0.90);
-  const cloudCenterX = centerX + size * 0.08;
-  const cloudCenterY = centerY + size * 0.19;
-  const cloudy =
-    kind === "cloud" ||
-    kind === "rain" ||
-    kind === "storm" ||
-    kind === "snow";
-
-  if (cloudy) {
+  // Sol, Lua, nascer/pôr do sol e eclipses usam a mesma nuvem e o mesmo
+  // alinhamento. A nuvem fica na parte inferior para o astro continuar legível.
+  if (state.cloud) {
+    const cloudScale =
+      (size / 82) * (state.denseCloud ? 1.02 : 0.90);
     drawStripCloud(
       ctx,
-      cloudCenterX,
-      cloudCenterY,
+      centerX + size * 0.08,
+      centerY + size * 0.19,
       cloudScale,
-      kind !== "cloud"
+      state.rain || state.storm
     );
   }
 
-  if (kind === "rain" || kind === "storm") {
+  if (state.rain) {
     drawWeatherRainDrops(
       ctx,
       centerX,
@@ -3447,7 +3463,7 @@ function drawMoonWeatherOverlay(
     );
   }
 
-  if (kind === "storm") {
+  if (state.storm) {
     drawWeatherLightning(
       ctx,
       centerX,
@@ -3456,7 +3472,7 @@ function drawMoonWeatherOverlay(
     );
   }
 
-  if (kind === "snow") {
+  if (state.snow) {
     drawWeatherSnowflake(
       ctx,
       centerX,
@@ -3466,7 +3482,7 @@ function drawMoonWeatherOverlay(
     );
   }
 
-  if (kind === "fog") {
+  if (state.fog) {
     drawWeatherFog(
       ctx,
       centerX,
@@ -3475,7 +3491,7 @@ function drawMoonWeatherOverlay(
     );
   }
 
-  if (kind === "wind") {
+  if (state.wind) {
     drawWeatherWind(
       ctx,
       centerX,
@@ -3558,14 +3574,8 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   const ticks = weatherConditionTicks(weather);
   if (ticks.length === 0) return;
 
-  // Todos os ícones compartilham exatamente a mesma caixa visual da Lua
-  // e o mesmo eixo horizontal fixo, independentemente da linha solar.
   const iconSize = weatherIconSize();
   const centerY = weatherIconCenterY();
-  const lunarGlyphs = new Set([
-    "🌑", "🌒", "🌓", "🌔",
-    "🌕", "🌖", "🌗", "🌘",
-  ]);
 
   for (const entry of ticks) {
     const centerX = timeToX(entry.tick);
@@ -3585,28 +3595,31 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         eclipse,
         entry.tick
       );
-      if (eclipse.type === "lunar") {
-        drawMoonWeatherOverlay(
-          ctx,
-          entry.forecast,
-          entry.tick,
-          centerX,
-          centerY,
-          iconSize
-        );
-      }
+      drawCelestialWeatherOverlay(
+        ctx,
+        entry.forecast,
+        centerX,
+        centerY,
+        iconSize
+      );
       continue;
     }
 
-    const glyph = weatherEmojiForForecast(
-      entry.forecast,
-      entry.tick
-    );
-    if (!glyph) continue;
+    const hour = entry.tick.getHours();
+    const isSunrise =
+      hour === SETTINGS.daylightStartHour;
+    const isSunset =
+      hour === SETTINGS.daylightEndHour;
 
-    if (lunarGlyphs.has(glyph)) {
-      // Toda Lua horária usa o mesmo desenho vetorial, crateras, recorte e
-      // contorno das fases lunares que já existiam no widget.
+    if (isSunrise || isSunset) {
+      drawSunriseSunsetGlyph(
+        ctx,
+        centerX,
+        centerY,
+        iconSize,
+        isSunrise ? "sunrise" : "sunset"
+      );
+    } else if (isNightWeatherHour(entry.tick)) {
       drawMoonPhase(
         ctx,
         moonPhaseForDate(entry.tick),
@@ -3615,20 +3628,18 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         iconSize,
         entry.tick
       );
-      drawMoonWeatherOverlay(
+    } else {
+      drawWeatherSun(
         ctx,
-        entry.forecast,
-        entry.tick,
         centerX,
         centerY,
-        iconSize
+        weatherSunRadius(iconSize)
       );
-      continue;
     }
 
-    drawWeatherGlyph(
+    drawCelestialWeatherOverlay(
       ctx,
-      glyph,
+      entry.forecast,
       centerX,
       centerY,
       iconSize
@@ -5447,10 +5458,9 @@ function drawNightSegment(
     hourlyWeather?.hours ?? [],
     nightCenterDate.getTime()
   );
-  drawMoonWeatherOverlay(
+  drawCelestialWeatherOverlay(
     ctx,
     moonForecast,
-    nightCenterDate,
     dayAxisX,
     moonY + moonSize / 2,
     moonSize
