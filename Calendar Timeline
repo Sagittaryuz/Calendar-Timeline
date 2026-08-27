@@ -3552,7 +3552,102 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   }
 }
 
+const KNOWN_ECLIPSES = [
+  {
+    type: "lunar",
+    name: "ECLIPSE LUNAR PARCIAL",
+    penumbralStart: Date.UTC(2026, 7, 28, 1, 24),
+    partialStart: Date.UTC(2026, 7, 28, 2, 34),
+    maximum: Date.UTC(2026, 7, 28, 4, 13),
+    partialEnd: Date.UTC(2026, 7, 28, 5, 52),
+    penumbralEnd: Date.UTC(2026, 7, 28, 7, 2),
+    magnitude: 0.9299,
+    gamma: 0.4964,
+  },
+];
+
+function knownEclipseForDate(date) {
+  const timestamp = date.getTime();
+
+  for (const event of KNOWN_ECLIPSES) {
+    if (
+      timestamp < event.penumbralStart ||
+      timestamp > event.penumbralEnd
+    ) {
+      continue;
+    }
+
+    const beforeMaximum = timestamp <= event.maximum;
+    const span = beforeMaximum
+      ? event.maximum - event.penumbralStart
+      : event.penumbralEnd - event.maximum;
+    const distance = beforeMaximum
+      ? event.maximum - timestamp
+      : timestamp - event.maximum;
+    const position = Math.max(
+      -1,
+      Math.min(
+        1,
+        (beforeMaximum ? -1 : 1) * distance / span
+      )
+    );
+    const inPartialPhase =
+      timestamp >= event.partialStart &&
+      timestamp <= event.partialEnd;
+    let coverage;
+
+    if (timestamp < event.partialStart) {
+      coverage =
+        0.12 *
+        (timestamp - event.penumbralStart) /
+        (event.partialStart - event.penumbralStart);
+    } else if (timestamp <= event.maximum) {
+      coverage =
+        0.12 +
+        (event.magnitude - 0.12) *
+          (timestamp - event.partialStart) /
+          (event.maximum - event.partialStart);
+    } else if (timestamp <= event.partialEnd) {
+      coverage =
+        0.12 +
+        (event.magnitude - 0.12) *
+          (event.partialEnd - timestamp) /
+          (event.partialEnd - event.maximum);
+    } else {
+      coverage =
+        0.12 *
+        (event.penumbralEnd - timestamp) /
+        (event.penumbralEnd - event.partialEnd);
+    }
+
+    return {
+      type: event.type,
+      name: event.name,
+      phase:
+        Math.abs(timestamp - event.maximum) <= 30 * 60 * 1000
+          ? "maximum"
+          : beforeMaximum
+            ? "ingress"
+            : "egress",
+      stage: inPartialPhase ? "partial" : "penumbral",
+      position,
+      latitudeOffset: Math.max(
+        -1,
+        Math.min(1, event.gamma / 1.6)
+      ),
+      coverage: Math.max(0, Math.min(1, coverage)),
+      magnitude: event.magnitude,
+      source: "NASA",
+    };
+  }
+
+  return null;
+}
+
 function eclipseForDate(date) {
+  const knownEclipse = knownEclipseForDate(date);
+  if (knownEclipse) return knownEclipse;
+
   const julianDay =
     date.getTime() / 86400000 + 2440587.5;
   const centuries = (julianDay - 2451545.0) / 36525;
