@@ -3488,10 +3488,39 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       continue;
     }
 
+    const hour = entry.tick.getHours();
+    const isSunrise =
+      hour === SETTINGS.daylightStartHour;
+    const isSunset =
+      hour === SETTINGS.daylightEndHour;
+    const isNight = isNightWeatherHour(entry.tick);
     const eclipse =
       entry.eclipse ?? eclipseForDate(entry.tick);
 
-    if (eclipse) {
+    // Os limites de transição têm prioridade absoluta: 06:00 e 18:00
+    // continuam sendo nascer e pôr do sol mesmo se houver um eclipse
+    // cadastrado no mesmo instante.
+    if (isSunrise || isSunset) {
+      drawSunriseSunsetGlyph(
+        ctx,
+        centerX,
+        centerY,
+        iconSize,
+        isSunrise ? "sunrise" : "sunset"
+      );
+      drawCelestialWeatherOverlay(
+        ctx,
+        entry.forecast,
+        centerX,
+        centerY,
+        iconSize
+      );
+      continue;
+    }
+
+    // Uma Lua (inclusive a de um eclipse lunar) nunca aparece durante o
+    // dia. O eclipse solar continua sendo desenhado durante o dia.
+    if (eclipse && (eclipse.type === "solar" || isNight)) {
       drawWeatherEclipseIcon(
         ctx,
         centerX,
@@ -3510,21 +3539,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       continue;
     }
 
-    const hour = entry.tick.getHours();
-    const isSunrise =
-      hour === SETTINGS.daylightStartHour;
-    const isSunset =
-      hour === SETTINGS.daylightEndHour;
-
-    if (isSunrise || isSunset) {
-      drawSunriseSunsetGlyph(
-        ctx,
-        centerX,
-        centerY,
-        iconSize,
-        isSunrise ? "sunrise" : "sunset"
-      );
-    } else if (isNightWeatherHour(entry.tick)) {
+    if (isNight) {
       drawMoonPhase(
         ctx,
         moonPhaseForDate(entry.tick),
