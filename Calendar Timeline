@@ -2813,11 +2813,6 @@ function lunarPhaseEmojiForDate(date) {
 function weatherEmojiForForecast(forecast, date) {
   const symbolGroup = weatherSymbolGroup(forecast);
   const symbol = String(forecast?.symbol ?? "").toLowerCase();
-  const rainMM = Math.max(0, Number(forecast?.rainMM) || 0);
-  const rainChance = Math.max(
-    0,
-    Math.min(100, Number(forecast?.rainChance) || 0)
-  );
   const cloudiness =
     forecast?.cloudiness === null ||
     forecast?.cloudiness === undefined
@@ -2834,6 +2829,12 @@ function weatherEmojiForForecast(forecast, date) {
 
   if (date.getHours() === SETTINGS.daylightEndHour) {
     return "🌇";
+  }
+
+  // Entre 18:00 e 06:00 o astro-base é sempre a Lua. Nuvens, chuva,
+  // tempestade, neve, neblina e vento são sobrepostos depois, no mesmo ícone.
+  if (night) {
+    return lunarPhaseEmojiForDate(date);
   }
 
   if (
@@ -2869,16 +2870,10 @@ function weatherEmojiForForecast(forecast, date) {
     return "🌧️";
   }
 
-  // À noite, a Lua permanece visível. A condição meteorológica é
-  // desenhada como uma sobreposição sobre a fase lunar.
-  if (night) {
-    return lunarPhaseEmojiForDate(date);
-  }
-
   if (cloudiness !== null && cloudiness >= 82) return "☁️";
   if (
     (cloudiness !== null && cloudiness >= 42) ||
-    symbolGroup === 2
+    (symbolGroup !== null && symbolGroup >= 2 && symbolGroup <= 5)
   ) {
     return "🌤️";
   }
@@ -3398,8 +3393,8 @@ function moonWeatherOverlayKind(forecast, date) {
   if (
     (cloudiness !== null &&
       Number.isFinite(cloudiness) &&
-      cloudiness >= 42) ||
-    symbolGroup === 2
+      cloudiness >= 32) ||
+    (symbolGroup !== null && symbolGroup >= 2 && symbolGroup <= 5)
   ) return "cloud";
 
   return null;
@@ -3416,7 +3411,16 @@ function drawMoonWeatherOverlay(
   const kind = moonWeatherOverlayKind(forecast, date);
   if (!kind) return;
 
-  const cloudScale = (size / 82) * 0.82;
+  const cloudiness = Math.max(
+    0,
+    Math.min(100, Number(forecast?.cloudiness) || 0)
+  );
+  const denseCloud =
+    cloudiness >= 78 ||
+    [3, 4, 5].includes(weatherSymbolGroup(forecast));
+  const cloudScale =
+    (size / 82) * (denseCloud ? 1.02 : 0.90);
+  const cloudCenterX = centerX + size * 0.08;
   const cloudCenterY = centerY + size * 0.19;
   const cloudy =
     kind === "cloud" ||
@@ -3427,7 +3431,7 @@ function drawMoonWeatherOverlay(
   if (cloudy) {
     drawStripCloud(
       ctx,
-      centerX,
+      cloudCenterX,
       cloudCenterY,
       cloudScale,
       kind !== "cloud"
@@ -3581,6 +3585,16 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         eclipse,
         entry.tick
       );
+      if (eclipse.type === "lunar") {
+        drawMoonWeatherOverlay(
+          ctx,
+          entry.forecast,
+          entry.tick,
+          centerX,
+          centerY,
+          iconSize
+        );
+      }
       continue;
     }
 
