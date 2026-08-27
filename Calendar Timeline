@@ -4542,7 +4542,9 @@ function drawWeekdayBadgesOnTop(ctx) {
 
 function drawFixedDaylightGlow(ctx, weather) {
   const lineY = solarLineY();
-  const glowEndY = timelineChartBottom();
+  // O brilho chega até a base da faixa térmica, ficando atrás das
+  // temperaturas, do preenchimento e da curva desenhados depois.
+  const glowEndY = thermalBandBottomY();
 
   for (const interval of visibleDaylightIntervals()) {
     // A luz solar é uniforme em relação às nuvens. Mantém apenas a
