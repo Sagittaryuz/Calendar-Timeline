@@ -2888,14 +2888,13 @@ function drawWeatherHalfSun(
   backgroundColor,
   visibleFraction = 0.75
 ) {
-  ctx.setFillColor(new Color(fillColor, 0.98));
-  ctx.fillEllipse(
-    new Rect(
-      centerX - radius,
-      centerY - radius,
-      radius * 2,
-      radius * 2
-    )
+  drawSunBurst(
+    ctx,
+    centerX,
+    centerY,
+    radius,
+    fillColor,
+    "#FF8A00"
   );
 
   // Mostra 75% do disco e recorta apenas a faixa inferior restante.
@@ -2954,7 +2953,7 @@ function drawSunriseSunsetGlyph(
 ) {
   const backgroundColor = "#07101A";
   const sunrise = kind === "sunrise";
-  const sunColor = "#FFD43B";
+  const sunColor = "#FFDE00";
   const horizonColor = sunrise ? "#64D2FF" : "#FF453A";
   const radius = weatherSunRadius(size);
   const sunCenterY = centerY + (sunrise ? size * 0.05 : -size * 0.03);
@@ -3901,9 +3900,60 @@ function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
   }
 }
 
-function drawWeatherSun(ctx, centerX, centerY, radius) {
-  const sunColor = new Color("#FFD43B", 0.98);
-  ctx.setFillColor(sunColor);
+function drawSunBurst(
+  ctx,
+  centerX,
+  centerY,
+  radius,
+  coreColor = "#FFDE00",
+  rayColor = "#FF8A00"
+) {
+  // Coroa laranja contínua, com 12 pontas largas, seguindo a referência.
+  const rays = 12;
+  const step = (Math.PI * 2) / rays;
+  const outerRadius = radius * 1.72;
+  const shoulderRadius = radius * 1.42;
+  const valleyRadius = radius * 1.06;
+  const points = [];
+
+  for (let index = 0; index < rays; index++) {
+    const angle = -Math.PI / 2 + index * step;
+    points.push(
+      new Point(
+        centerX + Math.cos(angle - step * 0.50) * valleyRadius,
+        centerY + Math.sin(angle - step * 0.50) * valleyRadius
+      ),
+      new Point(
+        centerX + Math.cos(angle - step * 0.28) * shoulderRadius,
+        centerY + Math.sin(angle - step * 0.28) * shoulderRadius
+      ),
+      new Point(
+        centerX + Math.cos(angle) * outerRadius,
+        centerY + Math.sin(angle) * outerRadius
+      ),
+      new Point(
+        centerX + Math.cos(angle + step * 0.28) * shoulderRadius,
+        centerY + Math.sin(angle + step * 0.28) * shoulderRadius
+      ),
+      new Point(
+        centerX + Math.cos(angle + step * 0.50) * valleyRadius,
+        centerY + Math.sin(angle + step * 0.50) * valleyRadius
+      )
+    );
+  }
+
+  const path = new Path();
+  path.move(points[0]);
+  for (const point of points.slice(1)) {
+    path.addLine(point);
+  }
+  path.addLine(points[0]);
+
+  ctx.setFillColor(new Color(rayColor, 1.0));
+  ctx.addPath(path);
+  ctx.fillPath();
+
+  ctx.setFillColor(new Color(coreColor, 1.0));
   ctx.fillEllipse(
     new Rect(
       centerX - radius,
@@ -3912,30 +3962,17 @@ function drawWeatherSun(ctx, centerX, centerY, radius) {
       radius * 2
     )
   );
+}
 
-  // Raios finos e regulares deixam o Sol redondo, maior e visualmente limpo.
-  ctx.setStrokeColor(new Color("#FFD43B", 0.94));
-  ctx.setLineWidth(Math.max(1.2, radius * 0.10));
-  for (let index = 0; index < 12; index++) {
-    const angle = (Math.PI * 2 * index) / 12;
-    const inner = radius * 1.35;
-    const outer = radius * 1.85;
-    const path = new Path();
-    path.move(
-      new Point(
-        centerX + Math.cos(angle) * inner,
-        centerY + Math.sin(angle) * inner
-      )
-    );
-    path.addLine(
-      new Point(
-        centerX + Math.cos(angle) * outer,
-        centerY + Math.sin(angle) * outer
-      )
-    );
-    ctx.addPath(path);
-    ctx.strokePath();
-  }
+function drawWeatherSun(ctx, centerX, centerY, radius) {
+  drawSunBurst(
+    ctx,
+    centerX,
+    centerY,
+    radius,
+    "#FFDE00",
+    "#FF8A00"
+  );
 }
 
 function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
