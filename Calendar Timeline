@@ -48,9 +48,10 @@ const SETTINGS = {
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
   overflowColor: "#636366",
-  nightMoonColor: "#FFB347",
-  nightMoonShadowColor: "#FF8A1F",
-  nightMoonCraterColor: "#D96B12",
+  nightMoonColor: "#D7DDE4",
+  nightMoonShadowColor: "#343A43",
+  nightMoonCraterColor: "#737D88",
+  nightMoonCraterHighlightColor: "#F0F3F6",
   nightStarColor: "#FFFFFF",
   nightCloudColor: "#F2F2F7",
   nightCloudShadeColor: "#D8DCE2",
@@ -5605,6 +5606,77 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
   }
 }
 
+function fillMoonLitSurface(
+  ctx,
+  x,
+  y,
+  size,
+  phase,
+  illumination
+) {
+  if (phase === "new" || illumination <= 0) return;
+
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  const radius = size / 2;
+  const isWaxing =
+    phase === "waxing-crescent" ||
+    phase === "first-quarter" ||
+    phase === "waxing-gibbous";
+  const isFull = phase === "full";
+  const normalizedIllumination = Math.max(
+    0,
+    Math.min(1, illumination)
+  );
+  const terminatorFactor = 1 - 2 * normalizedIllumination;
+
+  ctx.setFillColor(
+    new Color(SETTINGS.nightMoonColor, 0.98)
+  );
+
+  for (
+    let pixelY = Math.floor(y);
+    pixelY < Math.ceil(y + size);
+    pixelY++
+  ) {
+    const sampleY = pixelY + 0.5;
+    const normalizedY = (sampleY - centerY) / radius;
+    if (Math.abs(normalizedY) > 1) continue;
+
+    const edgeX =
+      radius *
+      Math.sqrt(Math.max(0, 1 - normalizedY * normalizedY));
+    let left;
+    let right;
+
+    if (isFull) {
+      left = centerX - edgeX;
+      right = centerX + edgeX;
+    } else if (isWaxing) {
+      const terminatorX =
+        terminatorFactor * edgeX;
+      left = centerX + terminatorX;
+      right = centerX + edgeX;
+    } else {
+      const terminatorX =
+        -terminatorFactor * edgeX;
+      left = centerX - edgeX;
+      right = centerX + terminatorX;
+    }
+
+    if (right > left) {
+      ctx.fillRect(
+        new Rect(
+          left,
+          pixelY,
+          Math.max(1, right - left),
+          1
+        )
+      );
+    }
+  }
+}
+
 function drawMoonPhase(
   ctx,
   moon,
@@ -5631,47 +5703,51 @@ function drawMoonPhase(
     ctx.strokeEllipse(moonRect);
   };
 
-  if (moon.phase === "new") {
-    ctx.setFillColor(new Color("#232329", 0.92));
-    ctx.fillEllipse(moonRect);
-    drawMoonCraters(ctx, x, y, size, 0.26);
-    drawOuterBorder();
-    return;
-  }
-
-  ctx.setFillColor(new Color(SETTINGS.nightMoonShadowColor, 0.92));
+  // A base escura permanece visível em todas as fases, inclusive na Lua nova.
+  ctx.setFillColor(
+    new Color(SETTINGS.nightMoonShadowColor, 0.98)
+  );
   ctx.fillEllipse(moonRect);
 
-  ctx.setFillColor(new Color(SETTINGS.nightMoonColor, 0.96));
-  ctx.fillEllipse(
-    new Rect(x, y, size * 0.84, size * 0.86)
+  fillMoonLitSurface(
+    ctx,
+    x,
+    y,
+    size,
+    moon.phase,
+    moon.illumination ?? (
+      moon.phase === "full"
+        ? 1
+        : moon.phase === "new"
+          ? 0
+          : 0.5
+    )
   );
-  drawMoonCraters(ctx, x, y, size, 0.42);
 
-  if (moon.phase !== "full") {
-    const cutoutOffset = moon.phase === "waxing" ? -0.30 : 0.30;
-    fillEllipseWithTimelineDayColors(
-      ctx,
-      new Rect(
-        x + size * cutoutOffset,
-        y - size * 0.02,
-        size,
-        size
-      )
-    );
-  }
-
+  // Textura monocromática discreta em ambos os hemisférios.
+  drawMoonCraters(ctx, x, y, size, 0.34);
   drawOuterBorder();
 }
 
 function drawMoonCraters(ctx, x, y, size, opacity) {
   const craters = [
-    [0.34, 0.30, 0.12],
-    [0.66, 0.44, 0.16],
-    [0.42, 0.68, 0.20],
-    [0.73, 0.72, 0.10],
+    [0.21, 0.25, 0.11],
+    [0.38, 0.18, 0.07],
+    [0.59, 0.22, 0.13],
+    [0.78, 0.31, 0.08],
+    [0.28, 0.43, 0.16],
+    [0.51, 0.42, 0.09],
+    [0.70, 0.48, 0.15],
+    [0.18, 0.65, 0.08],
+    [0.42, 0.67, 0.18],
+    [0.64, 0.69, 0.10],
+    [0.80, 0.76, 0.12],
+    [0.30, 0.84, 0.07],
   ];
-  ctx.setFillColor(new Color(SETTINGS.nightMoonCraterColor, opacity));
+
+  ctx.setFillColor(
+    new Color(SETTINGS.nightMoonCraterColor, opacity)
+  );
   for (const [relativeX, relativeY, diameter] of craters) {
     ctx.fillEllipse(
       new Rect(
@@ -5679,6 +5755,24 @@ function drawMoonCraters(ctx, x, y, size, opacity) {
         y + size * relativeY - (size * diameter) / 2,
         size * diameter,
         size * diameter
+      )
+    );
+  }
+
+  // Pequenos realces dão aparência de relevo sem introduzir cores novas.
+  ctx.setFillColor(
+    new Color(
+      SETTINGS.nightMoonCraterHighlightColor,
+      opacity * 0.28
+    )
+  );
+  for (const [relativeX, relativeY, diameter] of craters.slice(1, 9)) {
+    ctx.fillEllipse(
+      new Rect(
+        x + size * relativeX - size * diameter * 0.25,
+        y + size * relativeY - size * diameter * 0.25,
+        size * diameter * 0.50,
+        size * diameter * 0.50
       )
     );
   }
@@ -5736,19 +5830,65 @@ function drawFivePointStar(ctx, centerX, centerY, outerRadius, color) {
 function moonPhaseForDate(date) {
   const synodicMonth = 29.530588853;
   const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14, 0);
-  const elapsedDays = (date.getTime() - knownNewMoon) / 86400000;
-  const fraction = ((elapsedDays / synodicMonth) % 1 + 1) % 1;
+  const elapsedDays =
+    (date.getTime() - knownNewMoon) / 86400000;
+  const fraction =
+    ((elapsedDays / synodicMonth) % 1 + 1) % 1;
 
   if (fraction < 0.0625 || fraction >= 0.9375) {
-    return { phase: "new", name: "LUA NOVA" };
+    return {
+      phase: "new",
+      name: "LUA NOVA",
+      illumination: 0,
+    };
+  }
+  if (fraction < 0.1875) {
+    return {
+      phase: "waxing-crescent",
+      name: "LUA CRESCENTE",
+      illumination: 0.25,
+    };
+  }
+  if (fraction < 0.3125) {
+    return {
+      phase: "first-quarter",
+      name: "QUARTO CRESCENTE",
+      illumination: 0.5,
+    };
   }
   if (fraction < 0.4375) {
-    return { phase: "waxing", name: "LUA CRESCENTE" };
+    return {
+      phase: "waxing-gibbous",
+      name: "LUA GIBOSA CRESCENTE",
+      illumination: 0.75,
+    };
   }
   if (fraction < 0.5625) {
-    return { phase: "full", name: "LUA CHEIA" };
+    return {
+      phase: "full",
+      name: "LUA CHEIA",
+      illumination: 1,
+    };
   }
-  return { phase: "waning", name: "LUA MINGUANTE" };
+  if (fraction < 0.6875) {
+    return {
+      phase: "waning-gibbous",
+      name: "LUA GIBOSA MINGUANTE",
+      illumination: 0.75,
+    };
+  }
+  if (fraction < 0.8125) {
+    return {
+      phase: "last-quarter",
+      name: "QUARTO MINGUANTE",
+      illumination: 0.5,
+    };
+  }
+  return {
+    phase: "waning-crescent",
+    name: "LUA MINGUANTE",
+    illumination: 0.25,
+  };
 }
 
 function solarTimeForDate(date, isSunrise) {
