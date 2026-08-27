@@ -3552,24 +3552,26 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   }
 }
 
-const KNOWN_ECLIPSES = [
-  {
-    type: "lunar",
-    name: "ECLIPSE LUNAR PARCIAL",
-    penumbralStart: Date.UTC(2026, 7, 28, 1, 24),
-    partialStart: Date.UTC(2026, 7, 28, 2, 34),
-    maximum: Date.UTC(2026, 7, 28, 4, 13),
-    partialEnd: Date.UTC(2026, 7, 28, 5, 52),
-    penumbralEnd: Date.UTC(2026, 7, 28, 7, 2),
-    magnitude: 0.9299,
-    gamma: 0.4964,
-  },
-];
+function knownEclipses() {
+  return [
+    {
+      type: "lunar",
+      name: "ECLIPSE LUNAR PARCIAL",
+      penumbralStart: Date.UTC(2026, 7, 28, 1, 24),
+      partialStart: Date.UTC(2026, 7, 28, 2, 34),
+      maximum: Date.UTC(2026, 7, 28, 4, 13),
+      partialEnd: Date.UTC(2026, 7, 28, 5, 52),
+      penumbralEnd: Date.UTC(2026, 7, 28, 7, 2),
+      magnitude: 0.9299,
+      gamma: 0.4964,
+    },
+  ];
+}
 
 function knownEclipseForDate(date) {
   const timestamp = date.getTime();
 
-  for (const event of KNOWN_ECLIPSES) {
+  for (const event of knownEclipses()) {
     if (
       timestamp < event.penumbralStart ||
       timestamp > event.penumbralEnd
