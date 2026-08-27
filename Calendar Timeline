@@ -40,8 +40,9 @@ const SETTINGS = {
   rainLineColor: "#0A4F9E",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
-  saturdayTimelineBackgroundColor: "#071A2E",
-  sundayTimelineBackgroundColor: "#2A0A0D",
+  // Fundos de sábado e domingo mais claros e totalmente sólidos.
+  saturdayTimelineBackgroundColor: "#0D3F68",
+  sundayTimelineBackgroundColor: "#521720",
   holidayTimelineBackgroundColor: "#3A2A00",
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
