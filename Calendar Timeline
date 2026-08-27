@@ -353,9 +353,12 @@ async function loadWindow() {
         const reminderDayStart = normalizedReminderDayStart(reminder);
         const reminderDayEnd = addDays(reminderDayStart, 1);
         const reminderCutoff = reminderDayEnd;
+        // Lembretes com horário começam no horário devido; lembretes
+        // de dia inteiro começam à meia-noite e ocupam até a meia-noite
+        // seguinte.
         const reminderDisplayStart = hasTime
           ? due
-          : dateAtHour(reminderDayStart, SETTINGS.daylightStartHour);
+          : reminderDayStart;
         const identifier =
           reminder.identifier ?? `${reminder.title}-${due}`;
         const baseItem = {
@@ -374,9 +377,9 @@ async function loadWindow() {
           ),
         };
 
-        // O lembrete permanece visível desde o horário de início até
-        // 00:00 do próprio dia. Se continuar pendente, ele reaparece no
-        // dia seguinte como atrasado durante todo o dia.
+        // O lembrete com horário permanece visível desde o horário devido
+        // até o fim do dia. O lembrete de dia inteiro ocupa o dia completo.
+        // Se continuar pendente, ele reaparece no dia seguinte como atrasado.
         const segments = [];
         if (reminderDisplayStart < reminderCutoff) {
           segments.push({
