@@ -3300,6 +3300,69 @@ function drawCelestialWeatherOverlay(
   }
 }
 
+function fillEllipseIntersection(
+  ctx,
+  targetRect,
+  occluderRect,
+  color
+) {
+  const targetCenterX = targetRect.x + targetRect.width / 2;
+  const targetCenterY = targetRect.y + targetRect.height / 2;
+  const targetRadiusX = Math.max(0.001, targetRect.width / 2);
+  const targetRadiusY = Math.max(0.001, targetRect.height / 2);
+  const occluderCenterX =
+    occluderRect.x + occluderRect.width / 2;
+  const occluderCenterY =
+    occluderRect.y + occluderRect.height / 2;
+  const occluderRadiusX =
+    Math.max(0.001, occluderRect.width / 2);
+  const occluderRadiusY =
+    Math.max(0.001, occluderRect.height / 2);
+  const startX = Math.floor(
+    Math.max(targetRect.x, occluderRect.x)
+  );
+  const endX = Math.ceil(
+    Math.min(
+      targetRect.x + targetRect.width,
+      occluderRect.x + occluderRect.width
+    )
+  );
+
+  ctx.setFillColor(color);
+  for (let x = startX; x < endX; x++) {
+    const sampleX = x + 0.5;
+    const targetNormalizedX =
+      (sampleX - targetCenterX) / targetRadiusX;
+    const occluderNormalizedX =
+      (sampleX - occluderCenterX) / occluderRadiusX;
+    if (
+      Math.abs(targetNormalizedX) > 1 ||
+      Math.abs(occluderNormalizedX) > 1
+    ) {
+      continue;
+    }
+
+    const targetHalfHeight =
+      targetRadiusY *
+      Math.sqrt(1 - targetNormalizedX * targetNormalizedX);
+    const occluderHalfHeight =
+      occluderRadiusY *
+      Math.sqrt(1 - occluderNormalizedX * occluderNormalizedX);
+    const top = Math.max(
+      targetCenterY - targetHalfHeight,
+      occluderCenterY - occluderHalfHeight
+    );
+    const bottom = Math.min(
+      targetCenterY + targetHalfHeight,
+      occluderCenterY + occluderHalfHeight
+    );
+
+    if (bottom > top) {
+      ctx.fillRect(new Rect(x, top, 1, bottom - top));
+    }
+  }
+}
+
 function drawWeatherEclipseIcon(
   ctx,
   centerX,
@@ -3314,9 +3377,21 @@ function drawWeatherEclipseIcon(
     size,
     size
   );
+  const position = Math.max(
+    -1,
+    Math.min(1, Number(eclipse?.position) || 0)
+  );
+  const latitudeOffset = Math.max(
+    -1,
+    Math.min(1, Number(eclipse?.latitudeOffset) || 0)
+  );
+  const coverage = Math.max(
+    0,
+    Math.min(1, Number(eclipse?.coverage) || 0)
+  );
 
   if (eclipse.type === "lunar") {
-    // O eclipse lunar preserva integralmente o desenho já usado nas fases.
+    // O eclipse lunar ocorre sempre próximo da Lua cheia.
     drawMoonPhase(
       ctx,
       { phase: "full", name: "ECLIPSE LUNAR" },
@@ -3326,47 +3401,78 @@ function drawWeatherEclipseIcon(
       date
     );
 
-    // Sombra terrestre parcial, sem substituir crateras ou contorno lunar.
-    ctx.setFillColor(new Color("#6E1721", 0.48));
-    ctx.fillEllipse(
+    // A sombra entra pela direita, cruza o disco e sai pela esquerda.
+    // O deslocamento vertical representa o afastamento do centro da sombra.
+    const shadowCenterX =
+      centerX - position * size * 0.82;
+    const shadowCenterY =
+      centerY + latitudeOffset * size * 0.34;
+    const penumbraSize = size * 1.28;
+    const umbraSize = size * 1.10;
+
+    fillEllipseIntersection(
+      ctx,
+      rect,
       new Rect(
-        rect.x + size * 0.30,
-        rect.y - size * 0.02,
-        size,
-        size
-      )
+        shadowCenterX - penumbraSize / 2,
+        shadowCenterY - penumbraSize / 2,
+        penumbraSize,
+        penumbraSize
+      ),
+      new Color("#6E1721", 0.22 + coverage * 0.24)
     );
+    fillEllipseIntersection(
+      ctx,
+      rect,
+      new Rect(
+        shadowCenterX - umbraSize / 2,
+        shadowCenterY - umbraSize / 2,
+        umbraSize,
+        umbraSize
+      ),
+      new Color("#481018", 0.34 + coverage * 0.42)
+    );
+
     ctx.setStrokeColor(new Color("#B8A7FF", 0.96));
     ctx.setLineWidth(4);
     ctx.strokeEllipse(rect);
     return;
   }
 
-  // Eclipse solar criado no mesmo quadro e diâmetro dos demais astros.
-  ctx.setStrokeColor(new Color("#FFD000", 0.98));
-  ctx.setLineWidth(Math.max(4, size * 0.13));
-  ctx.strokeEllipse(
-    new Rect(
-      rect.x + size * 0.06,
-      rect.y + size * 0.06,
-      size * 0.88,
-      size * 0.88
-    )
+  // No eclipse solar, o Sol continua como base e o disco lunar atravessa
+  // sua frente de acordo com o horário da progressão.
+  const sunRadius = weatherSunRadius(size);
+  drawWeatherSun(ctx, centerX, centerY, sunRadius);
+  const sunRect = new Rect(
+    centerX - sunRadius,
+    centerY - sunRadius,
+    sunRadius * 2,
+    sunRadius * 2
   );
-  ctx.setFillColor(new Color("#111116", 1.0));
-  ctx.fillEllipse(
-    new Rect(
-      rect.x + size * 0.12,
-      rect.y + size * 0.12,
-      size * 0.76,
-      size * 0.76
-    )
+  const moonRadius = sunRadius * 1.06;
+  const moonCenterX =
+    centerX - position * sunRadius * 1.92;
+  const moonCenterY =
+    centerY + latitudeOffset * sunRadius * 0.92;
+  const moonRect = new Rect(
+    moonCenterX - moonRadius,
+    moonCenterY - moonRadius,
+    moonRadius * 2,
+    moonRadius * 2
   );
+
+  fillEllipseIntersection(
+    ctx,
+    sunRect,
+    moonRect,
+    new Color("#111116", 0.88 + coverage * 0.12)
+  );
+
   ctx.setStrokeColor(
-    dayBoundaryLineColor(date, loadResult.holidayDates)
+    new Color("#FFD000", 0.72 + coverage * 0.26)
   );
-  ctx.setLineWidth(4);
-  ctx.strokeEllipse(rect);
+  ctx.setLineWidth(Math.max(2, size * 0.07));
+  ctx.strokeEllipse(sunRect);
 }
 
 function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
@@ -3547,25 +3653,60 @@ function eclipseForDate(date) {
   const phaseAngle = normalizeDegrees(
     moonLongitude - sunLongitude
   );
-  const distanceFromNew = Math.min(
-    phaseAngle,
-    360 - phaseAngle
-  );
-  const distanceFromFull = Math.abs(phaseAngle - 180);
+  const signedDifference = (angle, target) =>
+    ((angle - target + 540) % 360) - 180;
+  const distanceFromNew = signedDifference(phaseAngle, 0);
+  const distanceFromFull = signedDifference(phaseAngle, 180);
+  const latitudeWindow = 1.6;
 
-  if (
-    distanceFromNew <= 4.5 &&
-    Math.abs(moonLatitude) <= 1.6
-  ) {
-    return { type: "solar" };
-  }
-  if (
-    distanceFromFull <= 4.5 &&
-    Math.abs(moonLatitude) <= 1.6
-  ) {
-    return { type: "lunar" };
-  }
-  return null;
+  const eclipseState = (type, phaseDistance, phaseWindow) => {
+    if (
+      Math.abs(phaseDistance) > phaseWindow ||
+      Math.abs(moonLatitude) > latitudeWindow
+    ) {
+      return null;
+    }
+
+    const position = Math.max(
+      -1,
+      Math.min(1, phaseDistance / phaseWindow)
+    );
+    const latitudeOffset = Math.max(
+      -1,
+      Math.min(1, moonLatitude / latitudeWindow)
+    );
+    const phaseAlignment = 1 - Math.abs(position);
+    const latitudeAlignment = 1 - Math.abs(latitudeOffset);
+    const coverage = Math.max(
+      0,
+      Math.min(
+        1,
+        phaseAlignment *
+          (0.28 + 0.72 * Math.sqrt(latitudeAlignment))
+      )
+    );
+    const phase =
+      position < -0.16
+        ? "ingress"
+        : position > 0.16
+          ? "egress"
+          : "maximum";
+
+    return {
+      type,
+      phase,
+      position,
+      latitudeOffset,
+      coverage,
+    };
+  };
+
+  // As janelas equivalem aproximadamente à duração visual do fenômeno.
+  // O lunar permanece mais longo; o solar é mais concentrado.
+  return (
+    eclipseState("solar", distanceFromNew, 1.8) ||
+    eclipseState("lunar", distanceFromFull, 2.6)
+  );
 }
 
 function drawWeatherConditionStrip(ctx, weather) {
