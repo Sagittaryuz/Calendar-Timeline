@@ -2955,7 +2955,6 @@ function drawSunriseSunsetGlyph(
   const backgroundColor = "#07101A";
   const sunrise = kind === "sunrise";
   const sunColor = "#FFDE00";
-  const horizonColor = sunrise ? "#64D2FF" : "#FF453A";
   const radius = weatherSunRadius(size);
   const sunCenterY = centerY + (sunrise ? size * 0.05 : -size * 0.03);
 
@@ -2977,7 +2976,9 @@ function drawSunriseSunsetGlyph(
     }
   }
 
-  // O mesmo círculo do Sol é recortado pela metade.
+  // Sem reflexo de água: o disco solar ocupa esse espaço.
+  // Mantém apenas uma pequena faixa inferior recortada para preservar
+  // a leitura visual de nascer/pôr do sol.
   drawWeatherHalfSun(
     ctx,
     centerX,
@@ -2985,43 +2986,8 @@ function drawSunriseSunsetGlyph(
     radius,
     sunColor,
     backgroundColor,
-    0.75
+    0.90
   );
-
-  // Duas barras ficam abaixo de 75% da altura do símbolo.
-  const horizonLines = sunrise
-    ? [
-        [0.38, 0.76],
-        [0.52, 0.46],
-      ]
-    : [
-        [0.36, 0.74],
-        [0.50, 0.42],
-      ];
-
-  for (const [offset, width] of horizonLines) {
-    if (sunrise) {
-      drawWeatherPathSegment(
-        ctx,
-        centerX - size * width / 2,
-        centerY + size * offset,
-        centerX + size * width / 2,
-        centerY + size * offset,
-        horizonColor,
-        Math.max(1.4, size * 0.05)
-      );
-    } else {
-      drawWeatherWaveLine(
-        ctx,
-        centerX,
-        centerY + size * offset,
-        size * width,
-        size * 0.025,
-        horizonColor,
-        Math.max(1.4, size * 0.05)
-      );
-    }
-  }
 }
 
 function drawWeatherRainDrops(ctx, centerX, centerY, size) {
