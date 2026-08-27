@@ -3860,6 +3860,22 @@ function drawWeatherConditionStrip(ctx, weather) {
       const moonCenterX = timeToX(moonDate);
       const moonCenterY = weatherIconCenterY();
       const moonSize = weatherIconSize();
+
+      // O marcador superior usa o mesmo padrão visual do nome do dia
+      // inferior: mesma largura, mesma cor e preenchimento sólido.
+      // A altura recebe uma pequena margem para ficar realmente por fora
+      // da Lua, inclusive no modo normal de 40 px.
+      const moonBadge = moonDayBadgeRect(
+        moonCenterX,
+        moonCenterY
+      );
+      const moonBadgeStyle = dayBadgeStyle(
+        moonDate,
+        loadResult.holidayDates
+      );
+      ctx.setFillColor(moonBadgeStyle.background);
+      ctx.fillRect(moonBadge);
+
       const moonX = moonCenterX - moonSize / 2;
       const moonY = moonCenterY - moonSize / 2;
       const nightEclipse = eclipseForDate(moonDate);
@@ -6194,6 +6210,20 @@ function legendBadgeRect(centerX, centerY) {
 function dayLegendBadgeRect(centerX, centerY) {
   const width = dayLegendLabelWidth();
   const height = legendFrameHeight();
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  );
+}
+
+function moonDayBadgeRect(centerX, centerY) {
+  const width = dayLegendLabelWidth();
+  const height = Math.max(
+    legendFrameHeight(),
+    weatherIconSize() + 6
+  );
   return new Rect(
     centerX - width / 2,
     centerY - height / 2,
