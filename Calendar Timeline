@@ -3427,7 +3427,7 @@ function drawWeatherEclipseIcon(
       new Color("#481018", 0.34 + coverage * 0.42)
     );
 
-    strokeMoonEllipseInside(
+    strokeMoonEllipseOutside(
       ctx,
       rect,
       new Color("#B8A7FF", 0.96),
@@ -5691,21 +5691,21 @@ function fillMoonLitSurface(
   }
 }
 
-function strokeMoonEllipseInside(
+function strokeMoonEllipseOutside(
   ctx,
   rect,
   color,
   lineWidth
 ) {
-  // A borda fica inteiramente dentro do mesmo retângulo do ícone.
-  // Assim, não aumenta o tamanho externo nem reduz a Lua em relação
-  // aos demais símbolos.
-  const inset = lineWidth / 2;
+  // O retângulo recebido contém os 40 px do desenho da Lua.
+  // A borda é deslocada para fora, preservando integralmente
+  // o tamanho visual do disco lunar.
+  const outset = lineWidth / 2;
   const borderRect = new Rect(
-    rect.x + inset,
-    rect.y + inset,
-    Math.max(1, rect.width - lineWidth),
-    Math.max(1, rect.height - lineWidth)
+    rect.x - outset,
+    rect.y - outset,
+    rect.width + lineWidth,
+    rect.height + lineWidth
   );
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
@@ -5728,7 +5728,7 @@ function drawMoonPhase(
       borderDate.getMinutes() === 0;
     if (!isDayBoundary) return;
 
-    strokeMoonEllipseInside(
+    strokeMoonEllipseOutside(
       ctx,
       moonRect,
       dayBoundaryLineColor(
