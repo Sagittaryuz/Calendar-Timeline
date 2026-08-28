@@ -3427,9 +3427,12 @@ function drawWeatherEclipseIcon(
       new Color("#481018", 0.34 + coverage * 0.42)
     );
 
-    ctx.setStrokeColor(new Color("#B8A7FF", 0.96));
-    ctx.setLineWidth(4);
-    ctx.strokeEllipse(rect);
+    strokeMoonEllipseInside(
+      ctx,
+      rect,
+      new Color("#B8A7FF", 0.96),
+      4
+    );
     return;
   }
 
@@ -5688,6 +5691,27 @@ function fillMoonLitSurface(
   }
 }
 
+function strokeMoonEllipseInside(
+  ctx,
+  rect,
+  color,
+  lineWidth
+) {
+  // A borda fica inteiramente dentro do mesmo retângulo do ícone.
+  // Assim, não aumenta o tamanho externo nem reduz a Lua em relação
+  // aos demais símbolos.
+  const inset = lineWidth / 2;
+  const borderRect = new Rect(
+    rect.x + inset,
+    rect.y + inset,
+    Math.max(1, rect.width - lineWidth),
+    Math.max(1, rect.height - lineWidth)
+  );
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(lineWidth);
+  ctx.strokeEllipse(borderRect);
+}
+
 function drawMoonPhase(
   ctx,
   moon,
@@ -5704,14 +5728,15 @@ function drawMoonPhase(
       borderDate.getMinutes() === 0;
     if (!isDayBoundary) return;
 
-    ctx.setStrokeColor(
+    strokeMoonEllipseInside(
+      ctx,
+      moonRect,
       dayBoundaryLineColor(
         borderDate,
         loadResult.holidayDates
-      )
+      ),
+      4
     );
-    ctx.setLineWidth(4);
-    ctx.strokeEllipse(moonRect);
   };
 
   // A base escura permanece visível em todas as fases, inclusive na Lua nova.
