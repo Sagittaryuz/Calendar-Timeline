@@ -4606,13 +4606,14 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "  };",
     "  const maxFontSize = " +
       (isCompactMode()
-        ? 28
+        ? 94
         : isExtendedDetailedMode()
-          ? 32
-          : 36) +
+          ? 106
+          : 118) +
       ";",
-    "  const minFontSize = " + (isCompactMode() ? 18 : 22) + ";",
-    "  const glyphAngle = -Math.PI / 4;",
+    "  const minFontSize = " + (isCompactMode() ? 34 : 42) + ";",
+    "  const fontFamily = 'Arial Narrow, HelveticaNeue-CondensedBlack, Impact, Arial Black, sans-serif';",
+    "  const verticalScale = 1.16;",
     "  context.save();",
     "  context.beginPath();",
     "  context.rect(0, gridTop, canvasWidth, Math.max(1, gridBottom - gridTop));",
@@ -4623,49 +4624,42 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    const top = Number(entry.top);",
     "    const bottom = Number(entry.bottom);",
     "    if (!(x1 > x0) || !(bottom > top)) continue;",
-    "    context.save();",
-    "    context.beginPath();",
-    "    context.rect(x0, top, x1 - x0, bottom - top);",
-    "    context.clip();",
     "    const dx = x1 - x0;",
     "    const dy = bottom - top;",
     "    const diagonalLength = Math.sqrt(dx * dx + dy * dy);",
+    "    const targetLength = diagonalLength * 0.96;",
     "    const characters = Array.from(entry.label);",
+    "    if (characters.length === 0) continue;",
+    "    const heightDrivenSize = (bottom - top) * 0.72;",
+    "    const widthDrivenSize =",
+    "      targetLength / Math.max(1, characters.length * 0.58);",
     "    const fontSize = Math.max(",
     "      minFontSize,",
-    "      Math.min(",
-    "        maxFontSize,",
-    "        diagonalLength / Math.max(1, characters.length * 1.65)",
-    "      )",
+    "      Math.min(maxFontSize, Math.max(heightDrivenSize, widthDrivenSize))",
     "    );",
-    "    context.font =",
-    "      '900 ' + fontSize +",
-    "      'px -apple-system, BlinkMacSystemFont, SF Pro Rounded, sans-serif';",
+    "    context.font = '900 ' + fontSize + 'px ' + fontFamily;",
     "    context.textAlign = 'center';",
     "    context.textBaseline = 'middle';",
+    "    const measuredWidth = Math.max(1, context.measureText(entry.label).width);",
+    "    const horizontalScale = targetLength / measuredWidth;",
+    "    const angle = -Math.atan2(dy, dx);",
+    "    const whiteStrokeWidth = Math.max(3.8, fontSize * 0.16);",
+    "    context.save();",
+    "    context.beginPath();",
+    "    context.rect(x0, top, dx, bottom - top);",
+    "    context.clip();",
+    "    context.translate((x0 + x1) / 2, (top + bottom) / 2);",
+    "    context.rotate(angle);",
+    "    context.scale(horizontalScale, verticalScale);",
     "    context.lineJoin = 'round';",
-    "    const whiteStrokeWidth = Math.max(3.6, fontSize * 0.16);",
-    "    const darkOutlineWidth = whiteStrokeWidth + 2.0;",
-    "    for (let index = 0; index < characters.length; index++) {",
-    "      const progress =",
-    "        characters.length === 1",
-    "          ? 0.5",
-    "          : 0.08 + (index / (characters.length - 1)) * 0.84;",
-    "      const glyphX = x0 + dx * progress;",
-    "      const glyphY = bottom - dy * progress;",
-    "      context.save();",
-    "      context.translate(glyphX, glyphY);",
-    "      context.rotate(glyphAngle);",
-    "      context.lineWidth = darkOutlineWidth;",
-    "      context.strokeStyle = rgba('#000000', 0.44);",
-    "      context.strokeText(characters[index], 0, 0);",
-    "      context.lineWidth = whiteStrokeWidth;",
-    "      context.strokeStyle = rgba('#FFFFFF', 1.0);",
-    "      context.strokeText(characters[index], 0, 0);",
-    "      context.fillStyle = rgba('#FFFFFF', 1.0);",
-    "      context.fillText(characters[index], 0, 0);",
-    "      context.restore();",
-    "    }",
+    "    context.lineWidth = whiteStrokeWidth + 2.0;",
+    "    context.strokeStyle = rgba('#000000', 0.44);",
+    "    context.strokeText(entry.label, 0, 0);",
+    "    context.lineWidth = whiteStrokeWidth;",
+    "    context.strokeStyle = rgba('#FFFFFF', 1.0);",
+    "    context.strokeText(entry.label, 0, 0);",
+    "    context.fillStyle = rgba('#FFFFFF', 1.0);",
+    "    context.fillText(entry.label, 0, 0);",
     "    context.restore();",
     "  }",
     "  context.restore();",
@@ -4683,14 +4677,13 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     Data.fromBase64String(dataURL.slice(separator + 1))
   );
 }
-
 function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
   const maxFontSize = isCompactMode()
-    ? 28
+    ? 94
     : isExtendedDetailedMode()
-      ? 32
-      : 36;
-  const minFontSize = isCompactMode() ? 18 : 22;
+      ? 106
+      : 118;
+  const minFontSize = isCompactMode() ? 34 : 42;
 
   ctx.setTextAlignedCenter();
   for (const entry of entries) {
@@ -4703,13 +4696,14 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     const dx = x1 - x0;
     const dy = bottom - top;
     const diagonalLength = Math.sqrt(dx * dx + dy * dy);
+    const targetLength = diagonalLength * 0.96;
     const characters = Array.from(entry.label);
+    const heightDrivenSize = (bottom - top) * 0.72;
+    const widthDrivenSize =
+      targetLength / Math.max(1, characters.length * 0.58);
     const fontSize = Math.max(
       minFontSize,
-      Math.min(
-        maxFontSize,
-        diagonalLength / Math.max(1, characters.length * 1.65)
-      )
+      Math.min(maxFontSize, Math.max(heightDrivenSize, widthDrivenSize))
     );
 
     ctx.setFont(Font.blackRoundedSystemFont(fontSize));
@@ -4722,7 +4716,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
       const progress =
         characters.length === 1
           ? 0.5
-          : 0.08 + (index / (characters.length - 1)) * 0.84;
+          : 0.02 + (index / (characters.length - 1)) * 0.96;
       const glyphX = x0 + dx * progress;
       const glyphY = bottom - dy * progress;
       const glyphRect = new Rect(
