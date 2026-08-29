@@ -158,7 +158,7 @@ const preparedItems = prepareTimelineItems(loadResult.items, now);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems);
 const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
-  : makeWidget(selectedItems, loadResult.error);
+  : await makeWidget(selectedItems, loadResult.error);
 
 // Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
 // o Calendário, conservando o intervalo definido no parâmetro do widget.
@@ -1402,11 +1402,11 @@ function groupOverflowItems(items) {
   return groups;
 }
 
-function makeWidget(items, loadError) {
+async function makeWidget(items, loadError) {
   const widget = new ListWidget();
   widget.setPadding(0, 0, 0, 0);
   widget.backgroundColor = new Color(SETTINGS.backgroundColor);
-  widget.backgroundImage = renderWidget(items, loadError);
+  widget.backgroundImage = await renderWidget(items, loadError);
   return widget;
 }
 
@@ -1510,7 +1510,7 @@ function accessoryEventStatus(event) {
   return formatDate(event.start, "EEE HH:mm").toLocaleUpperCase("pt-BR");
 }
 
-function renderWidget(items, loadError) {
+async function renderWidget(items, loadError) {
   const ctx = new DrawContext();
   ctx.size = new Size(CANVAS.width, CANVAS.height);
   ctx.opaque = true;
@@ -1520,7 +1520,7 @@ function renderWidget(items, loadError) {
   drawTimelineBackground(ctx);
   drawDatePanel(ctx, loadResult.holidayDates);
 
-  const timelineImage = renderTimelinePanel(items, loadError);
+  const timelineImage = await renderTimelinePanel(items, loadError);
   ctx.drawImageInRect(
     timelineImage,
     new Rect(
@@ -4449,7 +4449,7 @@ function drawVisibleDailyExtremes(
   }
 }
 
-function renderTimelinePanel(items, loadError) {
+async function renderTimelinePanel(items, loadError) {
   const ctx = new DrawContext();
   ctx.size = new Size(timelineWidth(), timelineHeight());
   ctx.opaque = false;
@@ -4464,6 +4464,9 @@ function renderTimelinePanel(items, loadError) {
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
+  // Os nomes completos dos dias ficam no grid, atrás da curva térmica,
+  // da chuva e dos charts; o recorte acompanha cada coluna de 24 horas.
+  await drawDiagonalWeekdayLabels(ctx);
   drawCompactThermalBand(ctx, hourlyWeather);
   // As colunas de precipitação atravessam a curva térmica; os charts da
   // agenda continuam sendo desenhados depois e permanecem prioritários.
@@ -4500,6 +4503,237 @@ function renderTimelinePanel(items, loadError) {
   return ctx.getImage();
 }
 
+
+function diagonalWeekdayLabelColor(date) {
+  if (loadResult.holidayDates.has(dateKey(date))) {
+    return "#FFCC00";
+  }
+  if (date.getDay() === 6) return "#0A84FF";
+  if (date.getDay() === 0) return "#FF453A";
+  return "#FFFFFF";
+}
+
+function diagonalWeekdayLabelEntries() {
+  const entries = [];
+  const weekdayLabels = [
+    "DOMINGO",
+    "SEGUNDA",
+    "TERÇA",
+    "QUARTA",
+    "QUINTA",
+    "SEXTA",
+    "SÁBADO",
+  ];
+  const gridTop = solarLineY();
+  const gridBottom = thermalBandBottomY();
+  let dayStart = startOfDay(windowStart);
+  const finalDay = startOfDay(windowEnd);
+
+  while (dayStart <= finalDay) {
+    const dayEnd = addDays(dayStart, 1);
+    if (
+      dayEnd.getTime() > windowStart.getTime() &&
+      dayStart.getTime() < windowEnd.getTime()
+    ) {
+      entries.push({
+        label: weekdayLabels[dayStart.getDay()],
+        x0: timeToX(dayStart),
+        x1: timeToX(dayEnd),
+        top: gridTop,
+        bottom: gridBottom,
+        color: diagonalWeekdayLabelColor(dayStart),
+        opacity: isCompactMode() ? 0.22 : 0.18,
+      });
+    }
+    dayStart = dayEnd;
+  }
+
+  return entries;
+}
+
+async function drawDiagonalWeekdayLabels(ctx) {
+  const entries = diagonalWeekdayLabelEntries();
+  if (entries.length === 0) return;
+
+  try {
+    const overlay = await rasterizeDiagonalWeekdayLabels(entries);
+    if (overlay) {
+      ctx.drawImageAtPoint(overlay, new Point(0, 0));
+      return;
+    }
+  } catch (_) {
+    // O recorte nativo continua disponível se o WebView não estiver
+    // disponível durante uma atualização em segundo plano.
+  }
+
+  drawDiagonalWeekdayLabelsFallback(ctx, entries);
+}
+
+async function rasterizeDiagonalWeekdayLabels(entries) {
+  if (
+    typeof WebView === "undefined" ||
+    typeof Data === "undefined" ||
+    typeof Image === "undefined"
+  ) {
+    return null;
+  }
+
+  const width = Math.max(1, Math.ceil(timelineWidth()));
+  const height = Math.max(1, Math.ceil(timelineHeight()));
+  const html =
+    "<!doctype html><html><head><meta name='viewport' " +
+    "content='width=device-width,initial-scale=1'>" +
+    "<style>html,body{margin:0;padding:0;background:transparent;" +
+    "overflow:hidden}</style></head><body>" +
+    "<canvas id='weekday-diagonal-overlay'></canvas>" +
+    "</body></html>";
+
+  const webView = new WebView();
+  await webView.loadHTML(html);
+
+  const javascript = [
+    "(function() {",
+    "  const canvas = document.getElementById('weekday-diagonal-overlay');",
+    "  const context = canvas.getContext('2d');",
+    "  const entries = " + JSON.stringify(entries) + ";",
+    "  const canvasWidth = " + width + ";",
+    "  const canvasHeight = " + height + ";",
+    "  canvas.width = canvasWidth;",
+    "  canvas.height = canvasHeight;",
+    "  const gridTop = Number(entries[0].top);",
+    "  const gridBottom = Number(entries[0].bottom);",
+    "  const rgba = function(hex, alpha) {",
+    "    const value = hex.replace('#', '');",
+    "    const red = parseInt(value.slice(0, 2), 16);",
+    "    const green = parseInt(value.slice(2, 4), 16);",
+    "    const blue = parseInt(value.slice(4, 6), 16);",
+    "    return 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';",
+    "  };",
+    "  const maxFontSize = " +
+      (isCompactMode()
+        ? 28
+        : isExtendedDetailedMode()
+          ? 32
+          : 36) +
+      ";",
+    "  const minFontSize = " + (isCompactMode() ? 18 : 22) + ";",
+    "  const glyphAngle = Math.PI / 4;",
+    "  context.save();",
+    "  context.beginPath();",
+    "  context.rect(0, gridTop, canvasWidth, Math.max(1, gridBottom - gridTop));",
+    "  context.clip();",
+    "  for (const entry of entries) {",
+    "    const x0 = Number(entry.x0);",
+    "    const x1 = Number(entry.x1);",
+    "    const top = Number(entry.top);",
+    "    const bottom = Number(entry.bottom);",
+    "    if (!(x1 > x0) || !(bottom > top)) continue;",
+    "    context.save();",
+    "    context.beginPath();",
+    "    context.rect(x0, top, x1 - x0, bottom - top);",
+    "    context.clip();",
+    "    const dx = x1 - x0;",
+    "    const dy = bottom - top;",
+    "    const diagonalLength = Math.sqrt(dx * dx + dy * dy);",
+    "    const characters = Array.from(entry.label);",
+    "    const fontSize = Math.max(",
+    "      minFontSize,",
+    "      Math.min(",
+    "        maxFontSize,",
+    "        diagonalLength / Math.max(1, characters.length * 1.65)",
+    "      )",
+    "    );",
+    "    context.font =",
+    "      '900 ' + fontSize +",
+    "      'px -apple-system, BlinkMacSystemFont, SF Pro Rounded, sans-serif';",
+    "    context.textAlign = 'center';",
+    "    context.textBaseline = 'middle';",
+    "    context.lineJoin = 'round';",
+    "    context.lineWidth = Math.max(1.2, fontSize * 0.07);",
+    "    context.strokeStyle = rgba('#000000', 0.32);",
+    "    context.fillStyle = rgba(entry.color, Number(entry.opacity));",
+    "    for (let index = 0; index < characters.length; index++) {",
+    "      const progress =",
+    "        characters.length === 1",
+    "          ? 0.5",
+    "          : 0.08 + (index / (characters.length - 1)) * 0.84;",
+    "      const glyphX = x0 + dx * progress;",
+    "      const glyphY = top + dy * progress;",
+    "      context.save();",
+    "      context.translate(glyphX, glyphY);",
+    "      context.rotate(glyphAngle);",
+    "      context.strokeText(characters[index], 0, 0);",
+    "      context.fillText(characters[index], 0, 0);",
+    "      context.restore();",
+    "    }",
+    "    context.restore();",
+    "  }",
+    "  context.restore();",
+    "  return canvas.toDataURL('image/png');",
+    "})()",
+  ].join("\n");
+
+  const dataURL = await webView.evaluateJavaScript(javascript, false);
+  if (typeof dataURL !== "string") return null;
+
+  const separator = dataURL.indexOf(",");
+  if (separator < 0) return null;
+
+  return Image.fromData(
+    Data.fromBase64String(dataURL.slice(separator + 1))
+  );
+}
+
+function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
+  const maxFontSize = isCompactMode()
+    ? 28
+    : isExtendedDetailedMode()
+      ? 32
+      : 36;
+  const minFontSize = isCompactMode() ? 18 : 22;
+
+  ctx.setTextAlignedCenter();
+  for (const entry of entries) {
+    const x0 = Number(entry.x0);
+    const x1 = Number(entry.x1);
+    const top = Number(entry.top);
+    const bottom = Number(entry.bottom);
+    if (!(x1 > x0) || !(bottom > top)) continue;
+
+    const dx = x1 - x0;
+    const dy = bottom - top;
+    const diagonalLength = Math.sqrt(dx * dx + dy * dy);
+    const characters = Array.from(entry.label);
+    const fontSize = Math.max(
+      minFontSize,
+      Math.min(
+        maxFontSize,
+        diagonalLength / Math.max(1, characters.length * 1.65)
+      )
+    );
+
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setTextColor(new Color(entry.color, entry.opacity));
+
+    for (let index = 0; index < characters.length; index++) {
+      const progress =
+        characters.length === 1
+          ? 0.5
+          : 0.08 + (index / (characters.length - 1)) * 0.84;
+      const glyphX = x0 + dx * progress;
+      const glyphY = top + dy * progress;
+      ctx.drawTextInRect(
+        characters[index],
+        new Rect(
+          glyphX - fontSize,
+          glyphY - fontSize,
+          fontSize * 2,
+          fontSize * 2
+        )
+      );
+    }
+  }
+}
 
 function drawTimelineDayBoundariesOnTop(ctx) {
   const lineTop = weatherStripBottomY();
