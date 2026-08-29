@@ -4504,12 +4504,7 @@ async function renderTimelinePanel(items, loadError) {
 }
 
 
-function diagonalWeekdayLabelColor(date) {
-  if (loadResult.holidayDates.has(dateKey(date))) {
-    return "#FFCC00";
-  }
-  if (date.getDay() === 6) return "#0A84FF";
-  if (date.getDay() === 0) return "#FF453A";
+function diagonalWeekdayLabelColor(_) {
   return "#FFFFFF";
 }
 
@@ -4542,7 +4537,7 @@ function diagonalWeekdayLabelEntries() {
         top: gridTop,
         bottom: gridBottom,
         color: diagonalWeekdayLabelColor(dayStart),
-        opacity: isCompactMode() ? 0.22 : 0.18,
+        opacity: 1.0,
       });
     }
     dayStart = dayEnd;
@@ -4617,7 +4612,7 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
           : 36) +
       ";",
     "  const minFontSize = " + (isCompactMode() ? 18 : 22) + ";",
-    "  const glyphAngle = Math.PI / 4;",
+    "  const glyphAngle = -Math.PI / 4;",
     "  context.save();",
     "  context.beginPath();",
     "  context.rect(0, gridTop, canvasWidth, Math.max(1, gridBottom - gridTop));",
@@ -4649,20 +4644,25 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    context.textAlign = 'center';",
     "    context.textBaseline = 'middle';",
     "    context.lineJoin = 'round';",
-    "    context.lineWidth = Math.max(1.2, fontSize * 0.07);",
-    "    context.strokeStyle = rgba('#000000', 0.32);",
-    "    context.fillStyle = rgba(entry.color, Number(entry.opacity));",
+    "    const whiteStrokeWidth = Math.max(3.6, fontSize * 0.16);",
+    "    const darkOutlineWidth = whiteStrokeWidth + 2.0;",
     "    for (let index = 0; index < characters.length; index++) {",
     "      const progress =",
     "        characters.length === 1",
     "          ? 0.5",
     "          : 0.08 + (index / (characters.length - 1)) * 0.84;",
     "      const glyphX = x0 + dx * progress;",
-    "      const glyphY = top + dy * progress;",
+    "      const glyphY = bottom - dy * progress;",
     "      context.save();",
     "      context.translate(glyphX, glyphY);",
     "      context.rotate(glyphAngle);",
+    "      context.lineWidth = darkOutlineWidth;",
+    "      context.strokeStyle = rgba('#000000', 0.44);",
     "      context.strokeText(characters[index], 0, 0);",
+    "      context.lineWidth = whiteStrokeWidth;",
+    "      context.strokeStyle = rgba('#FFFFFF', 1.0);",
+    "      context.strokeText(characters[index], 0, 0);",
+    "      context.fillStyle = rgba('#FFFFFF', 1.0);",
     "      context.fillText(characters[index], 0, 0);",
     "      context.restore();",
     "    }",
@@ -4713,7 +4713,10 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     );
 
     ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-    ctx.setTextColor(new Color(entry.color, entry.opacity));
+    const thickOffsets = [
+      [-2, 0], [2, 0], [0, -2], [0, 2],
+      [-1, -1], [1, -1], [-1, 1], [1, 1],
+    ];
 
     for (let index = 0; index < characters.length; index++) {
       const progress =
@@ -4721,20 +4724,32 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
           ? 0.5
           : 0.08 + (index / (characters.length - 1)) * 0.84;
       const glyphX = x0 + dx * progress;
-      const glyphY = top + dy * progress;
-      ctx.drawTextInRect(
-        characters[index],
-        new Rect(
-          glyphX - fontSize,
-          glyphY - fontSize,
-          fontSize * 2,
-          fontSize * 2
-        )
+      const glyphY = bottom - dy * progress;
+      const glyphRect = new Rect(
+        glyphX - fontSize,
+        glyphY - fontSize,
+        fontSize * 2,
+        fontSize * 2
       );
+
+      ctx.setTextColor(new Color("#000000", 0.44));
+      for (const [offsetX, offsetY] of thickOffsets) {
+        ctx.drawTextInRect(
+          characters[index],
+          new Rect(
+            glyphRect.x + offsetX,
+            glyphRect.y + offsetY,
+            glyphRect.width,
+            glyphRect.height
+          )
+        );
+      }
+
+      ctx.setTextColor(Color.white());
+      ctx.drawTextInRect(characters[index], glyphRect);
     }
   }
 }
-
 function drawTimelineDayBoundariesOnTop(ctx) {
   const lineTop = weatherStripBottomY();
   const lineBottom = bottomLegendCenterY();
