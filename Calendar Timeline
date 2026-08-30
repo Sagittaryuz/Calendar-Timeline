@@ -4548,10 +4548,38 @@ function diagonalWeekdayLabelEntries() {
       dayEnd.getTime() > windowStart.getTime() &&
       dayStart.getTime() < windowEnd.getTime()
     ) {
+      const sunnyStart = dateAtHour(
+        dayStart,
+        SETTINGS.daylightStartHour
+      );
+      const sunnyEnd = dateAtHour(
+        dayStart,
+        SETTINGS.daylightEndHour
+      );
+      const visibleSunnyStart = new Date(
+        Math.max(sunnyStart.getTime(), windowStart.getTime())
+      );
+      const visibleSunnyEnd = new Date(
+        Math.min(sunnyEnd.getTime(), windowEnd.getTime())
+      );
+      const hasVisibleSunnyArea =
+        visibleSunnyEnd.getTime() > visibleSunnyStart.getTime();
+      const sunnyCenterStart = hasVisibleSunnyArea
+        ? visibleSunnyStart
+        : sunnyStart;
+      const sunnyCenterEnd = hasVisibleSunnyArea
+        ? visibleSunnyEnd
+        : sunnyEnd;
+
       entries.push({
         label: weekdayLabels[dayStart.getDay()],
+        // A geometria, a inclinação e a distribuição continuam baseadas
+        // no dia inteiro; somente o centro visual acompanha o Sol.
         x0: timeToX(dayStart),
         x1: timeToX(dayEnd),
+        centerX:
+          (timeToX(sunnyCenterStart) + timeToX(sunnyCenterEnd)) / 2,
+        centerY: (gridTop + gridBottom) / 2,
         top: gridTop,
         bottom: gridBottom,
         color: diagonalWeekdayLabelColor(dayStart),
@@ -4720,7 +4748,13 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    context.beginPath();",
     "    context.rect(x0, top, x1 - x0, bottom - top);",
     "    context.clip();",
-    "    context.translate((x0 + x1) / 2, (top + bottom) / 2);",
+    "    const centerX = Number.isFinite(Number(entry.centerX))", 
+    "      ? Number(entry.centerX)", 
+    "      : (x0 + x1) / 2;", 
+    "    const centerY = Number.isFinite(Number(entry.centerY))", 
+    "      ? Number(entry.centerY)", 
+    "      : (top + bottom) / 2;", 
+    "    context.translate(centerX, centerY);",
     "    context.rotate(typography.angle);",
     "    context.scale(typography.horizontalScale, verticalScale);",
     "    context.lineJoin = 'round';",
@@ -4768,6 +4802,16 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     const dx = x1 - x0;
     const dy = bottom - top;
     const diagonalLength = Math.sqrt(dx * dx + dy * dy);
+    const originalCenterX = (x0 + x1) / 2;
+    const originalCenterY = (top + bottom) / 2;
+    const targetCenterX = Number.isFinite(Number(entry.centerX))
+      ? Number(entry.centerX)
+      : originalCenterX;
+    const targetCenterY = Number.isFinite(Number(entry.centerY))
+      ? Number(entry.centerY)
+      : originalCenterY;
+    const centerOffsetX = targetCenterX - originalCenterX;
+    const centerOffsetY = targetCenterY - originalCenterY;
     const characters = Array.from(entry.label);
     if (characters.length === 0) continue;
 
@@ -4791,8 +4835,10 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         characters.length === 1
           ? 0.5
           : 0.08 + (index / (characters.length - 1)) * 0.84;
-      const glyphX = x0 + dx * progress;
-      const glyphY = bottom - dy * progress;
+      const glyphX =
+        x0 + dx * progress + centerOffsetX;
+      const glyphY =
+        bottom - dy * progress + centerOffsetY;
       const glyphRect = new Rect(
         glyphX - fontSize,
         glyphY - fontSize,
