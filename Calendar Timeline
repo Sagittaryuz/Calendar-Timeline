@@ -1301,8 +1301,9 @@ function chooseItems(items, referenceDate, limit) {
     a.start.getTime() - b.start.getTime() ||
     a.end.getTime() - b.end.getTime();
 
-  // A concatenação é reiniciada em cada dia. Assim, um item de amanhã
-  // nunca desloca a posição vertical de um item de hoje.
+  // O agrupamento diário preserva a ordem visual de cada data. A ocupação
+  // das linhas, porém, permanece compartilhada para que eventos iniciados
+  // anteriormente reservem sua linha enquanto ainda estiverem ativos.
   const byDay = new Map();
   for (const item of relevant) {
     const key = dateKey(item.start);
@@ -1312,9 +1313,13 @@ function chooseItems(items, referenceDate, limit) {
 
   const placed = [];
   const hidden = [];
+  const rows = Array.from({ length: limit }, () => []);
+  const orderedDayGroups = [...byDay.entries()]
+    .sort(([firstDay], [secondDay]) =>
+      firstDay.localeCompare(secondDay)
+    );
 
-  for (const dayItems of byDay.values()) {
-    const rows = Array.from({ length: limit }, () => []);
+  for (const [, dayItems] of orderedDayGroups) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
