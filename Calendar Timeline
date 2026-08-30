@@ -2607,15 +2607,15 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // No modo compacto, a faixa térmica passa de 51 px para 48 px:
-  // 18 px para a curva + 30 px para a legenda de temperaturas.
-  return thermalBandBottomY() - (isCompactMode() ? 18 : 30);
+  // No modo compacto, o bloco térmico total fica com 40 px:
+  // 12 px para a curva + 28 px para a legenda de temperaturas.
+  return thermalBandBottomY() - (isCompactMode() ? 12 : 30);
 }
 
 function thermalTemperatureLabelTopY() {
   // A legenda numérica pertence ao módulo térmico. Esta reserva inclui
   // as fontes maiores de máxima/mínima e impede que os charts a atravessem.
-  return thermalBandTopY() - (isCompactMode() ? 30 : 32);
+  return thermalBandTopY() - (isCompactMode() ? 28 : 32);
 }
 
 function thermalBandBottomY() {
@@ -2651,9 +2651,16 @@ function timelineRowHeight() {
 function compactTimelineScale() {
   if (!isCompactMode()) return 1;
 
-  // Os 3 px liberados na faixa térmica são distribuídos igualmente
-  // entre as cinco linhas do chart: 0,6 px por linha.
-  const expansionPerRow = 3 / SETTINGS.maxItems;
+  // Desde o desenho compacto original, o bloco térmico caiu de 51 px
+  // para 40 px. Os 11 px liberados são distribuídos igualmente entre
+  // as cinco linhas: 2,2 px adicionais por linha.
+  const originalCompactThermalHeight = 51;
+  const currentCompactThermalHeight =
+    thermalBandBottomY() - thermalTemperatureLabelTopY();
+  const expansionPerRow = Math.max(
+    0,
+    originalCompactThermalHeight - currentCompactThermalHeight
+  ) / SETTINGS.maxItems;
   const expandedRowHeight = timelineRowHeight();
   const originalRowHeight = Math.max(
     1,
