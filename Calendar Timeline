@@ -2607,7 +2607,9 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  return thermalBandBottomY() - (isCompactMode() ? 21 : 30);
+  // No modo compacto, a faixa térmica passa de 51 px para 48 px:
+  // 18 px para a curva + 30 px para a legenda de temperaturas.
+  return thermalBandBottomY() - (isCompactMode() ? 18 : 30);
 }
 
 function thermalTemperatureLabelTopY() {
@@ -2646,13 +2648,32 @@ function timelineRowHeight() {
   );
 }
 
+function compactTimelineScale() {
+  if (!isCompactMode()) return 1;
+
+  // Os 3 px liberados na faixa térmica são distribuídos igualmente
+  // entre as cinco linhas do chart: 0,6 px por linha.
+  const expansionPerRow = 3 / SETTINGS.maxItems;
+  const expandedRowHeight = timelineRowHeight();
+  const originalRowHeight = Math.max(
+    1,
+    expandedRowHeight - expansionPerRow
+  );
+  return expandedRowHeight / originalRowHeight;
+}
+
+function compactTimelineFontSize(size) {
+  return size * compactTimelineScale();
+}
+
 function timelineBarHeight(item) {
+  const compactScale = compactTimelineScale();
   const preferredHeight = item?.isOverflow
     ? isCompactMode()
-      ? 29
+      ? 29 * compactScale
       : 34
     : isCompactMode()
-      ? 30
+      ? 30 * compactScale
       : isExtendedDetailedMode()
         ? 35
         : 38;
@@ -6678,7 +6699,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
     ctx.setTextAlignedCenter();
     ctx.setFont(
-      Font.blackRoundedSystemFont(isCompactMode() ? 20 : 23)
+      Font.blackRoundedSystemFont(
+        isCompactMode() ? compactTimelineFontSize(20) : 23
+      )
     );
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
@@ -6712,12 +6735,16 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode()
-    ? 19
+    ? compactTimelineFontSize(19)
     : windowHours > 24
       ? 23
       : 26;
-  const statusFontSize = isCompactMode() ? 12 : 15;
-  const metadataFontSize = isCompactMode() ? 11 : 15;
+  const statusFontSize = isCompactMode()
+    ? compactTimelineFontSize(12)
+    : 15;
+  const metadataFontSize = isCompactMode()
+    ? compactTimelineFontSize(11)
+    : 15;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
