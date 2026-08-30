@@ -2731,10 +2731,10 @@ function drawBottomHourLegend(ctx) {
         : Font.blackMonospacedSystemFont(hourFontSize)
     );
     ctx.setTextColor(
-      isDaylightHour
-        ? daylightHourColor(tick)
-        : isSecondaryNightHour
-          ? secondaryNightLegendColor()
+      isSecondaryNightHour
+        ? secondaryNightLegendColor()
+        : isDaylightHour
+          ? daylightHourColor(tick)
           : Color.white()
     );
     ctx.drawTextInRect(
@@ -4424,13 +4424,10 @@ function drawVisibleDailyExtremes(
       y - 24
     );
     const hour = evenTick.getHours();
-    const isNight =
-      hour > SETTINGS.daylightEndHour ||
-      hour < SETTINGS.daylightStartHour;
-    const labelColor =
-      isNight && isSecondaryNightLegendHour(hour)
-        ? secondaryNightLegendColor()
-        : Color.white();
+    const isNight = isSecondaryNightLegendHour(hour);
+    const labelColor = isNight
+      ? secondaryNightLegendColor()
+      : Color.white();
 
     drawTemperatureText(
       String(Math.round(forecast.temperature)) + "º",
@@ -4464,7 +4461,7 @@ function drawVisibleDailyExtremes(
       labelY,
       extremeFontSize,
       entry.color,
-      "#FFFFFF",
+      entry.kind === "maximum" ? "#000000" : "#FFFFFF",
       true
     );
   }
@@ -6465,6 +6462,16 @@ function daylightHourColor(tick) {
 }
 
 function isSecondaryNightLegendHour(hour) {
+  // No modo de 24 horas, toda a faixa noturna — 18:00 a 06:00,
+  // incluindo os dois limites — usa o mesmo cinza dos horários pares
+  // das janelas longas.
+  if (windowHours <= 24) {
+    return (
+      hour >= SETTINGS.nightStartHour ||
+      hour <= SETTINGS.nightEndHour
+    );
+  }
+
   return [2, 4, 20, 22].includes(hour);
 }
 
