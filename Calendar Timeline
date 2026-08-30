@@ -47,6 +47,7 @@ const SETTINGS = {
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
   minimumTemperatureColor: "#64D2FF",
+  maximumTemperatureColor: "#FF6961",
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
   overflowColor: "#636366",
@@ -1895,7 +1896,7 @@ function drawTemperatureFooter(ctx, weather) {
     const labelColor = isDayBoundaryTemperature
       ? dayBoundaryTextColor
       : isMaximum
-        ? "#FF453A"
+        ? SETTINGS.maximumTemperatureColor
         : isMinimum
           ? SETTINGS.minimumTemperatureColor
           : isSecondaryNightHour
@@ -4312,7 +4313,7 @@ function drawVisibleDailyExtremes(
       {
         timestamp: Number(extreme.maximumTimestamp),
         temperature: Number(extreme.maximum),
-        color: "#FF453A",
+        color: SETTINGS.maximumTemperatureColor,
         kind: "maximum",
       }
     );
