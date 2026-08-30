@@ -4707,12 +4707,12 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    context.scale(typography.horizontalScale, verticalScale);",
     "    context.lineJoin = 'round';",
     "    context.lineWidth = typography.strokeWidth + 1.8;",
-    "    context.strokeStyle = rgba('#000000', 0.48);",
+    "    context.strokeStyle = rgba('#000000', 0.22);",
     "    context.strokeText(entry.label, 0, 0);",
     "    context.lineWidth = typography.strokeWidth;",
-    "    context.strokeStyle = rgba('#FFFFFF', 1.0);",
+    "    context.strokeStyle = rgba('#FFFFFF', 0.30);",
     "    context.strokeText(entry.label, 0, 0);",
-    "    context.fillStyle = rgba('#FFFFFF', 1.0);",
+    "    context.fillStyle = rgba('#FFFFFF', 0.30);",
     "    context.fillText(entry.label, 0, 0);",
     "    context.restore();",
     "  }",
@@ -4782,7 +4782,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         fontSize * 2
       );
 
-      ctx.setTextColor(new Color("#000000", 0.48));
+      ctx.setTextColor(new Color("#000000", 0.20));
       for (const [offsetX, offsetY] of thickOffsets) {
         ctx.drawTextInRect(
           characters[index],
@@ -4795,7 +4795,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         );
       }
 
-      ctx.setTextColor(Color.white());
+      ctx.setTextColor(new Color("#FFFFFF", 0.30));
       ctx.drawTextInRect(characters[index], glyphRect);
     }
   }
