@@ -4627,29 +4627,18 @@ function diagonalWeekdayLabelEntries() {
         dayStart,
         SETTINGS.daylightEndHour
       );
-      const visibleSunnyStart = new Date(
-        Math.max(sunnyStart.getTime(), windowStart.getTime())
-      );
-      const visibleSunnyEnd = new Date(
-        Math.min(sunnyEnd.getTime(), windowEnd.getTime())
-      );
-      const hasVisibleSunnyArea =
-        visibleSunnyEnd.getTime() > visibleSunnyStart.getTime();
-      const sunnyCenterStart = hasVisibleSunnyArea
-        ? visibleSunnyStart
-        : sunnyStart;
-      const sunnyCenterEnd = hasVisibleSunnyArea
-        ? visibleSunnyEnd
-        : sunnyEnd;
+      // A palavra ocupa somente o intervalo ensolarado fixo do dia.
+      // Não usamos a parte visível da janela para recalcular o centro:
+      // quando a timeline se move, a janela do canvas corta naturalmente
+      // as letras nas bordas, sem deslocar a palavra para 00:00 ou 24:00.
+      const sunnyStartX = timeToX(sunnyStart);
+      const sunnyEndX = timeToX(sunnyEnd);
 
       entries.push({
         label: weekdayLabels[dayStart.getDay()],
-        // A geometria, a inclinação e a distribuição continuam baseadas
-        // no dia inteiro; somente o centro visual acompanha o Sol.
-        x0: timeToX(dayStart),
-        x1: timeToX(dayEnd),
-        centerX:
-          (timeToX(sunnyCenterStart) + timeToX(sunnyCenterEnd)) / 2,
+        x0: sunnyStartX,
+        x1: sunnyEndX,
+        centerX: (sunnyStartX + sunnyEndX) / 2,
         centerY: (gridTop + gridBottom) / 2,
         top: gridTop,
         bottom: gridBottom,
