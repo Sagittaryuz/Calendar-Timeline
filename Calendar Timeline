@@ -320,52 +320,84 @@ async function loadWindow() {
     });
 
     // CalendarEvent.between() pode não devolver um evento cujo início ficou
-    // antes de windowStart. CalendarEvent.today() é a fonte complementar
-    // para eventos de dia inteiro iniciados antes de hoje e ainda ativos.
-    // O mapa remove duplicidades quando as duas consultas encontram o mesmo
-    // evento.
-    const displayEventMap = new Map();
-    for (const event of [...events, ...todayEvents]) {
-      if (!includeCalendar(event.calendar)) continue;
+    // antes de windowStart. CalendarEvent.today() é a fonte autoritativa
+    // para ocorrências que o Calendário considera pertencentes ao dia atual.
+    const eventOccurrenceKey = (event) => {
+      const sourceIdentifier =
+        event.identifier ??
+        `${event.calendar?.identifier ?? event.calendar?.title ?? ""}-${event.title ?? "Evento"}`;
+      const occurrenceStart = event.startDate
+        ? event.startDate.getTime()
+        : "sem-inicio";
+      return `${sourceIdentifier}::${occurrenceStart}`;
+    };
 
-      const eventStart = event.startDate;
-      const eventEnd = event.endDate;
-      if (
-        !eventStart ||
-        !eventEnd ||
-        eventEnd <= windowStart ||
-        eventStart >= windowEnd
-      ) {
-        continue;
+    const displayEventMap = new Map();
+    const collectDisplayEvent = (event, occursToday = false) => {
+      if (!includeCalendar(event.calendar)) return;
+
+      const eventStart = event.startDate
+        ? new Date(event.startDate)
+        : null;
+      let eventEnd = event.endDate
+        ? new Date(event.endDate)
+        : null;
+      const isAllDay = Boolean(event.isAllDay);
+
+      if (!eventStart || !eventEnd) return;
+
+      // Em eventos de dia inteiro, alguns calendários entregam endDate em
+      // 00:00 do último dia exibido. Se CalendarEvent.today() confirmou que
+      // a ocorrência pertence a hoje, ela deve permanecer visível até 00:00
+      // do dia seguinte, independentemente desse limite bruto.
+      if (isAllDay && occursToday) {
+        const currentDayEnd = addDays(startOfDay(windowStart), 1);
+        if (eventEnd < currentDayEnd) {
+          eventEnd = currentDayEnd;
+        }
       }
 
-      const eventKey =
-        event.identifier ??
-        `${event.title}-${eventStart.getTime()}-${eventEnd.getTime()}`;
-      displayEventMap.set(eventKey, event);
-    }
+      if (eventEnd <= windowStart || eventStart >= windowEnd) return;
 
-    const eventItems = [...displayEventMap.values()].map((event) => ({
-      kind: "event",
-      title: cleanTitle(event.title, "Evento"),
-      calendarTitle: event.calendar?.title ?? "Calendário",
-      start: event.startDate,
-      end: event.endDate,
-      isAllDay: Boolean(event.isAllDay),
-      identifier: event.identifier ?? `${event.title}-${event.startDate}`,
-      location: cleanOptionalText(event.location),
-      notes: cleanOptionalText(event.notes),
-      attendeeCount: Array.isArray(event.attendees)
-        ? event.attendees.filter((attendee) => !attendee.isCurrentUser).length
-        : 0,
-      participationStatus: currentUserParticipationStatus(event.attendees),
-      availability: event.availability ?? "busy",
-      hasVideoLink: eventHasVideoLink(event),
-      color: safeCalendarColor(
-        event.calendar,
-        SETTINGS.fallbackEventColor
-      ),
-    }));
+      displayEventMap.set(eventOccurrenceKey(event), {
+        event,
+        start: eventStart,
+        end: eventEnd,
+        isAllDay,
+      });
+    };
+
+    events.forEach((event) => collectDisplayEvent(event, false));
+    // Executada depois para que a versão confirmada por today() prevaleça
+    // sobre uma eventual duplicata da consulta por intervalo.
+    todayEvents.forEach((event) => collectDisplayEvent(event, true));
+
+    const eventItems = [...displayEventMap.values()].map((view) => {
+      const event = view.event;
+      return {
+        kind: "event",
+        title: cleanTitle(event.title, "Evento"),
+        calendarTitle: event.calendar?.title ?? "Calendário",
+        start: view.start,
+        end: view.end,
+        isAllDay: view.isAllDay,
+        identifier:
+          event.identifier ??
+          `${event.title}-${view.start.getTime()}`,
+        location: cleanOptionalText(event.location),
+        notes: cleanOptionalText(event.notes),
+        attendeeCount: Array.isArray(event.attendees)
+          ? event.attendees.filter((attendee) => !attendee.isCurrentUser).length
+          : 0,
+        participationStatus: currentUserParticipationStatus(event.attendees),
+        availability: event.availability ?? "busy",
+        hasVideoLink: eventHasVideoLink(event),
+        color: safeCalendarColor(
+          event.calendar,
+          SETTINGS.fallbackEventColor
+        ),
+      };
+    });
 
     const reminderItems = displayReminders
       .filter((reminder) => {
