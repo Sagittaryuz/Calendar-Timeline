@@ -46,6 +46,7 @@ const SETTINGS = {
   holidayTimelineBackgroundColor: "#3A2A00",
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
+  minimumTemperatureColor: "#64D2FF",
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
   overflowColor: "#636366",
@@ -1896,7 +1897,7 @@ function drawTemperatureFooter(ctx, weather) {
       : isMaximum
         ? "#FF453A"
         : isMinimum
-          ? "#0A84FF"
+          ? SETTINGS.minimumTemperatureColor
           : isSecondaryNightHour
             ? SETTINGS.secondaryTextColor
             : "#FFFFFF";
@@ -4305,7 +4306,7 @@ function drawVisibleDailyExtremes(
       {
         timestamp: Number(extreme.minimumTimestamp),
         temperature: Number(extreme.minimum),
-        color: "#0A84FF",
+        color: SETTINGS.minimumTemperatureColor,
         kind: "minimum",
       },
       {
