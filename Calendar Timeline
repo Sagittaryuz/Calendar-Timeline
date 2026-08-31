@@ -3911,9 +3911,6 @@ function drawWeatherConditionStrip(ctx, weather) {
   const bottom = weatherStripBottomY();
   // Fundo transparente: o gradiente original do widget permanece visível
   // atrás das luas, dos sóis, das legendas e do grid.
-  ctx.setFillColor(new Color("#FFFFFF", 0.14));
-  ctx.fillRect(new Rect(0, bottom - 1, timelineWidth(), 1));
-
   // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
   drawDayBoundaryOriginsBehindMoon(ctx, bottom);
 
