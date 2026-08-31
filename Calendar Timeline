@@ -37,7 +37,8 @@ const SETTINGS = {
   rainSymbolMinChance: 35,
   cloudEvidenceMinCloudiness: 32,
   denseCloudMinCloudiness: 78,
-  // Azul claro original usado nas barras verticais de chuva.\n  rainLineColor: "#64D2FF",
+  // Azul claro original usado nas barras verticais de chuva.
+  rainLineColor: "#64D2FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
