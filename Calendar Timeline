@@ -116,7 +116,9 @@ const CANVAS = {
   marginX: 34,
   plotLeft: 34,
   plotRight: 1058,
-  // Após o deslocamento vertical de -5 px, o topo efetivo fica em\n  // 125 px: exatamente no antigo nível da linha sob o título.\n  timelineTop: 130,
+  // Após o deslocamento vertical de -5 px, o topo efetivo fica em
+  // 125 px: exatamente no antigo nível da linha sob o título.
+  timelineTop: 130,
   timelineBottom: 491,
   footerTop: 459,
   footerBottom: 510,
