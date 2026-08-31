@@ -116,7 +116,7 @@ const CANVAS = {
   marginX: 34,
   plotLeft: 34,
   plotRight: 1058,
-  timelineTop: 139,
+  // Após o deslocamento vertical de -5 px, o topo efetivo fica em\n  // 125 px: exatamente no antigo nível da linha sob o título.\n  timelineTop: 130,
   timelineBottom: 491,
   footerTop: 459,
   footerBottom: 510,
@@ -1742,17 +1742,6 @@ function drawDatePanel(ctx, holidayDates) {
   );
   const totalWidth = fullDate.length * characterWidth;
   const startX = (CANVAS.width - totalWidth) / 2;
-
-  ctx.setStrokeColor(new Color("#242428"));
-  ctx.setLineWidth(3);
-  ctx.strokeRect(
-    new Rect(
-      CANVAS.marginX,
-      CANVAS.headerHeight - 3,
-      CANVAS.width - CANVAS.marginX * 2,
-      1
-    )
-  );
 
   ctx.setTextAlignedLeft();
   let segmentX = startX;
