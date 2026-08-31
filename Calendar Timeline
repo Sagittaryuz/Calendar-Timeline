@@ -37,7 +37,7 @@ const SETTINGS = {
   rainSymbolMinChance: 35,
   cloudEvidenceMinCloudiness: 32,
   denseCloudMinCloudiness: 78,
-  rainLineColor: "#0A4F9E",
+  // Azul claro original usado nas barras verticais de chuva.\n  rainLineColor: "#64D2FF",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
@@ -1632,10 +1632,15 @@ function drawTimelineBackground(ctx) {
     const x0 = Math.max(0, timeToX(visibleStart));
     const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
 
-    if (x1 > x0) {
-      ctx.setFillColor(
-        new Color(timelineBackgroundColorForDate(dayStart), 1.0)
-      );
+    const backgroundColor = timelineBackgroundColorForDate(dayStart);
+    const isSpecialDay =
+      backgroundColor !== SETTINGS.timelineBackgroundColor;
+
+    // Dias comuns permanecem transparentes para revelar o gradiente original
+    // desenhado no fundo do widget. Mantemos apenas as tintas específicas
+    // de sábado, domingo e feriados.
+    if (x1 > x0 && isSpecialDay) {
+      ctx.setFillColor(new Color(backgroundColor, 1.0));
       ctx.fillRect(
         new Rect(
           CANVAS.plotLeft + x0,
@@ -3903,8 +3908,8 @@ function eclipseForDate(date) {
 
 function drawWeatherConditionStrip(ctx, weather) {
   const bottom = weatherStripBottomY();
-  ctx.setFillColor(new Color("#07101A", 0.66));
-  ctx.fillRect(new Rect(0, 0, timelineWidth(), bottom));
+  // Fundo transparente: o gradiente original do widget permanece visível
+  // atrás das luas, dos sóis, das legendas e do grid.
   ctx.setFillColor(new Color("#FFFFFF", 0.14));
   ctx.fillRect(new Rect(0, bottom - 1, timelineWidth(), 1));
 
@@ -4261,7 +4266,7 @@ function drawHourlyRainColumn(
 
   ctx.setFillColor(
     new Color(
-      "#2E78BF",
+      "#DDF7FF",
       Math.min(0.92, opacity * 0.58)
     )
   );
@@ -4547,10 +4552,10 @@ async function renderTimelinePanel(items, loadError) {
   // Os nomes completos dos dias ficam no grid, atrás da curva térmica,
   // da chuva e dos charts; o recorte acompanha cada coluna de 24 horas.
   await drawDiagonalWeekdayLabels(ctx);
-  drawCompactThermalBand(ctx, hourlyWeather);
-  // As colunas de precipitação atravessam a curva térmica; os charts da
-  // agenda continuam sendo desenhados depois e permanecem prioritários.
+  // As barras de chuva ficam atrás da curva, da legenda de temperaturas
+  // e dos demais elementos térmicos, mas continuam visíveis no chart.
   drawWeatherRainCurtains(ctx, hourlyWeather);
+  drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
     drawPermissionState(ctx);
