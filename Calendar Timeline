@@ -4327,6 +4327,16 @@ function drawCompactThermalBand(ctx, weather) {
     minimum,
     maximum
   );
+
+  // As barras ficam limitadas entre o topo e a base da curva térmica.
+  // A curva e os textos são desenhados depois para permanecerem legíveis.
+  drawThermalRainBars(
+    ctx,
+    sourceHours,
+    graphTop,
+    graphBottom
+  );
+
   drawThermalCurve(
     ctx,
     smoothPoints,
@@ -4550,9 +4560,8 @@ async function renderTimelinePanel(items, loadError) {
   // Os nomes completos dos dias ficam no grid, atrás da curva térmica,
   // da chuva e dos charts; o recorte acompanha cada coluna de 24 horas.
   await drawDiagonalWeekdayLabels(ctx);
-  // As barras de chuva ficam atrás da curva, da legenda de temperaturas
-  // e dos demais elementos térmicos, mas continuam visíveis no chart.
-  drawWeatherRainCurtains(ctx, hourlyWeather);
+  // A chuva é desenhada somente dentro da faixa térmica inferior.
+  // Assim nenhuma barra atravessa os charts dos eventos e lembretes.
   drawCompactThermalBand(ctx, hourlyWeather);
 
   if (loadError) {
