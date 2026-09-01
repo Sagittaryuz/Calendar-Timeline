@@ -38,7 +38,7 @@ const SETTINGS = {
   cloudEvidenceMinCloudiness: 32,
   denseCloudMinCloudiness: 78,
   // Azul claro original usado nas barras verticais de chuva.
-  rainLineColor: "#64D2FF",
+  rainLineColor: "#14C1F5",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
@@ -2141,7 +2141,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     ) - timeToX(windowStart)
   );
   const quarterWidth = hourWidth / 4;
-  const requestedBarWidth = isCompactMode() ? 6 : 9;
+  const requestedBarWidth = isCompactMode() ? 5 : 8;
   const barWidth = Math.min(
     requestedBarWidth,
     Math.max(2, quarterWidth * 0.88)
