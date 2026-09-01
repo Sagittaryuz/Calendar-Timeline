@@ -2167,7 +2167,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     ctx.setFillColor(
       new Color(
         SETTINGS.rainLineColor,
-        isCompactMode() ? 0.40 : 0.48
+        1.0
       )
     );
     ctx.fillRect(
@@ -4372,20 +4372,19 @@ function drawCompactThermalBand(ctx, weather) {
     maximum
   );
 
-  // As barras ficam limitadas entre o topo e a base da curva térmica.
-  // A curva e os textos são desenhados depois para permanecerem legíveis.
-  drawThermalRainBars(
-    ctx,
-    sourceHours,
-    graphTop,
-    graphBottom
-  );
-
   drawThermalCurve(
     ctx,
     smoothPoints,
     minimum,
     maximum
+  );
+
+  // Barras opacas sobre a curva e antes dos textos de temperatura.
+  drawThermalRainBars(
+    ctx,
+    sourceHours,
+    graphTop,
+    graphBottom
   );
   drawVisibleDailyExtremes(
     ctx,
