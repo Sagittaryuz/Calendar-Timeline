@@ -2068,24 +2068,57 @@ function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
 }
 
 function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
-  const rainEntries = sourceHours
-    .map((hour) => ({
-      hour,
-      evidence: rainEvidenceForForecast(hour),
-      amount: rainMillimetersForHour(hour),
-      timestamp:
-        Number.isFinite(Number(hour.rainStartTimestamp)) &&
-        Number(hour.rainStartTimestamp) >= windowStart.getTime() - 3600000
-          ? Number(hour.rainStartTimestamp)
-          : Number(hour.timestamp),
-    }))
-    .filter(
-      (entry) =>
-        entry.evidence.hasRain &&
-        entry.amount > 0 &&
-        entry.timestamp >= windowStart.getTime() - 3600000 &&
-        entry.timestamp <= windowEnd.getTime()
-    );
+  const quarterHourMilliseconds = 15 * 60 * 1000;
+  const visibleStart = windowStart.getTime() - quarterHourMilliseconds;
+  const visibleEnd = windowEnd.getTime();
+  const rainByQuarter = new Map();
+
+  // A Foreca fornece a previsão em intervalos de uma hora. Cada intervalo
+  // é dividido em quatro posições para representar a chuva a cada 15 min.
+  for (const hour of sourceHours) {
+    const intervalEnd = Number(hour.timestamp);
+    if (!Number.isFinite(intervalEnd)) continue;
+
+    const declaredStart = Number(hour.rainStartTimestamp);
+    const intervalStart =
+      Number.isFinite(declaredStart) && declaredStart < intervalEnd
+        ? declaredStart
+        : intervalEnd - 60 * 60 * 1000;
+    const evidence = rainEvidenceForForecast(hour);
+    const amount = rainMillimetersForHour(hour);
+
+    if (
+      !evidence.hasRain ||
+      amount <= 0 ||
+      intervalEnd <= intervalStart
+    ) {
+      continue;
+    }
+
+    for (
+      let timestamp = intervalStart;
+      timestamp < intervalEnd;
+      timestamp += quarterHourMilliseconds
+    ) {
+      if (
+        timestamp < visibleStart ||
+        timestamp > visibleEnd
+      ) {
+        continue;
+      }
+
+      const existing = rainByQuarter.get(timestamp);
+      if (!existing || amount > existing.amount) {
+        rainByQuarter.set(timestamp, {
+          amount,
+          timestamp,
+        });
+      }
+    }
+  }
+
+  const rainEntries = [...rainByQuarter.values()]
+    .sort((first, second) => first.timestamp - second.timestamp);
 
   if (!rainEntries.length) return;
 
@@ -2099,16 +2132,19 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     4,
     graphBottom - graphTop - 2
   );
-  // Barras espessas, sem ultrapassar a largura de uma hora em janelas longas.
+
+  // Mantém as barras espessas; em janelas longas, adapta a largura
+  // à resolução de cada quarto de hora para preservar a leitura.
   const hourWidth = Math.abs(
     timeToX(
       new Date(windowStart.getTime() + 60 * 60 * 1000)
     ) - timeToX(windowStart)
   );
+  const quarterWidth = hourWidth / 4;
   const requestedBarWidth = isCompactMode() ? 6 : 9;
   const barWidth = Math.min(
     requestedBarWidth,
-    Math.max(4, hourWidth)
+    Math.max(2, quarterWidth * 0.88)
   );
 
   for (const entry of rainEntries) {
@@ -2128,8 +2164,6 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       continue;
     }
 
-    // A barra nasce na base do gráfico e fica atrás do preenchimento
-    // térmico e da curva. O azul é discreto para não competir com a agenda.
     ctx.setFillColor(
       new Color(
         SETTINGS.rainLineColor,
