@@ -2099,7 +2099,17 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     4,
     graphBottom - graphTop - 2
   );
-  const barWidth = isCompactMode() ? 4 : 5;
+  // Barras espessas, sem ultrapassar a largura de uma hora em janelas longas.
+  const hourWidth = Math.abs(
+    timeToX(
+      new Date(windowStart.getTime() + 60 * 60 * 1000)
+    ) - timeToX(windowStart)
+  );
+  const requestedBarWidth = isCompactMode() ? 6 : 9;
+  const barWidth = Math.min(
+    requestedBarWidth,
+    Math.max(4, hourWidth)
+  );
 
   for (const entry of rainEntries) {
     const normalized = Math.max(
