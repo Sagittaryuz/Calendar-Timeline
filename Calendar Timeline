@@ -6836,6 +6836,80 @@ function drawHourAxis(ctx, items) {
   drawEventStartLines(ctx, items);
 }
 
+function isAllDayTimelineChart(item) {
+  return Boolean(item?.isAllDay || item?.sourceIsAllDay);
+}
+
+function timelineDayBoundaryGap() {
+  return isCompactMode() ? 4 : 5;
+}
+
+function timelineBarSegments(item, startX, endX) {
+  const width = Math.max(1, endX - startX);
+  if (isAllDayTimelineChart(item)) {
+    return [{ x: startX, width }];
+  }
+
+  const start = item?.start;
+  const end = item?.end;
+  if (
+    !(start instanceof Date) ||
+    !(end instanceof Date) ||
+    end <= start
+  ) {
+    return [{ x: startX, width }];
+  }
+
+  const gap = timelineDayBoundaryGap();
+  const boundaries = [];
+  let day = startOfDay(start);
+
+  while (day.getTime() <= end.getTime()) {
+    const boundaryTime = day.getTime();
+    if (
+      boundaryTime >= start.getTime() &&
+      boundaryTime <= end.getTime()
+    ) {
+      const boundaryX = timeToX(day);
+      if (
+        boundaryX >= startX - gap &&
+        boundaryX <= endX + gap
+      ) {
+        boundaries.push(boundaryX);
+      }
+    }
+    day = addDays(day, 1);
+  }
+
+  if (boundaries.length === 0) {
+    return [{ x: startX, width }];
+  }
+
+  const segments = [];
+  let segmentStart = startX;
+  for (const boundaryX of boundaries) {
+    const segmentEnd = boundaryX - gap;
+    if (segmentEnd > segmentStart) {
+      segments.push({
+        x: segmentStart,
+        width: segmentEnd - segmentStart,
+      });
+    }
+    segmentStart = Math.max(segmentStart, boundaryX + gap);
+  }
+
+  if (endX > segmentStart) {
+    segments.push({
+      x: segmentStart,
+      width: endX - segmentStart,
+    });
+  }
+
+  return segments.length > 0
+    ? segments.filter((segment) => segment.width > 0)
+    : [{ x: startX, width }];
+}
+
 function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
@@ -6883,14 +6957,40 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
         : SETTINGS.minimumChartWidth
       : 1;
   const width = Math.max(exactWidth, minimumWidth);
+  const barSegments = timelineBarSegments(
+    item,
+    x,
+    x + width
+  );
 
-  const barRect = new Rect(x, barY, width, barHeight);
-  drawTimelineBar(ctx, barRect, color, item);
+  for (const segment of barSegments) {
+    drawTimelineBar(
+      ctx,
+      new Rect(
+        segment.x,
+        barY,
+        segment.width,
+        barHeight
+      ),
+      color,
+      item
+    );
+  }
 
   const priorityPrefix = reminderPriorityPrefix(item);
   const title = priorityPrefix + item.title.toLocaleUpperCase("pt-BR");
-  const visibleLeft = Math.max(0, x);
-  const visibleRight = Math.min(timelineWidth(), x + width);
+  const visibleLeft = Math.max(
+    0,
+    Math.min(...barSegments.map((segment) => segment.x))
+  );
+  const visibleRight = Math.min(
+    timelineWidth(),
+    Math.max(
+      ...barSegments.map(
+        (segment) => segment.x + segment.width
+      )
+    )
+  );
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode()
@@ -6992,13 +7092,14 @@ function drawTimelineBar(ctx, rect, color, item) {
     accent = new Color(SETTINGS.priorityReminderColor);
   }
 
+  const cornerRadius = isCompactMode() ? 6 : 7;
   if (!accent || rect.width < 8 || rect.height < 8) {
-    fillRoundedRect(ctx, rect, 6, color);
+    fillRoundedRect(ctx, rect, cornerRadius, color);
     return;
   }
 
   const borderWidth = item.isCurrentEvent ? 4 : 3;
-  fillRoundedRect(ctx, rect, 6, accent);
+  fillRoundedRect(ctx, rect, cornerRadius, accent);
   fillRoundedRect(
     ctx,
     new Rect(
@@ -7007,7 +7108,7 @@ function drawTimelineBar(ctx, rect, color, item) {
       rect.width - borderWidth * 2,
       rect.height - borderWidth * 2
     ),
-    4,
+    Math.max(2, cornerRadius - borderWidth),
     color
   );
 }
