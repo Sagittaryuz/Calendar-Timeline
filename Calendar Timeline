@@ -6917,11 +6917,11 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       Math.min(timelineWidth() - markerWidth, timeToX(item.start))
     );
 
-    fillRoundedRect(
+    drawTimelineBar(
       ctx,
       new Rect(markerX, barY, markerWidth, barHeight),
-      5,
-      color
+      color,
+      item
     );
 
     ctx.setTextAlignedCenter();
@@ -7080,29 +7080,60 @@ function drawTimelineBar(ctx, rect, color, item) {
   let accent = null;
   if (item.isOverdue) accent = new Color(SETTINGS.overdueReminderColor);
   else if (item.isCurrentEvent) accent = new Color(SETTINGS.currentEventColor);
-  else if (item.isNextEvent) accent = new Color(SETTINGS.nextEventColor);
   else if (item.conflictCount > 0) accent = new Color(SETTINGS.conflictColor);
   else if (item.kind === "reminder" && item.priority > 0) {
     accent = new Color(SETTINGS.priorityReminderColor);
   }
 
+  // Contorno preto comum a todos os charts.
   const cornerRadius = isCompactMode() ? 6 : 7;
+  const outlineWidth = Math.min(
+    2,
+    Math.max(0.75, Math.min(rect.width, rect.height) / 4)
+  );
+  const outlinedRect = new Rect(
+    rect.x + outlineWidth,
+    rect.y + outlineWidth,
+    Math.max(1, rect.width - outlineWidth * 2),
+    Math.max(1, rect.height - outlineWidth * 2)
+  );
+
+  fillRoundedRect(
+    ctx,
+    rect,
+    cornerRadius,
+    new Color("#000000", 1.0)
+  );
+
   if (!accent || rect.width < 8 || rect.height < 8) {
-    fillRoundedRect(ctx, rect, cornerRadius, color);
+    fillRoundedRect(
+      ctx,
+      outlinedRect,
+      Math.max(1, cornerRadius - outlineWidth),
+      color
+    );
     return;
   }
 
-  const borderWidth = item.isCurrentEvent ? 4 : 3;
-  fillRoundedRect(ctx, rect, cornerRadius, accent);
+  const accentBorderWidth = item.isCurrentEvent ? 4 : 3;
+  fillRoundedRect(
+    ctx,
+    outlinedRect,
+    Math.max(1, cornerRadius - outlineWidth),
+    accent
+  );
   fillRoundedRect(
     ctx,
     new Rect(
-      rect.x + borderWidth,
-      rect.y + borderWidth,
-      rect.width - borderWidth * 2,
-      rect.height - borderWidth * 2
+      outlinedRect.x + accentBorderWidth,
+      outlinedRect.y + accentBorderWidth,
+      Math.max(1, outlinedRect.width - accentBorderWidth * 2),
+      Math.max(1, outlinedRect.height - accentBorderWidth * 2)
     ),
-    Math.max(2, cornerRadius - borderWidth),
+    Math.max(
+      1,
+      cornerRadius - outlineWidth - accentBorderWidth
+    ),
     color
   );
 }
@@ -7117,7 +7148,7 @@ function reminderPriorityPrefix(item) {
 function timelineItemStatus(item) {
   const pieces = [];
   if (item.isCurrentEvent) pieces.push(currentEventCountdown(item.end));
-  else if (item.isNextEvent) pieces.push(nextEventCountdown(item.start));
+  // O próximo evento não exibe mais a contagem regressiva em horas.
   if (item.conflictCount > 0) pieces.push(`×${item.conflictCount + 1}`);
   return pieces.join("  ");
 }
