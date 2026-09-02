@@ -6781,6 +6781,17 @@ function drawHourLabelFrames(ctx, ticks) {
   }
 }
 
+function eventStartsAtDayChange(event) {
+  const date = event?.start;
+  return (
+    date instanceof Date &&
+    date.getHours() === 0 &&
+    date.getMinutes() === 0 &&
+    date.getSeconds() === 0 &&
+    date.getMilliseconds() === 0
+  );
+}
+
 function drawEventStartLines(ctx, items) {
   const events = prioritizedEvents(items);
   const lineWidth = 4;
@@ -6789,6 +6800,9 @@ function drawEventStartLines(ctx, items) {
   // A linha principal permanece atrás dos charts e chega até a
   // borda inferior de cada chart.
   for (const event of [...events].reverse()) {
+    // Eventos iniciados às 00:00 já coincidem com a divisão do dia.
+    if (eventStartsAtDayChange(event)) continue;
+
     const x = timeToX(event.start);
     if (x < 0 || x > timelineWidth()) continue;
 
@@ -6817,6 +6831,9 @@ function drawEventStartLineAnchors(ctx, items) {
   // Este trecho é desenhado sobre o próprio chart para que a ligação
   // visual alcance o centro do chart sem alterar sua hora de início.
   for (const event of [...events].reverse()) {
+    // Eventos iniciados às 00:00 já coincidem com a divisão do dia.
+    if (eventStartsAtDayChange(event)) continue;
+
     const x = timeToX(event.start);
     if (x < 0 || x > timelineWidth()) continue;
 
