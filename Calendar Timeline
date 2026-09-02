@@ -6841,7 +6841,11 @@ function isAllDayTimelineChart(item) {
 }
 
 function timelineDayBoundaryGap() {
-  return isCompactMode() ? 8 : 5;
+  // A linha de mudança de dia tem 8 px; o recuo é medido
+  // a partir da borda visível dessa linha.
+  const visibleGap = isCompactMode() ? 8 : 5;
+  const boundaryLineHalfWidth = 4;
+  return visibleGap + boundaryLineHalfWidth;
 }
 
 function timelineBarSegments(item, startX, endX) {
