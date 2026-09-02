@@ -6836,10 +6836,6 @@ function drawHourAxis(ctx, items) {
   drawEventStartLines(ctx, items);
 }
 
-function isAllDayTimelineChart(item) {
-  return Boolean(item?.isAllDay || item?.sourceIsAllDay);
-}
-
 function timelineDayBoundaryGap() {
   // A linha de mudança de dia tem 8 px; o recuo é medido
   // a partir da borda visível dessa linha.
@@ -6850,10 +6846,6 @@ function timelineDayBoundaryGap() {
 
 function timelineBarSegments(item, startX, endX) {
   const width = Math.max(1, endX - startX);
-  if (isAllDayTimelineChart(item)) {
-    return [{ x: startX, width }];
-  }
-
   const start = item?.start;
   const end = item?.end;
   if (
