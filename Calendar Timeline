@@ -4629,6 +4629,9 @@ async function renderTimelinePanel(items, loadError) {
         drawTimelineItem(ctx, item, y, rowHeight)
       );
     }
+
+    // A ligação entra no próprio chart até seu centro.
+    drawEventStartLineAnchors(ctx, items);
   }
 
   drawBottomHourLegend(ctx);
@@ -6780,12 +6783,11 @@ function drawHourLabelFrames(ctx, ticks) {
 
 function drawEventStartLines(ctx, items) {
   const events = prioritizedEvents(items);
-  const lineWidth = 2;
+  const lineWidth = 4;
   const curveBottom = thermalBandBottomY();
 
-  // Cada linha nasce atrás da curva térmica e sobe somente até o chart
-  // correspondente. Como esta camada é desenhada antes da curva e dos
-  // charts, a origem inferior fica naturalmente encoberta.
+  // A linha principal permanece atrás dos charts e chega até a
+  // borda inferior de cada chart.
   for (const event of [...events].reverse()) {
     const x = timeToX(event.start);
     if (x < 0 || x > timelineWidth()) continue;
@@ -6795,6 +6797,35 @@ function drawEventStartLines(ctx, items) {
 
     const lineTop = Math.min(curveBottom, bar.bottom);
     const lineHeight = Math.max(1, curveBottom - lineTop);
+
+    ctx.setFillColor(new Color(event.color, 1.0));
+    ctx.fillRect(
+      new Rect(
+        x - lineWidth / 2,
+        lineTop,
+        lineWidth,
+        lineHeight
+      )
+    );
+  }
+}
+
+function drawEventStartLineAnchors(ctx, items) {
+  const events = prioritizedEvents(items);
+  const lineWidth = 4;
+
+  // Este trecho é desenhado sobre o próprio chart para que a ligação
+  // visual alcance o centro do chart sem alterar sua hora de início.
+  for (const event of [...events].reverse()) {
+    const x = timeToX(event.start);
+    if (x < 0 || x > timelineWidth()) continue;
+
+    const bar = timelineBarVerticalRect(event);
+    if (!bar) continue;
+
+    const lineTop = bar.centerY;
+    const lineBottom = Math.min(thermalBandBottomY(), bar.bottom);
+    const lineHeight = Math.max(1, lineBottom - lineTop);
 
     ctx.setFillColor(new Color(event.color, 1.0));
     ctx.fillRect(
