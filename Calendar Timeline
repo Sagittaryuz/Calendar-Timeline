@@ -6843,7 +6843,7 @@ function isAllDayTimelineChart(item) {
 function timelineDayBoundaryGap() {
   // A linha de mudança de dia tem 8 px; o recuo é medido
   // a partir da borda visível dessa linha.
-  const visibleGap = isCompactMode() ? 8 : 5;
+  const visibleGap = isCompactMode() ? 10 : 5;
   const boundaryLineHalfWidth = 4;
   return visibleGap + boundaryLineHalfWidth;
 }
@@ -6866,21 +6866,19 @@ function timelineBarSegments(item, startX, endX) {
 
   const gap = timelineDayBoundaryGap();
   const boundaries = [];
-  let day = startOfDay(start);
 
-  while (day.getTime() <= end.getTime()) {
-    const boundaryTime = day.getTime();
+  // Usa a extensão visual real do retângulo, pois um chart curto
+  // pode receber largura mínima e alcançar visualmente a virada.
+  let day = startOfDay(windowStart);
+  const finalDay = addDays(windowEnd, 1);
+
+  while (day.getTime() <= finalDay.getTime()) {
+    const boundaryX = timeToX(day);
     if (
-      boundaryTime >= start.getTime() &&
-      boundaryTime <= end.getTime()
+      boundaryX >= startX - gap &&
+      boundaryX <= endX + gap
     ) {
-      const boundaryX = timeToX(day);
-      if (
-        boundaryX >= startX - gap &&
-        boundaryX <= endX + gap
-      ) {
-        boundaries.push(boundaryX);
-      }
+      boundaries.push(boundaryX);
     }
     day = addDays(day, 1);
   }
