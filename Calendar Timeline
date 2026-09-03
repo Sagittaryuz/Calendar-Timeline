@@ -5007,13 +5007,14 @@ function drawWeekdayBadgesOnTop(ctx) {
     if (tick.getHours() !== 0) continue;
 
     const x = timeToX(tick);
+    const badgeCenterX = clampedDayLegendCenterX(x);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const badge = dayLegendBadgeRect(x, centerY);
+    const badge = dayLegendBadgeRect(badgeCenterX, centerY);
     const weekdayLabel = shortWeekday(tick);
     const dateLabel = String(tick.getDate()).padStart(2, "0");
     const dateFontSize = weekdayLegendDateFontSize();
     const textRects = inlineWeekdayLegendTextRects(
-      x,
+      badgeCenterX,
       centerY,
       weekdayLabel,
       fontSize,
@@ -6686,7 +6687,15 @@ function centeredLegendTextRect(centerX, centerY) {
 // Os badges de mudança de dia são mais largos que os rótulos numéricos.
 // Isso garante as três letras completas inclusive na janela de 36 horas.
 function dayLegendLabelWidth() {
-  return 64;
+  return 76;
+}
+
+function clampedDayLegendCenterX(centerX) {
+  const halfWidth = dayLegendLabelWidth() / 2;
+  return Math.max(
+    halfWidth,
+    Math.min(timelineWidth() - halfWidth, centerX)
+  );
 }
 
 function weekdayLegendDateFontSize() {
@@ -6703,8 +6712,8 @@ function inlineWeekdayLegendTextRects(
   dateLabel,
   dateFontSize
 ) {
-  // Mantém o grupo compacto, mas reserva apenas um pixel entre os textos.
-  const gap = 1;
+  // Os textos encostam visualmente; a largura maior do badge evita cortes.
+  const gap = 0;
   const weekdayWidth =
     estimatedTextWidth(weekdayLabel, weekdayFontSize) + 1;
   const dateWidth =
