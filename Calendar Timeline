@@ -4668,7 +4668,6 @@ function diagonalWeekdayLabelEntries() {
       dayEnd.getTime() > windowStart.getTime() &&
       dayStart.getTime() < windowEnd.getTime()
     ) {
-      const groupKey = dateKey(dayStart);
       const sunnyStart = dateAtHour(
         dayStart,
         SETTINGS.daylightStartHour
@@ -4683,46 +4682,18 @@ function diagonalWeekdayLabelEntries() {
       // as letras nas bordas, sem deslocar a palavra para 00:00 ou 24:00.
       const sunnyStartX = timeToX(sunnyStart);
       const sunnyEndX = timeToX(sunnyEnd);
-      const centerY = (gridTop + gridBottom) / 2;
-      const color = diagonalWeekdayLabelColor(dayStart);
-      const addEntry = (label, labelType, x0, x1) => {
-        entries.push({
-          label,
-          labelType,
-          groupKey,
-          x0,
-          x1,
-          centerX: (x0 + x1) / 2,
-          centerY,
-          top: gridTop,
-          bottom: gridBottom,
-          color,
-          opacity: 1.0,
-        });
-      };
 
-      // O nome do dia permanece centralizado no intervalo diurno.
-      addEntry(
-        weekdayLabels[dayStart.getDay()],
-        "weekday",
-        sunnyStartX,
-        sunnyEndX
-      );
-
-      // A data ocupa os dois intervalos noturnos do próprio dia.
-      const dateLabel = formatDate(dayStart, "dd/MM");
-      addEntry(
-        dateLabel,
-        "date",
-        timeToX(dayStart),
-        sunnyStartX
-      );
-      addEntry(
-        dateLabel,
-        "date",
-        sunnyEndX,
-        timeToX(dayEnd)
-      );
+      entries.push({
+        label: weekdayLabels[dayStart.getDay()],
+        x0: sunnyStartX,
+        x1: sunnyEndX,
+        centerX: (sunnyStartX + sunnyEndX) / 2,
+        centerY: (gridTop + gridBottom) / 2,
+        top: gridTop,
+        bottom: gridBottom,
+        color: diagonalWeekdayLabelColor(dayStart),
+        opacity: 1.0,
+      });
     }
     dayStart = dayEnd;
   }
@@ -4800,7 +4771,7 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "  const verticalScale = 1.05;",
     "  const minimumHorizontalScale = 0.62;",
     "  const maximumHorizontalScale = 1.45;",
-    "  const buildTypography = function(entry, candidateSize) {",
+    "  const chooseTypography = function(entry) {",
     "    const x0 = Number(entry.x0);",
     "    const x1 = Number(entry.x1);",
     "    const top = Number(entry.top);",
@@ -4811,52 +4782,44 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    const theta = Math.abs(angle);",
     "    const sinTheta = Math.max(0.0001, Math.sin(theta));",
     "    const cosTheta = Math.max(0.0001, Math.cos(theta));",
-    "    context.font = '900 ' + candidateSize + 'px ' + fontFamily;",
-    "    const measuredWidth = Math.max(1, context.measureText(entry.label || '').width);",
-    "    const strokeWidth = Math.max(2.6, candidateSize * 0.07);",
-    "    const textHeight = candidateSize * verticalScale + strokeWidth * 2;",
-    "    const widthLimit =",
-    "      (dx - textHeight * sinTheta) / cosTheta;",
-    "    const heightLimit =",
-    "      (dy - textHeight * cosTheta) / sinTheta;",
-    "    const safeLength =",
-    "      Math.max(1, Math.min(widthLimit, heightLimit)) * 0.94;",
-    "    const horizontalScale = safeLength / measuredWidth;",
-    "    return {",
-    "      fontSize: candidateSize,",
-    "      measuredWidth,",
-    "      strokeWidth,",
-    "      textHeight,",
-    "      safeLength,",
-    "      horizontalScale,",
-    "      angle,",
-    "    };",
-    "  };",
-    "  const chooseTypography = function(entry, forcedFontSize) {",
-    "    const candidateSizes = Number.isFinite(Number(forcedFontSize))",
-    "      ? [Number(forcedFontSize)]",
-    "      : Array.from({ length: Math.floor((maxFontSize - minFontSize) / 2) + 1 },",
-    "          function(_, index) { return minFontSize + index * 2; });",
     "    let selected = null;",
     "    let closestAboveMaximum = null;",
     "    let closestBelowMinimum = null;",
-    "    for (const candidateSize of candidateSizes) {",
-    "      const typography = buildTypography(entry, candidateSize);",
+    "    for (let candidateSize = minFontSize; candidateSize <= maxFontSize; candidateSize += 2) {",
+    "      context.font = '900 ' + candidateSize + 'px ' + fontFamily;",
+    "      const measuredWidth = Math.max(1, context.measureText(entry.label).width);",
+    "      const strokeWidth = Math.max(2.6, candidateSize * 0.07);",
+    "      const textHeight = candidateSize * verticalScale + strokeWidth * 2;",
+    "      const widthLimit =",
+    "        (dx - textHeight * sinTheta) / cosTheta;",
+    "      const heightLimit =",
+    "        (dy - textHeight * cosTheta) / sinTheta;",
+    "      const safeLength =",
+    "        Math.max(1, Math.min(widthLimit, heightLimit)) * 0.94;",
+    "      const horizontalScale = safeLength / measuredWidth;",
+    "      const typography = {",
+    "        fontSize: candidateSize,",
+    "        measuredWidth,",
+    "        strokeWidth,",
+    "        safeLength,",
+    "        horizontalScale,",
+    "        angle,",
+    "      };",
     "      if (",
-    "        typography.horizontalScale >= minimumHorizontalScale &&",
-    "        typography.horizontalScale <= maximumHorizontalScale",
+    "        horizontalScale >= minimumHorizontalScale &&",
+    "        horizontalScale <= maximumHorizontalScale",
     "      ) {",
     "        selected = typography;",
     "      } else if (",
-    "        typography.horizontalScale > maximumHorizontalScale &&",
+    "        horizontalScale > maximumHorizontalScale &&",
     "        (!closestAboveMaximum ||",
-    "          typography.horizontalScale < closestAboveMaximum.horizontalScale)",
+    "          horizontalScale < closestAboveMaximum.horizontalScale)",
     "      ) {",
     "        closestAboveMaximum = typography;",
     "      } else if (",
-    "        typography.horizontalScale < minimumHorizontalScale &&",
+    "        horizontalScale < minimumHorizontalScale &&",
     "        (!closestBelowMinimum ||",
-    "          typography.horizontalScale > closestBelowMinimum.horizontalScale)",
+    "          horizontalScale > closestBelowMinimum.horizontalScale)",
     "      ) {",
     "        closestBelowMinimum = typography;",
     "      }",
@@ -4878,23 +4841,13 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "  context.beginPath();",
     "  context.rect(0, gridTop, canvasWidth, Math.max(1, gridBottom - gridTop));",
     "  context.clip();",
-    "  const weekdayTypographies = new Map();",
-    "  for (const entry of entries) {",
-    "    if (entry.labelType !== 'weekday') continue;",
-    "    const typography = chooseTypography(entry);",
-    "    if (typography) weekdayTypographies.set(entry.groupKey, typography);",
-    "  }",
     "  for (const entry of entries) {",
     "    const x0 = Number(entry.x0);",
     "    const x1 = Number(entry.x1);",
     "    const top = Number(entry.top);",
     "    const bottom = Number(entry.bottom);",
     "    if (!(x1 > x0) || !(bottom > top)) continue;",
-    "    const referenceTypography = weekdayTypographies.get(entry.groupKey);",
-    "    const typography =",
-    "      entry.labelType === 'date' && referenceTypography",
-    "        ? chooseTypography(entry, referenceTypography.fontSize)",
-    "        : chooseTypography(entry);",
+    "    const typography = chooseTypography(entry);",
     "    if (!typography) continue;",
     "    context.font =",
     "      '900 ' + typography.fontSize + 'px ' + fontFamily;",
@@ -4914,14 +4867,13 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    context.rotate(typography.angle);",
     "    context.scale(typography.horizontalScale, verticalScale);",
     "    context.lineJoin = 'round';",
-    "    context.font = '900 ' + typography.fontSize + 'px ' + fontFamily;",
     "    context.lineWidth = typography.strokeWidth + 1.8;",
     "    context.strokeStyle = rgba('#000000', 0.22);",
     "    context.strokeText(entry.label, 0, 0);",
     "    context.lineWidth = typography.strokeWidth;",
-    "    context.strokeStyle = rgba(entry.color || '#FFFFFF', 0.30);",
+    "    context.strokeStyle = rgba('#FFFFFF', 0.30);",
     "    context.strokeText(entry.label, 0, 0);",
-    "    context.fillStyle = rgba(entry.color || '#FFFFFF', 0.30);",
+    "    context.fillStyle = rgba('#FFFFFF', 0.30);",
     "    context.fillText(entry.label, 0, 0);",
     "    context.restore();",
     "  }",
@@ -4948,42 +4900,6 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
       : 96;
   const minFontSize = isCompactMode() ? 26 : 30;
 
-  const calculateFontSize = (entry) => {
-    const x0 = Number(entry.x0);
-    const x1 = Number(entry.x1);
-    const top = Number(entry.top);
-    const bottom = Number(entry.bottom);
-    if (!(x1 > x0) || !(bottom > top)) return null;
-
-    const characters = Array.from(entry.label || "");
-    if (characters.length === 0) return null;
-
-    const dx = x1 - x0;
-    const dy = bottom - top;
-    const diagonalLength = Math.sqrt(dx * dx + dy * dy);
-    return Math.max(
-      minFontSize,
-      Math.min(
-        maxFontSize,
-        Math.min(
-          (bottom - top) * 0.30,
-          diagonalLength / Math.max(1, characters.length * 1.35)
-        )
-      )
-    );
-  };
-
-  // A data mantém exatamente o tamanho tipográfico do dia da semana
-  // correspondente, mesmo sendo desenhada em um intervalo menor.
-  const weekdayFontSizes = new Map();
-  for (const entry of entries) {
-    if (entry.labelType !== "weekday") continue;
-    const fontSize = calculateFontSize(entry);
-    if (Number.isFinite(fontSize)) {
-      weekdayFontSizes.set(entry.groupKey, fontSize);
-    }
-  }
-
   ctx.setTextAlignedCenter();
   for (const entry of entries) {
     const x0 = Number(entry.x0);
@@ -4994,6 +4910,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
 
     const dx = x1 - x0;
     const dy = bottom - top;
+    const diagonalLength = Math.sqrt(dx * dx + dy * dy);
     const originalCenterX = (x0 + x1) / 2;
     const originalCenterY = (top + bottom) / 2;
     const targetCenterX = Number.isFinite(Number(entry.centerX))
@@ -5004,16 +4921,19 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
       : originalCenterY;
     const centerOffsetX = targetCenterX - originalCenterX;
     const centerOffsetY = targetCenterY - originalCenterY;
-    const characters = Array.from(entry.label || "");
+    const characters = Array.from(entry.label);
     if (characters.length === 0) continue;
 
-    const referenceFontSize = weekdayFontSizes.get(entry.groupKey);
-    const fontSize =
-      entry.labelType === "date" && Number.isFinite(referenceFontSize)
-        ? referenceFontSize
-        : calculateFontSize(entry);
-    if (!Number.isFinite(fontSize)) continue;
-
+    const fontSize = Math.max(
+      minFontSize,
+      Math.min(
+        maxFontSize,
+        Math.min(
+          (bottom - top) * 0.30,
+          diagonalLength / Math.max(1, characters.length * 1.35)
+        )
+      )
+    );
     const thickOffsets = [
       [-1, 0], [1, 0], [0, -1], [0, 1],
     ];
@@ -5024,8 +4944,10 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         characters.length === 1
           ? 0.5
           : 0.08 + (index / (characters.length - 1)) * 0.84;
-      const glyphX = x0 + dx * progress + centerOffsetX;
-      const glyphY = bottom - dy * progress + centerOffsetY;
+      const glyphX =
+        x0 + dx * progress + centerOffsetX;
+      const glyphY =
+        bottom - dy * progress + centerOffsetY;
       const glyphRect = new Rect(
         glyphX - fontSize,
         glyphY - fontSize,
@@ -5046,7 +4968,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         );
       }
 
-      ctx.setTextColor(new Color(entry.color || "#FFFFFF", 0.30));
+      ctx.setTextColor(new Color("#FFFFFF", 0.30));
       ctx.drawTextInRect(characters[index], glyphRect);
     }
   }
