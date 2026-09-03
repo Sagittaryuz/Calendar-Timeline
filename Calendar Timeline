@@ -1411,6 +1411,10 @@ function isExtendedDetailedMode() {
   return windowHours > 24 && !isCompactMode();
 }
 
+function usesEvenHourCadence() {
+  return windowHours >= 24;
+}
+
 function itemImportance(item) {
   if (item.isCurrentEvent) return 110;
   if (item.isNextEvent) return 100;
@@ -2573,7 +2577,7 @@ function drawThermalCurve(
 }
 
 function thermalLabelTicks(ticks) {
-  if (windowHours >= 24) {
+  if (usesEvenHourCadence()) {
     // A partir de 24 h, os textos aparecem somente nas horas pares.
     return ticks.filter((tick) => tick.getHours() % 2 === 0);
   }
@@ -2872,8 +2876,8 @@ function weatherForecastNearest(hours, timestamp) {
 }
 
 function weatherConditionTicks(weather) {
-  // Em 24 horas há um ícone por hora; em janelas maiores, somente horas pares.
-  const stepHours = windowHours <= 24 ? 1 : 2;
+  // A partir de 24 horas, os ícones também acompanham somente horas pares.
+  const stepHours = usesEvenHourCadence() ? 2 : 1;
   const ticks = [];
   let tick = floorToHour(windowStart);
 
@@ -6532,7 +6536,7 @@ function eventAtTime(date, items) {
 
 function hourTicks() {
   const ticks = [];
-  const showEveryHour = windowHours <= 24;
+  const showEveryHour = !usesEvenHourCadence();
   let tick = floorToHour(windowStart);
 
   if (!showEveryHour && tick.getHours() % 2 !== 0) {
@@ -6617,10 +6621,9 @@ function daylightHourColor(tick) {
 }
 
 function isSecondaryNightLegendHour(hour) {
-  // No modo de 24 horas, toda a faixa noturna — 18:00 a 06:00,
-  // incluindo os dois limites — usa o mesmo cinza dos horários pares
-  // das janelas longas.
-  if (windowHours <= 24) {
+  // Abaixo de 24 horas, toda a faixa noturna — 18:00 a 06:00,
+  // incluindo os dois limites — usa o mesmo cinza.
+  if (!usesEvenHourCadence()) {
     return (
       hour >= SETTINGS.nightStartHour ||
       hour <= SETTINGS.nightEndHour
