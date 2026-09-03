@@ -5009,19 +5009,29 @@ function drawWeekdayBadgesOnTop(ctx) {
     const x = timeToX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
     const badge = dayLegendBadgeRect(x, centerY);
-    const label = `${shortWeekday(tick)} (${String(tick.getDate()).padStart(2, "0")})`;
-    const textRect = centeredDayLegendTextRect(x, centerY);
-    const textFontSize = fittedDayLegendFontSize(
-      label,
-      fontSize,
-      textRect.width
+    const textRects = weekdayLegendTextRects(
+      x,
+      centerY,
+      fontSize
     );
+    const dateLabel = `(${String(tick.getDate()).padStart(2, "0")})`;
     ctx.setFillColor(style.background);
     ctx.fillRect(badge);
-    ctx.setFont(Font.blackRoundedSystemFont(textFontSize));
     ctx.setTextColor(style.text);
     ctx.setTextAlignedCenter();
-    ctx.drawTextInRect(label, textRect);
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.drawTextInRect(
+      shortWeekday(tick),
+      textRects.weekday
+    );
+    ctx.setFont(
+      Font.blackRoundedSystemFont(
+        isCompactMode() || isExtendedDetailedMode()
+          ? 9
+          : 10
+      )
+    );
+    ctx.drawTextInRect(dateLabel, textRects.date);
   }
 }
 
@@ -6682,39 +6692,34 @@ function dayLegendLabelWidth() {
   return 64;
 }
 
-function centeredDayLegendTextRect(centerX, centerY) {
+function weekdayLegendTextRects(centerX, centerY, weekdayFontSize) {
+  const dateFontSize =
+    isCompactMode() || isExtendedDetailedMode()
+      ? 9
+      : 10;
+  const dateHeight = dateFontSize + 2;
+  const weekdayHeight = Math.min(
+    weekdayFontSize + 3,
+    legendFrameHeight() - dateHeight
+  );
+  const contentHeight = weekdayHeight + dateHeight;
+  const contentTop = centerY - contentHeight / 2;
   const width = dayLegendLabelWidth();
-  const height = legendTextHeight();
-  return new Rect(
-    centerX - width / 2,
-    centerY - height / 2,
-    width,
-    height
-  );
-}
 
-function fittedDayLegendFontSize(text, maximumFontSize, maximumWidth) {
-  const horizontalPadding = 4;
-  const availableWidth = Math.max(
-    1,
-    maximumWidth - horizontalPadding
-  );
-  const estimatedWidth = estimatedTextWidth(
-    text,
-    maximumFontSize
-  );
-  if (estimatedWidth <= availableWidth) return maximumFontSize;
-
-  // Mantém o retângulo e seu espaçamento inalterados; somente reduz
-  // a fonte do texto composto para que ele permaneça dentro da moldura.
-  return Math.max(
-    12,
-    Math.floor(
-      (availableWidth / Math.max(1, estimatedWidth)) *
-        maximumFontSize *
-        0.94
-    )
-  );
+  return {
+    weekday: new Rect(
+      centerX - width / 2,
+      contentTop,
+      width,
+      weekdayHeight
+    ),
+    date: new Rect(
+      centerX - width / 2,
+      contentTop + weekdayHeight,
+      width,
+      dateHeight
+    ),
+  };
 }
 
 function legendBadgeRect(centerX, centerY) {
