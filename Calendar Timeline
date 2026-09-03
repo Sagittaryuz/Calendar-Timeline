@@ -5009,15 +5009,19 @@ function drawWeekdayBadgesOnTop(ctx) {
     const x = timeToX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
     const badge = dayLegendBadgeRect(x, centerY);
+    const label = `${shortWeekday(tick)} (${String(tick.getDate()).padStart(2, "0")})`;
+    const textRect = centeredDayLegendTextRect(x, centerY);
+    const textFontSize = fittedDayLegendFontSize(
+      label,
+      fontSize,
+      textRect.width
+    );
     ctx.setFillColor(style.background);
     ctx.fillRect(badge);
-    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setFont(Font.blackRoundedSystemFont(textFontSize));
     ctx.setTextColor(style.text);
     ctx.setTextAlignedCenter();
-    ctx.drawTextInRect(
-      shortWeekday(tick),
-      centeredDayLegendTextRect(x, centerY)
-    );
+    ctx.drawTextInRect(label, textRect);
   }
 }
 
@@ -6689,6 +6693,30 @@ function centeredDayLegendTextRect(centerX, centerY) {
   );
 }
 
+function fittedDayLegendFontSize(text, maximumFontSize, maximumWidth) {
+  const horizontalPadding = 4;
+  const availableWidth = Math.max(
+    1,
+    maximumWidth - horizontalPadding
+  );
+  const estimatedWidth = estimatedTextWidth(
+    text,
+    maximumFontSize
+  );
+  if (estimatedWidth <= availableWidth) return maximumFontSize;
+
+  // Mantém o retângulo e seu espaçamento inalterados; somente reduz
+  // a fonte do texto composto para que ele permaneça dentro da moldura.
+  return Math.max(
+    12,
+    Math.floor(
+      (availableWidth / Math.max(1, estimatedWidth)) *
+        maximumFontSize *
+        0.94
+    )
+  );
+}
+
 function legendBadgeRect(centerX, centerY) {
   const width = legendLabelWidth();
   const height = legendFrameHeight();
@@ -7522,30 +7550,3 @@ function safeCalendarColor(calendar, fallback) {
     return hex ? `#${hex.replace("#", "")}` : fallback;
   } catch (_) {
     return fallback;
-  }
-}
-
-function fillRoundedRect(ctx, rect, radius, color) {
-  const r = Math.min(radius, rect.width / 2, rect.height / 2);
-  ctx.setFillColor(color);
-  ctx.fillRect(new Rect(rect.x + r, rect.y, rect.width - 2 * r, rect.height));
-  ctx.fillRect(new Rect(rect.x, rect.y + r, rect.width, rect.height - 2 * r));
-  ctx.fillEllipse(new Rect(rect.x, rect.y, 2 * r, 2 * r));
-  ctx.fillEllipse(new Rect(rect.x + rect.width - 2 * r, rect.y, 2 * r, 2 * r));
-  ctx.fillEllipse(
-    new Rect(rect.x, rect.y + rect.height - 2 * r, 2 * r, 2 * r)
-  );
-  ctx.fillEllipse(
-    new Rect(
-      rect.x + rect.width - 2 * r,
-      rect.y + rect.height - 2 * r,
-      2 * r,
-      2 * r
-    )
-  );
-}
-
-function cleanTitle(value, fallback) {
-  const title = String(value ?? "").replace(/\s+/g, " ").trim();
-  return title || fallback;
-}
