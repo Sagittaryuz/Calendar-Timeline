@@ -5007,30 +5007,17 @@ function drawWeekdayBadgesOnTop(ctx) {
     if (tick.getHours() !== 0) continue;
 
     const x = timeToX(tick);
-    const badgeCenterX = clampedDayLegendCenterX(x);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const badge = dayLegendBadgeRect(badgeCenterX, centerY);
-    const weekdayLabel = shortWeekday(tick);
-    const dateLabel = String(tick.getDate()).padStart(2, "0");
-    // Mesmo tamanho e mesma altura do dia; somente o peso e a cor mudam.
-    const dateFontSize = fontSize;
-    const textRects = inlineWeekdayLegendTextRects(
-      badgeCenterX,
-      centerY,
-      weekdayLabel,
-      fontSize,
-      dateLabel,
-      dateFontSize
-    );
+    const badge = dayLegendBadgeRect(x, centerY);
     ctx.setFillColor(style.background);
     ctx.fillRect(badge);
-    ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackRoundedSystemFont(fontSize));
     ctx.setTextColor(style.text);
-    ctx.drawTextInRect(weekdayLabel, textRects.weekday);
-    ctx.setFont(Font.regularRoundedSystemFont(dateFontSize));
-    ctx.setTextColor(new Color(SETTINGS.secondaryTextColor, 1.0));
-    ctx.drawTextInRect(dateLabel, textRects.date);
+    ctx.setTextAlignedCenter();
+    ctx.drawTextInRect(
+      shortWeekday(tick),
+      centeredDayLegendTextRect(x, centerY)
+    );
   }
 }
 
@@ -6686,62 +6673,20 @@ function centeredLegendTextRect(centerX, centerY) {
 }
 
 // Os badges de mudança de dia são mais largos que os rótulos numéricos.
-// Esta é a medida original do retângulo e não depende do texto desenhado.
+// Isso garante as três letras completas inclusive na janela de 36 horas.
 function dayLegendLabelWidth() {
   return 64;
 }
 
-function clampedDayLegendCenterX(centerX) {
-  // O texto pode ser um pouco mais largo que o retângulo, mas nunca pode
-  // ser cortado nas bordas da própria timeline.
-  const halfWidth = Math.max(
-    dayLegendLabelWidth() / 2,
-    38
-  );
-  return Math.max(
-    halfWidth,
-    Math.min(timelineWidth() - halfWidth, centerX)
-  );
-}
-
-function inlineWeekdayLegendTextRects(
-  centerX,
-  centerY,
-  weekdayLabel,
-  weekdayFontSize,
-  dateLabel,
-  dateFontSize
-) {
-  // Os textos encostam visualmente e permanecem independentes do badge.
-  const gap = 0;
-  // Não há padding invisível: cada campo acompanha somente o texto.
-  const weekdayWidth = estimatedTextWidth(
-    weekdayLabel,
-    weekdayFontSize
-  );
-  const dateWidth = estimatedTextWidth(
-    dateLabel,
-    dateFontSize
-  );
-  const totalWidth = weekdayWidth + gap + dateWidth;
-  const left = centerX - totalWidth / 2;
+function centeredDayLegendTextRect(centerX, centerY) {
+  const width = dayLegendLabelWidth();
   const height = legendTextHeight();
-  const top = centerY - height / 2;
-
-  return {
-    weekday: new Rect(
-      left,
-      top,
-      weekdayWidth,
-      height
-    ),
-    date: new Rect(
-      left + weekdayWidth + gap,
-      top,
-      dateWidth,
-      height
-    ),
-  };
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  );
 }
 
 function legendBadgeRect(centerX, centerY) {
@@ -7480,7 +7425,7 @@ function titleWeekday(date) {
 }
 
 function shortWeekday(date) {
-  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
   return weekdays[date.getDay()];
 }
 
