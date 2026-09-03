@@ -6686,13 +6686,18 @@ function centeredLegendTextRect(centerX, centerY) {
 }
 
 // Os badges de mudança de dia são mais largos que os rótulos numéricos.
-// Isso garante as três letras completas inclusive na janela de 36 horas.
+// Esta é a medida original do retângulo e não depende do texto desenhado.
 function dayLegendLabelWidth() {
-  return 92;
+  return 64;
 }
 
 function clampedDayLegendCenterX(centerX) {
-  const halfWidth = dayLegendLabelWidth() / 2;
+  // O texto pode ser um pouco mais largo que o retângulo, mas nunca pode
+  // ser cortado nas bordas da própria timeline.
+  const halfWidth = Math.max(
+    dayLegendLabelWidth() / 2,
+    38
+  );
   return Math.max(
     halfWidth,
     Math.min(timelineWidth() - halfWidth, centerX)
@@ -6707,12 +6712,17 @@ function inlineWeekdayLegendTextRects(
   dateLabel,
   dateFontSize
 ) {
-  // Os textos encostam visualmente; a largura maior do badge evita cortes.
+  // Os textos encostam visualmente e permanecem independentes do badge.
   const gap = 0;
-  const weekdayWidth =
-    estimatedTextWidth(weekdayLabel, weekdayFontSize) + 1;
-  const dateWidth =
-    estimatedTextWidth(dateLabel, dateFontSize) + 1;
+  // Não há padding invisível: cada campo acompanha somente o texto.
+  const weekdayWidth = estimatedTextWidth(
+    weekdayLabel,
+    weekdayFontSize
+  );
+  const dateWidth = estimatedTextWidth(
+    dateLabel,
+    dateFontSize
+  );
   const totalWidth = weekdayWidth + gap + dateWidth;
   const left = centerX - totalWidth / 2;
   const height = legendTextHeight();
