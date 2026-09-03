@@ -5012,7 +5012,8 @@ function drawWeekdayBadgesOnTop(ctx) {
     const badge = dayLegendBadgeRect(badgeCenterX, centerY);
     const weekdayLabel = shortWeekday(tick);
     const dateLabel = String(tick.getDate()).padStart(2, "0");
-    const dateFontSize = weekdayLegendDateFontSize();
+    // Mesmo tamanho e mesma altura do dia; somente o peso e a cor mudam.
+    const dateFontSize = fontSize;
     const textRects = inlineWeekdayLegendTextRects(
       badgeCenterX,
       centerY,
@@ -6687,7 +6688,7 @@ function centeredLegendTextRect(centerX, centerY) {
 // Os badges de mudança de dia são mais largos que os rótulos numéricos.
 // Isso garante as três letras completas inclusive na janela de 36 horas.
 function dayLegendLabelWidth() {
-  return 76;
+  return 92;
 }
 
 function clampedDayLegendCenterX(centerX) {
@@ -6696,12 +6697,6 @@ function clampedDayLegendCenterX(centerX) {
     halfWidth,
     Math.min(timelineWidth() - halfWidth, centerX)
   );
-}
-
-function weekdayLegendDateFontSize() {
-  if (isCompactMode()) return 11;
-  if (isExtendedDetailedMode()) return 11;
-  return 12;
 }
 
 function inlineWeekdayLegendTextRects(
@@ -7475,7 +7470,7 @@ function titleWeekday(date) {
 }
 
 function shortWeekday(date) {
-  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
+  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
   return weekdays[date.getDay()];
 }
 
