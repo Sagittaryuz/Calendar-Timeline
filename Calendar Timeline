@@ -186,9 +186,14 @@ widget.refreshAfterDate = new Date(
       : 15 * 60 * 1000)
 );
 
-if (config.runsInWidget || config.runsWithSiri) {
-  // Ao ser chamado pelo Atalhos, recalcula e entrega o widget
-  // silenciosamente, sem abrir a prévia do Scriptable.
+if (
+  config.runsInWidget ||
+  config.runsWithSiri ||
+  hasDayOffsetParameter
+) {
+  // A navegação chega por uma URL e executa o carregador dentro do app.
+  // Nesse caso, grava o resultado diretamente no widget em vez de abrir
+  // somente a prévia do Scriptable.
   Script.setWidget(widget);
 } else {
   if (loadResult.error) {
