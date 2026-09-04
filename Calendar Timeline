@@ -109,14 +109,14 @@ const THERMAL_COLOR_STOPS = [
 ];
 
 const CANVAS = {
-  width: 1172,
+  width: 1180,
   height: 510,
   headerHeight: 128, // 25% da altura total
   marginX: 34,
   plotLeft: 34,
-  plotRight: 1138,
-  // 636 px na versão anterior +40 px.
-  titleAreaWidth: 676,
+  plotRight: 1146,
+  // 676 px na versão anterior +24 px; área total solicitada: 700 px.
+  titleAreaWidth: 700,
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 125 px: exatamente no antigo nível da linha sob o título.
   timelineTop: 130,
@@ -1891,6 +1891,9 @@ function drawDatePanel(ctx, holidayDates) {
   titleCtx.opaque = false;
   titleCtx.respectScreenScale = false;
   titleCtx.setTextAlignedLeft();
+  // Compensação óptica de 10 px para alinhar o centro visual do título
+  // com o eixo horizontal das setas, que permanece na posição atual.
+  const titleTextY = 20 - 10;
   let segmentX = startX;
   for (const segment of segments) {
     titleCtx.setFont(
@@ -1899,7 +1902,7 @@ function drawDatePanel(ctx, holidayDates) {
         : Font.regularMonospacedSystemFont(fontSize)
     );
     titleCtx.setTextColor(segment.color);
-    titleCtx.drawText(segment.text, new Point(segmentX, 20));
+    titleCtx.drawText(segment.text, new Point(segmentX, titleTextY));
     segmentX += segment.text.length * characterWidth;
   }
 
@@ -2868,6 +2871,12 @@ function weatherIconSize() {
   return isCompactMode() ? 34 : 46;
 }
 
+function weatherSunIconSize() {
+  // Apenas os símbolos solares crescem; a Lua continua usando
+  // exclusivamente weatherIconSize().
+  return weatherIconSize() + 5;
+}
+
 function weatherIconCenterY() {
   return Math.round(weatherStripBottomY() / 2);
 }
@@ -3795,15 +3804,12 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   const ticks = weatherConditionTicks(weather);
   if (ticks.length === 0) return;
 
-  const iconSize = weatherIconSize();
+  const baseIconSize = weatherIconSize();
+  const sunIconSize = weatherSunIconSize();
   const centerY = weatherIconCenterY();
 
   for (const entry of ticks) {
     const centerX = timeToX(entry.tick);
-    if (!weatherIconIntersectsTimeline(centerX, iconSize)) {
-      continue;
-    }
-
     const hour = entry.tick.getHours();
     const isSunrise =
       hour === SETTINGS.daylightStartHour;
@@ -3812,6 +3818,15 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
     const isNight = isNightWeatherHour(entry.tick);
     const eclipse =
       entry.eclipse ?? eclipseForDate(entry.tick);
+    const isRegularSun = !isNight && !eclipse;
+    const displaySize =
+      isSunrise || isSunset || isRegularSun
+        ? sunIconSize
+        : baseIconSize;
+
+    if (!weatherIconIntersectsTimeline(centerX, displaySize)) {
+      continue;
+    }
 
     // Os limites de transição têm prioridade absoluta: 06:00 e 18:00
     // continuam sendo nascer e pôr do sol mesmo se houver um eclipse
@@ -3821,7 +3836,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         ctx,
         centerX,
         centerY,
-        iconSize,
+        displaySize,
         isSunrise ? "sunrise" : "sunset"
       );
       drawCelestialWeatherOverlay(
@@ -3829,7 +3844,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         entry.forecast,
         centerX,
         centerY,
-        iconSize
+        baseIconSize
       );
       continue;
     }
@@ -3841,7 +3856,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         ctx,
         centerX,
         centerY,
-        iconSize,
+        baseIconSize,
         eclipse,
         entry.tick
       );
@@ -3850,7 +3865,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         entry.forecast,
         centerX,
         centerY,
-        iconSize
+        baseIconSize
       );
       continue;
     }
@@ -3859,9 +3874,9 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       drawMoonPhase(
         ctx,
         moonPhaseForDate(entry.tick),
-        centerX - iconSize / 2,
-        centerY - iconSize / 2,
-        iconSize,
+        centerX - baseIconSize / 2,
+        centerY - baseIconSize / 2,
+        baseIconSize,
         entry.tick
       );
     } else {
@@ -3869,7 +3884,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         ctx,
         centerX,
         centerY,
-        weatherSunRadius(iconSize)
+        weatherSunRadius(sunIconSize)
       );
     }
 
@@ -3878,7 +3893,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       entry.forecast,
       centerX,
       centerY,
-      iconSize
+      baseIconSize
     );
   }
 }
