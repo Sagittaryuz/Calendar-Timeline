@@ -2694,23 +2694,6 @@ function thermalTemperatureY(
   return graphBottom - normalized * (graphBottom - graphTop);
 }
 
-function thermalTemperatureYDownward(
-  temperature,
-  minimum,
-  maximum,
-  graphTop,
-  graphBottom
-) {
-  const range = maximum - minimum;
-  const normalized = range < 0.1
-    ? 0.5
-    : Math.max(
-        0,
-        Math.min(1, (temperature - minimum) / range)
-      );
-  return graphTop + normalized * (graphBottom - graphTop);
-}
-
 function smoothThermalCurve(points) {
   if (points.length <= 2) return points;
 
@@ -3132,12 +3115,12 @@ function timelineBarHeight(item) {
   const preferredHeight = item?.isOverflow
     ? isCompactMode()
       ? 29 * compactScale
-      : 34
+      : 38
     : isCompactMode()
       ? 30 * compactScale
       : isExtendedDetailedMode()
         ? 35
-        : 38;
+        : 44;
 
   // Ao comprimir as cinco linhas, preserva uma separação mínima entre charts.
   return Math.min(
@@ -3168,7 +3151,7 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
-  const hourFontSize = isCompactMode() ? 23 : 26;
+  const hourFontSize = isCompactMode() ? 25 : 28;
 
   ctx.setTextAlignedCenter();
   for (const tick of hourTicks()) {
@@ -4689,10 +4672,12 @@ function drawTopThermalBand(ctx, weather) {
   const graphTop = weatherThermalGraphTopY();
   const graphBottom = weatherThermalGraphBottomY();
 
+  // Temperaturas maiores ficam acima. Como a área é preenchida até a base
+  // da faixa, os trechos quentes também ficam mais intensamente pintados.
   const curvePoints = buildThermalSamples(sourceHours)
     .map((sample) => ({
       x: timeToX(new Date(sample.timestamp)),
-      y: thermalTemperatureYDownward(
+      y: thermalTemperatureY(
         sample.temperature,
         minimum,
         maximum,
@@ -4744,11 +4729,60 @@ function drawVisibleDailyExtremes(
   ctx,
   sourceHours
 ) {
-  const daily = dailyTemperatureExtremes(sourceHours);
-  const visibleStart = windowStart.getTime();
-  const visibleEnd = windowEnd.getTime();
-  const normalFontSize = isCompactMode() ? 18 : 22;
-  const extremeFontSize = isCompactMode() ? 23 : 28;
+  const temperatureFontSize = isCompactMode() ? 21 : 25;
+
+  // A janela de 24 horas mantém os astros em horas pares. As temperaturas
+  // usadas para máxima e mínima também precisam vir somente desse conjunto
+  // visível; uma máxima/mínima real em hora ímpar não é exibida.
+  const displayedForecasts = [];
+  let tick = floorToHour(windowStart);
+  if (tick.getHours() % 2 !== 0) {
+    tick.setHours(tick.getHours() + 1);
+  }
+  while (tick <= windowEnd) {
+    const forecast = temperatureAtTimestamp(
+      sourceHours,
+      tick.getTime()
+    );
+    if (forecast) {
+      displayedForecasts.push({
+        tick: new Date(tick),
+        forecast,
+      });
+    }
+    tick = new Date(tick.getTime() + 2 * 60 * 60 * 1000);
+  }
+
+  const daily = {};
+  for (const entry of displayedForecasts) {
+    // 24:00 já é o início do dia seguinte e não participa da máxima ou
+    // mínima do dia selecionado, embora seu rótulo continue sendo exibido.
+    if (entry.tick.getTime() >= windowEnd.getTime()) continue;
+
+    const temperature = Number(entry.forecast.temperature);
+    if (!Number.isFinite(temperature)) continue;
+
+    const key = dateKey(entry.tick);
+    if (!daily[key]) {
+      daily[key] = {
+        minimum: temperature,
+        minimumTimestamp: entry.tick.getTime(),
+        maximum: temperature,
+        maximumTimestamp: entry.tick.getTime(),
+      };
+      continue;
+    }
+
+    if (temperature < daily[key].minimum) {
+      daily[key].minimum = temperature;
+      daily[key].minimumTimestamp = entry.tick.getTime();
+    }
+    if (temperature > daily[key].maximum) {
+      daily[key].maximum = temperature;
+      daily[key].maximumTimestamp = entry.tick.getTime();
+    }
+  }
+
   const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
@@ -4768,47 +4802,12 @@ function drawVisibleDailyExtremes(
     );
   }
 
-  const visibleExtremes = extremeEntries.filter(
-    (entry) =>
-      Number.isFinite(entry.timestamp) &&
-      entry.timestamp >= visibleStart &&
-      entry.timestamp <= visibleEnd
+  const visibleExtremes = extremeEntries.filter((entry) =>
+    Number.isFinite(entry.timestamp)
   );
   const exactExtremeTimestamps = new Set(
     visibleExtremes.map((entry) => entry.timestamp)
   );
-  const suppressedEvenTimestamps = new Set();
-
-  for (const entry of visibleExtremes) {
-    const date = new Date(entry.timestamp);
-    if (date.getHours() % 2 === 0) continue;
-
-    const previousEven = new Date(date);
-    previousEven.setHours(date.getHours() - 1, 0, 0, 0);
-    const nextEven = new Date(date);
-    nextEven.setHours(date.getHours() + 1, 0, 0, 0);
-    suppressedEvenTimestamps.add(previousEven.getTime());
-    suppressedEvenTimestamps.add(nextEven.getTime());
-  }
-
-  const evenTicks = [];
-  let tick = floorToHour(windowStart);
-  if (tick.getHours() % 2 !== 0) {
-    tick.setHours(tick.getHours() + 1);
-  }
-  const tickStepHours = isCompactMode() ? 6 : 2;
-  while (tick <= windowEnd) {
-    if (
-      tick.getHours() % tickStepHours === 0 &&
-      !suppressedEvenTimestamps.has(tick.getTime()) &&
-      !exactExtremeTimestamps.has(tick.getTime())
-    ) {
-      evenTicks.push(new Date(tick));
-    }
-    tick = new Date(
-      tick.getTime() + 2 * 60 * 60 * 1000
-    );
-  }
 
   const resolvedTextColor = (value, opacity = 1.0) =>
     typeof value === "string"
@@ -4862,29 +4861,30 @@ function drawVisibleDailyExtremes(
     ctx.drawTextInRect(label, rect);
   };
 
-  for (const evenTick of evenTicks) {
-    const forecast = temperatureAtTimestamp(
-      sourceHours,
-      evenTick.getTime()
-    );
+  for (const evenTick of displayedForecasts) {
+    const forecast = evenTick.forecast;
     if (!forecast) continue;
 
-    const x = timeToX(evenTick);
-    const labelY = weatherTemperatureLabelY(normalFontSize);
-    const hour = evenTick.getHours();
+    const x = timeToX(evenTick.tick);
+    const labelY = weatherTemperatureLabelY(temperatureFontSize);
+    const hour = evenTick.tick.getHours();
     const isNight = isSecondaryNightLegendHour(hour);
     const labelColor = isNight
       ? secondaryNightLegendColor()
       : Color.white();
 
+    if (exactExtremeTimestamps.has(evenTick.tick.getTime())) {
+      continue;
+    }
+
     drawTemperatureText(
       String(Math.round(forecast.temperature)) + "º",
       x,
       labelY,
-      normalFontSize,
+      temperatureFontSize,
       labelColor,
       "#000000",
-      false
+      true
     );
   }
 
@@ -4892,12 +4892,12 @@ function drawVisibleDailyExtremes(
   for (const entry of visibleExtremes) {
     const date = new Date(entry.timestamp);
     const x = timeToX(date);
-    const labelY = weatherTemperatureLabelY(extremeFontSize);
+    const labelY = weatherTemperatureLabelY(temperatureFontSize);
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
       x,
       labelY,
-      extremeFontSize,
+      temperatureFontSize,
       entry.color,
       "#000000",
       true
@@ -4911,6 +4911,13 @@ async function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
+  // O brilho fica na base da faixa solar; as linhas horárias vêm depois
+  // dele para manter a mesma leitura vertical em todo o painel.
+  if (SETTINGS.showSolarGlow) {
+    drawFixedDaylightGlow(ctx, hourlyWeather);
+  }
+  drawHourAxis(ctx, items);
+
   // A curva térmica ocupa a faixa superior e é desenhada antes dos astros,
   // para que eles permaneçam visualmente à frente dela.
   const thermalBand = drawTopThermalBand(ctx, hourlyWeather);
@@ -4919,12 +4926,6 @@ async function renderTimelinePanel(items, loadError) {
     // Os números são desenhados depois dos astros, sobre a metade inferior
     // de cada símbolo, mantendo a leitura sem reservar uma faixa extra.
     drawVisibleDailyExtremes(ctx, thermalBand.sourceHours);
-  }
-  drawHourAxis(ctx, items);
-  // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
-  // atrás da curva térmica e dos charts de agenda.
-  if (SETTINGS.showSolarGlow) {
-    drawFixedDaylightGlow(ctx, hourlyWeather);
   }
   if (loadError) {
     drawPermissionState(ctx);
@@ -7102,8 +7103,11 @@ function drawEventStartLineAnchors(ctx, items) {
 
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
-  const gridTop = solarLineY();
-  const gridBottom = thermalBandBottomY();
+  // Cada linha mantém o mesmo x dos astros e das horas, atravessando
+  // verticalmente toda a faixa útil do painel.
+  const gridTop = 0;
+  const gridBottom =
+    bottomLegendCenterY() + legendFrameHeight() / 2;
 
   for (const tick of ticks) {
     const x = timeToX(tick);
@@ -7246,7 +7250,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ctx.setTextAlignedCenter();
     ctx.setFont(
       Font.blackRoundedSystemFont(
-        isCompactMode() ? compactTimelineFontSize(20) : 23
+        isCompactMode() ? compactTimelineFontSize(20) : 25
       )
     );
     ctx.setTextColor(Color.white());
@@ -7310,13 +7314,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ? compactTimelineFontSize(19)
     : windowHours > 24
       ? 23
-      : 26;
+      : 29;
   const statusFontSize = isCompactMode()
     ? compactTimelineFontSize(12)
-    : 15;
+    : 17;
   const metadataFontSize = isCompactMode()
     ? compactTimelineFontSize(11)
-    : 15;
+    : 17;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
