@@ -109,12 +109,14 @@ const THERMAL_COLOR_STOPS = [
 ];
 
 const CANVAS = {
-  width: 1092,
+  width: 1122,
   height: 510,
   headerHeight: 128, // 25% da altura total
   marginX: 34,
   plotLeft: 34,
-  plotRight: 1058,
+  plotRight: 1088,
+  // 556 px na versão anterior +40 px.
+  titleAreaWidth: 596,
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 125 px: exatamente no antigo nível da linha sob o título.
   timelineTop: 130,
@@ -1932,7 +1934,7 @@ function drawDatePanel(ctx, holidayDates) {
 }
 
 function titleAreaMetrics() {
-  const width = CANVAS.width * 0.50 + 10;
+  const width = CANVAS.titleAreaWidth;
   const x = (CANVAS.width - width) / 2;
   return {
     x,
@@ -2216,12 +2218,10 @@ function drawTemperatureFooter(ctx, weather) {
 function drawThermalHourGuides(ctx, ticks, graphBottom) {
   for (const tick of ticks) {
     const hour = tick.getHours();
-    // As bordas de cada dia ficam sem linha vertical; o pequeno recuo dos
-    // charts é preservado separadamente em timelineBarSegments().
-    if (hour === 0) continue;
 
     const x = timeToX(tick);
-    // Mesmas espessuras e cores das linhas do grid superior.
+    // As linhas de 00:00 e 24:00 usam exatamente a mesma espessura e cor
+    // das demais linhas horárias.
     const width = hour === 12 ? 2 : 1;
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
@@ -2888,9 +2888,9 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // No modo compacto, o bloco térmico total fica com 40 px:
-  // 12 px para a curva + 28 px para a legenda de temperaturas.
-  return thermalBandBottomY() - (isCompactMode() ? 12 : 30);
+  // A curva térmica regular ocupa 20 px. Os 10 px liberados retornam
+  // diretamente para a área da timeline e dos charts.
+  return thermalBandBottomY() - (isCompactMode() ? 12 : 20);
 }
 
 function thermalTemperatureLabelTopY() {
@@ -3067,9 +3067,9 @@ function weatherConditionTicks(weather) {
     tick.setHours(tick.getHours() + 1);
   }
 
-  const iconDisplayEnd = new Date(
-    windowEnd.getTime() + stepHours * 60 * 60 * 1000
-  );
+  // Nunca desenha ícones depois de 24:00; isso evitava a meia Lua parcial
+  // que aparecia em 02:00 do dia seguinte.
+  const iconDisplayEnd = windowEnd;
 
   while (tick <= iconDisplayEnd) {
     const forecast = weatherForecastNearest(
@@ -6694,9 +6694,7 @@ function compactEventHourMarkers() {
 }
 
 function hourGridLineColor(tick) {
-  return tick.getHours() === 0
-    ? dayBoundaryLineColor(tick, loadResult.holidayDates)
-    : new Color("#3A3A3C", 1.0);
+  return new Color("#3A3A3C", 1.0);
 }
 
 function daylightHourColor(tick) {
@@ -6954,7 +6952,6 @@ function drawHourAxis(ctx, items) {
     const x = timeToX(tick);
     const hour = tick.getHours();
     const isNoon = hour === 12;
-    if (hour === 0) continue;
 
     ctx.setStrokeColor(hourGridLineColor(tick));
     ctx.setLineWidth(isNoon ? 2 : 1);
@@ -7152,20 +7149,6 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const metadataFontSize = isCompactMode()
     ? compactTimelineFontSize(11)
     : 15;
-
-  if (item.kind === "reminder") {
-    drawReminderLabel(
-      ctx,
-      title,
-      visibleLeft,
-      barY,
-      barHeight,
-      titleFontSize,
-      color
-    );
-    return;
-  }
-
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
@@ -7254,65 +7237,6 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       )
     );
   }
-}
-
-function drawReminderLabel(
-  ctx,
-  title,
-  chartLeft,
-  barY,
-  barHeight,
-  fontSize,
-  color
-) {
-  const markerDiameter = isCompactMode() ? 8 : 10;
-  const markerGap = isCompactMode() ? 4 : 5;
-  const markerRight = Math.max(0, chartLeft - markerGap);
-  const markerX = Math.max(
-    0,
-    markerRight - markerDiameter
-  );
-  const textRight = markerX - markerGap;
-  const maximumTextWidth = Math.max(0, textRight - 2);
-  const visibleTitle = truncateTitle(
-    title,
-    maximumTextWidth,
-    fontSize
-  );
-  const titleWidth = estimatedTextWidth(
-    visibleTitle,
-    fontSize
-  );
-  const textX = Math.max(0, textRight - titleWidth);
-  const textY =
-    barY + Math.max(0, (barHeight - fontSize) / 2 - 2);
-  const centerY = barY + barHeight / 2;
-  const labelColor = color;
-
-  if (visibleTitle) {
-    ctx.setTextAlignedLeft();
-    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-    ctx.setTextColor(new Color("#000000", 0.82));
-    ctx.drawText(
-      visibleTitle,
-      new Point(textX + 1, textY + 1)
-    );
-    ctx.setTextColor(labelColor);
-    ctx.drawText(
-      visibleTitle,
-      new Point(textX, textY)
-    );
-  }
-
-  ctx.setFillColor(labelColor);
-  ctx.fillEllipse(
-    new Rect(
-      markerX,
-      centerY - markerDiameter / 2,
-      markerDiameter,
-      markerDiameter
-    )
-  );
 }
 
 function drawTimelineBar(ctx, rect, color, item) {
