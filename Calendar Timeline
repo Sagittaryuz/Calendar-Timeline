@@ -426,10 +426,11 @@ async function loadWindow() {
         const hasTime = Boolean(reminder.dueDateIncludesTime);
         const reminderDayStart = normalizedReminderDayStart(reminder);
         const reminderDayEnd = addDays(reminderDayStart, 1);
-        const reminderCutoff = reminderDayEnd;
+        const reminderCutoff = hasTime
+          ? reminderDayEnd
+          : dateAtHour(reminderDayStart, 18);
         // Lembretes com horário começam no horário devido; lembretes
-        // de dia inteiro começam à meia-noite e ocupam até a meia-noite
-        // seguinte.
+        // de dia inteiro começam à meia-noite e ocupam até 18:00.
         const reminderDisplayStart = hasTime
           ? due
           : reminderDayStart;
@@ -452,7 +453,7 @@ async function loadWindow() {
         };
 
         // O lembrete com horário permanece visível desde o horário devido
-        // até o fim do dia. O lembrete de dia inteiro ocupa o dia completo.
+        // até o fim do dia. O lembrete de dia inteiro ocupa 00:00–18:00.
         // Se continuar pendente, ele reaparece no dia seguinte como atrasado.
         const segments = [];
         if (reminderDisplayStart < reminderCutoff) {
@@ -480,23 +481,36 @@ async function loadWindow() {
         const identifier = reminder.identifier ?? `${reminder.title}-${due}`;
         return !reminderIdentifiers.has(identifier);
       })
-      .map((reminder) => ({
-        kind: "reminder",
-        title: cleanTitle(reminder.title, "Lembrete"),
-        calendarTitle: reminder.calendar?.title ?? "Lembretes",
-        // No dia seguinte, um lembrete ainda pendente reaparece como
-        // atrasado desde 00:00 até 00:00 do dia seguinte.
-        start: windowStart,
-        end: windowEnd,
-        isAllDay: false,
-        identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
-        priority: Number(reminder.priority) || 0,
-        isOverdue: true,
-        color: safeCalendarColor(
-          reminder.calendar,
-          SETTINGS.fallbackReminderColor
-        ),
-      }));
+      .map((reminder) => {
+        const due = reminder.dueDate;
+        const hasTime = Boolean(reminder.dueDateIncludesTime);
+        const dueDayStart = normalizedReminderDayStart(reminder);
+        const overdueStart = hasTime
+          ? due
+          : dueDayStart;
+        const overdueEnd = hasTime
+          ? windowEnd
+          : dateAtHour(windowStart, 18);
+
+        return {
+          kind: "reminder",
+          title: cleanTitle(reminder.title, "Lembrete"),
+          calendarTitle: reminder.calendar?.title ?? "Lembretes",
+          // Mantém o início real do atraso para que o chart possa aparecer
+          // antes da linha de 00:00. Lembretes sem horário terminam às 18:00.
+          start: overdueStart,
+          end: overdueEnd,
+          isAllDay: false,
+          sourceIsAllDay: !hasTime,
+          identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
+          priority: Number(reminder.priority) || 0,
+          isOverdue: true,
+          color: safeCalendarColor(
+            reminder.calendar,
+            SETTINGS.fallbackReminderColor
+          ),
+        };
+      });
 
     const holidayDates = new Set(
       [...events, ...todayEvents]
@@ -1329,24 +1343,49 @@ function prepareTimelineItems(items, referenceDate) {
 }
 
 
-function chooseItems(items, referenceDate, limit) {
+function chooseItems(items, _referenceDate, limit) {
+  // A seleção precisa considerar a janela desenhada, não o instante atual.
+  // Assim, eventos já encerrados continuam disponíveis para um dia passado
+  // ou para a parte já concluída do dia atual.
   const relevant = [...items].filter(
-    (item) => item.isAllDay || item.end >= referenceDate
+    (item) =>
+      item?.start instanceof Date &&
+      item?.end instanceof Date &&
+      item.end > windowStart &&
+      item.start < windowEnd
   );
 
   const byTime = (a, b) =>
     a.start.getTime() - b.start.getTime() ||
     a.end.getTime() - b.end.getTime();
 
+  // Um lembrete atrasado começa antes da janela, mas pertence visualmente
+  // ao dia selecionado. Isso mantém os eventos do dia acima dele.
+  const displayDayKey = (item) =>
+    item.kind === "reminder" &&
+    item.isOverdue &&
+    item.start < windowStart
+      ? dateKey(windowStart)
+      : dateKey(item.start);
+
   // O agrupamento diário preserva a ordem visual de cada data. A ocupação
   // das linhas, porém, permanece compartilhada para que eventos iniciados
   // anteriormente reservem sua linha enquanto ainda estiverem ativos.
   const byDay = new Map();
   for (const item of relevant) {
-    const key = dateKey(item.start);
+    const key = displayDayKey(item);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(item);
   }
+
+  const allDayIntervals = relevant
+    .filter(
+      (item) => item.kind === "event" && item.isAllDay
+    )
+    .map((item) => ({
+      start: item.start,
+      end: item.end,
+    }));
 
   const placed = [];
   const hidden = [];
@@ -1356,14 +1395,17 @@ function chooseItems(items, referenceDate, limit) {
       firstDay.localeCompare(secondDay)
     );
 
-  for (const [, dayItems] of orderedDayGroups) {
+  for (const [dayKey, dayItems] of orderedDayGroups) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
     const allDayEvents = [...dayItems]
       .filter(isAllDayEvent)
       .sort(byTime);
-    const dayStart = startOfDay(dayItems[0].start);
+    const dayStart =
+      dayKey === dateKey(windowStart)
+        ? startOfDay(windowStart)
+        : startOfDay(dayItems[0].start);
     const dayEnd = addDays(dayStart, 1);
     const dayInterval = {
       start: dayStart,
@@ -1377,9 +1419,73 @@ function chooseItems(items, referenceDate, limit) {
         ? Math.max(1, limit - 1)
         : limit;
 
+    const rowCanAccept = (item, row) => {
+      if (row < 0 || row >= limit) return false;
+
+      // Nenhum item com horário pode ocupar a última linha durante o
+      // intervalo de um evento de dia inteiro. Isso também protege a
+      // virada do dia quando um evento começou no dia anterior.
+      if (
+        row === limit - 1 &&
+        !item.isAllDay &&
+        allDayIntervals.some((interval) =>
+          itemsOverlap(item, interval)
+        )
+      ) {
+        return false;
+      }
+
+      return rows[row].every((existing) =>
+        itemsCanShareTimelineRow(item, existing)
+      );
+    };
+
+    const preferredRows = (preferredRow, rowLimit) => {
+      const ordered = [];
+      const append = (row) => {
+        if (
+          row >= 0 &&
+          row < rowLimit &&
+          !ordered.includes(row)
+        ) {
+          ordered.push(row);
+        }
+      };
+
+      append(preferredRow);
+      for (let row = preferredRow - 1; row >= 0; row--) {
+        append(row);
+      }
+      for (let row = preferredRow + 1; row < rowLimit; row++) {
+        append(row);
+      }
+      return ordered;
+    };
+
+    const rowOrderFor = (item, preferredRow, rowLimit) => {
+      // Um item pode compartilhar primeiro uma linha já ocupada por um
+      // item compatível. Só depois tenta uma linha vazia pela ordem normal
+      // de preferência.
+      const shareableRows = [];
+      for (let row = 0; row < rowLimit; row++) {
+        if (
+          rows[row].length > 0 &&
+          rowCanAccept(item, row)
+        ) {
+          shareableRows.push(row);
+        }
+      }
+
+      const normalRows = preferredRows(preferredRow, rowLimit);
+      return [
+        ...shareableRows,
+        ...normalRows.filter((row) => !shareableRows.includes(row)),
+      ];
+    };
+
     const placeItem = (item, rowOrder) => {
-      const availableRow = rowOrder.find((row) =>
-        rows[row].every((existing) => !itemsOverlap(item, existing))
+      const availableRow = [...new Set(rowOrder)].find((row) =>
+        rowCanAccept(item, row)
       );
 
       if (availableRow === undefined) {
@@ -1404,16 +1510,10 @@ function chooseItems(items, referenceDate, limit) {
 
     timedEvents.forEach((item, index) => {
       const preferredRow = Math.min(index, timedRowLimit - 1);
-      const upperRows = [];
-      for (let row = preferredRow - 1; row >= 0; row--) {
-        upperRows.push(row);
-      }
-      const lowerRows = [];
-      for (let row = preferredRow + 1; row < timedRowLimit; row++) {
-        lowerRows.push(row);
-      }
-
-      placeItem(item, [preferredRow, ...upperRows, ...lowerRows]);
+      placeItem(
+        item,
+        rowOrderFor(item, preferredRow, timedRowLimit)
+      );
     });
 
     const highestEventRow = placed
@@ -1435,11 +1535,16 @@ function chooseItems(items, referenceDate, limit) {
             timedRowLimit - 1
           );
 
-    // Lembretes ficam abaixo do último evento. Não podem usar linhas
-    // superiores, mesmo quando uma delas estiver livre.
+    // Lembretes atrasados vêm primeiro entre os lembretes. Os que não têm
+    // evento compatível em até 6 horas ficam abaixo do último evento; os
+    // compatíveis podem compartilhar a linha desse evento.
     const reminders = [...dayItems]
       .filter((item) => item.kind === "reminder")
-      .sort(byTime);
+      .sort(
+        (a, b) =>
+          Number(b.isOverdue) - Number(a.isOverdue) ||
+          byTime(a, b)
+      );
     if (reminderFirstRow >= timedRowLimit) {
       hidden.push(...reminders);
     } else {
@@ -1448,11 +1553,10 @@ function chooseItems(items, referenceDate, limit) {
           reminderFirstRow + index,
           timedRowLimit - 1
         );
-        const lowerRows = [];
-        for (let row = preferredRow + 1; row < timedRowLimit; row++) {
-          lowerRows.push(row);
-        }
-        placeItem(item, [preferredRow, ...lowerRows]);
+        placeItem(
+          item,
+          rowOrderFor(item, preferredRow, timedRowLimit)
+        );
       });
     }
 
@@ -1466,7 +1570,7 @@ function chooseItems(items, referenceDate, limit) {
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
   const overflowByDay = new Map();
   for (const item of hidden) {
-    const key = dateKey(item.start);
+    const key = displayDayKey(item);
     if (!overflowByDay.has(key)) overflowByDay.set(key, []);
     overflowByDay.get(key).push(item);
   }
@@ -1523,6 +1627,33 @@ function itemsOverlap(first, second) {
   // Um item que começa exatamente quando o outro termina pode reutilizar
   // a mesma linha.
   return firstStart < secondEnd && secondStart < firstEnd;
+}
+
+function itemsCanShareTimelineRow(first, second) {
+  if (itemsOverlap(first, second)) return false;
+
+  // Lembretes continuam em linhas separadas entre si. A regra das 6 horas
+  // vale para evento-evento e evento-lembrete.
+  if (
+    first.kind === "reminder" &&
+    second.kind === "reminder"
+  ) {
+    return false;
+  }
+
+  // Eventos de dia inteiro ficam na última linha e podem coexistir apenas
+  // com um trecho que esteja fora do seu próprio intervalo.
+  if (first.isAllDay || second.isAllDay) return true;
+
+  const firstStart = first.start.getTime();
+  const secondStart = second.start.getTime();
+  const firstEnd = effectiveItemEnd(first);
+  const secondEnd = effectiveItemEnd(second);
+  const gap = firstEnd <= secondStart
+    ? secondStart - firstEnd
+    : firstStart - secondEnd;
+
+  return gap <= 6 * 60 * 60 * 1000;
 }
 
 function effectiveItemEnd(item) {
@@ -4798,7 +4929,7 @@ async function renderTimelinePanel(items, loadError) {
         .filter((candidate) => candidate.gridRow === row)
         .sort(
           (a, b) =>
-            Number(a.isOverflow) - Number(b.isOverflow) ||
+            Number(b.isOverflow) - Number(a.isOverflow) ||
             a.start.getTime() - b.start.getTime()
         );
 
@@ -7048,6 +7179,17 @@ function timelineBarSegments(item, startX, endX) {
   const segments = [];
   let segmentStart = startX;
   for (const boundaryX of boundaries) {
+    // O lembrete atrasado atravessa a meia-noite. Na primeira linha
+    // vertical da janela ele não recebe o gap visual.
+    const isWindowStartBoundary =
+      Math.abs(boundaryX - timeToX(windowStart)) < 0.5;
+    const bridgesWindowStart =
+      isWindowStartBoundary &&
+      item.kind === "reminder" &&
+      item.isOverdue &&
+      item.start < windowStart;
+    if (bridgesWindowStart) continue;
+
     const segmentEnd = boundaryX - gap;
     if (segmentEnd > segmentStart) {
       segments.push({
