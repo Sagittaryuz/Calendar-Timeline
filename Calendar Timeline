@@ -482,12 +482,8 @@ async function loadWindow() {
         return !reminderIdentifiers.has(identifier);
       })
       .map((reminder) => {
-        const due = reminder.dueDate;
         const hasTime = Boolean(reminder.dueDateIncludesTime);
-        const dueDayStart = normalizedReminderDayStart(reminder);
-        const overdueStart = hasTime
-          ? due
-          : dueDayStart;
+        const overdueStart = windowStart;
         const overdueEnd = hasTime
           ? windowEnd
           : dateAtHour(windowStart, 18);
@@ -496,8 +492,8 @@ async function loadWindow() {
           kind: "reminder",
           title: cleanTitle(reminder.title, "Lembrete"),
           calendarTitle: reminder.calendar?.title ?? "Lembretes",
-          // Mantém o início real do atraso para que o chart possa aparecer
-          // antes da linha de 00:00. Lembretes sem horário terminam às 18:00.
+          // O atraso começa exatamente na linha de 00:00, sem ocupar a
+          // margem anterior. Lembretes sem horário terminam às 18:00.
           start: overdueStart,
           end: overdueEnd,
           isAllDay: false,
@@ -7187,7 +7183,7 @@ function timelineBarSegments(item, startX, endX) {
       isWindowStartBoundary &&
       item.kind === "reminder" &&
       item.isOverdue &&
-      item.start < windowStart;
+      item.start <= windowStart;
     if (bridgesWindowStart) continue;
 
     const segmentEnd = boundaryX - gap;
