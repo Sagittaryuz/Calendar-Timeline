@@ -109,14 +109,14 @@ const THERMAL_COLOR_STOPS = [
 ];
 
 const CANVAS = {
-  width: 1162,
+  width: 1172,
   height: 510,
   headerHeight: 128, // 25% da altura total
   marginX: 34,
   plotLeft: 34,
-  plotRight: 1128,
-  // 596 px na versão anterior +40 px.
-  titleAreaWidth: 636,
+  plotRight: 1138,
+  // 636 px na versão anterior +40 px.
+  titleAreaWidth: 676,
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 125 px: exatamente no antigo nível da linha sob o título.
   timelineTop: 130,
