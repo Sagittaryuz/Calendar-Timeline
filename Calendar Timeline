@@ -115,8 +115,8 @@ const CANVAS = {
   marginX: 34,
   plotLeft: 34,
   plotRight: 1146,
-  // 676 px na versão anterior +24 px; área total solicitada: 700 px.
-  titleAreaWidth: 700,
+  // 700 px na versão anterior +100 px; área total solicitada: 800 px.
+  titleAreaWidth: 800,
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 125 px: exatamente no antigo nível da linha sob o título.
   timelineTop: 130,
@@ -2018,8 +2018,8 @@ function drawDatePanel(ctx, holidayDates) {
   titleCtx.opaque = false;
   titleCtx.respectScreenScale = false;
   titleCtx.setTextAlignedLeft();
-  // Compensação óptica de 10 px para alinhar o centro visual do título
-  // com o eixo horizontal das setas, que permanece na posição atual.
+  // Compensação óptica de 10 px para manter o centro visual do título
+  // alinhado horizontalmente com as setas.
   const titleTextY = 20 - 10;
   let segmentX = startX;
   for (const segment of segments) {
@@ -2047,16 +2047,24 @@ function drawDatePanel(ctx, holidayDates) {
     )
   );
 
+  // As setas ficam alinhadas às linhas verticais de 01:00 e 23:00.
+  // timeToX() usa coordenadas relativas ao painel da timeline; por isso
+  // somamos plotLeft para obter a coordenada do canvas inteiro.
+  const leftArrowX =
+    CANVAS.plotLeft + timeToX(dateAtHour(windowStart, 1));
+  const rightArrowX =
+    CANVAS.plotLeft + timeToX(dateAtHour(windowStart, 23));
+
   drawNavigationChevron(
     ctx,
-    titleLayout.leftCenterX,
+    leftArrowX,
     20 + fontSize / 2,
     -1,
     dayOffset > -7
   );
   drawNavigationChevron(
     ctx,
-    titleLayout.rightCenterX,
+    rightArrowX,
     20 + fontSize / 2,
     1,
     dayOffset < 7
@@ -2069,8 +2077,6 @@ function titleAreaMetrics() {
   return {
     x,
     width,
-    leftCenterX: x / 2,
-    rightCenterX: x + width + (CANVAS.width - x - width) / 2,
   };
 }
 
