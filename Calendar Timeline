@@ -2694,6 +2694,14 @@ function thermalTemperatureY(
   return graphBottom - normalized * (graphBottom - graphTop);
 }
 
+function mirrorThermalCurvePoints(points, graphTop, graphBottom) {
+  const horizontalAxisY = (graphTop + graphBottom) / 2;
+  return points.map((point) => ({
+    ...point,
+    y: horizontalAxisY - (point.y - horizontalAxisY),
+  }));
+}
+
 function smoothThermalCurve(points) {
   if (points.length <= 2) return points;
 
@@ -2786,7 +2794,9 @@ function drawThermalArea(
   points,
   graphBottom,
   minimum,
-  maximum
+  maximum,
+  graphTop = 0,
+  fillDirection = "down"
 ) {
   if (points.length < 2 || graphBottom <= 0) return;
 
@@ -2797,6 +2807,9 @@ function drawThermalArea(
   const verticalStep = 2;
   const topAlpha = 0.80;
   const bottomAlpha = 0.10;
+  // "up" preenche o lado oposto da curva, reproduzindo o espelho
+  // geométrico em relação ao eixo horizontal central.
+  const fillsAboveCurve = fillDirection === "up";
 
   for (let index = 0; index < points.length - 1; index++) {
     const first = points[index];
@@ -2818,11 +2831,24 @@ function drawThermalArea(
       const curveY =
         first.y +
         (second.y - first.y) * progress;
-      const topY = Math.max(
-        0,
+      const clampedCurveY = Math.max(
+        graphTop,
         Math.min(graphBottom, curveY)
       );
-      if (topY >= graphBottom) continue;
+      const fillStartY = fillsAboveCurve
+        ? graphTop
+        : clampedCurveY;
+      const fillEndY = fillsAboveCurve
+        ? clampedCurveY
+        : graphBottom;
+      if (fillEndY <= fillStartY) continue;
+
+      const gradientStartAlpha = fillsAboveCurve
+        ? bottomAlpha
+        : topAlpha;
+      const gradientEndAlpha = fillsAboveCurve
+        ? topAlpha
+        : bottomAlpha;
 
       const color = thermalTemperatureColor(
         temperature,
@@ -2834,15 +2860,15 @@ function drawThermalArea(
         Math.min(horizontalStep + 1, endX - x + 1)
       );
 
-      for (let y = topY; y < graphBottom; y += verticalStep) {
+      for (let y = fillStartY; y < fillEndY; y += verticalStep) {
         const ratio =
-          (y - topY) /
-          Math.max(1, graphBottom - topY);
+          (y - fillStartY) /
+          Math.max(1, fillEndY - fillStartY);
         const easedRatio = thermalSmoothstep(ratio);
         const alpha =
-          topAlpha +
-          (bottomAlpha - topAlpha) * easedRatio;
-        const height = Math.min(verticalStep, graphBottom - y);
+          gradientStartAlpha +
+          (gradientEndAlpha - gradientStartAlpha) * easedRatio;
+        const height = Math.min(verticalStep, fillEndY - y);
 
         ctx.setFillColor(new Color(color, alpha));
         ctx.fillRect(
@@ -4672,8 +4698,8 @@ function drawTopThermalBand(ctx, weather) {
   const graphTop = weatherThermalGraphTopY();
   const graphBottom = weatherThermalGraphBottomY();
 
-  // Temperaturas maiores ficam acima. Como a área é preenchida até a base
-  // da faixa, os trechos quentes também ficam mais intensamente pintados.
+  // A escala térmica é calculada normalmente; o espelhamento é aplicado
+  // somente à geometria da curva e de seu preenchimento.
   const curvePoints = buildThermalSamples(sourceHours)
     .map((sample) => ({
       x: timeToX(new Date(sample.timestamp)),
@@ -4693,17 +4719,24 @@ function drawTopThermalBand(ctx, weather) {
     );
 
   const smoothPoints = smoothThermalCurve(curvePoints);
+  const mirroredPoints = mirrorThermalCurvePoints(
+    smoothPoints,
+    graphTop,
+    graphBottom
+  );
   drawThermalArea(
     ctx,
-    smoothPoints,
+    mirroredPoints,
     graphBottom,
     minimum,
-    maximum
+    maximum,
+    graphTop,
+    "up"
   );
 
   drawThermalCurve(
     ctx,
-    smoothPoints,
+    mirroredPoints,
     minimum,
     maximum
   );
