@@ -46,7 +46,7 @@ const SETTINGS = {
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
   minimumTemperatureColor: "#64D2FF",
-  maximumTemperatureColor: "#FF6961",
+  maximumTemperatureColor: "#FF0000",
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
   overflowColor: "#636366",
@@ -2702,6 +2702,34 @@ function mirrorThermalCurvePoints(points, graphTop, graphBottom) {
   }));
 }
 
+function thermalCurveYAtX(points, x, fallback) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return fallback;
+  }
+
+  if (x <= points[0].x) return points[0].y;
+
+  const last = points[points.length - 1];
+  if (x >= last.x) return last.y;
+
+  for (let index = 1; index < points.length; index++) {
+    const previous = points[index - 1];
+    const current = points[index];
+    if (x > current.x) continue;
+
+    const span = current.x - previous.x;
+    const progress = span <= 0
+      ? 0
+      : Math.max(
+          0,
+          Math.min(1, (x - previous.x) / span)
+        );
+    return previous.y + (current.y - previous.y) * progress;
+  }
+
+  return fallback;
+}
+
 function smoothThermalCurve(points) {
   if (points.length <= 2) return points;
 
@@ -3189,7 +3217,7 @@ function drawBottomHourLegend(ctx) {
 
     if (isWindowStart || isWindowEnd) {
       ctx.setFont(Font.blackMonospacedSystemFont(hourFontSize));
-      ctx.setTextColor(Color.white());
+      ctx.setTextColor(secondaryNightLegendColor());
       ctx.drawTextInRect(
         isWindowStart ? "0h" : "24h",
         centeredLegendTextRect(timeToX(tick), centerY)
@@ -4675,7 +4703,7 @@ function drawHourlyRainColumn(
   );
 }
 
-function drawTopThermalBand(ctx, weather) {
+function buildTopThermalBand(weather) {
   const sourceHours = [...(weather?.hours ?? [])]
     .filter(
       (hour) =>
@@ -4724,6 +4752,31 @@ function drawTopThermalBand(ctx, weather) {
     graphTop,
     graphBottom
   );
+
+  return {
+    sourceHours,
+    minimum,
+    maximum,
+    graphTop,
+    graphBottom,
+    mirroredPoints,
+  };
+}
+
+function drawTopThermalBand(ctx, thermalBand) {
+  if (!thermalBand) return null;
+
+  const {
+    sourceHours,
+    minimum,
+    maximum,
+    graphTop,
+    graphBottom,
+    mirroredPoints,
+  } = thermalBand;
+
+  // O preenchimento acompanha o espelhamento da linha, sem deslocar as
+  // temperaturas que ficam sobre os astros.
   drawThermalArea(
     ctx,
     mirroredPoints,
@@ -4741,7 +4794,8 @@ function drawTopThermalBand(ctx, weather) {
     maximum
   );
 
-  // Barras opacas sobre a curva e antes dos textos de temperatura.
+  // As barras de chuva continuam na camada meteorológica e não participam
+  // do espelhamento exclusivo da curva térmica.
   drawThermalRainBars(
     ctx,
     sourceHours,
@@ -4749,13 +4803,7 @@ function drawTopThermalBand(ctx, weather) {
     graphBottom
   );
 
-  return {
-    sourceHours,
-    minimum,
-    maximum,
-    graphTop,
-    graphBottom,
-  };
+  return thermalBand;
 }
 
 function drawVisibleDailyExtremes(
@@ -4944,16 +4992,16 @@ async function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // O brilho fica na base da faixa solar; as linhas horárias vêm depois
-  // dele para manter a mesma leitura vertical em todo o painel.
+  // O brilho é desenhado primeiro para ficar atrás de todos os elementos.
+  const thermalBand = buildTopThermalBand(hourlyWeather);
   if (SETTINGS.showSolarGlow) {
-    drawFixedDaylightGlow(ctx, hourlyWeather);
+    drawFixedDaylightGlow(ctx, thermalBand);
   }
   drawHourAxis(ctx, items);
 
   // A curva térmica ocupa a faixa superior e é desenhada antes dos astros,
   // para que eles permaneçam visualmente à frente dela.
-  const thermalBand = drawTopThermalBand(ctx, hourlyWeather);
+  drawTopThermalBand(ctx, thermalBand);
   drawWeatherConditionStrip(ctx, hourlyWeather);
   if (thermalBand) {
     // Os números são desenhados depois dos astros, sobre a metade inferior
@@ -5326,25 +5374,39 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     }
   }
 }
-function drawFixedDaylightGlow(ctx, weather) {
-  const lineY = solarLineY();
-  // O brilho chega até a base da faixa térmica, ficando atrás das
-  // temperaturas, do preenchimento e da curva desenhados depois.
+function drawFixedDaylightGlow(ctx, thermalBand) {
+  const thermalPoints = thermalBand?.mirroredPoints;
+  if (!Array.isArray(thermalPoints) || thermalPoints.length < 2) {
+    return;
+  }
+
+  // Não existe mais uma linha solar independente. O brilho começa na
+  // altura real da curva térmica e desce até a base da área dos charts.
   const glowEndY = thermalBandBottomY();
 
   for (const interval of visibleDaylightIntervals()) {
-    // A luz solar é uniforme em relação às nuvens. Mantém apenas a
-    // progressão natural do amanhecer ao meio-dia e ao entardecer.
     const slices = daylightSlices(interval);
     if (slices.length === 0) continue;
 
-    // A irradiação amarela não sofre mais atenuação pela nebulosidade.
     for (const slice of slices) {
-      // Uma faixa de um pixel por vez, sem sobreposição, mantém o
-      // gradiente contínuo e elimina as bordas horizontais.
-      for (let y = lineY + 1; y < glowEndY; y += 1) {
+      const sliceCenterX = slice.x + slice.width / 2;
+      const curveY = Math.max(
+        0,
+        Math.min(
+          glowEndY,
+          thermalCurveYAtX(
+            thermalPoints,
+            sliceCenterX,
+            weatherThermalGraphBottomY()
+          )
+        )
+      );
+
+      // Cada coluna nasce na curva. Como curveY varia com x, o limite
+      // superior do fundo luminoso acompanha o desenho térmico.
+      for (let y = curveY; y < glowEndY; y += 1) {
         const verticalProgress =
-          (y - lineY) / Math.max(1, glowEndY - lineY);
+          (y - curveY) / Math.max(1, glowEndY - curveY);
         const verticalStrength = Math.pow(
           Math.max(0, 1 - verticalProgress),
           1.05
@@ -5361,30 +5423,23 @@ function drawFixedDaylightGlow(ctx, weather) {
           new Rect(slice.x, y, slice.width + 1, 1)
         );
       }
+    }
 
-      // Linha solar única sobre a borda do grid. Ela fica exatamente em
-      // lineY; o preenchimento abaixo continua sem faixas adicionais.
-      ctx.setFillColor(
-        new Color(
-          "#FFD000",
-          Math.min(
-            1,
-            (0.22 + 0.77 * slice.daylightStrength) *
-              SETTINGS.solarGlowIntensity
+    // Mantém apenas um halo suave nas mudanças de luz, também começando
+    // na altura correspondente da curva, sem reintroduzir uma linha.
+    for (const endpointX of [interval.x0, interval.x1]) {
+      const endpointY = Math.max(
+        0,
+        Math.min(
+          glowEndY,
+          thermalCurveYAtX(
+            thermalPoints,
+            endpointX,
+            weatherThermalGraphBottomY()
           )
         )
       );
-      ctx.fillRect(
-        new Rect(slice.x - 1, lineY, slice.width + 3, 10)
-      );
 
-      // O gradiente contínuo fornece a intensidade abaixo da linha, sem
-      // retângulos sobrepostos com bordas rígidas.
-    }
-
-    // Somente 06:00 e 18:00 recebem a projeção circular das extremidades.
-    for (const endpointX of [interval.x0, interval.x1]) {
-      const visibility = 1;
       for (const [radius, opacity] of [
         [12, 0.10],
         [8, 0.18],
@@ -5395,14 +5450,14 @@ function drawFixedDaylightGlow(ctx, weather) {
             "#FFD000",
             Math.min(
               1,
-              opacity * visibility * SETTINGS.solarGlowIntensity
+              opacity * SETTINGS.solarGlowIntensity
             )
           )
         );
         ctx.fillEllipse(
           new Rect(
             endpointX - radius,
-            lineY,
+            endpointY,
             radius * 2,
             radius * 2
           )
@@ -6916,7 +6971,7 @@ function isSecondaryNightLegendHour(hour) {
     );
   }
 
-  return [2, 4, 20, 22].includes(hour);
+  return [0, 2, 4, 20, 22].includes(hour);
 }
 
 function secondaryNightLegendColor() {
