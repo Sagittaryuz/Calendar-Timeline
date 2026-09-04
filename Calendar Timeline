@@ -2694,6 +2694,23 @@ function thermalTemperatureY(
   return graphBottom - normalized * (graphBottom - graphTop);
 }
 
+function thermalTemperatureYDownward(
+  temperature,
+  minimum,
+  maximum,
+  graphTop,
+  graphBottom
+) {
+  const range = maximum - minimum;
+  const normalized = range < 0.1
+    ? 0.5
+    : Math.max(
+        0,
+        Math.min(1, (temperature - minimum) / range)
+      );
+  return graphTop + normalized * (graphBottom - graphTop);
+}
+
 function smoothThermalCurve(points) {
   if (points.length <= 2) return points;
 
@@ -3023,6 +3040,22 @@ function weatherIconIntersectsTimeline(centerX, halfWidth) {
   );
 }
 
+function weatherThermalGraphTopY() {
+  return 0;
+}
+
+function weatherThermalGraphBottomY() {
+  // A curva ocupa exatamente a faixa superior dos astros, sem criar uma
+  // segunda reserva vertical para o módulo térmico.
+  return Math.max(1, weatherStripBottomY() - 1);
+}
+
+function weatherTemperatureLabelY(fontSize) {
+  // O topo da caixa começa na metade inferior do astro e permanece dentro
+  // da faixa superior, deixando as horas livres na base.
+  return weatherIconCenterY() - fontSize / 2 + 7;
+}
+
 // A linha solar nasce no primeiro pixel útil do grid, abaixo da faixa fixa
 // dos ícones. Assim o halo não interfere no alinhamento óptico dos astros.
 function solarLineY() {
@@ -3030,14 +3063,12 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // A curva térmica regular ocupa 20 px. Os 10 px liberados retornam
-  // diretamente para a área da timeline e dos charts.
+  // Mantido para compatibilidade com o desenho legado da faixa inferior.
   return thermalBandBottomY() - (isCompactMode() ? 12 : 20);
 }
 
 function thermalTemperatureLabelTopY() {
-  // A legenda numérica pertence ao módulo térmico. Esta reserva inclui
-  // as fontes maiores de máxima/mínima e impede que os charts a atravessem.
+  // Mantido para compatibilidade com o desenho legado da faixa inferior.
   return thermalBandTopY() - (isCompactMode() ? 28 : 32);
 }
 
@@ -3058,9 +3089,9 @@ function timelineChartTop() {
 }
 
 function timelineChartBottom() {
-  // Mantém exatamente o início atual da agenda e reduz somente seu limite
-  // inferior, reservando uma margem real antes da legenda térmica.
-  return thermalTemperatureLabelTopY() - 5;
+  // Sem a faixa térmica inferior, os charts ocupam todo o espaço disponível
+  // até a pequena margem real antes da legenda das horas.
+  return thermalBandBottomY() - 5;
 }
 
 function timelineRowHeight() {
@@ -4635,7 +4666,7 @@ function drawHourlyRainColumn(
   );
 }
 
-function drawCompactThermalBand(ctx, weather) {
+function drawTopThermalBand(ctx, weather) {
   const sourceHours = [...(weather?.hours ?? [])]
     .filter(
       (hour) =>
@@ -4648,20 +4679,20 @@ function drawCompactThermalBand(ctx, weather) {
       Number(hour.timestamp) >= windowStart.getTime() &&
       Number(hour.timestamp) <= windowEnd.getTime()
   );
-  if (!visibleHours.length) return;
+  if (!visibleHours.length) return null;
 
   const visibleValues = visibleHours.map((hour) =>
     Number(hour.temperature)
   );
   const minimum = Math.min(...visibleValues);
   const maximum = Math.max(...visibleValues);
-  const graphTop = thermalBandTopY();
-  const graphBottom = thermalBandBottomY();
+  const graphTop = weatherThermalGraphTopY();
+  const graphBottom = weatherThermalGraphBottomY();
 
   const curvePoints = buildThermalSamples(sourceHours)
     .map((sample) => ({
       x: timeToX(new Date(sample.timestamp)),
-      y: thermalTemperatureY(
+      y: thermalTemperatureYDownward(
         sample.temperature,
         minimum,
         maximum,
@@ -4699,23 +4730,19 @@ function drawCompactThermalBand(ctx, weather) {
     graphTop,
     graphBottom
   );
-  drawVisibleDailyExtremes(
-    ctx,
+
+  return {
     sourceHours,
     minimum,
     maximum,
     graphTop,
-    graphBottom
-  );
+    graphBottom,
+  };
 }
 
 function drawVisibleDailyExtremes(
   ctx,
-  sourceHours,
-  minimum,
-  maximum,
-  graphTop,
-  graphBottom
+  sourceHours
 ) {
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
@@ -4843,17 +4870,7 @@ function drawVisibleDailyExtremes(
     if (!forecast) continue;
 
     const x = timeToX(evenTick);
-    const y = thermalTemperatureY(
-      forecast.temperature,
-      minimum,
-      maximum,
-      graphTop,
-      graphBottom
-    );
-    const labelY = Math.max(
-      thermalTemperatureLabelTopY() + 4,
-      y - 24
-    );
+    const labelY = weatherTemperatureLabelY(normalFontSize);
     const hour = evenTick.getHours();
     const isNight = isSecondaryNightLegendHour(hour);
     const labelColor = isNight
@@ -4875,17 +4892,7 @@ function drawVisibleDailyExtremes(
   for (const entry of visibleExtremes) {
     const date = new Date(entry.timestamp);
     const x = timeToX(date);
-    const y = thermalTemperatureY(
-      entry.temperature,
-      minimum,
-      maximum,
-      graphTop,
-      graphBottom
-    );
-    const labelY = Math.max(
-      thermalTemperatureLabelTopY() + 2,
-      y - 31
-    );
+    const labelY = weatherTemperatureLabelY(extremeFontSize);
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
       x,
@@ -4904,19 +4911,21 @@ async function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // Weathergraph: clima em uma faixa estreita, agenda no centro,
-  // curva térmica compacta e horas na base.
+  // A curva térmica ocupa a faixa superior e é desenhada antes dos astros,
+  // para que eles permaneçam visualmente à frente dela.
+  const thermalBand = drawTopThermalBand(ctx, hourlyWeather);
   drawWeatherConditionStrip(ctx, hourlyWeather);
+  if (thermalBand) {
+    // Os números são desenhados depois dos astros, sobre a metade inferior
+    // de cada símbolo, mantendo a leitura sem reservar uma faixa extra.
+    drawVisibleDailyExtremes(ctx, thermalBand.sourceHours);
+  }
   drawHourAxis(ctx, items);
   // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
   // atrás da curva térmica e dos charts de agenda.
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
-  // A chuva é desenhada somente dentro da faixa térmica inferior.
-  // Assim nenhuma barra atravessa os charts dos eventos e lembretes.
-  drawCompactThermalBand(ctx, hourlyWeather);
-
   if (loadError) {
     drawPermissionState(ctx);
   } else {
