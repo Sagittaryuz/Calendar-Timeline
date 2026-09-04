@@ -176,11 +176,9 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// O toque no centro volta sempre para o dia atual. As áreas laterais são
-// sobrepostas no widget pela própria makeWidget(), com os destinos vizinhos.
-if (!isAccessoryFamily(widgetFamily)) {
-  widget.url = navigationURL(0);
-}
+// O toque no centro e as setas usam as três áreas transparentes criadas em
+// addNavigationOverlay(). A URL geral do widget não é definida porque ela
+// pode capturar o toque antes das áreas individuais.
 widget.refreshAfterDate = new Date(
   Date.now() +
     (selectedDayIsToday
@@ -1720,15 +1718,24 @@ function addNavigationOverlay(widget, currentOffset) {
   header.layoutHorizontally();
   header.setPadding(0, 0, 0, 0);
   header.size = new Size(pointWidth, headerHeight);
+  const transparentHitImage = makeTransparentNavigationImage();
 
   const addButton = (width, targetOffset) => {
     const button = header.addStack();
     button.setPadding(0, 0, 0, 0);
     button.size = new Size(width, headerHeight);
-    button.url = navigationURL(targetOffset);
-    // Um spacer torna a área da stack efetivamente tocável mesmo quando ela
-    // não possui conteúdo visível.
-    button.addSpacer();
+    const targetURL = navigationURL(targetOffset);
+    button.url = targetURL;
+
+    // Stack vazia, contendo apenas spacer, não oferece uma superfície de
+    // toque confiável. A imagem transparente ocupa toda a área do botão e
+    // também recebe a URL diretamente, sem alterar a aparência do widget.
+    const hitTarget = button.addImage(transparentHitImage);
+    hitTarget.imageSize = new Size(
+      Math.max(1, width),
+      Math.max(1, headerHeight)
+    );
+    hitTarget.url = targetURL;
     return button;
   };
 
@@ -1736,6 +1743,16 @@ function addNavigationOverlay(widget, currentOffset) {
   addButton(centerWidth, 0);
   addButton(rightWidth, Math.min(7, currentOffset + 1));
   overlay.addSpacer();
+}
+
+function makeTransparentNavigationImage() {
+  const imageContext = new DrawContext();
+  imageContext.size = new Size(1, 1);
+  imageContext.opaque = false;
+  imageContext.respectScreenScale = false;
+  imageContext.setFillColor(new Color("#FFFFFF", 0));
+  imageContext.fillRect(new Rect(0, 0, 1, 1));
+  return imageContext.getImage();
 }
 
 function isAccessoryFamily(family) {
