@@ -3422,29 +3422,29 @@ function drawWeatherHalfSun(
   backgroundColor,
   visibleFraction = 0.75
 ) {
+  // Recorta o disco em uma camada transparente, sem pintar o fundo.
+  const clampedFraction = Math.max(0.5, Math.min(1, visibleFraction));
+  const padding = Math.ceil(radius * 2 + 4);
+  const clipBottom = padding - radius + radius * 2 * clampedFraction;
+  const layer = new DrawContext();
+  layer.size = new Size(padding * 2, clipBottom);
+  layer.opaque = false;
+  layer.respectScreenScale = false;
   drawSunBurst(
-    ctx,
-    centerX,
-    centerY,
+    layer,
+    padding,
+    padding,
     radius,
     fillColor,
     "#FF8A00"
   );
-
-  // Mostra 75% do disco e recorta apenas a faixa inferior restante.
-  const clampedFraction = Math.max(
-    0.5,
-    Math.min(1, visibleFraction)
-  );
-  const maskY =
-    centerY - radius + radius * 2 * clampedFraction;
-  ctx.setFillColor(new Color(backgroundColor, 1.0));
-  ctx.fillRect(
+  ctx.drawImageInRect(
+    layer.getImage(),
     new Rect(
-      centerX - radius - 2,
-      maskY,
-      radius * 2 + 4,
-      radius * 2 + 4
+      centerX - padding,
+      centerY - padding,
+      padding * 2,
+      clipBottom
     )
   );
 }
