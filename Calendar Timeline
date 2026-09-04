@@ -128,6 +128,9 @@ const CANVAS = {
   temperatureLegendVerticalOffset: 7,
   // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
   timelineVerticalOffset: -5,
+  // Reserva lateral para que as luas centradas em 00:00 e 24:00 caibam
+  // integralmente dentro do widget.
+  timelineEdgeInset: 68,
 };
 
 CANVAS.timelineTop += CANVAS.timelineVerticalOffset;
@@ -1297,12 +1300,8 @@ function prepareTimelineItems(items, referenceDate) {
 
   for (const item of prepared) {
     const hasEnded = item.end instanceof Date && item.end <= referenceDate;
-    const reminderWasDue =
-      item.kind === "reminder" &&
-      item.start instanceof Date &&
-      item.start <= referenceDate;
     item.isPast = Boolean(
-      item.isOverdue || (item.kind === "reminder" ? reminderWasDue : hasEnded)
+      item.kind === "event" && hasEnded
     );
   }
 
@@ -1359,6 +1358,23 @@ function chooseItems(items, referenceDate, limit) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
+    const allDayEvents = [...dayItems]
+      .filter(isAllDayEvent)
+      .sort(byTime);
+    const dayStart = startOfDay(dayItems[0].start);
+    const dayEnd = addDays(dayStart, 1);
+    const dayInterval = {
+      start: dayStart,
+      end: dayEnd,
+    };
+    // A última linha fica reservada para eventos de dia inteiro quando
+    // houver algum no mesmo dia. Assim, lembretes nunca empurram esses
+    // eventos para cima nem ocupam a linha que lhes é destinada.
+    const timedRowLimit =
+      allDayEvents.length > 0
+        ? Math.max(1, limit - 1)
+        : limit;
+
     const placeItem = (item, rowOrder) => {
       const availableRow = rowOrder.find((row) =>
         rows[row].every((existing) => !itemsOverlap(item, existing))
@@ -1366,47 +1382,82 @@ function chooseItems(items, referenceDate, limit) {
 
       if (availableRow === undefined) {
         hidden.push(item);
-        return;
+        return null;
       }
 
       const positioned = { ...item, gridRow: availableRow };
       rows[availableRow].push(positioned);
       placed.push(positioned);
+      return availableRow;
     };
 
-    // Eventos e lembretes com horário aparecem primeiro, em ordem
-    // cronológica, ocupando as linhas de cima para baixo.
-    const regularItems = [...dayItems]
-      .filter((item) => !isAllDayEvent(item))
+    // Eventos com horário sempre ocupam as linhas superiores, antes de
+    // qualquer lembrete do mesmo dia.
+    const timedEvents = [...dayItems]
+      .filter(
+        (item) =>
+          item.kind === "event" && !isAllDayEvent(item)
+      )
       .sort(byTime);
 
-    regularItems.forEach((item, index) => {
-      const preferredRow = Math.min(index, limit - 1);
+    timedEvents.forEach((item, index) => {
+      const preferredRow = Math.min(index, timedRowLimit - 1);
       const upperRows = [];
       for (let row = preferredRow - 1; row >= 0; row--) {
         upperRows.push(row);
       }
       const lowerRows = [];
-      for (let row = preferredRow + 1; row < limit; row++) {
+      for (let row = preferredRow + 1; row < timedRowLimit; row++) {
         lowerRows.push(row);
       }
 
       placeItem(item, [preferredRow, ...upperRows, ...lowerRows]);
     });
 
-    // Eventos de dia inteiro continuam sendo os últimos na ordem de
-    // exibição, mas ocupam as linhas disponíveis de baixo para cima:
-    // quinta, quarta, terceira, segunda e primeira.
-    const allDayEvents = [...dayItems]
-      .filter(isAllDayEvent)
-      .sort(byTime);
-    const bottomUpRows = Array.from(
-      { length: limit },
-      (_, index) => limit - 1 - index
-    );
+    const highestEventRow = placed
+      .filter(
+        (item) =>
+          item.kind === "event" &&
+          !item.isAllDay &&
+          itemsOverlap(item, dayInterval)
+      )
+      .reduce(
+        (highest, item) => Math.max(highest, item.gridRow),
+        -1
+      );
+    const reminderFirstRow =
+      highestEventRow >= timedRowLimit
+        ? timedRowLimit
+        : Math.min(
+            Math.max(0, highestEventRow + 1),
+            timedRowLimit - 1
+          );
 
+    // Lembretes ficam abaixo do último evento. Não podem usar linhas
+    // superiores, mesmo quando uma delas estiver livre.
+    const reminders = [...dayItems]
+      .filter((item) => item.kind === "reminder")
+      .sort(byTime);
+    if (reminderFirstRow >= timedRowLimit) {
+      hidden.push(...reminders);
+    } else {
+      reminders.forEach((item, index) => {
+        const preferredRow = Math.min(
+          reminderFirstRow + index,
+          timedRowLimit - 1
+        );
+        const lowerRows = [];
+        for (let row = preferredRow + 1; row < timedRowLimit; row++) {
+          lowerRows.push(row);
+        }
+        placeItem(item, [preferredRow, ...lowerRows]);
+      });
+    }
+
+    // Eventos de dia inteiro ocupam exclusivamente a última linha. Os que
+    // excederem essa capacidade seguem para o marcador +2, +3 etc.
     allDayEvents.forEach((item) => {
-      placeItem(item, bottomUpRows);
+      placeItem(item, [limit - 1]);
     });
   }
 
@@ -1523,8 +1574,13 @@ function addNavigationOverlay(widget, currentOffset) {
   const pointWidth = CANVAS.width / scale;
   const pointHeight = CANVAS.height / scale;
   const headerHeight = CANVAS.headerHeight / scale;
-  const leftWidth = pointWidth * 0.25;
-  const centerWidth = pointWidth * 0.50;
+  const titleLayout = titleAreaMetrics();
+  const leftWidth = titleLayout.x / scale;
+  const centerWidth = titleLayout.width / scale;
+  const rightWidth = Math.max(
+    0,
+    pointWidth - leftWidth - centerWidth
+  );
 
   const overlay = widget.addStack();
   overlay.layoutVertically();
@@ -1549,7 +1605,7 @@ function addNavigationOverlay(widget, currentOffset) {
 
   addButton(leftWidth, Math.max(-7, currentOffset - 1));
   addButton(centerWidth, 0);
-  addButton(leftWidth, Math.min(7, currentOffset + 1));
+  addButton(rightWidth, Math.min(7, currentOffset + 1));
   overlay.addSpacer();
 }
 
@@ -1845,32 +1901,45 @@ function drawDatePanel(ctx, holidayDates) {
     segmentX += segment.text.length * characterWidth;
   }
 
+  const titleLayout = titleAreaMetrics();
+
   // A tipografia mantém a altura original e é comprimida somente no eixo X,
-  // ocupando metade da largura anterior e permanecendo no centro.
+  // ocupando metade da largura anterior mais 10 px e permanecendo no centro.
   ctx.drawImageInRect(
     titleCtx.getImage(),
     new Rect(
-      CANVAS.width * 0.25,
+      titleLayout.x,
       0,
-      CANVAS.width * 0.50,
+      titleLayout.width,
       CANVAS.headerHeight
     )
   );
 
   drawNavigationChevron(
     ctx,
-    CANVAS.width * 0.125,
-    CANVAS.headerHeight / 2,
+    titleLayout.leftCenterX,
+    20 + fontSize / 2,
     -1,
     dayOffset > -7
   );
   drawNavigationChevron(
     ctx,
-    CANVAS.width * 0.875,
-    CANVAS.headerHeight / 2,
+    titleLayout.rightCenterX,
+    20 + fontSize / 2,
     1,
     dayOffset < 7
   );
+}
+
+function titleAreaMetrics() {
+  const width = CANVAS.width * 0.50 + 10;
+  const x = (CANVAS.width - width) / 2;
+  return {
+    x,
+    width,
+    leftCenterX: x / 2,
+    rightCenterX: x + width + (CANVAS.width - x - width) / 2,
+  };
 }
 
 function drawNavigationChevron(ctx, centerX, centerY, direction, enabled) {
@@ -1962,7 +2031,7 @@ function drawTemperatureFooter(ctx, weather) {
     ? 23
     : isExtendedDetailedMode()
       ? 22
-      : 27;
+      : 30;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -2095,7 +2164,7 @@ function drawTemperatureFooter(ctx, weather) {
       ? 23
       : isExtendedDetailedMode()
         ? 24
-        : 27;
+        : 30;
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
@@ -2796,7 +2865,7 @@ function weatherStripBottomY() {
 // A faixa superior pertence exclusivamente aos astros e ícones de clima.
 // Todos compartilham o mesmo centro horizontal e a mesma caixa visual.
 function weatherIconSize() {
-  return isCompactMode() ? 30 : 40;
+  return isCompactMode() ? 34 : 46;
 }
 
 function weatherIconCenterY() {
@@ -2926,16 +2995,26 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
-  // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
-  // aumentamos levemente a fonte sem alterar o modo de 24 h.
-  const hourFontSize =
-    windowHours > 24 && isCompactMode()
-      ? 20
-      : 22;
+  const hourFontSize = isCompactMode() ? 23 : 26;
 
   ctx.setTextAlignedCenter();
   for (const tick of hourTicks()) {
     const hour = tick.getHours();
+    const isWindowStart =
+      tick.getTime() === windowStart.getTime();
+    const isWindowEnd =
+      tick.getTime() === windowEnd.getTime();
+
+    if (isWindowStart || isWindowEnd) {
+      ctx.setFont(Font.blackMonospacedSystemFont(hourFontSize));
+      ctx.setTextColor(Color.white());
+      ctx.drawTextInRect(
+        isWindowStart ? "0h" : "24h",
+        centeredLegendTextRect(timeToX(tick), centerY)
+      );
+      continue;
+    }
+
     if (hour === 0) continue;
 
     const isDaylightHour =
@@ -4493,8 +4572,8 @@ function drawVisibleDailyExtremes(
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
   const visibleEnd = windowEnd.getTime();
-  const normalFontSize = isCompactMode() ? 16 : 19;
-  const extremeFontSize = isCompactMode() ? 21 : 25;
+  const normalFontSize = isCompactMode() ? 18 : 22;
+  const extremeFontSize = isCompactMode() ? 23 : 28;
   const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
@@ -4721,7 +4800,6 @@ async function renderTimelinePanel(items, loadError) {
   // atravessar a faixa dos astros, dos charts, das temperaturas e das horas.
   drawCurrentTimeLine(ctx);
   drawBottomHourLegend(ctx);
-  drawWeekdayBadgesOnTop(ctx);
   return ctx.getImage();
 }
 
@@ -5057,34 +5135,6 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     }
   }
 }
-
-
-function drawWeekdayBadgesOnTop(ctx) {
-  const fontSize = isCompactMode()
-    ? 18
-    : isExtendedDetailedMode()
-      ? 20
-      : 22;
-  const centerY = bottomLegendCenterY();
-
-  for (const tick of hourTicks()) {
-    if (tick.getHours() !== 0) continue;
-
-    const x = timeToX(tick);
-    const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const badge = dayLegendBadgeRect(x, centerY);
-    ctx.setFillColor(style.background);
-    ctx.fillRect(badge);
-    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-    ctx.setTextColor(style.text);
-    ctx.setTextAlignedCenter();
-    ctx.drawTextInRect(
-      shortWeekday(tick),
-      centeredDayLegendTextRect(x, centerY)
-    );
-  }
-}
-
 function drawFixedDaylightGlow(ctx, weather) {
   const lineY = solarLineY();
   // O brilho chega até a base da faixa térmica, ficando atrás das
@@ -5329,8 +5379,16 @@ function solarVisibilityAtTimestamp(weather, timestamp) {
 
 function timelineDateAtX(x) {
   const duration = windowEnd.getTime() - windowStart.getTime();
-  const progress = x / Math.max(1, timelineWidth());
-  return new Date(windowStart.getTime() + duration * progress);
+  const progress =
+    (x - timelineContentLeft()) /
+    Math.max(1, timelineContentWidth());
+  const clampedProgress = Math.max(
+    0,
+    Math.min(1, progress)
+  );
+  return new Date(
+    windowStart.getTime() + duration * clampedProgress
+  );
 }
 
 function drawCloudCoverageForms(ctx, weather, stripBottom) {
@@ -5840,7 +5898,8 @@ function drawNightAtmosphere(ctx, nightStart, nightEnd) {
 
 function drawTwilightGlow(ctx, moment, isSunrise) {
   const centerX = timeToX(moment);
-  const hourWidth = timelineWidth() / Math.max(1, windowHours);
+  const hourWidth =
+    timelineContentWidth() / Math.max(1, windowHours);
   const radius = Math.max(22, Math.min(88, hourWidth * 1.85));
   if (centerX + radius < 0 || centerX - radius > timelineWidth()) return;
 
@@ -5897,8 +5956,7 @@ function drawDaylightGlow(ctx, sunrise, sunset, dayStart) {
 
   for (let x = x0; x < x1; x += 2) {
     const time = new Date(
-      windowStart.getTime() +
-        (x / timelineWidth()) * (windowEnd.getTime() - windowStart.getTime())
+      timelineDateAtX(x).getTime()
     );
     const linearStrength = time <= noon
       ? (time.getTime() - sunrise.getTime()) /
@@ -5983,8 +6041,8 @@ function drawNightScenes(ctx) {
 
     if (intervalIsVisible(nightStart, nightEnd)) {
       // Toda noite é sempre uma única cena entre 18:00 e 06:00. A Lua grande
-      // permanece centralizada à meia-noite mesmo quando somente uma parte
-      // do intervalo está visível; o canvas recorta naturalmente as bordas.
+      // permanece centralizada à meia-noite e usa a margem lateral reservada
+      // para que as mudanças de dia fiquem integralmente visíveis.
       drawNightSegment(
         ctx,
         nightStart,
@@ -6034,9 +6092,9 @@ function drawNightSegment(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
 
-  const maximumMoonSize = mergedNight ? 128 : 96;
+  const maximumMoonSize = mergedNight ? 136 : 96;
   const proportionalSize = mergedNight
-    ? sceneWidth * 0.30
+    ? sceneWidth * 0.31
     : sceneWidth * 0.44;
   const moonSize = Math.max(
     16,
@@ -6046,7 +6104,10 @@ function drawNightSegment(
   const dayAxisBottomY = localPlotBottom();
   const dayAxisCenterY = (dayAxisTopY + dayAxisBottomY) / 2;
   const dayAxisX = timeToX(nightCenterDate);
-  const moonX = dayAxisX - moonSize / 2;
+  const moonX = Math.max(
+    0,
+    Math.min(timelineWidth() - moonSize, dayAxisX - moonSize / 2)
+  );
   // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
   // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
   // limite inferior visível do grid.
@@ -6097,12 +6158,12 @@ function drawNightSegment(
   const cloudScale = moonSize / 96;
   const cloudWidth = 74 * cloudScale;
   const leftCloudX = Math.max(
-    x0,
-    Math.min(x1 - cloudWidth, moonX - 27 * cloudScale)
+    0,
+    Math.min(timelineWidth() - cloudWidth, moonX - 27 * cloudScale)
   );
   const rightCloudX = Math.max(
-    x0,
-    Math.min(x1 - cloudWidth, moonX + moonSize - 42 * cloudScale)
+    0,
+    Math.min(timelineWidth() - cloudWidth, moonX + moonSize - 42 * cloudScale)
   );
   drawMoonCloud(
     ctx,
@@ -6126,9 +6187,6 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
   const radiusY = Math.max(0.0001, rect.height / 2);
   const startX = Math.floor(rect.x);
   const endX = Math.ceil(rect.x + rect.width);
-  const windowDuration =
-    windowEnd.getTime() - windowStart.getTime();
-
   // Cada coluna recebe a cor do seu próprio dia. Assim, o recorte da Lua
   // respeita exatamente as linhas de 00:00, mesmo quando ela atravessa dias.
   for (let x = startX; x < endX; x++) {
@@ -6139,10 +6197,7 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
     const halfHeight =
       radiusY *
       Math.sqrt(Math.max(0, 1 - normalizedX * normalizedX));
-    const sampleDate = new Date(
-      windowStart.getTime() +
-        (sampleX / timelineWidth()) * windowDuration
-    );
+    const sampleDate = timelineDateAtX(sampleX);
 
     ctx.setFillColor(
       new Color(timelineBackgroundColorForDate(sampleDate), 1.0)
@@ -6259,23 +6314,6 @@ function drawMoonPhase(
   borderDate = null
 ) {
   const moonRect = new Rect(x, y, size, size);
-  const drawOuterBorder = () => {
-    const isDayBoundary =
-      borderDate instanceof Date &&
-      borderDate.getHours() === 0 &&
-      borderDate.getMinutes() === 0;
-    if (!isDayBoundary) return;
-
-    strokeMoonEllipseOutside(
-      ctx,
-      moonRect,
-      dayBoundaryLineColor(
-        borderDate,
-        loadResult.holidayDates
-      ),
-      4
-    );
-  };
 
   // A base escura permanece visível em todas as fases, inclusive na Lua nova.
   ctx.setFillColor(
@@ -6300,7 +6338,6 @@ function drawMoonPhase(
 
   // Textura monocromática discreta em ambos os hemisférios.
   drawMoonCraters(ctx, x, y, size, 0.34);
-  drawOuterBorder();
 }
 
 function drawMoonCraters(ctx, x, y, size, opacity) {
@@ -6735,21 +6772,9 @@ function centeredLegendTextRect(centerX, centerY) {
   );
 }
 
-// Os badges de mudança de dia são mais largos que os rótulos numéricos.
-// Isso garante as três letras completas inclusive na janela de 36 horas.
+// A moldura térmica de mudança de dia é mais larga que os rótulos numéricos.
 function dayLegendLabelWidth() {
   return 64;
-}
-
-function centeredDayLegendTextRect(centerX, centerY) {
-  const width = dayLegendLabelWidth();
-  const height = legendTextHeight();
-  return new Rect(
-    centerX - width / 2,
-    centerY - height / 2,
-    width,
-    height
-  );
 }
 
 function legendBadgeRect(centerX, centerY) {
@@ -7127,6 +7152,20 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const metadataFontSize = isCompactMode()
     ? compactTimelineFontSize(11)
     : 15;
+
+  if (item.kind === "reminder") {
+    drawReminderLabel(
+      ctx,
+      title,
+      visibleLeft,
+      barY,
+      barHeight,
+      titleFontSize,
+      color
+    );
+    return;
+  }
+
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
@@ -7215,6 +7254,65 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       )
     );
   }
+}
+
+function drawReminderLabel(
+  ctx,
+  title,
+  chartLeft,
+  barY,
+  barHeight,
+  fontSize,
+  color
+) {
+  const markerDiameter = isCompactMode() ? 8 : 10;
+  const markerGap = isCompactMode() ? 4 : 5;
+  const markerRight = Math.max(0, chartLeft - markerGap);
+  const markerX = Math.max(
+    0,
+    markerRight - markerDiameter
+  );
+  const textRight = markerX - markerGap;
+  const maximumTextWidth = Math.max(0, textRight - 2);
+  const visibleTitle = truncateTitle(
+    title,
+    maximumTextWidth,
+    fontSize
+  );
+  const titleWidth = estimatedTextWidth(
+    visibleTitle,
+    fontSize
+  );
+  const textX = Math.max(0, textRight - titleWidth);
+  const textY =
+    barY + Math.max(0, (barHeight - fontSize) / 2 - 2);
+  const centerY = barY + barHeight / 2;
+  const labelColor = color;
+
+  if (visibleTitle) {
+    ctx.setTextAlignedLeft();
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setTextColor(new Color("#000000", 0.82));
+    ctx.drawText(
+      visibleTitle,
+      new Point(textX + 1, textY + 1)
+    );
+    ctx.setTextColor(labelColor);
+    ctx.drawText(
+      visibleTitle,
+      new Point(textX, textY)
+    );
+  }
+
+  ctx.setFillColor(labelColor);
+  ctx.fillEllipse(
+    new Rect(
+      markerX,
+      centerY - markerDiameter / 2,
+      markerDiameter,
+      markerDiameter
+    )
+  );
 }
 
 function drawTimelineBar(ctx, rect, color, item) {
@@ -7624,11 +7722,6 @@ function titleWeekday(date) {
   return weekdays[date.getDay()];
 }
 
-function shortWeekday(date) {
-  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
-  return weekdays[date.getDay()];
-}
-
 function formatDate(date, format) {
   const formatter = new DateFormatter();
   formatter.locale = SETTINGS.locale;
@@ -7701,11 +7794,28 @@ function ceilToHour(sourceDate) {
 function timeToX(date) {
   const elapsed = date.getTime() - windowStart.getTime();
   const duration = windowEnd.getTime() - windowStart.getTime();
-  return (elapsed / duration) * timelineWidth();
+  return (
+    timelineContentLeft() +
+    (elapsed / duration) * timelineContentWidth()
+  );
 }
 
 function timelineWidth() {
   return CANVAS.plotRight - CANVAS.plotLeft;
+}
+
+function timelineContentLeft() {
+  return Math.min(
+    CANVAS.timelineEdgeInset,
+    Math.max(0, timelineWidth() / 2 - 1)
+  );
+}
+
+function timelineContentWidth() {
+  return Math.max(
+    1,
+    timelineWidth() - timelineContentLeft() * 2
+  );
 }
 
 function timelineHeight() {
