@@ -10,6 +10,8 @@ const THEME_MODE = "black"; // "black" | "dark"
 const SETTINGS = {
   locale: "pt_BR",
   maxItems: 5,
+  defaultWindowHours: 24,
+  maximumWindowHours: 168, // Até 7 dias.
   refreshSeconds: 60,
   compactModeFromHours: 36,
   minimumChartWidth: 34,
@@ -46,7 +48,7 @@ const SETTINGS = {
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
   minimumTemperatureColor: "#64D2FF",
-  maximumTemperatureColor: "#FF0000",
+  maximumTemperatureColor: "#FF6961",
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
   overflowColor: "#636366",
@@ -109,14 +111,12 @@ const THERMAL_COLOR_STOPS = [
 ];
 
 const CANVAS = {
-  width: 1180,
+  width: 1092,
   height: 510,
   headerHeight: 128, // 25% da altura total
   marginX: 34,
   plotLeft: 34,
-  plotRight: 1146,
-  // 700 px na versão anterior +100 px; área total solicitada: 800 px.
-  titleAreaWidth: 800,
+  plotRight: 1058,
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 125 px: exatamente no antigo nível da linha sob o título.
   timelineTop: 130,
@@ -130,9 +130,6 @@ const CANVAS = {
   temperatureLegendVerticalOffset: 7,
   // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
   timelineVerticalOffset: -5,
-  // Reserva lateral para que as luas centradas em 00:00 e 24:00 caibam
-  // integralmente dentro do widget.
-  timelineEdgeInset: 68,
 };
 
 CANVAS.timelineTop += CANVAS.timelineVerticalOffset;
@@ -142,18 +139,14 @@ CANVAS.footerBottom += CANVAS.timelineVerticalOffset;
 
 const now = new Date();
 now.setSeconds(0, 0);
-const queryParameters = args.queryParameters ?? {};
-const todayStart = startOfToday();
-const hasDayOffsetParameter =
-  queryParameters.dayOffset !== undefined &&
-  queryParameters.dayOffset !== null;
-const dayOffset = hasDayOffsetParameter
-  ? rememberDayOffset(parseDayOffset(queryParameters.dayOffset))
-  : restoreDayOffset();
-const windowHours = 24;
-const windowStart = addDays(todayStart, dayOffset);
-const windowEnd = addDays(windowStart, 1);
-const selectedDayIsToday = dayOffset === 0;
+const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
+const requestedHours =
+  (args.queryParameters ?? {}).hours ?? args.widgetParameter;
+const windowHours = parseWindowHours(requestedHours);
+const windowStart = new Date(now);
+const windowEnd = new Date(
+  windowStart.getTime() + windowHours * 60 * 60 * 1000
+);
 const loadResult = await loadWindow();
 const astronomy = await loadAstronomy();
 const widgetFamily = config.runsInWidget ? config.widgetFamily : null;
@@ -167,39 +160,39 @@ const nightTextures =
 const automaticHolidayDates = await loadAutomaticHolidays(astronomy);
 automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
 const preparedItems = prepareTimelineItems(loadResult.items, now);
-const selectedItems = chooseItems(
-  preparedItems,
-  windowStart,
-  SETTINGS.maxItems
-);
+const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems);
 const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// O toque no centro e as setas usam as três áreas transparentes criadas em
-// addNavigationOverlay(). A URL geral do widget não é definida porque ela
-// pode capturar o toque antes das áreas individuais.
+// Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
+// o Calendário, conservando o intervalo definido no parâmetro do widget.
+let refreshURL = addURLParameter(
+  URLScheme.forRunningScript(),
+  "refresh",
+  "1"
+);
+refreshURL = addURLParameter(refreshURL, "hours", String(windowHours));
+widget.url = refreshURL;
 widget.refreshAfterDate = new Date(
-  Date.now() +
-    (selectedDayIsToday
-      ? SETTINGS.refreshSeconds * 1000
-      : 15 * 60 * 1000)
+  Date.now() + SETTINGS.refreshSeconds * 1000
 );
 
-if (
-  config.runsInWidget ||
-  config.runsWithSiri ||
-  hasDayOffsetParameter
-) {
-  // A navegação chega por uma URL e executa o carregador dentro do app.
-  // Nesse caso, grava o resultado diretamente no widget em vez de abrir
-  // somente a prévia do Scriptable.
+if (config.runsInWidget || config.runsWithSiri) {
+  // Ao ser chamado pelo Atalhos, recalcula e entrega o widget
+  // silenciosamente, sem abrir a prévia do Scriptable.
   Script.setWidget(widget);
 } else {
   if (loadResult.error) {
     await showPermissionHelp(loadResult.error);
   }
-  await widget.presentMedium();
+
+  if (refreshRequested) {
+    Script.setWidget(widget);
+    Safari.open(calendarURL(now));
+  } else {
+    await widget.presentMedium();
+  }
 }
 
 Script.complete();
@@ -212,7 +205,7 @@ async function loadWindow() {
     // fusos negativos, isso aparece localmente na noite do dia anterior.
     // A margem de um dia garante que eles entrem na consulta; abaixo a data
     // é normalizada antes de decidir se pertence à janela visível.
-    const reminderQueryStart = addDays(startOfDay(windowStart), -1);
+    const reminderQueryStart = addDays(startOfToday(), -1);
     const reminderQueryEnd = addDays(startOfDay(windowEnd), 1);
     // A consulta também recua um dia para capturar eventos que começaram
     // ontem e continuam ocupando o dia atual.
@@ -227,13 +220,9 @@ async function loadWindow() {
       await Promise.all([
         CalendarEvent.between(eventQueryStart, windowEnd),
         Reminder.incompleteDueBetween(reminderQueryStart, reminderQueryEnd),
-        selectedDayIsToday
-          ? CalendarEvent.today()
-          : Promise.resolve([]),
-        selectedDayIsToday
-          ? Reminder.incompleteDueToday()
-          : Promise.resolve([]),
-        SETTINGS.showOverdueReminders && selectedDayIsToday
+        CalendarEvent.today(),
+        Reminder.incompleteDueToday(),
+        SETTINGS.showOverdueReminders
           ? Reminder.scheduled()
           : Promise.resolve([]),
       ]);
@@ -295,7 +284,7 @@ async function loadWindow() {
       reminderOccurrenceView(reminder)
     );
     const todayOccurrenceViews = todayRemindersRaw.map((reminder) =>
-      reminderOccurrenceView(reminder, windowStart)
+      reminderOccurrenceView(reminder, startOfToday())
     );
 
     const reminderOccurrenceKey = (reminder) => {
@@ -330,7 +319,7 @@ async function loadWindow() {
     const displayReminders = [...displayReminderMap.values()];
     const todayReminders = displayReminders.filter((reminder) => {
       const dayStart = normalizedReminderDayStart(reminder);
-      return dayStart && dateKey(dayStart) === dateKey(windowStart);
+      return dayStart && dateKey(dayStart) === dateKey(now);
     });
 
     // CalendarEvent.between() pode não devolver um evento cujo início ficou
@@ -361,17 +350,13 @@ async function loadWindow() {
       if (!eventStart || !eventEnd) return;
 
       // Em eventos de dia inteiro, alguns calendários entregam endDate em
-      // 00:00 do próprio dia. Corrige esse limite tanto para hoje quanto para
-      // um dia histórico/futuro navegado.
-      if (isAllDay) {
-        const eventDayEnd = addDays(startOfDay(eventStart), 1);
-        if (eventEnd <= eventStart) eventEnd = eventDayEnd;
-
-        // Se CalendarEvent.today() confirmou a ocorrência atual, ela deve
-        // permanecer visível até 00:00 do dia seguinte.
-        if (occursToday) {
-          const currentDayEnd = addDays(startOfDay(windowStart), 1);
-          if (eventEnd < currentDayEnd) eventEnd = currentDayEnd;
+      // 00:00 do último dia exibido. Se CalendarEvent.today() confirmou que
+      // a ocorrência pertence a hoje, ela deve permanecer visível até 00:00
+      // do dia seguinte, independentemente desse limite bruto.
+      if (isAllDay && occursToday) {
+        const currentDayEnd = addDays(startOfDay(windowStart), 1);
+        if (eventEnd < currentDayEnd) {
+          eventEnd = currentDayEnd;
         }
       }
 
@@ -429,11 +414,10 @@ async function loadWindow() {
         const hasTime = Boolean(reminder.dueDateIncludesTime);
         const reminderDayStart = normalizedReminderDayStart(reminder);
         const reminderDayEnd = addDays(reminderDayStart, 1);
-        const reminderCutoff = hasTime
-          ? reminderDayEnd
-          : dateAtHour(reminderDayStart, 18);
+        const reminderCutoff = reminderDayEnd;
         // Lembretes com horário começam no horário devido; lembretes
-        // de dia inteiro começam à meia-noite e ocupam até 18:00.
+        // de dia inteiro começam à meia-noite e ocupam até a meia-noite
+        // seguinte.
         const reminderDisplayStart = hasTime
           ? due
           : reminderDayStart;
@@ -456,7 +440,7 @@ async function loadWindow() {
         };
 
         // O lembrete com horário permanece visível desde o horário devido
-        // até o fim do dia. O lembrete de dia inteiro ocupa 00:00–18:00.
+        // até o fim do dia. O lembrete de dia inteiro ocupa o dia completo.
         // Se continuar pendente, ele reaparece no dia seguinte como atrasado.
         const segments = [];
         if (reminderDisplayStart < reminderCutoff) {
@@ -476,40 +460,30 @@ async function loadWindow() {
     );
     const overdueReminderItems = scheduledReminders
       .filter((reminder) => {
-        if (!selectedDayIsToday) return false;
         const due = reminder.dueDate;
         const dueDayStart = normalizedReminderDayStart(reminder);
-        if (!due || !dueDayStart || dueDayStart >= windowStart) return false;
+        if (!due || !dueDayStart || dueDayStart >= startOfToday()) return false;
         if (!includeCalendar(reminder.calendar)) return false;
         const identifier = reminder.identifier ?? `${reminder.title}-${due}`;
         return !reminderIdentifiers.has(identifier);
       })
-      .map((reminder) => {
-        const hasTime = Boolean(reminder.dueDateIncludesTime);
-        const overdueStart = windowStart;
-        const overdueEnd = hasTime
-          ? windowEnd
-          : dateAtHour(windowStart, 18);
-
-        return {
-          kind: "reminder",
-          title: cleanTitle(reminder.title, "Lembrete"),
-          calendarTitle: reminder.calendar?.title ?? "Lembretes",
-          // O atraso começa exatamente na linha de 00:00, sem ocupar a
-          // margem anterior. Lembretes sem horário terminam às 18:00.
-          start: overdueStart,
-          end: overdueEnd,
-          isAllDay: false,
-          sourceIsAllDay: !hasTime,
-          identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
-          priority: Number(reminder.priority) || 0,
-          isOverdue: true,
-          color: safeCalendarColor(
-            reminder.calendar,
-            SETTINGS.fallbackReminderColor
-          ),
-        };
-      });
+      .map((reminder) => ({
+        kind: "reminder",
+        title: cleanTitle(reminder.title, "Lembrete"),
+        calendarTitle: reminder.calendar?.title ?? "Lembretes",
+        // No dia seguinte, um lembrete ainda pendente reaparece como
+        // atrasado desde 00:00 até 00:00 do dia seguinte.
+        start: startOfToday(),
+        end: addDays(startOfToday(), 1),
+        isAllDay: false,
+        identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
+        priority: Number(reminder.priority) || 0,
+        isOverdue: true,
+        color: safeCalendarColor(
+          reminder.calendar,
+          SETTINGS.fallbackReminderColor
+        ),
+      }));
 
     const holidayDates = new Set(
       [...events, ...todayEvents]
@@ -517,21 +491,18 @@ async function loadWindow() {
         .map((event) => dateKey(event.startDate))
     );
 
-    const selectedDayEvents = eventItems.filter(
-      (event) => event.end > windowStart && event.start < windowEnd
-    );
-    const selectedDayScheduleSummary = calculateScheduleSummary(
-      selectedDayEvents,
-      windowStart,
-      windowEnd
+    const todayScheduleSummary = calculateScheduleSummary(
+      todayEvents,
+      startOfToday(),
+      addDays(startOfToday(), 1)
     );
 
     return {
       items: [...eventItems, ...reminderItems, ...overdueReminderItems],
-      todayEventCount: selectedDayEvents.length,
+      todayEventCount: todayEvents.length,
       todayReminderCount: todayReminders.length,
-      todayBusyMinutes: selectedDayScheduleSummary.busyMinutes,
-      todayFreeMinutes: selectedDayScheduleSummary.freeMinutes,
+      todayBusyMinutes: todayScheduleSummary.busyMinutes,
+      todayFreeMinutes: todayScheduleSummary.freeMinutes,
       holidayDates,
       error: null,
     };
@@ -759,29 +730,18 @@ async function loadHourlyWeather(location) {
 function mergeHourlyWeatherHours(cachedHours, freshHours) {
   const byTimestamp = new Map();
 
-  // Horas já encerradas são registros: depois que foram armazenadas, uma
-  // nova previsão não pode substituí-las por outro valor.
-  for (const hour of cachedHours) {
+  // O resultado novo prevalece quando a mesma hora já existe no cache.
+  for (const hour of [...cachedHours, ...freshHours]) {
     const timestamp = Number(hour?.timestamp);
     if (Number.isFinite(timestamp)) {
       byTimestamp.set(timestamp, hour);
     }
   }
 
-  const currentDayStart = startOfToday().getTime();
-  for (const hour of freshHours) {
-    const timestamp = Number(hour?.timestamp);
-    if (!Number.isFinite(timestamp)) continue;
-    if (timestamp < currentDayStart && byTimestamp.has(timestamp)) {
-      continue;
-    }
-    byTimestamp.set(timestamp, hour);
-  }
-
-  // O cache cobre exatamente os sete dias navegáveis em cada direção e o
-  // limite superior necessário para completar o sétimo dia futuro.
-  const retentionStart = addDays(startOfToday(), -7).getTime();
-  const retentionEnd = addDays(startOfToday(), 8).getTime();
+  // Mantém o dia anterior para preservar extremos que ainda possam aparecer
+  // na janela móvel e limita o cache aos sete dias suportados pelo widget.
+  const retentionStart = addDays(startOfDay(windowStart), -1).getTime();
+  const retentionEnd = addDays(startOfDay(windowEnd), 2).getTime();
 
   return [...byTimestamp.values()]
     .filter((hour) => {
@@ -1313,13 +1273,6 @@ function prepareTimelineItems(items, referenceDate) {
     (item) => item.kind === "event" && !item.isAllDay
   );
 
-  for (const item of prepared) {
-    const hasEnded = item.end instanceof Date && item.end <= referenceDate;
-    item.isPast = Boolean(
-      item.kind === "event" && hasEnded
-    );
-  }
-
   for (const event of events) {
     event.isCurrentEvent =
       event.start <= referenceDate && event.end > referenceDate;
@@ -1342,49 +1295,24 @@ function prepareTimelineItems(items, referenceDate) {
 }
 
 
-function chooseItems(items, _referenceDate, limit) {
-  // A seleção precisa considerar a janela desenhada, não o instante atual.
-  // Assim, eventos já encerrados continuam disponíveis para um dia passado
-  // ou para a parte já concluída do dia atual.
+function chooseItems(items, referenceDate, limit) {
   const relevant = [...items].filter(
-    (item) =>
-      item?.start instanceof Date &&
-      item?.end instanceof Date &&
-      item.end > windowStart &&
-      item.start < windowEnd
+    (item) => item.isAllDay || item.end >= referenceDate
   );
 
   const byTime = (a, b) =>
     a.start.getTime() - b.start.getTime() ||
     a.end.getTime() - b.end.getTime();
 
-  // Um lembrete atrasado começa antes da janela, mas pertence visualmente
-  // ao dia selecionado. Isso mantém os eventos do dia acima dele.
-  const displayDayKey = (item) =>
-    item.kind === "reminder" &&
-    item.isOverdue &&
-    item.start < windowStart
-      ? dateKey(windowStart)
-      : dateKey(item.start);
-
   // O agrupamento diário preserva a ordem visual de cada data. A ocupação
   // das linhas, porém, permanece compartilhada para que eventos iniciados
   // anteriormente reservem sua linha enquanto ainda estiverem ativos.
   const byDay = new Map();
   for (const item of relevant) {
-    const key = displayDayKey(item);
+    const key = dateKey(item.start);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(item);
   }
-
-  const allDayIntervals = relevant
-    .filter(
-      (item) => item.kind === "event" && item.isAllDay
-    )
-    .map((item) => ({
-      start: item.start,
-      end: item.end,
-    }));
 
   const placed = [];
   const hidden = [];
@@ -1394,182 +1322,65 @@ function chooseItems(items, _referenceDate, limit) {
       firstDay.localeCompare(secondDay)
     );
 
-  for (const [dayKey, dayItems] of orderedDayGroups) {
+  for (const [, dayItems] of orderedDayGroups) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
-    const allDayEvents = [...dayItems]
-      .filter(isAllDayEvent)
-      .sort(byTime);
-    const dayStart =
-      dayKey === dateKey(windowStart)
-        ? startOfDay(windowStart)
-        : startOfDay(dayItems[0].start);
-    const dayEnd = addDays(dayStart, 1);
-    const dayInterval = {
-      start: dayStart,
-      end: dayEnd,
-    };
-    // A última linha fica reservada para eventos de dia inteiro quando
-    // houver algum no mesmo dia. Assim, lembretes nunca empurram esses
-    // eventos para cima nem ocupam a linha que lhes é destinada.
-    const timedRowLimit =
-      allDayEvents.length > 0
-        ? Math.max(1, limit - 1)
-        : limit;
-
-    const rowCanAccept = (item, row) => {
-      if (row < 0 || row >= limit) return false;
-
-      // Nenhum item com horário pode ocupar a última linha durante o
-      // intervalo de um evento de dia inteiro. Isso também protege a
-      // virada do dia quando um evento começou no dia anterior.
-      if (
-        row === limit - 1 &&
-        !item.isAllDay &&
-        allDayIntervals.some((interval) =>
-          itemsOverlap(item, interval)
-        )
-      ) {
-        return false;
-      }
-
-      return rows[row].every((existing) =>
-        itemsCanShareTimelineRow(item, existing)
-      );
-    };
-
-    const preferredRows = (preferredRow, rowLimit) => {
-      const ordered = [];
-      const append = (row) => {
-        if (
-          row >= 0 &&
-          row < rowLimit &&
-          !ordered.includes(row)
-        ) {
-          ordered.push(row);
-        }
-      };
-
-      append(preferredRow);
-      for (let row = preferredRow - 1; row >= 0; row--) {
-        append(row);
-      }
-      for (let row = preferredRow + 1; row < rowLimit; row++) {
-        append(row);
-      }
-      return ordered;
-    };
-
-    const rowOrderFor = (item, preferredRow, rowLimit) => {
-      // Um item pode compartilhar primeiro uma linha já ocupada por um
-      // item compatível. Só depois tenta uma linha vazia pela ordem normal
-      // de preferência.
-      const shareableRows = [];
-      for (let row = 0; row < rowLimit; row++) {
-        if (
-          rows[row].length > 0 &&
-          rowCanAccept(item, row)
-        ) {
-          shareableRows.push(row);
-        }
-      }
-
-      const normalRows = preferredRows(preferredRow, rowLimit);
-      return [
-        ...shareableRows,
-        ...normalRows.filter((row) => !shareableRows.includes(row)),
-      ];
-    };
-
     const placeItem = (item, rowOrder) => {
-      const availableRow = [...new Set(rowOrder)].find((row) =>
-        rowCanAccept(item, row)
+      const availableRow = rowOrder.find((row) =>
+        rows[row].every((existing) => !itemsOverlap(item, existing))
       );
 
       if (availableRow === undefined) {
         hidden.push(item);
-        return null;
+        return;
       }
 
       const positioned = { ...item, gridRow: availableRow };
       rows[availableRow].push(positioned);
       placed.push(positioned);
-      return availableRow;
     };
 
-    // Eventos com horário sempre ocupam as linhas superiores, antes de
-    // qualquer lembrete do mesmo dia.
-    const timedEvents = [...dayItems]
-      .filter(
-        (item) =>
-          item.kind === "event" && !isAllDayEvent(item)
-      )
+    // Eventos e lembretes com horário aparecem primeiro, em ordem
+    // cronológica, ocupando as linhas de cima para baixo.
+    const regularItems = [...dayItems]
+      .filter((item) => !isAllDayEvent(item))
       .sort(byTime);
 
-    timedEvents.forEach((item, index) => {
-      const preferredRow = Math.min(index, timedRowLimit - 1);
-      placeItem(
-        item,
-        rowOrderFor(item, preferredRow, timedRowLimit)
-      );
+    regularItems.forEach((item, index) => {
+      const preferredRow = Math.min(index, limit - 1);
+      const upperRows = [];
+      for (let row = preferredRow - 1; row >= 0; row--) {
+        upperRows.push(row);
+      }
+      const lowerRows = [];
+      for (let row = preferredRow + 1; row < limit; row++) {
+        lowerRows.push(row);
+      }
+
+      placeItem(item, [preferredRow, ...upperRows, ...lowerRows]);
     });
 
-    const highestEventRow = placed
-      .filter(
-        (item) =>
-          item.kind === "event" &&
-          !item.isAllDay &&
-          itemsOverlap(item, dayInterval)
-      )
-      .reduce(
-        (highest, item) => Math.max(highest, item.gridRow),
-        -1
-      );
-    const reminderFirstRow =
-      highestEventRow >= timedRowLimit
-        ? timedRowLimit
-        : Math.min(
-            Math.max(0, highestEventRow + 1),
-            timedRowLimit - 1
-          );
+    // Eventos de dia inteiro continuam sendo os últimos na ordem de
+    // exibição, mas ocupam as linhas disponíveis de baixo para cima:
+    // quinta, quarta, terceira, segunda e primeira.
+    const allDayEvents = [...dayItems]
+      .filter(isAllDayEvent)
+      .sort(byTime);
+    const bottomUpRows = Array.from(
+      { length: limit },
+      (_, index) => limit - 1 - index
+    );
 
-    // Lembretes atrasados vêm primeiro entre os lembretes. Os que não têm
-    // evento compatível em até 6 horas ficam abaixo do último evento; os
-    // compatíveis podem compartilhar a linha desse evento.
-    const reminders = [...dayItems]
-      .filter((item) => item.kind === "reminder")
-      .sort(
-        (a, b) =>
-          Number(b.isOverdue) - Number(a.isOverdue) ||
-          byTime(a, b)
-      );
-    if (reminderFirstRow >= timedRowLimit) {
-      hidden.push(...reminders);
-    } else {
-      reminders.forEach((item, index) => {
-        const preferredRow = Math.min(
-          reminderFirstRow + index,
-          timedRowLimit - 1
-        );
-        placeItem(
-          item,
-          rowOrderFor(item, preferredRow, timedRowLimit)
-        );
-      });
-    }
-
-    // Eventos de dia inteiro ocupam exclusivamente a última linha. Os que
-    // excederem essa capacidade seguem para o marcador +2, +3 etc.
     allDayEvents.forEach((item) => {
-      placeItem(item, [limit - 1]);
+      placeItem(item, bottomUpRows);
     });
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
   const overflowByDay = new Map();
   for (const item of hidden) {
-    const key = displayDayKey(item);
+    const key = dateKey(item.start);
     if (!overflowByDay.has(key)) overflowByDay.set(key, []);
     overflowByDay.get(key).push(item);
   }
@@ -1628,33 +1439,6 @@ function itemsOverlap(first, second) {
   return firstStart < secondEnd && secondStart < firstEnd;
 }
 
-function itemsCanShareTimelineRow(first, second) {
-  if (itemsOverlap(first, second)) return false;
-
-  // Lembretes continuam em linhas separadas entre si. A regra das 6 horas
-  // vale para evento-evento e evento-lembrete.
-  if (
-    first.kind === "reminder" &&
-    second.kind === "reminder"
-  ) {
-    return false;
-  }
-
-  // Eventos de dia inteiro ficam na última linha e podem coexistir apenas
-  // com um trecho que esteja fora do seu próprio intervalo.
-  if (first.isAllDay || second.isAllDay) return true;
-
-  const firstStart = first.start.getTime();
-  const secondStart = second.start.getTime();
-  const firstEnd = effectiveItemEnd(first);
-  const secondEnd = effectiveItemEnd(second);
-  const gap = firstEnd <= secondStart
-    ? secondStart - firstEnd
-    : firstStart - secondEnd;
-
-  return gap <= 6 * 60 * 60 * 1000;
-}
-
 function effectiveItemEnd(item) {
   const start = item.start.getTime();
   const end = item.end.getTime();
@@ -1694,70 +1478,7 @@ async function makeWidget(items, loadError) {
   widget.setPadding(0, 0, 0, 0);
   widget.backgroundColor = new Color(SETTINGS.backgroundColor);
   widget.backgroundImage = await renderWidget(items, loadError);
-  addNavigationOverlay(widget, dayOffset);
   return widget;
-}
-
-function addNavigationOverlay(widget, currentOffset) {
-  // O canvas é renderizado em 3x para o widget médio (1092x510 px =
-  // 364x170 pt). As stacks transparentes usam a mesma geometria do título,
-  // sem alterar a imagem de fundo.
-  const scale = CANVAS.width / 364;
-  const pointWidth = CANVAS.width / scale;
-  const pointHeight = CANVAS.height / scale;
-  const headerHeight = CANVAS.headerHeight / scale;
-  const titleLayout = titleAreaMetrics();
-  const leftWidth = titleLayout.x / scale;
-  const centerWidth = titleLayout.width / scale;
-  const rightWidth = Math.max(
-    0,
-    pointWidth - leftWidth - centerWidth
-  );
-
-  const overlay = widget.addStack();
-  overlay.layoutVertically();
-  overlay.setPadding(0, 0, 0, 0);
-  overlay.size = new Size(pointWidth, pointHeight);
-
-  const header = overlay.addStack();
-  header.layoutHorizontally();
-  header.setPadding(0, 0, 0, 0);
-  header.size = new Size(pointWidth, headerHeight);
-  const transparentHitImage = makeTransparentNavigationImage();
-
-  const addButton = (width, targetOffset) => {
-    const button = header.addStack();
-    button.setPadding(0, 0, 0, 0);
-    button.size = new Size(width, headerHeight);
-    const targetURL = navigationURL(targetOffset);
-    button.url = targetURL;
-
-    // Stack vazia, contendo apenas spacer, não oferece uma superfície de
-    // toque confiável. A imagem transparente ocupa toda a área do botão e
-    // também recebe a URL diretamente, sem alterar a aparência do widget.
-    const hitTarget = button.addImage(transparentHitImage);
-    hitTarget.imageSize = new Size(
-      Math.max(1, width),
-      Math.max(1, headerHeight)
-    );
-    hitTarget.url = targetURL;
-    return button;
-  };
-
-  addButton(leftWidth, Math.max(-7, currentOffset - 1));
-  addButton(centerWidth, 0);
-  addButton(rightWidth, Math.min(7, currentOffset + 1));
-  overlay.addSpacer();
-}
-
-function makeTransparentNavigationImage() {
-  const imageContext = new DrawContext();
-  imageContext.size = new Size(1, 1);
-  imageContext.opaque = false;
-  imageContext.respectScreenScale = false;
-  imageContext.setFillColor(new Color("#FFFFFF", 0));
-  imageContext.fillRect(new Rect(0, 0, 1, 1));
-  return imageContext.getImage();
 }
 
 function isAccessoryFamily(family) {
@@ -1999,21 +1720,20 @@ function hexToRGB(hex) {
 }
 
 function drawDatePanel(ctx, holidayDates) {
-  const titleDate = windowStart;
-  const weekday = titleWeekday(titleDate).toLocaleUpperCase("pt-BR");
-  const dayNumber = formatDate(titleDate, "d");
-  const month = formatDate(titleDate, "MMMM").toLocaleUpperCase("pt-BR");
+  const weekday = titleWeekday(now).toLocaleUpperCase("pt-BR");
+  const dayNumber = formatDate(now, "d");
+  const month = formatDate(now, "MMMM").toLocaleUpperCase("pt-BR");
   const segments = [
     {
       text: weekday,
       bold: true,
-      color: titleWeekdayColor(titleDate, holidayDates),
+      color: titleWeekdayColor(now, holidayDates),
     },
     { text: ", ", bold: false, color: Color.white() },
     {
       text: dayNumber,
       bold: true,
-      color: titleDayColor(titleDate, holidayDates),
+      color: titleDayColor(now, holidayDates),
     },
     { text: " DE ", bold: false, color: Color.white() },
     { text: month, bold: true, color: Color.white() },
@@ -2035,93 +1755,18 @@ function drawDatePanel(ctx, holidayDates) {
   const totalWidth = fullDate.length * characterWidth;
   const startX = (CANVAS.width - totalWidth) / 2;
 
-  const titleCtx = new DrawContext();
-  titleCtx.size = new Size(CANVAS.width, CANVAS.headerHeight);
-  titleCtx.opaque = false;
-  titleCtx.respectScreenScale = false;
-  titleCtx.setTextAlignedLeft();
-  // Compensação óptica de 10 px para manter o centro visual do título
-  // alinhado horizontalmente com as setas.
-  const titleTextY = 20 - 10;
+  ctx.setTextAlignedLeft();
   let segmentX = startX;
   for (const segment of segments) {
-    titleCtx.setFont(
+    ctx.setFont(
       segment.bold
         ? Font.blackMonospacedSystemFont(fontSize)
         : Font.regularMonospacedSystemFont(fontSize)
     );
-    titleCtx.setTextColor(segment.color);
-    titleCtx.drawText(segment.text, new Point(segmentX, titleTextY));
+    ctx.setTextColor(segment.color);
+    ctx.drawText(segment.text, new Point(segmentX, 20));
     segmentX += segment.text.length * characterWidth;
   }
-
-  const titleLayout = titleAreaMetrics();
-
-  // A tipografia mantém a altura original e é comprimida somente no eixo X,
-  // ocupando metade da largura anterior mais 10 px e permanecendo no centro.
-  ctx.drawImageInRect(
-    titleCtx.getImage(),
-    new Rect(
-      titleLayout.x,
-      0,
-      titleLayout.width,
-      CANVAS.headerHeight
-    )
-  );
-
-  // As setas ficam alinhadas às linhas verticais de 01:00 e 23:00.
-  // timeToX() usa coordenadas relativas ao painel da timeline; por isso
-  // somamos plotLeft para obter a coordenada do canvas inteiro.
-  const leftArrowX =
-    CANVAS.plotLeft + timeToX(dateAtHour(windowStart, 1));
-  const rightArrowX =
-    CANVAS.plotLeft + timeToX(dateAtHour(windowStart, 23));
-
-  drawNavigationChevron(
-    ctx,
-    leftArrowX,
-    20 + fontSize / 2,
-    -1,
-    dayOffset > -7
-  );
-  drawNavigationChevron(
-    ctx,
-    rightArrowX,
-    20 + fontSize / 2,
-    1,
-    dayOffset < 7
-  );
-}
-
-function titleAreaMetrics() {
-  const width = CANVAS.titleAreaWidth;
-  const x = (CANVAS.width - width) / 2;
-  return {
-    x,
-    width,
-  };
-}
-
-function drawNavigationChevron(ctx, centerX, centerY, direction, enabled) {
-  const path = new Path();
-  const halfHeight = 16;
-  const halfWidth = 10;
-  if (direction < 0) {
-    path.move(new Point(centerX + halfWidth, centerY - halfHeight));
-    path.addLine(new Point(centerX - halfWidth, centerY));
-    path.addLine(new Point(centerX + halfWidth, centerY + halfHeight));
-  } else {
-    path.move(new Point(centerX - halfWidth, centerY - halfHeight));
-    path.addLine(new Point(centerX + halfWidth, centerY));
-    path.addLine(new Point(centerX - halfWidth, centerY + halfHeight));
-  }
-
-  ctx.setStrokeColor(
-    new Color(enabled ? SETTINGS.primaryTextColor : SETTINGS.secondaryTextColor, 0.9)
-  );
-  ctx.setLineWidth(5);
-  ctx.addPath(path);
-  ctx.strokePath();
 }
 
 function drawTemperatureFooter(ctx, weather) {
@@ -2191,7 +1836,7 @@ function drawTemperatureFooter(ctx, weather) {
     ? 23
     : isExtendedDetailedMode()
       ? 22
-      : 30;
+      : 27;
 
   // 1) guias horárias discretas, sem caixas ou preenchimentos individuais;
   // 2) chuva atrás da área e da curva térmica;
@@ -2206,7 +1851,7 @@ function drawTemperatureFooter(ctx, weather) {
   );
 
   // As guias originais do grid ficam visíveis por cima das barras azuis.
-  drawThermalHourGuides(footerCtx, ticks, graphBottom);
+  drawThermalHourGuides(footerCtx, ticks, graphBottom, false);
 
   const thermalSamples = buildThermalSamples(sourceHours);
   const curvePoints = thermalSamples
@@ -2242,13 +1887,20 @@ function drawTemperatureFooter(ctx, weather) {
     temperatureMaximum
   );
 
-  // O quadrado inferior é preenchido primeiro; a legenda permanece livre de
-  // uma linha vertical grossa na virada do dia.
+  // O quadrado inferior é preenchido primeiro; a linha de mudança de dia
+  // fica por cima dele e da curva térmica.
   const renderedLabelTop = labelTop + thermalCurveExpansion;
   // Mantém a posição vertical existente e usa o mesmo eixo para todos os
   // números da legenda inferior.
   const temperatureLegendCenterY = renderedLabelTop + 13.5;
   drawThermalDayBadgeFrames(
+    footerCtx,
+    ticks,
+    temperatureLegendCenterY
+  );
+
+  // A linha termina exatamente no centro do quadrado inferior.
+  drawThermalDayBoundaryGuides(
     footerCtx,
     ticks,
     temperatureLegendCenterY
@@ -2324,7 +1976,7 @@ function drawTemperatureFooter(ctx, weather) {
       ? 23
       : isExtendedDetailedMode()
         ? 24
-        : 30;
+        : 27;
     footerCtx.setFont(
       isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
@@ -2373,20 +2025,38 @@ function drawTemperatureFooter(ctx, weather) {
   );
 }
 
-function drawThermalHourGuides(ctx, ticks, graphBottom) {
+function drawThermalHourGuides(
+  ctx,
+  ticks,
+  graphBottom,
+  includeDayBoundaries = true
+) {
   for (const tick of ticks) {
     const hour = tick.getHours();
+    if (!includeDayBoundaries && hour === 0) continue;
 
     const x = timeToX(tick);
-    // As linhas de 00:00 e 24:00 usam exatamente a mesma espessura e cor
-    // das demais linhas horárias.
-    const width = hour === 12 ? 2 : 1;
+    // Mesmas espessuras e cores das linhas do grid superior.
+    const width = hour === 0 ? 8 : hour === 12 ? 2 : 1;
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(x - width / 2, 0, width, graphBottom)
     );
   }
 }
+
+function drawThermalDayBoundaryGuides(ctx, ticks, lineBottomY) {
+  for (const tick of ticks) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(
+      new Rect(x - 4, 0, 8, lineBottomY)
+    );
+  }
+}
+
 
 function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
   for (const tick of ticks) {
@@ -2466,14 +2136,6 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     4,
     graphBottom - graphTop - 2
   );
-  // Cada barra ocupava originalmente o trecho entre
-  // `graphBottom - height` e `graphBottom`. O eixo próprio das barras é o
-  // eixo horizontal central da faixa; ao espelhá-las, elas passam a ocupar
-  // o trecho correspondente a partir de `graphTop`, mantendo exatamente a
-  // mesma altura, largura e intensidade.
-  const horizontalAxisY = (graphTop + graphBottom) / 2;
-  const mirroredBarTop =
-    2 * horizontalAxisY - graphBottom;
 
   // Mantém as barras espessas; em janelas longas, adapta a largura
   // à resolução de cada quarto de hora para preservar a leitura.
@@ -2515,7 +2177,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     ctx.fillRect(
       new Rect(
         centerX - barWidth / 2,
-        mirroredBarTop,
+        graphBottom - height,
         barWidth,
         height
       )
@@ -2724,42 +2386,6 @@ function thermalTemperatureY(
   return graphBottom - normalized * (graphBottom - graphTop);
 }
 
-function mirrorThermalCurvePoints(points, graphTop, graphBottom) {
-  const horizontalAxisY = (graphTop + graphBottom) / 2;
-  return points.map((point) => ({
-    ...point,
-    y: horizontalAxisY - (point.y - horizontalAxisY),
-  }));
-}
-
-function thermalCurveYAtX(points, x, fallback) {
-  if (!Array.isArray(points) || points.length === 0) {
-    return fallback;
-  }
-
-  if (x <= points[0].x) return points[0].y;
-
-  const last = points[points.length - 1];
-  if (x >= last.x) return last.y;
-
-  for (let index = 1; index < points.length; index++) {
-    const previous = points[index - 1];
-    const current = points[index];
-    if (x > current.x) continue;
-
-    const span = current.x - previous.x;
-    const progress = span <= 0
-      ? 0
-      : Math.max(
-          0,
-          Math.min(1, (x - previous.x) / span)
-        );
-    return previous.y + (current.y - previous.y) * progress;
-  }
-
-  return fallback;
-}
-
 function smoothThermalCurve(points) {
   if (points.length <= 2) return points;
 
@@ -2852,9 +2478,7 @@ function drawThermalArea(
   points,
   graphBottom,
   minimum,
-  maximum,
-  graphTop = 0,
-  fillDirection = "down"
+  maximum
 ) {
   if (points.length < 2 || graphBottom <= 0) return;
 
@@ -2865,9 +2489,6 @@ function drawThermalArea(
   const verticalStep = 2;
   const topAlpha = 0.80;
   const bottomAlpha = 0.10;
-  // "up" preenche o lado oposto da curva, reproduzindo o espelho
-  // geométrico em relação ao eixo horizontal central.
-  const fillsAboveCurve = fillDirection === "up";
 
   for (let index = 0; index < points.length - 1; index++) {
     const first = points[index];
@@ -2889,24 +2510,11 @@ function drawThermalArea(
       const curveY =
         first.y +
         (second.y - first.y) * progress;
-      const clampedCurveY = Math.max(
-        graphTop,
+      const topY = Math.max(
+        0,
         Math.min(graphBottom, curveY)
       );
-      const fillStartY = fillsAboveCurve
-        ? graphTop
-        : clampedCurveY;
-      const fillEndY = fillsAboveCurve
-        ? clampedCurveY
-        : graphBottom;
-      if (fillEndY <= fillStartY) continue;
-
-      const gradientStartAlpha = fillsAboveCurve
-        ? bottomAlpha
-        : topAlpha;
-      const gradientEndAlpha = fillsAboveCurve
-        ? topAlpha
-        : bottomAlpha;
+      if (topY >= graphBottom) continue;
 
       const color = thermalTemperatureColor(
         temperature,
@@ -2918,15 +2526,15 @@ function drawThermalArea(
         Math.min(horizontalStep + 1, endX - x + 1)
       );
 
-      for (let y = fillStartY; y < fillEndY; y += verticalStep) {
+      for (let y = topY; y < graphBottom; y += verticalStep) {
         const ratio =
-          (y - fillStartY) /
-          Math.max(1, fillEndY - fillStartY);
+          (y - topY) /
+          Math.max(1, graphBottom - topY);
         const easedRatio = thermalSmoothstep(ratio);
         const alpha =
-          gradientStartAlpha +
-          (gradientEndAlpha - gradientStartAlpha) * easedRatio;
-        const height = Math.min(verticalStep, fillEndY - y);
+          topAlpha +
+          (bottomAlpha - topAlpha) * easedRatio;
+        const height = Math.min(verticalStep, graphBottom - y);
 
         ctx.setFillColor(new Color(color, alpha));
         ctx.fillRect(
@@ -3085,13 +2693,7 @@ function weatherStripBottomY() {
 // A faixa superior pertence exclusivamente aos astros e ícones de clima.
 // Todos compartilham o mesmo centro horizontal e a mesma caixa visual.
 function weatherIconSize() {
-  return isCompactMode() ? 34 : 46;
-}
-
-function weatherSunIconSize() {
-  // Apenas os símbolos solares crescem; a Lua continua usando
-  // exclusivamente weatherIconSize().
-  return weatherIconSize() + 5;
+  return isCompactMode() ? 30 : 40;
 }
 
 function weatherIconCenterY() {
@@ -3107,22 +2709,6 @@ function weatherIconIntersectsTimeline(centerX, halfWidth) {
   );
 }
 
-function weatherThermalGraphTopY() {
-  return 0;
-}
-
-function weatherThermalGraphBottomY() {
-  // A curva ocupa exatamente a faixa superior dos astros, sem criar uma
-  // segunda reserva vertical para o módulo térmico.
-  return Math.max(1, weatherStripBottomY() - 1);
-}
-
-function weatherTemperatureLabelY(fontSize) {
-  // O topo da caixa começa na metade inferior do astro e permanece dentro
-  // da faixa superior, deixando as horas livres na base.
-  return weatherIconCenterY() - fontSize / 2 + 7;
-}
-
 // A linha solar nasce no primeiro pixel útil do grid, abaixo da faixa fixa
 // dos ícones. Assim o halo não interfere no alinhamento óptico dos astros.
 function solarLineY() {
@@ -3130,12 +2716,14 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // Mantido para compatibilidade com o desenho legado da faixa inferior.
-  return thermalBandBottomY() - (isCompactMode() ? 12 : 20);
+  // No modo compacto, o bloco térmico total fica com 40 px:
+  // 12 px para a curva + 28 px para a legenda de temperaturas.
+  return thermalBandBottomY() - (isCompactMode() ? 12 : 30);
 }
 
 function thermalTemperatureLabelTopY() {
-  // Mantido para compatibilidade com o desenho legado da faixa inferior.
+  // A legenda numérica pertence ao módulo térmico. Esta reserva inclui
+  // as fontes maiores de máxima/mínima e impede que os charts a atravessem.
   return thermalBandTopY() - (isCompactMode() ? 28 : 32);
 }
 
@@ -3156,9 +2744,9 @@ function timelineChartTop() {
 }
 
 function timelineChartBottom() {
-  // Sem a faixa térmica inferior, os charts ocupam todo o espaço disponível
-  // até a pequena margem real antes da legenda das horas.
-  return thermalBandBottomY() - 5;
+  // Mantém exatamente o início atual da agenda e reduz somente seu limite
+  // inferior, reservando uma margem real antes da legenda térmica.
+  return thermalTemperatureLabelTopY() - 5;
 }
 
 function timelineRowHeight() {
@@ -3199,12 +2787,12 @@ function timelineBarHeight(item) {
   const preferredHeight = item?.isOverflow
     ? isCompactMode()
       ? 29 * compactScale
-      : 38
+      : 34
     : isCompactMode()
       ? 30 * compactScale
       : isExtendedDetailedMode()
         ? 35
-        : 44;
+        : 38;
 
   // Ao comprimir as cinco linhas, preserva uma separação mínima entre charts.
   return Math.min(
@@ -3235,26 +2823,16 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
-  const hourFontSize = isCompactMode() ? 25 : 28;
+  // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
+  // aumentamos levemente a fonte sem alterar o modo de 24 h.
+  const hourFontSize =
+    windowHours > 24 && isCompactMode()
+      ? 20
+      : 22;
 
   ctx.setTextAlignedCenter();
   for (const tick of hourTicks()) {
     const hour = tick.getHours();
-    const isWindowStart =
-      tick.getTime() === windowStart.getTime();
-    const isWindowEnd =
-      tick.getTime() === windowEnd.getTime();
-
-    if (isWindowStart || isWindowEnd) {
-      ctx.setFont(Font.regularMonospacedSystemFont(hourFontSize));
-      ctx.setTextColor(secondaryNightLegendColor());
-      ctx.drawTextInRect(
-        isWindowStart ? "0h" : "24h",
-        centeredLegendTextRect(timeToX(tick), centerY)
-      );
-      continue;
-    }
-
     if (hour === 0) continue;
 
     const isDaylightHour =
@@ -3307,9 +2885,9 @@ function weatherConditionTicks(weather) {
     tick.setHours(tick.getHours() + 1);
   }
 
-  // Nunca desenha ícones depois de 24:00; isso evitava a meia Lua parcial
-  // que aparecia em 02:00 do dia seguinte.
-  const iconDisplayEnd = windowEnd;
+  const iconDisplayEnd = new Date(
+    windowEnd.getTime() + stepHours * 60 * 60 * 1000
+  );
 
   while (tick <= iconDisplayEnd) {
     const forecast = weatherForecastNearest(
@@ -3452,29 +3030,29 @@ function drawWeatherHalfSun(
   backgroundColor,
   visibleFraction = 0.75
 ) {
-  // Recorta o disco em uma camada transparente, sem pintar o fundo.
-  const clampedFraction = Math.max(0.5, Math.min(1, visibleFraction));
-  const padding = Math.ceil(radius * 2 + 4);
-  const clipBottom = padding - radius + radius * 2 * clampedFraction;
-  const layer = new DrawContext();
-  layer.size = new Size(padding * 2, clipBottom);
-  layer.opaque = false;
-  layer.respectScreenScale = false;
   drawSunBurst(
-    layer,
-    padding,
-    padding,
+    ctx,
+    centerX,
+    centerY,
     radius,
     fillColor,
     "#FF8A00"
   );
-  ctx.drawImageInRect(
-    layer.getImage(),
+
+  // Mostra 75% do disco e recorta apenas a faixa inferior restante.
+  const clampedFraction = Math.max(
+    0.5,
+    Math.min(1, visibleFraction)
+  );
+  const maskY =
+    centerY - radius + radius * 2 * clampedFraction;
+  ctx.setFillColor(new Color(backgroundColor, 1.0));
+  ctx.fillRect(
     new Rect(
-      centerX - padding,
-      centerY - padding,
-      padding * 2,
-      clipBottom
+      centerX - radius - 2,
+      maskY,
+      radius * 2 + 4,
+      radius * 2 + 4
     )
   );
 }
@@ -4035,12 +3613,15 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
   const ticks = weatherConditionTicks(weather);
   if (ticks.length === 0) return;
 
-  const baseIconSize = weatherIconSize();
-  const sunIconSize = weatherSunIconSize();
+  const iconSize = weatherIconSize();
   const centerY = weatherIconCenterY();
 
   for (const entry of ticks) {
     const centerX = timeToX(entry.tick);
+    if (!weatherIconIntersectsTimeline(centerX, iconSize)) {
+      continue;
+    }
+
     const hour = entry.tick.getHours();
     const isSunrise =
       hour === SETTINGS.daylightStartHour;
@@ -4049,15 +3630,6 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
     const isNight = isNightWeatherHour(entry.tick);
     const eclipse =
       entry.eclipse ?? eclipseForDate(entry.tick);
-    const isRegularSun = !isNight && !eclipse;
-    const displaySize =
-      isSunrise || isSunset || isRegularSun
-        ? sunIconSize
-        : baseIconSize;
-
-    if (!weatherIconIntersectsTimeline(centerX, displaySize)) {
-      continue;
-    }
 
     // Os limites de transição têm prioridade absoluta: 06:00 e 18:00
     // continuam sendo nascer e pôr do sol mesmo se houver um eclipse
@@ -4067,7 +3639,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         ctx,
         centerX,
         centerY,
-        displaySize,
+        iconSize,
         isSunrise ? "sunrise" : "sunset"
       );
       drawCelestialWeatherOverlay(
@@ -4075,7 +3647,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         entry.forecast,
         centerX,
         centerY,
-        baseIconSize
+        iconSize
       );
       continue;
     }
@@ -4087,7 +3659,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         ctx,
         centerX,
         centerY,
-        baseIconSize,
+        iconSize,
         eclipse,
         entry.tick
       );
@@ -4096,7 +3668,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         entry.forecast,
         centerX,
         centerY,
-        baseIconSize
+        iconSize
       );
       continue;
     }
@@ -4105,9 +3677,9 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       drawMoonPhase(
         ctx,
         moonPhaseForDate(entry.tick),
-        centerX - baseIconSize / 2,
-        centerY - baseIconSize / 2,
-        baseIconSize,
+        centerX - iconSize / 2,
+        centerY - iconSize / 2,
+        iconSize,
         entry.tick
       );
     } else {
@@ -4115,7 +3687,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
         ctx,
         centerX,
         centerY,
-        weatherSunRadius(sunIconSize)
+        weatherSunRadius(iconSize)
       );
     }
 
@@ -4124,7 +3696,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       entry.forecast,
       centerX,
       centerY,
-      baseIconSize
+      iconSize
     );
   }
 }
@@ -4387,6 +3959,8 @@ function drawWeatherConditionStrip(ctx, weather) {
   const bottom = weatherStripBottomY();
   // Fundo transparente: o gradiente original do widget permanece visível
   // atrás das luas, dos sóis, das legendas e do grid.
+  // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
+  drawDayBoundaryOriginsBehindMoon(ctx, bottom);
 
   // O sol central fixo foi removido. Cada horário recebe seu próprio ícone.
   drawHourlyWeatherIcons(ctx, weather, bottom);
@@ -4451,6 +4025,25 @@ function drawWeatherConditionStrip(ctx, weather) {
     }
 
     nightDay = addDays(nightDay, 1);
+  }
+}
+
+function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
+  const moonCenterY = weatherIconCenterY();
+
+  for (const tick of hourTicks()) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(
+      new Rect(
+        x - 4,
+        moonCenterY,
+        8,
+        Math.max(1, stripBottom - moonCenterY)
+      )
+    );
   }
 }
 
@@ -4733,7 +4326,7 @@ function drawHourlyRainColumn(
   );
 }
 
-function buildTopThermalBand(weather) {
+function drawCompactThermalBand(ctx, weather) {
   const sourceHours = [...(weather?.hours ?? [])]
     .filter(
       (hour) =>
@@ -4746,18 +4339,16 @@ function buildTopThermalBand(weather) {
       Number(hour.timestamp) >= windowStart.getTime() &&
       Number(hour.timestamp) <= windowEnd.getTime()
   );
-  if (!visibleHours.length) return null;
+  if (!visibleHours.length) return;
 
   const visibleValues = visibleHours.map((hour) =>
     Number(hour.temperature)
   );
   const minimum = Math.min(...visibleValues);
   const maximum = Math.max(...visibleValues);
-  const graphTop = weatherThermalGraphTopY();
-  const graphBottom = weatherThermalGraphBottomY();
+  const graphTop = thermalBandTopY();
+  const graphBottom = thermalBandBottomY();
 
-  // A escala térmica é calculada normalmente; o espelhamento é aplicado
-  // somente à geometria da curva e de seu preenchimento.
   const curvePoints = buildThermalSamples(sourceHours)
     .map((sample) => ({
       x: timeToX(new Date(sample.timestamp)),
@@ -4777,123 +4368,51 @@ function buildTopThermalBand(weather) {
     );
 
   const smoothPoints = smoothThermalCurve(curvePoints);
-  const mirroredPoints = mirrorThermalCurvePoints(
-    smoothPoints,
-    graphTop,
-    graphBottom
-  );
-
-  return {
-    sourceHours,
-    minimum,
-    maximum,
-    graphTop,
-    graphBottom,
-    mirroredPoints,
-  };
-}
-
-function drawTopThermalBand(ctx, thermalBand) {
-  if (!thermalBand) return null;
-
-  const {
-    sourceHours,
-    minimum,
-    maximum,
-    graphTop,
-    graphBottom,
-    mirroredPoints,
-  } = thermalBand;
-
-  // O preenchimento acompanha o espelhamento da linha, sem deslocar as
-  // temperaturas que ficam sobre os astros.
   drawThermalArea(
     ctx,
-    mirroredPoints,
+    smoothPoints,
     graphBottom,
-    minimum,
-    maximum,
-    graphTop,
-    "up"
-  );
-
-  drawThermalCurve(
-    ctx,
-    mirroredPoints,
     minimum,
     maximum
   );
 
-  // As barras de chuva permanecem na camada meteorológica e também são
-  // espelhadas em relação ao próprio eixo horizontal da faixa.
+  drawThermalCurve(
+    ctx,
+    smoothPoints,
+    minimum,
+    maximum
+  );
+
+  // Barras opacas sobre a curva e antes dos textos de temperatura.
   drawThermalRainBars(
     ctx,
     sourceHours,
     graphTop,
     graphBottom
   );
-
-  return thermalBand;
+  drawVisibleDailyExtremes(
+    ctx,
+    sourceHours,
+    minimum,
+    maximum,
+    graphTop,
+    graphBottom
+  );
 }
 
 function drawVisibleDailyExtremes(
   ctx,
-  sourceHours
+  sourceHours,
+  minimum,
+  maximum,
+  graphTop,
+  graphBottom
 ) {
-  const temperatureFontSize = isCompactMode() ? 21 : 25;
-
-  // A janela de 24 horas mantém os astros em horas pares. As temperaturas
-  // usadas para máxima e mínima também precisam vir somente desse conjunto
-  // visível; uma máxima/mínima real em hora ímpar não é exibida.
-  const displayedForecasts = [];
-  let tick = floorToHour(windowStart);
-  if (tick.getHours() % 2 !== 0) {
-    tick.setHours(tick.getHours() + 1);
-  }
-  while (tick <= windowEnd) {
-    const forecast = temperatureAtTimestamp(
-      sourceHours,
-      tick.getTime()
-    );
-    if (forecast) {
-      displayedForecasts.push({
-        tick: new Date(tick),
-        forecast,
-      });
-    }
-    tick = new Date(tick.getTime() + 2 * 60 * 60 * 1000);
-  }
-
-  const daily = {};
-  for (const entry of displayedForecasts) {
-    // 24:00 já é o início do dia seguinte e não participa da máxima ou
-    // mínima do dia selecionado, embora seu rótulo continue sendo exibido.
-    if (entry.tick.getTime() >= windowEnd.getTime()) continue;
-
-    const temperature = Number(entry.forecast.temperature);
-    if (!Number.isFinite(temperature)) continue;
-
-    const key = dateKey(entry.tick);
-    if (!daily[key]) {
-      daily[key] = {
-        minimum: temperature,
-        minimumTimestamp: entry.tick.getTime(),
-        maximum: temperature,
-        maximumTimestamp: entry.tick.getTime(),
-      };
-      continue;
-    }
-
-    if (temperature < daily[key].minimum) {
-      daily[key].minimum = temperature;
-      daily[key].minimumTimestamp = entry.tick.getTime();
-    }
-    if (temperature > daily[key].maximum) {
-      daily[key].maximum = temperature;
-      daily[key].maximumTimestamp = entry.tick.getTime();
-    }
-  }
-
+  const daily = dailyTemperatureExtremes(sourceHours);
+  const visibleStart = windowStart.getTime();
+  const visibleEnd = windowEnd.getTime();
+  const normalFontSize = isCompactMode() ? 16 : 19;
+  const extremeFontSize = isCompactMode() ? 21 : 25;
   const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
@@ -4913,12 +4432,47 @@ function drawVisibleDailyExtremes(
     );
   }
 
-  const visibleExtremes = extremeEntries.filter((entry) =>
-    Number.isFinite(entry.timestamp)
+  const visibleExtremes = extremeEntries.filter(
+    (entry) =>
+      Number.isFinite(entry.timestamp) &&
+      entry.timestamp >= visibleStart &&
+      entry.timestamp <= visibleEnd
   );
   const exactExtremeTimestamps = new Set(
     visibleExtremes.map((entry) => entry.timestamp)
   );
+  const suppressedEvenTimestamps = new Set();
+
+  for (const entry of visibleExtremes) {
+    const date = new Date(entry.timestamp);
+    if (date.getHours() % 2 === 0) continue;
+
+    const previousEven = new Date(date);
+    previousEven.setHours(date.getHours() - 1, 0, 0, 0);
+    const nextEven = new Date(date);
+    nextEven.setHours(date.getHours() + 1, 0, 0, 0);
+    suppressedEvenTimestamps.add(previousEven.getTime());
+    suppressedEvenTimestamps.add(nextEven.getTime());
+  }
+
+  const evenTicks = [];
+  let tick = floorToHour(windowStart);
+  if (tick.getHours() % 2 !== 0) {
+    tick.setHours(tick.getHours() + 1);
+  }
+  const tickStepHours = isCompactMode() ? 6 : 2;
+  while (tick <= windowEnd) {
+    if (
+      tick.getHours() % tickStepHours === 0 &&
+      !suppressedEvenTimestamps.has(tick.getTime()) &&
+      !exactExtremeTimestamps.has(tick.getTime())
+    ) {
+      evenTicks.push(new Date(tick));
+    }
+    tick = new Date(
+      tick.getTime() + 2 * 60 * 60 * 1000
+    );
+  }
 
   const resolvedTextColor = (value, opacity = 1.0) =>
     typeof value === "string"
@@ -4972,30 +4526,39 @@ function drawVisibleDailyExtremes(
     ctx.drawTextInRect(label, rect);
   };
 
-  for (const evenTick of displayedForecasts) {
-    const forecast = evenTick.forecast;
+  for (const evenTick of evenTicks) {
+    const forecast = temperatureAtTimestamp(
+      sourceHours,
+      evenTick.getTime()
+    );
     if (!forecast) continue;
 
-    const x = timeToX(evenTick.tick);
-    const labelY = weatherTemperatureLabelY(temperatureFontSize);
-    const hour = evenTick.tick.getHours();
+    const x = timeToX(evenTick);
+    const y = thermalTemperatureY(
+      forecast.temperature,
+      minimum,
+      maximum,
+      graphTop,
+      graphBottom
+    );
+    const labelY = Math.max(
+      thermalTemperatureLabelTopY() + 4,
+      y - 24
+    );
+    const hour = evenTick.getHours();
     const isNight = isSecondaryNightLegendHour(hour);
     const labelColor = isNight
       ? secondaryNightLegendColor()
       : Color.white();
 
-    if (exactExtremeTimestamps.has(evenTick.tick.getTime())) {
-      continue;
-    }
-
     drawTemperatureText(
       String(Math.round(forecast.temperature)) + "º",
       x,
       labelY,
-      temperatureFontSize,
+      normalFontSize,
       labelColor,
       "#000000",
-      true
+      false
     );
   }
 
@@ -5003,12 +4566,22 @@ function drawVisibleDailyExtremes(
   for (const entry of visibleExtremes) {
     const date = new Date(entry.timestamp);
     const x = timeToX(date);
-    const labelY = weatherTemperatureLabelY(temperatureFontSize);
+    const y = thermalTemperatureY(
+      entry.temperature,
+      minimum,
+      maximum,
+      graphTop,
+      graphBottom
+    );
+    const labelY = Math.max(
+      thermalTemperatureLabelTopY() + 2,
+      y - 31
+    );
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
       x,
       labelY,
-      temperatureFontSize,
+      extremeFontSize,
       entry.color,
       "#000000",
       true
@@ -5022,22 +4595,22 @@ async function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // O brilho é desenhado primeiro para ficar atrás de todos os elementos.
-  const thermalBand = buildTopThermalBand(hourlyWeather);
-  if (SETTINGS.showSolarGlow) {
-    drawFixedDaylightGlow(ctx, thermalBand);
-  }
-  drawHourAxis(ctx, items);
-
-  // A curva térmica ocupa a faixa superior e é desenhada antes dos astros,
-  // para que eles permaneçam visualmente à frente dela.
-  drawTopThermalBand(ctx, thermalBand);
+  // Weathergraph: clima em uma faixa estreita, agenda no centro,
+  // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
-  if (thermalBand) {
-    // Os números são desenhados depois dos astros, sobre a metade inferior
-    // de cada símbolo, mantendo a leitura sem reservar uma faixa extra.
-    drawVisibleDailyExtremes(ctx, thermalBand.sourceHours);
+  drawHourAxis(ctx, items);
+  // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
+  // atrás da curva térmica e dos charts de agenda.
+  if (SETTINGS.showSolarGlow) {
+    drawFixedDaylightGlow(ctx, hourlyWeather);
   }
+  // Os nomes completos dos dias ficam no grid, atrás da curva térmica,
+  // da chuva e dos charts; o recorte acompanha cada coluna de 24 horas.
+  await drawDiagonalWeekdayLabels(ctx);
+  // A chuva é desenhada somente dentro da faixa térmica inferior.
+  // Assim nenhuma barra atravessa os charts dos eventos e lembretes.
+  drawCompactThermalBand(ctx, hourlyWeather);
+
   if (loadError) {
     drawPermissionState(ctx);
   } else {
@@ -5052,7 +4625,7 @@ async function renderTimelinePanel(items, loadError) {
         .filter((candidate) => candidate.gridRow === row)
         .sort(
           (a, b) =>
-            Number(b.isOverflow) - Number(a.isOverflow) ||
+            Number(a.isOverflow) - Number(b.isOverflow) ||
             a.start.getTime() - b.start.getTime()
         );
 
@@ -5065,10 +4638,10 @@ async function renderTimelinePanel(items, loadError) {
     drawEventStartLineAnchors(ctx, items);
   }
 
-  // O marcador de horário atual fica atrás das legendas inferiores para
-  // atravessar a faixa dos astros, dos charts, das temperaturas e das horas.
-  drawCurrentTimeLine(ctx);
   drawBottomHourLegend(ctx);
+  // As divisões de dia e seus badges prevalecem sobre todas as camadas.
+  drawTimelineDayBoundariesOnTop(ctx);
+  drawWeekdayBadgesOnTop(ctx);
   return ctx.getImage();
 }
 
@@ -5404,39 +4977,73 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     }
   }
 }
-function drawFixedDaylightGlow(ctx, thermalBand) {
-  const thermalPoints = thermalBand?.mirroredPoints;
-  if (!Array.isArray(thermalPoints) || thermalPoints.length < 2) {
-    return;
-  }
 
-  // Não existe mais uma linha solar independente. O brilho começa na
-  // altura real da curva térmica e desce até a base da área dos charts.
+
+function drawTimelineDayBoundariesOnTop(ctx) {
+  const lineTop = weatherStripBottomY();
+  const lineBottom = bottomLegendCenterY();
+
+  for (const tick of hourTicks()) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    ctx.setFillColor(hourGridLineColor(tick));
+    ctx.fillRect(
+      new Rect(
+        x - 4,
+        lineTop,
+        8,
+        Math.max(1, lineBottom - lineTop)
+      )
+    );
+  }
+}
+
+function drawWeekdayBadgesOnTop(ctx) {
+  const fontSize = isCompactMode()
+    ? 18
+    : isExtendedDetailedMode()
+      ? 20
+      : 22;
+  const centerY = bottomLegendCenterY();
+
+  for (const tick of hourTicks()) {
+    if (tick.getHours() !== 0) continue;
+
+    const x = timeToX(tick);
+    const style = dayBadgeStyle(tick, loadResult.holidayDates);
+    const badge = dayLegendBadgeRect(x, centerY);
+    ctx.setFillColor(style.background);
+    ctx.fillRect(badge);
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setTextColor(style.text);
+    ctx.setTextAlignedCenter();
+    ctx.drawTextInRect(
+      shortWeekday(tick),
+      centeredDayLegendTextRect(x, centerY)
+    );
+  }
+}
+
+function drawFixedDaylightGlow(ctx, weather) {
+  const lineY = solarLineY();
+  // O brilho chega até a base da faixa térmica, ficando atrás das
+  // temperaturas, do preenchimento e da curva desenhados depois.
   const glowEndY = thermalBandBottomY();
 
   for (const interval of visibleDaylightIntervals()) {
+    // A luz solar é uniforme em relação às nuvens. Mantém apenas a
+    // progressão natural do amanhecer ao meio-dia e ao entardecer.
     const slices = daylightSlices(interval);
     if (slices.length === 0) continue;
 
+    // A irradiação amarela não sofre mais atenuação pela nebulosidade.
     for (const slice of slices) {
-      const sliceCenterX = slice.x + slice.width / 2;
-      const curveY = Math.max(
-        0,
-        Math.min(
-          glowEndY,
-          thermalCurveYAtX(
-            thermalPoints,
-            sliceCenterX,
-            weatherThermalGraphBottomY()
-          )
-        )
-      );
-
-      // Cada coluna nasce na curva. Como curveY varia com x, o limite
-      // superior do fundo luminoso acompanha o desenho térmico.
-      for (let y = curveY; y < glowEndY; y += 1) {
+      // Uma faixa de um pixel por vez, sem sobreposição, mantém o
+      // gradiente contínuo e elimina as bordas horizontais.
+      for (let y = lineY + 1; y < glowEndY; y += 1) {
         const verticalProgress =
-          (y - curveY) / Math.max(1, glowEndY - curveY);
+          (y - lineY) / Math.max(1, glowEndY - lineY);
         const verticalStrength = Math.pow(
           Math.max(0, 1 - verticalProgress),
           1.05
@@ -5453,23 +5060,30 @@ function drawFixedDaylightGlow(ctx, thermalBand) {
           new Rect(slice.x, y, slice.width + 1, 1)
         );
       }
-    }
 
-    // Mantém apenas um halo suave nas mudanças de luz, também começando
-    // na altura correspondente da curva, sem reintroduzir uma linha.
-    for (const endpointX of [interval.x0, interval.x1]) {
-      const endpointY = Math.max(
-        0,
-        Math.min(
-          glowEndY,
-          thermalCurveYAtX(
-            thermalPoints,
-            endpointX,
-            weatherThermalGraphBottomY()
+      // Linha solar única sobre a borda do grid. Ela fica exatamente em
+      // lineY; o preenchimento abaixo continua sem faixas adicionais.
+      ctx.setFillColor(
+        new Color(
+          "#FFD000",
+          Math.min(
+            1,
+            (0.22 + 0.77 * slice.daylightStrength) *
+              SETTINGS.solarGlowIntensity
           )
         )
       );
+      ctx.fillRect(
+        new Rect(slice.x - 1, lineY, slice.width + 3, 10)
+      );
 
+      // O gradiente contínuo fornece a intensidade abaixo da linha, sem
+      // retângulos sobrepostos com bordas rígidas.
+    }
+
+    // Somente 06:00 e 18:00 recebem a projeção circular das extremidades.
+    for (const endpointX of [interval.x0, interval.x1]) {
+      const visibility = 1;
       for (const [radius, opacity] of [
         [12, 0.10],
         [8, 0.18],
@@ -5480,14 +5094,14 @@ function drawFixedDaylightGlow(ctx, thermalBand) {
             "#FFD000",
             Math.min(
               1,
-              opacity * SETTINGS.solarGlowIntensity
+              opacity * visibility * SETTINGS.solarGlowIntensity
             )
           )
         );
         ctx.fillEllipse(
           new Rect(
             endpointX - radius,
-            endpointY,
+            lineY,
             radius * 2,
             radius * 2
           )
@@ -5655,16 +5269,8 @@ function solarVisibilityAtTimestamp(weather, timestamp) {
 
 function timelineDateAtX(x) {
   const duration = windowEnd.getTime() - windowStart.getTime();
-  const progress =
-    (x - timelineContentLeft()) /
-    Math.max(1, timelineContentWidth());
-  const clampedProgress = Math.max(
-    0,
-    Math.min(1, progress)
-  );
-  return new Date(
-    windowStart.getTime() + duration * clampedProgress
-  );
+  const progress = x / Math.max(1, timelineWidth());
+  return new Date(windowStart.getTime() + duration * progress);
 }
 
 function drawCloudCoverageForms(ctx, weather, stripBottom) {
@@ -6174,8 +5780,7 @@ function drawNightAtmosphere(ctx, nightStart, nightEnd) {
 
 function drawTwilightGlow(ctx, moment, isSunrise) {
   const centerX = timeToX(moment);
-  const hourWidth =
-    timelineContentWidth() / Math.max(1, windowHours);
+  const hourWidth = timelineWidth() / Math.max(1, windowHours);
   const radius = Math.max(22, Math.min(88, hourWidth * 1.85));
   if (centerX + radius < 0 || centerX - radius > timelineWidth()) return;
 
@@ -6232,7 +5837,8 @@ function drawDaylightGlow(ctx, sunrise, sunset, dayStart) {
 
   for (let x = x0; x < x1; x += 2) {
     const time = new Date(
-      timelineDateAtX(x).getTime()
+      windowStart.getTime() +
+        (x / timelineWidth()) * (windowEnd.getTime() - windowStart.getTime())
     );
     const linearStrength = time <= noon
       ? (time.getTime() - sunrise.getTime()) /
@@ -6317,8 +5923,8 @@ function drawNightScenes(ctx) {
 
     if (intervalIsVisible(nightStart, nightEnd)) {
       // Toda noite é sempre uma única cena entre 18:00 e 06:00. A Lua grande
-      // permanece centralizada à meia-noite e usa a margem lateral reservada
-      // para que as mudanças de dia fiquem integralmente visíveis.
+      // permanece centralizada à meia-noite mesmo quando somente uma parte
+      // do intervalo está visível; o canvas recorta naturalmente as bordas.
       drawNightSegment(
         ctx,
         nightStart,
@@ -6368,9 +5974,9 @@ function drawNightSegment(
     new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
   );
 
-  const maximumMoonSize = mergedNight ? 136 : 96;
+  const maximumMoonSize = mergedNight ? 128 : 96;
   const proportionalSize = mergedNight
-    ? sceneWidth * 0.31
+    ? sceneWidth * 0.30
     : sceneWidth * 0.44;
   const moonSize = Math.max(
     16,
@@ -6380,10 +5986,7 @@ function drawNightSegment(
   const dayAxisBottomY = localPlotBottom();
   const dayAxisCenterY = (dayAxisTopY + dayAxisBottomY) / 2;
   const dayAxisX = timeToX(nightCenterDate);
-  const moonX = Math.max(
-    0,
-    Math.min(timelineWidth() - moonSize, dayAxisX - moonSize / 2)
-  );
+  const moonX = dayAxisX - moonSize / 2;
   // A Lua fica centrada no mesmo eixo vertical do dia: horizontalmente
   // sobre a linha de 00:00 e verticalmente entre o centro do badge e o
   // limite inferior visível do grid.
@@ -6434,12 +6037,12 @@ function drawNightSegment(
   const cloudScale = moonSize / 96;
   const cloudWidth = 74 * cloudScale;
   const leftCloudX = Math.max(
-    0,
-    Math.min(timelineWidth() - cloudWidth, moonX - 27 * cloudScale)
+    x0,
+    Math.min(x1 - cloudWidth, moonX - 27 * cloudScale)
   );
   const rightCloudX = Math.max(
-    0,
-    Math.min(timelineWidth() - cloudWidth, moonX + moonSize - 42 * cloudScale)
+    x0,
+    Math.min(x1 - cloudWidth, moonX + moonSize - 42 * cloudScale)
   );
   drawMoonCloud(
     ctx,
@@ -6463,6 +6066,9 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
   const radiusY = Math.max(0.0001, rect.height / 2);
   const startX = Math.floor(rect.x);
   const endX = Math.ceil(rect.x + rect.width);
+  const windowDuration =
+    windowEnd.getTime() - windowStart.getTime();
+
   // Cada coluna recebe a cor do seu próprio dia. Assim, o recorte da Lua
   // respeita exatamente as linhas de 00:00, mesmo quando ela atravessa dias.
   for (let x = startX; x < endX; x++) {
@@ -6473,7 +6079,10 @@ function fillEllipseWithTimelineDayColors(ctx, rect) {
     const halfHeight =
       radiusY *
       Math.sqrt(Math.max(0, 1 - normalizedX * normalizedX));
-    const sampleDate = timelineDateAtX(sampleX);
+    const sampleDate = new Date(
+      windowStart.getTime() +
+        (sampleX / timelineWidth()) * windowDuration
+    );
 
     ctx.setFillColor(
       new Color(timelineBackgroundColorForDate(sampleDate), 1.0)
@@ -6590,6 +6199,23 @@ function drawMoonPhase(
   borderDate = null
 ) {
   const moonRect = new Rect(x, y, size, size);
+  const drawOuterBorder = () => {
+    const isDayBoundary =
+      borderDate instanceof Date &&
+      borderDate.getHours() === 0 &&
+      borderDate.getMinutes() === 0;
+    if (!isDayBoundary) return;
+
+    strokeMoonEllipseOutside(
+      ctx,
+      moonRect,
+      dayBoundaryLineColor(
+        borderDate,
+        loadResult.holidayDates
+      ),
+      4
+    );
+  };
 
   // A base escura permanece visível em todas as fases, inclusive na Lua nova.
   ctx.setFillColor(
@@ -6614,6 +6240,7 @@ function drawMoonPhase(
 
   // Textura monocromática discreta em ambos os hemisférios.
   drawMoonCraters(ctx, x, y, size, 0.34);
+  drawOuterBorder();
 }
 
 function drawMoonCraters(ctx, x, y, size, opacity) {
@@ -6970,7 +6597,9 @@ function compactEventHourMarkers() {
 }
 
 function hourGridLineColor(tick) {
-  return new Color("#3A3A3C", 1.0);
+  return tick.getHours() === 0
+    ? dayBoundaryLineColor(tick, loadResult.holidayDates)
+    : new Color("#3A3A3C", 1.0);
 }
 
 function daylightHourColor(tick) {
@@ -7001,7 +6630,7 @@ function isSecondaryNightLegendHour(hour) {
     );
   }
 
-  return [0, 2, 4, 20, 22].includes(hour);
+  return [2, 4, 20, 22].includes(hour);
 }
 
 function secondaryNightLegendColor() {
@@ -7046,9 +6675,21 @@ function centeredLegendTextRect(centerX, centerY) {
   );
 }
 
-// A moldura térmica de mudança de dia é mais larga que os rótulos numéricos.
+// Os badges de mudança de dia são mais largos que os rótulos numéricos.
+// Isso garante as três letras completas inclusive na janela de 36 horas.
 function dayLegendLabelWidth() {
   return 64;
+}
+
+function centeredDayLegendTextRect(centerX, centerY) {
+  const width = dayLegendLabelWidth();
+  const height = legendTextHeight();
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  );
 }
 
 function legendBadgeRect(centerX, centerY) {
@@ -7221,19 +6862,17 @@ function drawEventStartLineAnchors(ctx, items) {
 
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
-  // Cada linha mantém o mesmo x dos astros e das horas, atravessando
-  // verticalmente toda a faixa útil do painel.
-  const gridTop = 0;
-  const gridBottom =
-    bottomLegendCenterY() + legendFrameHeight() / 2;
+  const gridTop = solarLineY();
+  const gridBottom = thermalBandBottomY();
 
   for (const tick of ticks) {
     const x = timeToX(tick);
     const hour = tick.getHours();
+    const isMidnight = hour === 0;
     const isNoon = hour === 12;
 
     ctx.setStrokeColor(hourGridLineColor(tick));
-    ctx.setLineWidth(isNoon ? 2 : 1);
+    ctx.setLineWidth(isMidnight ? 8 : isNoon ? 2 : 1);
     ctx.strokeRect(
       new Rect(
         x,
@@ -7249,29 +6888,11 @@ function drawHourAxis(ctx, items) {
 }
 
 function timelineDayBoundaryGap() {
-  // O recuo continua existindo mesmo sem desenhar a linha da virada do dia.
-  // A folga inclui a antiga distância de segurança das bordas dos charts.
+  // A linha de mudança de dia tem 8 px; o recuo é medido
+  // a partir da borda visível dessa linha.
   const visibleGap = isCompactMode() ? 10 : 5;
   const boundaryLineHalfWidth = 4;
   return visibleGap + boundaryLineHalfWidth;
-}
-
-function drawCurrentTimeLine(ctx) {
-  if (!selectedDayIsToday) return;
-
-  const currentTimestamp = now.getTime();
-  if (
-    currentTimestamp < windowStart.getTime() ||
-    currentTimestamp > windowEnd.getTime()
-  ) {
-    return;
-  }
-
-  const x = Math.max(0, Math.min(timelineWidth(), timeToX(now)));
-  const lineBottom =
-    bottomLegendCenterY() + legendFrameHeight() / 2;
-  ctx.setFillColor(new Color("#30D158", 0.92));
-  ctx.fillRect(new Rect(Math.round(x), 0, 2, Math.max(1, lineBottom)));
 }
 
 function timelineBarSegments(item, startX, endX) {
@@ -7312,17 +6933,6 @@ function timelineBarSegments(item, startX, endX) {
   const segments = [];
   let segmentStart = startX;
   for (const boundaryX of boundaries) {
-    // O lembrete atrasado atravessa a meia-noite. Na primeira linha
-    // vertical da janela ele não recebe o gap visual.
-    const isWindowStartBoundary =
-      Math.abs(boundaryX - timeToX(windowStart)) < 0.5;
-    const bridgesWindowStart =
-      isWindowStartBoundary &&
-      item.kind === "reminder" &&
-      item.isOverdue &&
-      item.start <= windowStart;
-    if (bridgesWindowStart) continue;
-
     const segmentEnd = boundaryX - gap;
     if (segmentEnd > segmentStart) {
       segments.push({
@@ -7368,7 +6978,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ctx.setTextAlignedCenter();
     ctx.setFont(
       Font.blackRoundedSystemFont(
-        isCompactMode() ? compactTimelineFontSize(20) : 25
+        isCompactMode() ? compactTimelineFontSize(20) : 23
       )
     );
     ctx.setTextColor(Color.white());
@@ -7432,13 +7042,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ? compactTimelineFontSize(19)
     : windowHours > 24
       ? 23
-      : 29;
+      : 26;
   const statusFontSize = isCompactMode()
     ? compactTimelineFontSize(12)
-    : 17;
+    : 15;
   const metadataFontSize = isCompactMode()
     ? compactTimelineFontSize(11)
-    : 17;
+    : 15;
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
@@ -7483,18 +7093,6 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
       ctx.setTextColor(new Color("#FF453A"));
       ctx.drawText(priorityPrefix.trim(), textPoint);
-    }
-
-    if (item.isPast) {
-      drawTimelineStrikethrough(
-        ctx,
-        visibleTitle,
-        textPoint,
-        titleFontSize,
-        visibleRight - textPoint.x - 4,
-        barY,
-        barHeight
-      );
     }
   }
 
@@ -7565,13 +7163,6 @@ function drawTimelineBar(ctx, rect, color, item) {
       Math.max(1, cornerRadius - outlineWidth),
       color
     );
-    if (item.isPast) {
-      drawPastStateOverlay(
-        ctx,
-        outlinedRect,
-        Math.max(1, cornerRadius - outlineWidth)
-      );
-    }
     return;
   }
 
@@ -7582,106 +7173,20 @@ function drawTimelineBar(ctx, rect, color, item) {
     Math.max(1, cornerRadius - outlineWidth),
     accent
   );
-  const innerRect = new Rect(
-    outlinedRect.x + accentBorderWidth,
-    outlinedRect.y + accentBorderWidth,
-    Math.max(1, outlinedRect.width - accentBorderWidth * 2),
-    Math.max(1, outlinedRect.height - accentBorderWidth * 2)
-  );
   fillRoundedRect(
     ctx,
-    innerRect,
+    new Rect(
+      outlinedRect.x + accentBorderWidth,
+      outlinedRect.y + accentBorderWidth,
+      Math.max(1, outlinedRect.width - accentBorderWidth * 2),
+      Math.max(1, outlinedRect.height - accentBorderWidth * 2)
+    ),
     Math.max(
       1,
       cornerRadius - outlineWidth - accentBorderWidth
     ),
     color
   );
-
-  if (item.isPast) {
-    drawPastStateOverlay(
-      ctx,
-      innerRect,
-      Math.max(
-        1,
-        cornerRadius - outlineWidth - accentBorderWidth
-      )
-    );
-  }
-}
-
-function drawPastStateOverlay(ctx, rect, radius) {
-  if (!rect || rect.width < 3 || rect.height < 3) return;
-
-  const inset = Math.min(2, rect.width / 4, rect.height / 4);
-  const inner = new Rect(
-    rect.x + inset,
-    rect.y + inset,
-    Math.max(1, rect.width - inset * 2),
-    Math.max(1, rect.height - inset * 2)
-  );
-  fillRoundedRect(
-    ctx,
-    inner,
-    Math.max(1, radius - inset),
-    new Color("#000000", 0.14)
-  );
-
-  const spacing = Math.max(8, inner.height * 0.42);
-  const lineWidth = Math.max(1.25, Math.min(2.5, inner.height * 0.08));
-  ctx.setStrokeColor(new Color("#000000", 0.48));
-  ctx.setLineWidth(lineWidth);
-  for (
-    let offset = -inner.height;
-    offset <= inner.width;
-    offset += spacing
-  ) {
-    const bottomX = inner.x + offset;
-    const topX = bottomX + inner.height;
-    const clippedBottomX = Math.max(
-      inner.x,
-      Math.min(inner.x + inner.width, bottomX)
-    );
-    const clippedTopX = Math.max(
-      inner.x,
-      Math.min(inner.x + inner.width, topX)
-    );
-    if (Math.abs(clippedTopX - clippedBottomX) < 0.5) continue;
-
-    const path = new Path();
-    path.move(new Point(clippedBottomX, inner.y + inner.height));
-    path.addLine(new Point(clippedTopX, inner.y));
-    ctx.addPath(path);
-    ctx.strokePath();
-  }
-}
-
-function drawTimelineStrikethrough(
-  ctx,
-  text,
-  textPoint,
-  fontSize,
-  maximumWidth,
-  barY,
-  barHeight
-) {
-  const lineLength = Math.min(
-    estimatedTextWidth(text, fontSize),
-    Math.max(0, maximumWidth)
-  );
-  if (lineLength <= 0) return;
-
-  const y = Math.min(
-    barY + barHeight * 0.56,
-    textPoint.y + fontSize * 0.62
-  );
-  const path = new Path();
-  path.move(new Point(textPoint.x, y));
-  path.addLine(new Point(textPoint.x + lineLength, y));
-  ctx.setStrokeColor(new Color("#000000", 0.92));
-  ctx.setLineWidth(Math.max(2, fontSize * 0.08));
-  ctx.addPath(path);
-  ctx.strokePath();
 }
 
 function reminderPriorityPrefix(item) {
@@ -7806,42 +7311,28 @@ async function showPermissionHelp(errorMessage) {
   await alert.presentAlert();
 }
 
-function parseDayOffset(parameter) {
+function parseWindowHours(parameter) {
   const raw = String(parameter ?? "").trim();
-  if (!/^-?\d+$/.test(raw)) return 0;
+  if (!raw) return SETTINGS.defaultWindowHours;
+  if (!/^\d+$/.test(raw)) return SETTINGS.defaultWindowHours;
 
   const value = Number(raw);
-  if (!Number.isInteger(value)) return 0;
-  return Math.max(-7, Math.min(7, value));
+  if (
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > SETTINGS.maximumWindowHours
+  ) {
+    return SETTINGS.defaultWindowHours;
+  }
+  return value;
 }
 
-function dayOffsetStorageKey() {
-  return "Calendar-Timeline-selected-day-offset-v1";
-}
-
-function rememberDayOffset(value) {
-  const normalized = parseDayOffset(value);
-  try {
-    Keychain.set(dayOffsetStorageKey(), String(normalized));
-  } catch (_) {}
-  return normalized;
-}
-
-function restoreDayOffset() {
-  try {
-    if (Keychain.contains(dayOffsetStorageKey())) {
-      return parseDayOffset(Keychain.get(dayOffsetStorageKey()));
-    }
-  } catch (_) {}
-  return 0;
-}
-
-function navigationURL(targetOffset) {
-  return addURLParameter(
-    URLScheme.forRunningScript(),
-    "dayOffset",
-    String(Math.max(-7, Math.min(7, Number(targetOffset) || 0)))
+function calendarURL(date) {
+  const appleReferenceDate = Date.UTC(2001, 0, 1, 0, 0, 0);
+  const secondsSinceReference = Math.floor(
+    (date.getTime() - appleReferenceDate) / 1000
   );
+  return `calshow:${secondsSinceReference}`;
 }
 
 function addURLParameter(url, name, value) {
@@ -7936,6 +7427,11 @@ function titleWeekday(date) {
   return weekdays[date.getDay()];
 }
 
+function shortWeekday(date) {
+  const weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
+  return weekdays[date.getDay()];
+}
+
 function formatDate(date, format) {
   const formatter = new DateFormatter();
   formatter.locale = SETTINGS.locale;
@@ -8008,28 +7504,11 @@ function ceilToHour(sourceDate) {
 function timeToX(date) {
   const elapsed = date.getTime() - windowStart.getTime();
   const duration = windowEnd.getTime() - windowStart.getTime();
-  return (
-    timelineContentLeft() +
-    (elapsed / duration) * timelineContentWidth()
-  );
+  return (elapsed / duration) * timelineWidth();
 }
 
 function timelineWidth() {
   return CANVAS.plotRight - CANVAS.plotLeft;
-}
-
-function timelineContentLeft() {
-  return Math.min(
-    CANVAS.timelineEdgeInset,
-    Math.max(0, timelineWidth() / 2 - 1)
-  );
-}
-
-function timelineContentWidth() {
-  return Math.max(
-    1,
-    timelineWidth() - timelineContentLeft() * 2
-  );
 }
 
 function timelineHeight() {
