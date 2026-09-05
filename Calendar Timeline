@@ -2466,6 +2466,14 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     4,
     graphBottom - graphTop - 2
   );
+  // Cada barra ocupava originalmente o trecho entre
+  // `graphBottom - height` e `graphBottom`. O eixo próprio das barras é o
+  // eixo horizontal central da faixa; ao espelhá-las, elas passam a ocupar
+  // o trecho correspondente a partir de `graphTop`, mantendo exatamente a
+  // mesma altura, largura e intensidade.
+  const horizontalAxisY = (graphTop + graphBottom) / 2;
+  const mirroredBarTop =
+    2 * horizontalAxisY - graphBottom;
 
   // Mantém as barras espessas; em janelas longas, adapta a largura
   // à resolução de cada quarto de hora para preservar a leitura.
@@ -2507,7 +2515,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     ctx.fillRect(
       new Rect(
         centerX - barWidth / 2,
-        graphBottom - height,
+        mirroredBarTop,
         barWidth,
         height
       )
@@ -4816,8 +4824,8 @@ function drawTopThermalBand(ctx, thermalBand) {
     maximum
   );
 
-  // As barras de chuva continuam na camada meteorológica e não participam
-  // do espelhamento exclusivo da curva térmica.
+  // As barras de chuva permanecem na camada meteorológica e também são
+  // espelhadas em relação ao próprio eixo horizontal da faixa.
   drawThermalRainBars(
     ctx,
     sourceHours,
