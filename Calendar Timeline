@@ -2035,7 +2035,7 @@ function drawThermalHourGuides(
     const hour = tick.getHours();
     if (!includeDayBoundaries && hour === 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     // Mesmas espessuras e cores das linhas do grid superior.
     const width = hour === 0 ? 8 : hour === 12 ? 2 : 1;
     ctx.setFillColor(hourGridLineColor(tick));
@@ -2049,7 +2049,7 @@ function drawThermalDayBoundaryGuides(ctx, ticks, lineBottomY) {
   for (const tick of ticks) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(x - 4, 0, 8, lineBottomY)
@@ -2062,7 +2062,7 @@ function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
   for (const tick of ticks) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
     const frame = dayLegendBadgeRect(x, centerY);
 
@@ -2853,9 +2853,10 @@ function drawBottomHourLegend(ctx) {
           ? daylightHourColor(tick)
           : Color.white()
     );
+    const centerX = timelineLegendCenterX(tick);
     ctx.drawTextInRect(
       String(hour) + "h",
-      centeredLegendTextRect(timeToX(tick), centerY)
+      centeredLegendTextRect(centerX, centerY)
     );
   }
 }
@@ -4037,7 +4038,7 @@ function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
@@ -4989,7 +4990,7 @@ function drawTimelineDayBoundariesOnTop(ctx) {
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
@@ -5004,16 +5005,16 @@ function drawTimelineDayBoundariesOnTop(ctx) {
 
 function drawWeekdayBadgesOnTop(ctx) {
   const fontSize = isCompactMode()
-    ? 18
+    ? 20
     : isExtendedDetailedMode()
-      ? 20
-      : 22;
+      ? 22
+      : 24;
   const centerY = bottomLegendCenterY();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
     const badge = dayLegendBadgeRect(x, centerY);
     ctx.setFillColor(style.background);
@@ -6869,7 +6870,7 @@ function drawHourAxis(ctx, items) {
   const gridBottom = thermalBandBottomY();
 
   for (const tick of ticks) {
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     const hour = tick.getHours();
     const isMidnight = hour === 0;
     const isNoon = hour === 12;
@@ -7508,6 +7509,12 @@ function timeToX(date) {
   const elapsed = date.getTime() - windowStart.getTime();
   const duration = windowEnd.getTime() - windowStart.getTime();
   return (elapsed / duration) * timelineWidth();
+}
+
+function timelineLegendCenterX(date) {
+  // A legenda numérica e o dia da semana usam exatamente o centro da
+  // mesma barra vertical de mudança de dia/horário.
+  return timeToX(date);
 }
 
 function timelineWidth() {
