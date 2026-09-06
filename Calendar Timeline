@@ -2823,6 +2823,7 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
+  const bottomY = bottomLegendTextBottomY(centerY);
   // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
   // aumentamos levemente a fonte sem alterar o modo de 24 h.
   const hourFontSize =
@@ -2856,7 +2857,11 @@ function drawBottomHourLegend(ctx) {
     const centerX = timelineLegendCenterX(tick);
     ctx.drawTextInRect(
       String(hour) + "h",
-      centeredLegendTextRect(centerX, centerY)
+      bottomAlignedLegendTextRect(
+        centerX,
+        bottomY,
+        legendLabelWidth()
+      )
     );
   }
 }
@@ -5010,6 +5015,7 @@ function drawWeekdayBadgesOnTop(ctx) {
       ? 22
       : 24;
   const centerY = bottomLegendCenterY();
+  const bottomY = bottomLegendTextBottomY(centerY);
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -5024,7 +5030,11 @@ function drawWeekdayBadgesOnTop(ctx) {
     ctx.setTextAlignedCenter();
     ctx.drawTextInRect(
       shortWeekday(tick),
-      centeredDayLegendTextRect(x, centerY)
+      bottomAlignedLegendTextRect(
+        x,
+        bottomY,
+        dayLegendLabelWidth()
+      )
     );
   }
 }
@@ -6679,21 +6689,24 @@ function centeredLegendTextRect(centerX, centerY) {
   );
 }
 
+function bottomLegendTextBottomY(centerY) {
+  return centerY + legendTextHeight() / 2;
+}
+
+function bottomAlignedLegendTextRect(centerX, bottomY, width) {
+  const height = legendTextHeight();
+  return new Rect(
+    centerX - width / 2,
+    bottomY - height,
+    width,
+    height
+  );
+}
+
 // Os badges de mudança de dia são mais largos que os rótulos numéricos.
 // Isso garante as três letras completas inclusive na janela de 36 horas.
 function dayLegendLabelWidth() {
   return 64;
-}
-
-function centeredDayLegendTextRect(centerX, centerY) {
-  const width = dayLegendLabelWidth();
-  const height = legendTextHeight();
-  return new Rect(
-    centerX - width / 2,
-    centerY - height / 2,
-    width,
-    height
-  );
 }
 
 function legendBadgeRect(centerX, centerY) {
