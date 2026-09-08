@@ -1321,8 +1321,9 @@ function chooseItems(items, referenceDate, limit) {
     .sort(([firstDay], [secondDay]) =>
       firstDay.localeCompare(secondDay)
     );
+  const reservedAllDayRowsByDay = new Map();
 
-  for (const [, dayItems] of orderedDayGroups) {
+  for (const [dayKey, dayItems] of orderedDayGroups) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
@@ -1341,59 +1342,91 @@ function chooseItems(items, referenceDate, limit) {
       placed.push(positioned);
     };
 
-    // Eventos e lembretes com horário aparecem primeiro, em ordem
-    // cronológica, ocupando as linhas de cima para baixo.
-    const regularItems = [...dayItems]
-      .filter((item) => !isAllDayEvent(item))
-      .sort(byTime);
-
-    regularItems.forEach((item, index) => {
-      const preferredRow = Math.min(index, limit - 1);
-      const upperRows = [];
-      for (let row = preferredRow - 1; row >= 0; row--) {
-        upperRows.push(row);
-      }
-      const lowerRows = [];
-      for (let row = preferredRow + 1; row < limit; row++) {
-        lowerRows.push(row);
-      }
-
-      placeItem(item, [preferredRow, ...upperRows, ...lowerRows]);
-    });
-
-    // Eventos de dia inteiro continuam sendo os últimos na ordem de
-    // exibição, mas ocupam as linhas disponíveis de baixo para cima:
-    // quinta, quarta, terceira, segunda e primeira.
     const allDayEvents = [...dayItems]
       .filter(isAllDayEvent)
       .sort(byTime);
-    const bottomUpRows = Array.from(
-      { length: limit },
+
+    // Reserva as últimas linhas para eventos de dia inteiro antes de
+    // posicionar os demais itens. Assim, um chart comum nunca empurra um
+    // evento de dia inteiro para cima da última linha.
+    const reservedAllDayRows = Math.min(
+      allDayEvents.length,
+      limit
+    );
+    const regularRowLimit = Math.max(
+      0,
+      limit - reservedAllDayRows
+    );
+    const regularTopDownRows = Array.from(
+      { length: regularRowLimit },
+      (_, index) => index
+    );
+    const regularBottomUpRows = [...regularTopDownRows].reverse();
+    const allDayBottomUpRows = Array.from(
+      { length: reservedAllDayRows },
       (_, index) => limit - 1 - index
     );
+    reservedAllDayRowsByDay.set(dayKey, reservedAllDayRows);
 
+    // Eventos com horário aparecem antes dos lembretes e ocupam as linhas
+    // de cima para baixo. Lembretes começam pelas linhas inferiores; desse
+    // modo, um lembrete nunca passa visualmente à frente de um evento quando
+    // houver uma linha disponível. Itens que não se sobrepõem ainda podem
+    // compartilhar a mesma linha.
+    const regularItems = [...dayItems]
+      .filter((item) => !isAllDayEvent(item))
+      .sort(
+        (first, second) =>
+          (first.kind === "event" ? 0 : 1) -
+            (second.kind === "event" ? 0 : 1) ||
+          byTime(first, second)
+      );
+
+    regularItems.forEach((item) => {
+      const rowOrder =
+        item.kind === "event"
+          ? regularTopDownRows
+          : regularBottomUpRows;
+      placeItem(item, rowOrder);
+    });
+
+    // Eventos de dia inteiro continuam sendo os últimos na ordem de
+    // exibição e ficam fixados nas linhas inferiores: quinta, quarta,
+    // terceira, segunda e primeira.
     allDayEvents.forEach((item) => {
-      placeItem(item, bottomUpRows);
+      placeItem(item, allDayBottomUpRows);
     });
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
   const overflowByDay = new Map();
   for (const item of hidden) {
-    const key = dateKey(item.start);
+    const dayKey = dateKey(item.start);
+    const category =
+      item.kind === "event" && item.isAllDay
+        ? "all-day"
+        : "regular";
+    const key = `${dayKey}::${category}`;
     if (!overflowByDay.has(key)) overflowByDay.set(key, []);
     overflowByDay.get(key).push(item);
   }
 
   const overflowMarkers = [];
-  for (const hiddenItems of overflowByDay.values()) {
+  for (const [key, hiddenItems] of overflowByDay.entries()) {
+    const [dayKey, category] = key.split("::");
+    const reservedRows = reservedAllDayRowsByDay.get(dayKey) ?? 0;
+    const overflowRow =
+      category === "all-day"
+        ? limit - 1
+        : Math.max(0, limit - reservedRows - 1);
+
     for (const group of groupOverflowItems(hiddenItems)) {
       overflowMarkers.push({
         kind: "overflow",
         title: "+" + group.count,
         start: group.start,
         end: group.end,
-        gridRow: limit - 1,
+        gridRow: overflowRow,
         isOverflow: true,
         color: SETTINGS.overflowColor,
       });
@@ -2168,21 +2201,42 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       continue;
     }
 
-    ctx.setFillColor(
-      new Color(
-        SETTINGS.rainLineColor,
-        1.0
-      )
-    );
-    ctx.fillRect(
+    drawOutlinedRainBar(
+      ctx,
       new Rect(
         centerX - barWidth / 2,
         graphBottom - height,
         barWidth,
         height
-      )
+      ),
+      new Color(SETTINGS.rainLineColor, 1.0)
     );
   }
+}
+
+function drawOutlinedRainBar(ctx, rect, fillColor) {
+  const width = Math.max(0, rect.width);
+  const height = Math.max(0, rect.height);
+  if (width <= 0 || height <= 0) return;
+
+  // A borda fica dentro da área original da barra para não alterar a
+  // distribuição dos quartos de hora nem encostar nas barras vizinhas.
+  const borderWidth = Math.min(
+    1,
+    Math.min(width, height) / 3
+  );
+  ctx.setFillColor(new Color("#000000", 1.0));
+  ctx.fillRect(new Rect(rect.x, rect.y, width, height));
+
+  ctx.setFillColor(fillColor);
+  ctx.fillRect(
+    new Rect(
+      rect.x + borderWidth,
+      rect.y + borderWidth,
+      Math.max(0.1, width - borderWidth * 2),
+      Math.max(0.1, height - borderWidth * 2)
+    )
+  );
 }
 
 function rainMillimetersForHour(hour) {
@@ -2666,10 +2720,11 @@ function drawRainProbabilityBars(
       ? opacityForTick(tick, forecast)
       : 0.22;
 
-    ctx.setFillColor(
+    drawOutlinedRainBar(
+      ctx,
+      new Rect(x, y, barWidth, height),
       new Color(SETTINGS.rainLineColor, opacity)
     );
-    ctx.fillRect(new Rect(x, y, barWidth, height));
   }
 }
 
@@ -4309,14 +4364,15 @@ function drawHourlyRainColumn(
     )
   );
 
-  ctx.setFillColor(new Color(SETTINGS.rainLineColor, opacity));
-  ctx.fillRect(
+  drawOutlinedRainBar(
+    ctx,
     new Rect(
       centerX - width / 2,
       topY,
       width,
       height
-    )
+    ),
+    new Color(SETTINGS.rainLineColor, opacity)
   );
 
   ctx.setFillColor(
