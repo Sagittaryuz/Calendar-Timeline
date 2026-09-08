@@ -110,6 +110,10 @@ const THERMAL_COLOR_STOPS = [
   [33, "#FF1F1F"],
 ];
 
+// Eventos próximos podem compartilhar a mesma linha quando a distância
+// entre o fim de um e o início do outro não passa de seis horas.
+const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
+
 const CANVAS = {
   width: 1092,
   height: 510,
@@ -1327,19 +1331,20 @@ function chooseItems(items, referenceDate, limit) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
-    const placeItem = (item, rowOrder) => {
+    const placeItem = (item, rowOrder, canShareRow = itemsOverlap) => {
       const availableRow = rowOrder.find((row) =>
-        rows[row].every((existing) => !itemsOverlap(item, existing))
+        rows[row].every((existing) => canShareRow(item, existing))
       );
 
       if (availableRow === undefined) {
         hidden.push(item);
-        return;
+        return null;
       }
 
       const positioned = { ...item, gridRow: availableRow };
       rows[availableRow].push(positioned);
       placed.push(positioned);
+      return availableRow;
     };
 
     const allDayEvents = [...dayItems]
@@ -1361,33 +1366,55 @@ function chooseItems(items, referenceDate, limit) {
       { length: regularRowLimit },
       (_, index) => index
     );
-    const regularBottomUpRows = [...regularTopDownRows].reverse();
     const allDayBottomUpRows = Array.from(
       { length: reservedAllDayRows },
       (_, index) => limit - 1 - index
     );
     reservedAllDayRowsByDay.set(dayKey, reservedAllDayRows);
 
-    // Eventos com horário aparecem antes dos lembretes e ocupam as linhas
-    // de cima para baixo. Lembretes começam pelas linhas inferiores; desse
-    // modo, um lembrete nunca passa visualmente à frente de um evento quando
-    // houver uma linha disponível. Itens que não se sobrepõem ainda podem
-    // compartilhar a mesma linha.
-    const regularItems = [...dayItems]
-      .filter((item) => !isAllDayEvent(item))
-      .sort(
-        (first, second) =>
-          (first.kind === "event" ? 0 : 1) -
-            (second.kind === "event" ? 0 : 1) ||
-          byTime(first, second)
+    // Eventos com horário continuam tendo prioridade e são posicionados
+    // primeiro, de cima para baixo. Isso permite que os lembretes encontrem
+    // depois a primeira linha realmente disponível, sem passar visualmente
+    // para cima de um evento que ocupe uma linha mais baixa.
+    const regularEvents = [...dayItems]
+      .filter((item) => !isAllDayEvent(item) && item.kind === "event")
+      .sort(byTime);
+    const regularReminders = [...dayItems]
+      .filter((item) => !isAllDayEvent(item) && item.kind === "reminder")
+      .sort(byTime);
+    const eventRowsForDay = new Set();
+
+    regularEvents.forEach((item) => {
+      const row = placeItem(
+        item,
+        regularTopDownRows,
+        itemsCanShareTimelineRow
+      );
+      if (row !== null) eventRowsForDay.add(row);
+    });
+
+    const reminderRowOrder = () => {
+      const eventRows = [...eventRowsForDay].sort(
+        (first, second) => first - second
+      );
+      const lowestEventRow = eventRows.length
+        ? eventRows[eventRows.length - 1]
+        : -1;
+      const rowsBelowEvents = regularTopDownRows.filter(
+        (row) => row > lowestEventRow
       );
 
-    regularItems.forEach((item) => {
-      const rowOrder =
-        item.kind === "event"
-          ? regularTopDownRows
-          : regularBottomUpRows;
-      placeItem(item, rowOrder);
+      // Primeiro tenta compartilhar uma linha com um evento compatível.
+      // Se não for possível, usa a primeira linha abaixo de todos os eventos.
+      return [...eventRows, ...rowsBelowEvents];
+    };
+
+    regularReminders.forEach((item) => {
+      placeItem(
+        item,
+        reminderRowOrder(),
+        itemsCanShareTimelineRow
+      );
     });
 
     // Eventos de dia inteiro continuam sendo os últimos na ordem de
@@ -1470,6 +1497,26 @@ function itemsOverlap(first, second) {
   // Um item que começa exatamente quando o outro termina pode reutilizar
   // a mesma linha.
   return firstStart < secondEnd && secondStart < firstEnd;
+}
+
+function itemsCanShareTimelineRow(first, second) {
+  if (itemsOverlap(first, second)) return false;
+
+  // A regra solicitada vale para evento-evento e evento-lembrete. Dois
+  // lembretes não são agrupados apenas por estarem separados no tempo.
+  const hasEvent =
+    first.kind === "event" || second.kind === "event";
+  if (!hasEvent) return false;
+
+  const firstStart = first.start.getTime();
+  const secondStart = second.start.getTime();
+  const firstEnd = effectiveItemEnd(first);
+  const secondEnd = effectiveItemEnd(second);
+  const gap = firstStart >= secondEnd
+    ? firstStart - secondEnd
+    : secondStart - firstEnd;
+
+  return gap <= TIMELINE_ROW_SHARE_GAP_MS;
 }
 
 function effectiveItemEnd(item) {
