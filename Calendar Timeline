@@ -3934,7 +3934,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
     if (isNight) {
       drawMoonPhase(
         ctx,
-        moonPhaseForDate(entry.tick),
+        predominantMoonPhaseForNight(entry.tick),
         centerX - iconSize / 2,
         centerY - iconSize / 2,
         iconSize,
@@ -4277,7 +4277,7 @@ function drawWeatherConditionStrip(ctx, weather) {
       } else {
         drawMoonPhase(
           ctx,
-          moonPhaseForDate(moonDate),
+          predominantMoonPhaseForNight(moonDate),
           moonX,
           moonY,
           moonSize,
@@ -6249,9 +6249,7 @@ function drawNightSegment(
   const nightCenterDate = new Date(
     (nightStart.getTime() + nightEnd.getTime()) / 2
   );
-  const moon = moonPhaseForDate(
-    new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
-  );
+  const moon = predominantMoonPhaseForNight(nightCenterDate);
 
   const maximumMoonSize = mergedNight ? 128 : 96;
   const proportionalSize = mergedNight
@@ -6682,6 +6680,19 @@ function moonPhaseForDate(date) {
     name: "LUA MINGUANTE",
     illumination: 0.25,
   };
+}
+
+function predominantMoonPhaseForNight(date) {
+  const dayStart = startOfDay(date);
+  const nightCenter =
+    date.getHours() < SETTINGS.nightEndHour
+      ? dateAtHour(dayStart, 0)
+      : dateAtHour(addDays(dayStart, 1), 0);
+
+  // A fase é escolhida uma única vez no centro da noite. Assim, todos os
+  // horários noturnos usam o mesmo desenho, enquanto um eclipse continua
+  // tendo prioridade no horário exato em que acontece.
+  return moonPhaseForDate(nightCenter);
 }
 
 function solarTimeForDate(date, isSunrise) {
