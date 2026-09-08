@@ -110,8 +110,8 @@ const THERMAL_COLOR_STOPS = [
   [33, "#FF1F1F"],
 ];
 
-// Eventos próximos podem compartilhar a mesma linha quando a distância
-// entre o fim de um e o início do outro não passa de seis horas.
+// Lembretes podem subir para uma linha de evento quando a distância entre
+// eles não passa de seis horas.
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 
 const CANVAS = {
@@ -1418,9 +1418,9 @@ function chooseItems(items, _referenceDate, limit) {
     };
 
     const rowOrderFor = (item, preferredRow, rowLimit) => {
-      // Primeiro reutiliza uma linha já ocupada por item compatível. Depois
-      // procura uma linha vazia na ordem de preferência, redistribuindo o
-      // conteúdo para cima quando houver espaço.
+      // Primeiro reutiliza uma linha de evento compatível. Depois procura
+      // uma linha vazia na ordem de preferência, redistribuindo os lembretes
+      // para cima quando houver espaço.
       const shareableRows = [];
       for (let row = 0; row < rowLimit; row++) {
         if (
@@ -1491,8 +1491,8 @@ function chooseItems(items, _referenceDate, limit) {
           );
 
     // Lembretes atrasados vêm primeiro. Os compatíveis com um evento em
-    // até seis horas podem compartilhar a linha; os demais ficam abaixo
-    // do último evento.
+    // até seis horas podem subir para a linha do evento; os demais ficam
+    // abaixo do último evento.
     const reminders = [...dayItems]
       .filter((item) => item.kind === "reminder")
       .sort(
@@ -1586,8 +1586,20 @@ function itemsOverlap(first, second) {
 function itemsCanShareTimelineRow(first, second) {
   if (itemsOverlap(first, second)) return false;
 
+  // Eventos com horário são sempre apresentados antes dos lembretes e não
+  // compartilham a mesma linha entre si, mesmo quando há poucos minutos ou
+  // horas entre eles.
+  if (
+    first.kind === "event" &&
+    second.kind === "event" &&
+    !first.isAllDay &&
+    !second.isAllDay
+  ) {
+    return false;
+  }
+
   // Lembretes continuam em linhas separadas entre si. A regra das seis
-  // horas vale para evento-evento e evento-lembrete.
+  // horas vale para evento-lembrete.
   if (
     first.kind === "reminder" &&
     second.kind === "reminder"
@@ -1595,8 +1607,8 @@ function itemsCanShareTimelineRow(first, second) {
     return false;
   }
 
-  // Eventos de dia inteiro ficam na última linha e podem coexistir apenas
-  // com um trecho que esteja fora do seu próprio intervalo.
+  // Eventos de dia inteiro ficam na última linha e não devem bloquear um
+  // trecho que esteja fora do seu próprio intervalo.
   if (first.isAllDay || second.isAllDay) return true;
 
   const firstStart = first.start.getTime();
