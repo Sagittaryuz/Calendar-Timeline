@@ -1299,24 +1299,49 @@ function prepareTimelineItems(items, referenceDate) {
 }
 
 
-function chooseItems(items, referenceDate, limit) {
+function chooseItems(items, _referenceDate, limit) {
+  // A seleção considera a janela desenhada, não apenas o instante atual.
+  // Assim, eventos já encerrados continuam disponíveis ao navegar para
+  // outro dia ou para a parte já concluída do dia atual.
   const relevant = [...items].filter(
-    (item) => item.isAllDay || item.end >= referenceDate
+    (item) =>
+      item?.start instanceof Date &&
+      item?.end instanceof Date &&
+      item.end > windowStart &&
+      item.start < windowEnd
   );
 
   const byTime = (a, b) =>
     a.start.getTime() - b.start.getTime() ||
     a.end.getTime() - b.end.getTime();
 
+  // Um lembrete atrasado pertence visualmente ao dia selecionado, mesmo
+  // quando seu horário de origem está antes do início da janela.
+  const displayDayKey = (item) =>
+    item.kind === "reminder" &&
+    item.isOverdue &&
+    item.start < windowStart
+      ? dateKey(windowStart)
+      : dateKey(item.start);
+
   // O agrupamento diário preserva a ordem visual de cada data. A ocupação
   // das linhas, porém, permanece compartilhada para que eventos iniciados
   // anteriormente reservem sua linha enquanto ainda estiverem ativos.
   const byDay = new Map();
   for (const item of relevant) {
-    const key = dateKey(item.start);
+    const key = displayDayKey(item);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(item);
   }
+
+  const allDayIntervals = relevant
+    .filter(
+      (item) => item.kind === "event" && item.isAllDay
+    )
+    .map((item) => ({
+      start: item.start,
+      end: item.end,
+    }));
 
   const placed = [];
   const hidden = [];
@@ -1325,15 +1350,97 @@ function chooseItems(items, referenceDate, limit) {
     .sort(([firstDay], [secondDay]) =>
       firstDay.localeCompare(secondDay)
     );
-  const reservedAllDayRowsByDay = new Map();
-
   for (const [dayKey, dayItems] of orderedDayGroups) {
     const isAllDayEvent = (item) =>
       item.kind === "event" && item.isAllDay;
 
-    const placeItem = (item, rowOrder, canShareRow = itemsOverlap) => {
-      const availableRow = rowOrder.find((row) =>
-        rows[row].every((existing) => canShareRow(item, existing))
+    const allDayEvents = [...dayItems]
+      .filter(isAllDayEvent)
+      .sort(byTime);
+    const dayStart =
+      dayKey === dateKey(windowStart)
+        ? startOfDay(windowStart)
+        : startOfDay(dayItems[0].start);
+    const dayEnd = addDays(dayStart, 1);
+    const dayInterval = {
+      start: dayStart,
+      end: dayEnd,
+    };
+
+    // A última linha fica reservada para eventos de dia inteiro quando
+    // houver algum no mesmo dia. Assim, os demais itens nunca os empurram
+    // para cima nem ocupam a linha que lhes é destinada.
+    const timedRowLimit =
+      allDayEvents.length > 0
+        ? Math.max(1, limit - 1)
+        : limit;
+
+    const rowCanAccept = (item, row) => {
+      if (row < 0 || row >= limit) return false;
+
+      // Nenhum item com horário pode ocupar a última linha durante o
+      // intervalo de um evento de dia inteiro.
+      if (
+        row === limit - 1 &&
+        !item.isAllDay &&
+        allDayIntervals.some((interval) =>
+          itemsOverlap(item, interval)
+        )
+      ) {
+        return false;
+      }
+
+      return rows[row].every((existing) =>
+        itemsCanShareTimelineRow(item, existing)
+      );
+    };
+
+    const preferredRows = (preferredRow, rowLimit) => {
+      const ordered = [];
+      const append = (row) => {
+        if (
+          row >= 0 &&
+          row < rowLimit &&
+          !ordered.includes(row)
+        ) {
+          ordered.push(row);
+        }
+      };
+
+      append(preferredRow);
+      for (let row = preferredRow - 1; row >= 0; row--) {
+        append(row);
+      }
+      for (let row = preferredRow + 1; row < rowLimit; row++) {
+        append(row);
+      }
+      return ordered;
+    };
+
+    const rowOrderFor = (item, preferredRow, rowLimit) => {
+      // Primeiro reutiliza uma linha já ocupada por item compatível. Depois
+      // procura uma linha vazia na ordem de preferência, redistribuindo o
+      // conteúdo para cima quando houver espaço.
+      const shareableRows = [];
+      for (let row = 0; row < rowLimit; row++) {
+        if (
+          rows[row].length > 0 &&
+          rowCanAccept(item, row)
+        ) {
+          shareableRows.push(row);
+        }
+      }
+
+      const normalRows = preferredRows(preferredRow, rowLimit);
+      return [
+        ...shareableRows,
+        ...normalRows.filter((row) => !shareableRows.includes(row)),
+      ];
+    };
+
+    const placeItem = (item, rowOrder) => {
+      const availableRow = [...new Set(rowOrder)].find((row) =>
+        rowCanAccept(item, row)
       );
 
       if (availableRow === undefined) {
@@ -1347,113 +1454,90 @@ function chooseItems(items, referenceDate, limit) {
       return availableRow;
     };
 
-    const allDayEvents = [...dayItems]
-      .filter(isAllDayEvent)
+    // Eventos com horário sempre ocupam as linhas superiores, antes de
+    // qualquer lembrete do mesmo dia.
+    const timedEvents = [...dayItems]
+      .filter(
+        (item) =>
+          item.kind === "event" && !isAllDayEvent(item)
+      )
       .sort(byTime);
 
-    // Reserva as últimas linhas para eventos de dia inteiro antes de
-    // posicionar os demais itens. Assim, um chart comum nunca empurra um
-    // evento de dia inteiro para cima da última linha.
-    const reservedAllDayRows = Math.min(
-      allDayEvents.length,
-      limit
-    );
-    const regularRowLimit = Math.max(
-      0,
-      limit - reservedAllDayRows
-    );
-    const regularTopDownRows = Array.from(
-      { length: regularRowLimit },
-      (_, index) => index
-    );
-    const allDayBottomUpRows = Array.from(
-      { length: reservedAllDayRows },
-      (_, index) => limit - 1 - index
-    );
-    reservedAllDayRowsByDay.set(dayKey, reservedAllDayRows);
-
-    // Eventos com horário continuam tendo prioridade e são posicionados
-    // primeiro, de cima para baixo. Isso permite que os lembretes encontrem
-    // depois a primeira linha realmente disponível, sem passar visualmente
-    // para cima de um evento que ocupe uma linha mais baixa.
-    const regularEvents = [...dayItems]
-      .filter((item) => !isAllDayEvent(item) && item.kind === "event")
-      .sort(byTime);
-    const regularReminders = [...dayItems]
-      .filter((item) => !isAllDayEvent(item) && item.kind === "reminder")
-      .sort(byTime);
-    const eventRowsForDay = new Set();
-
-    regularEvents.forEach((item) => {
-      const row = placeItem(
-        item,
-        regularTopDownRows,
-        itemsCanShareTimelineRow
-      );
-      if (row !== null) eventRowsForDay.add(row);
-    });
-
-    const reminderRowOrder = () => {
-      const eventRows = [...eventRowsForDay].sort(
-        (first, second) => first - second
-      );
-      const lowestEventRow = eventRows.length
-        ? eventRows[eventRows.length - 1]
-        : -1;
-      const rowsBelowEvents = regularTopDownRows.filter(
-        (row) => row > lowestEventRow
-      );
-
-      // Primeiro tenta compartilhar uma linha com um evento compatível.
-      // Se não for possível, usa a primeira linha abaixo de todos os eventos.
-      return [...eventRows, ...rowsBelowEvents];
-    };
-
-    regularReminders.forEach((item) => {
+    timedEvents.forEach((item, index) => {
+      const preferredRow = Math.min(index, timedRowLimit - 1);
       placeItem(
         item,
-        reminderRowOrder(),
-        itemsCanShareTimelineRow
+        rowOrderFor(item, preferredRow, timedRowLimit)
       );
     });
 
-    // Eventos de dia inteiro continuam sendo os últimos na ordem de
-    // exibição e ficam fixados nas linhas inferiores: quinta, quarta,
-    // terceira, segunda e primeira.
+    const highestEventRow = placed
+      .filter(
+        (item) =>
+          item.kind === "event" &&
+          !item.isAllDay &&
+          itemsOverlap(item, dayInterval)
+      )
+      .reduce(
+        (highest, item) => Math.max(highest, item.gridRow),
+        -1
+      );
+    const reminderFirstRow =
+      highestEventRow >= timedRowLimit
+        ? timedRowLimit
+        : Math.min(
+            Math.max(0, highestEventRow + 1),
+            timedRowLimit - 1
+          );
+
+    // Lembretes atrasados vêm primeiro. Os compatíveis com um evento em
+    // até seis horas podem compartilhar a linha; os demais ficam abaixo
+    // do último evento.
+    const reminders = [...dayItems]
+      .filter((item) => item.kind === "reminder")
+      .sort(
+        (a, b) =>
+          Number(b.isOverdue) - Number(a.isOverdue) ||
+          byTime(a, b)
+      );
+    if (reminderFirstRow >= timedRowLimit) {
+      hidden.push(...reminders);
+    } else {
+      reminders.forEach((item, index) => {
+        const preferredRow = Math.min(
+          reminderFirstRow + index,
+          timedRowLimit - 1
+        );
+        placeItem(
+          item,
+          rowOrderFor(item, preferredRow, timedRowLimit)
+        );
+      });
+    }
+
+    // Eventos de dia inteiro ocupam exclusivamente a última linha.
     allDayEvents.forEach((item) => {
-      placeItem(item, allDayBottomUpRows);
+      placeItem(item, [limit - 1]);
     });
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
   const overflowByDay = new Map();
   for (const item of hidden) {
-    const dayKey = dateKey(item.start);
-    const category =
-      item.kind === "event" && item.isAllDay
-        ? "all-day"
-        : "regular";
-    const key = `${dayKey}::${category}`;
+    const key = displayDayKey(item);
     if (!overflowByDay.has(key)) overflowByDay.set(key, []);
     overflowByDay.get(key).push(item);
   }
 
   const overflowMarkers = [];
-  for (const [key, hiddenItems] of overflowByDay.entries()) {
-    const [dayKey, category] = key.split("::");
-    const reservedRows = reservedAllDayRowsByDay.get(dayKey) ?? 0;
-    const overflowRow =
-      category === "all-day"
-        ? limit - 1
-        : Math.max(0, limit - reservedRows - 1);
-
+  for (const hiddenItems of overflowByDay.values()) {
     for (const group of groupOverflowItems(hiddenItems)) {
       overflowMarkers.push({
         kind: "overflow",
         title: "+" + group.count,
         start: group.start,
         end: group.end,
-        gridRow: overflowRow,
+        gridRow: limit - 1,
         isOverflow: true,
         color: SETTINGS.overflowColor,
       });
@@ -1502,19 +1586,26 @@ function itemsOverlap(first, second) {
 function itemsCanShareTimelineRow(first, second) {
   if (itemsOverlap(first, second)) return false;
 
-  // A regra solicitada vale para evento-evento e evento-lembrete. Dois
-  // lembretes não são agrupados apenas por estarem separados no tempo.
-  const hasEvent =
-    first.kind === "event" || second.kind === "event";
-  if (!hasEvent) return false;
+  // Lembretes continuam em linhas separadas entre si. A regra das seis
+  // horas vale para evento-evento e evento-lembrete.
+  if (
+    first.kind === "reminder" &&
+    second.kind === "reminder"
+  ) {
+    return false;
+  }
+
+  // Eventos de dia inteiro ficam na última linha e podem coexistir apenas
+  // com um trecho que esteja fora do seu próprio intervalo.
+  if (first.isAllDay || second.isAllDay) return true;
 
   const firstStart = first.start.getTime();
   const secondStart = second.start.getTime();
   const firstEnd = effectiveItemEnd(first);
   const secondEnd = effectiveItemEnd(second);
-  const gap = firstStart >= secondEnd
-    ? firstStart - secondEnd
-    : secondStart - firstEnd;
+  const gap = firstEnd <= secondStart
+    ? secondStart - firstEnd
+    : firstStart - secondEnd;
 
   return gap <= TIMELINE_ROW_SHARE_GAP_MS;
 }
@@ -4111,6 +4202,10 @@ function drawWeatherConditionStrip(ctx, weather) {
       const moonX = moonCenterX - moonSize / 2;
       const moonY = moonCenterY - moonSize / 2;
       const nightEclipse = eclipseForDate(moonDate);
+      const moonForecast = weatherForecastNearest(
+        weather?.hours ?? [],
+        moonDate.getTime()
+      );
 
       // A Lua sobre a barra de 00:00 também precisa refletir o eclipse.
       // Sem este teste, o desenho normal feito aqui cobria o eclipse horário.
@@ -4133,6 +4228,17 @@ function drawWeatherConditionStrip(ctx, weather) {
           moonDate
         );
       }
+
+      // A Lua da mudança de dia usa a mesma condição meteorológica do
+      // horário central: nuvem, chuva, tempestade, neve, neblina ou vento.
+      // O overlay é desenhado por último para não ser coberto pela Lua.
+      drawCelestialWeatherOverlay(
+        ctx,
+        moonForecast,
+        moonCenterX,
+        moonCenterY,
+        moonSize
+      );
     }
 
     nightDay = addDays(nightDay, 1);
