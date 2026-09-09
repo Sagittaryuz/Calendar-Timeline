@@ -120,7 +120,7 @@ const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
 const DAY_CHANGE_CIRCLE_DIAMETER = 52;
 // Dimensão única dos astros: a faixa superior acompanha o módulo de 24 h.
 const WEATHER_ICON_SIZE_24H = 44;
-const WEATHER_ASTRO_STRIP_HEIGHT_24H = 60;
+const WEATHER_ASTRO_STRIP_HEIGHT_24H = 58;
 
 const CANVAS = {
   width: 1092,
@@ -3595,7 +3595,7 @@ function weatherIconSize() {
 }
 
 function weatherIconCenterY() {
-  // Ajuste óptico de 1 px para cima, mantendo a faixa com 60 px.
+  // Ajuste óptico de 1 px para cima, mantendo a faixa com 58 px.
   return Math.round(weatherStripBottomY() / 2) - 1;
 }
 
