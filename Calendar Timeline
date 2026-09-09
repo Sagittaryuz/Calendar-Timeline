@@ -5266,17 +5266,31 @@ function drawDayBadgeDetail(
     layout.secondLine.height
   );
 
+  const sideWidth = Math.min(leftRect.width, rightRect.width);
+  const longestSideTextWidth = Math.max(
+    estimatedTextWidth(summary.temperatureText, fontSize),
+    estimatedTextWidth(summary.countsText, fontSize)
+  );
+  const minimumSideFontSize = isCompactMode() ? 7 : 8;
+  const sideFontSize = Math.max(
+    minimumSideFontSize,
+    Math.min(
+      fontSize,
+      fontSize * sideWidth / Math.max(1, longestSideTextWidth)
+    )
+  );
+
   ctx.setTextAlignedCenter();
-  ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
+  ctx.setFont(Font.blackMonospacedSystemFont(sideFontSize));
   ctx.setTextColor(textColor);
   ctx.drawTextInRect(summary.temperatureText, leftRect);
 
   // O centro do ícone é o centro geométrico da segunda linha, nunca o
   // centro restante depois que os textos laterais são desenhados.
-  ctx.setFont(Font.regularSystemFont(fontSize + 1));
+  ctx.setFont(Font.regularSystemFont(sideFontSize + 1));
   ctx.drawTextInRect(summary.weatherGlyph, iconRect);
 
-  ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
+  ctx.setFont(Font.blackMonospacedSystemFont(sideFontSize));
   ctx.drawTextInRect(summary.countsText, rightRect);
 }
 
