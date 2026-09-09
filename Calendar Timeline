@@ -2240,7 +2240,6 @@ function drawCurrentDayFrame(ctx) {
   const {
     todayCard,
     boundaryX,
-    astroCenterY,
     cardBottomY,
     lineWidth,
     lineColor,
@@ -2278,15 +2277,6 @@ function drawCurrentDayFrame(ctx) {
     );
   }
 
-  // Linha que sai do centro do astro até a linha da base do cartão.
-  fillCurrentDayVerticalLine(
-    ctx,
-    boundaryX,
-    cardBottomY,
-    astroCenterY,
-    lineWidth,
-    lineColor
-  );
 }
 
 function drawTitleDayCard(
