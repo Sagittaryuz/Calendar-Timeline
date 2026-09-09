@@ -2098,7 +2098,9 @@ function drawCurrentDayFrame(ctx) {
   const astroCenterY =
     CANVAS.timelineTop + weatherIconCenterY();
   const boundaryBottomY =
-    CANVAS.timelineTop + bottomLegendCenterY();
+    CANVAS.timelineTop +
+    bottomLegendCenterY() +
+    legendFrameHeight() / 2;
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
   const lineColor = hourGridLineColor(nextDayBoundary);
