@@ -117,7 +117,7 @@ const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 // Raio comum dos cartões do título e das linhas de separação do dia.
 const TITLE_CARD_STANDARD_CORNER_RADIUS = 13;
 const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
-const DAY_CHANGE_CIRCLE_DIAMETER = 44;
+const DAY_CHANGE_CIRCLE_DIAMETER = 52;
 // Dimensão única dos astros: a faixa superior acompanha o módulo de 24 h.
 const WEATHER_ICON_SIZE_24H = 44;
 const WEATHER_ASTRO_STRIP_HEIGHT_24H = 52;
