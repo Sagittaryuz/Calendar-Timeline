@@ -5948,7 +5948,6 @@ function drawWeekdayBadgesOnTop(ctx) {
   // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
   const fontSize = 20;
   const centerY = bottomLegendCenterY();
-  const bottomY = bottomLegendTextBottomY(centerY);
   const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - 4;
 
   for (const tick of hourTicks()) {
@@ -5964,10 +5963,11 @@ function drawWeekdayBadgesOnTop(ctx) {
     ctx.setTextAlignedCenter();
     ctx.drawTextInRect(
       shortWeekday(tick),
-      bottomAlignedLegendTextRect(
+      centeredDayLegendTextRect(
         x,
-        bottomY,
-        textWidth
+        centerY,
+        textWidth,
+        fontSize
       )
     );
   }
@@ -7690,6 +7690,17 @@ function dayLegendCircleRect(centerX, centerY) {
     centerY - diameter / 2,
     diameter,
     diameter
+  );
+}
+
+function centeredDayLegendTextRect(centerX, centerY, width, fontSize) {
+  // O retângulo do texto usa o mesmo centro geométrico do círculo.
+  const height = fontSize;
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
   );
 }
 
