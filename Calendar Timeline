@@ -2125,8 +2125,7 @@ function drawTitleDayCard(
   const dateLabel = titleDayMonthLabel(date);
   const titleLabel = weekdayLabel + " " + dateLabel;
 
-  // O cartão externo é dividido em duas linhas reais. Cada linha recebe
-  // seu próprio centro vertical, sem depender da altura da outra.
+  // O cartão externo é dividido em duas linhas reais.
   const titleRow = new Rect(
     card.x + 8,
     card.y + 5,
@@ -2174,35 +2173,9 @@ function drawTitleDayCard(
     : "--º";
   const counts = titleScheduleCountsForDay(date);
   const countsText =
-    "E:" + String(counts.events) + " | L:" + String(counts.reminders);
+    "E:" + String(counts.events) + "|L:" + String(counts.reminders);
 
-  // A temperatura ocupa a área esquerda; o ícone ocupa o centro geométrico
-  // do cartão; os contadores ocupam a área direita.
-  const iconSize = 32;
-  const detailCenterX = card.x + card.width / 2;
-  const detailCenterY =
-    detailRow.y + detailRow.height / 2;
-  const sideGap = 8;
-  const leftArea = new Rect(
-    detailRow.x,
-    detailRow.y,
-    Math.max(
-      1,
-      detailCenterX - iconSize / 2 - sideGap - detailRow.x
-    ),
-    detailRow.height
-  );
-  const rightArea = new Rect(
-    detailCenterX + iconSize / 2 + sideGap,
-    detailRow.y,
-    Math.max(
-      1,
-      detailRow.x + detailRow.width -
-        (detailCenterX + iconSize / 2 + sideGap)
-    ),
-    detailRow.height
-  );
-
+  // Temperatura, ícone e contadores formam um único grupo contínuo.
   const temperatureFontSize = 22;
   const temperatureFont =
     Font.blackMonospacedSystemFont(temperatureFontSize);
@@ -2220,11 +2193,46 @@ function drawTitleDayCard(
   );
   const temperatureGroupWidth =
     minimumWidth + slashWidth + maximumWidth;
-  const temperatureX =
-    leftArea.x + (leftArea.width - temperatureGroupWidth) / 2;
+
+  const iconSize = 30;
+  const baseCountsFontSize = 16;
+  const baseCountsWidth = estimatedTextWidth(
+    countsText,
+    baseCountsFontSize
+  );
+  const availableCountsWidth = Math.max(
+    1,
+    detailRow.width - temperatureGroupWidth - iconSize
+  );
+  const countsFontSize = Math.max(
+    11,
+    Math.min(
+      baseCountsFontSize,
+      baseCountsFontSize *
+        availableCountsWidth /
+        Math.max(1, baseCountsWidth)
+    )
+  );
+  const renderedCountsWidth = estimatedTextWidth(
+    countsText,
+    countsFontSize
+  );
+
+  const groupWidth =
+    temperatureGroupWidth + iconSize + renderedCountsWidth;
+  const groupX =
+    card.x + (card.width - groupWidth) / 2;
+  const temperatureX = groupX;
+  const iconCenterX =
+    temperatureX + temperatureGroupWidth + iconSize / 2;
+  const countsX =
+    temperatureX + temperatureGroupWidth + iconSize;
+  const detailCenterY =
+    detailRow.y + detailRow.height / 2;
   const temperatureY =
-    detailRow.y +
-    (detailRow.height - temperatureFontSize) / 2;
+    detailCenterY - temperatureFontSize / 2;
+  const countsY =
+    detailCenterY - countsFontSize / 2;
 
   ctx.setTextAlignedLeft();
   ctx.setFont(temperatureFont);
@@ -2236,8 +2244,6 @@ function drawTitleDayCard(
     new Point(temperatureX, temperatureY)
   );
 
-  // A barra é desenhada imediatamente após a mínima: não há espaço
-  // artificial entre mínima e máxima.
   ctx.setFont(Font.regularMonospacedSystemFont(temperatureFontSize));
   ctx.setTextColor(new Color("#D1D1D6", 0.92));
   ctx.drawText(
@@ -2257,31 +2263,6 @@ function drawTitleDayCard(
     )
   );
 
-  const baseCountsFontSize = 16;
-  const countsWidth = estimatedTextWidth(
-    countsText,
-    baseCountsFontSize
-  );
-  const countsFontSize = Math.max(
-    11,
-    Math.min(
-      baseCountsFontSize,
-      baseCountsFontSize *
-        rightArea.width /
-        Math.max(1, countsWidth)
-    )
-  );
-  const renderedCountsWidth = estimatedTextWidth(
-    countsText,
-    countsFontSize
-  );
-  const countsX =
-    rightArea.x +
-    (rightArea.width - renderedCountsWidth) / 2;
-  const countsY =
-    detailRow.y +
-    (detailRow.height - countsFontSize) / 2;
-
   ctx.setFont(Font.blackMonospacedSystemFont(countsFontSize));
   ctx.setTextColor(detailColor);
   ctx.drawText(
@@ -2289,17 +2270,15 @@ function drawTitleDayCard(
     new Point(countsX, countsY)
   );
 
-  // O centro do ícone coincide exatamente com o centro da segunda linha.
+  // O ícone pertence ao grupo e acompanha seu centro vertical.
   drawTitleWeatherIcon(
     ctx,
     titleForecastForDay(date),
-    detailCenterX,
+    iconCenterX,
     detailCenterY,
     iconSize
   );
-}
-
-function titleDailyTemperatureForDay(date) {
+}function titleDailyTemperatureForDay(date) {
   const daily = titleDailyWeatherForDay(date);
   if (
     daily &&
@@ -7857,7 +7836,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   if (!visibleTitle && statusWidth === 0) return;
 
   const titleTextY =
-    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 2);
+    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 4);
   const reminderMarkerDiameter =
     item.kind === "reminder"
       ? isCompactMode()
@@ -7869,13 +7848,12 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     visibleLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
     titleTextY
   );
-  const textCenterY = titleTextY + titleFontSize / 2;
-
   if (item.kind === "reminder") {
+    // O círculo fica no mesmo eixo horizontal do centro do chart.
     drawReminderMarker(
       ctx,
       visibleLeft + 8 + reminderMarkerDiameter / 2,
-      textCenterY,
+      centerY,
       reminderMarkerDiameter,
       color
     );
