@@ -120,7 +120,7 @@ const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
 const DAY_CHANGE_CIRCLE_DIAMETER = 52;
 // Dimensão única dos astros: a faixa superior acompanha o módulo de 24 h.
 const WEATHER_ICON_SIZE_24H = 44;
-const WEATHER_ASTRO_STRIP_HEIGHT_24H = 68;
+const WEATHER_ASTRO_STRIP_HEIGHT_24H = 62;
 
 const CANVAS = {
   width: 1092,
@@ -3598,8 +3598,9 @@ function weatherIconCenterY() {
 }
 
 function dayBoundaryAstroOuterRadius() {
-  // Considera o raio do disco e metade da borda externa da Lua.
-  return weatherIconSize() / 2 + dayBoundaryLineWidth() / 2;
+  // A borda é desenhada para fora do disco e o stroke também se
+  // estende metade da própria espessura para cada lado.
+  return weatherIconSize() / 2 + dayBoundaryLineWidth();
 }
 
 function weatherIconIntersectsTimeline(centerX, halfWidth) {
