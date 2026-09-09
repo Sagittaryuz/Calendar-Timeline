@@ -118,6 +118,9 @@ const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 const TITLE_CARD_STANDARD_CORNER_RADIUS = 13;
 const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
 const DAY_CHANGE_CIRCLE_DIAMETER = 44;
+// Dimensão única dos astros: a faixa superior acompanha o módulo de 24 h.
+const WEATHER_ICON_SIZE_24H = 44;
+const WEATHER_ASTRO_STRIP_HEIGHT_24H = 52;
 
 const CANVAS = {
   width: 1092,
@@ -3590,15 +3593,15 @@ function temperatureHeatColor(
 
 
 function weatherStripBottomY() {
-  // Reduz a faixa dos astros em 10 px para eliminar o vão
-  // entre a linha do título e a borda superior da Lua.
-  return isCompactMode() ? 30 : 42;
+  // Uma única altura vale para todos os modos e acomoda o astro ampliado
+  // com a borda de 8 px, sem cortar sua parte superior.
+  return WEATHER_ASTRO_STRIP_HEIGHT_24H;
 }
 
 // A faixa superior pertence exclusivamente aos astros e ícones de clima.
 // Todos compartilham o mesmo centro horizontal e a mesma caixa visual.
 function weatherIconSize() {
-  return isCompactMode() ? 30 : 40;
+  return WEATHER_ICON_SIZE_24H;
 }
 
 function weatherIconCenterY() {
