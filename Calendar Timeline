@@ -5273,7 +5273,7 @@ function drawDayBadgeDetail(
 
   // O centro do ícone é o centro geométrico da segunda linha, nunca o
   // centro restante depois que os textos laterais são desenhados.
-  ctx.setFont(Font.systemFont(fontSize + 1));
+  ctx.setFont(Font.regularSystemFont(fontSize + 1));
   ctx.drawTextInRect(summary.weatherGlyph, iconRect);
 
   ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
