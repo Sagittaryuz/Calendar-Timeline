@@ -117,6 +117,7 @@ const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 // Raio comum dos cartões do título e das linhas de separação do dia.
 const TITLE_CARD_STANDARD_CORNER_RADIUS = 13;
 const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
+const DAY_CHANGE_CIRCLE_DIAMETER = 44;
 
 const CANVAS = {
   width: 1092,
@@ -2123,7 +2124,7 @@ function currentDayFrameMetrics() {
   const boundaryBottomY =
     CANVAS.timelineTop +
     bottomLegendCenterY() +
-    legendFrameHeight() / 2;
+    DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
   const lineColor = hourGridLineColor(nextDayBoundary);
@@ -3630,15 +3631,19 @@ function thermalTemperatureLabelTopY() {
 }
 
 function thermalBandBottomY() {
+  // Reserva espaço para o círculo de mudança de dia e mantém
+  // dois pixels de afastamento antes dele.
   return (
     bottomLegendCenterY() -
-    legendFrameHeight() / 2 -
+    DAY_CHANGE_CIRCLE_DIAMETER / 2 -
     2
   );
 }
 
 function bottomLegendCenterY() {
-  return timelineHeight() - legendFrameHeight() / 2 - 2;
+  // O eixo inferior considera o diâmetro do círculo, não o antigo
+  // retângulo de 38 px.
+  return timelineHeight() - DAY_CHANGE_CIRCLE_DIAMETER / 2 - 2;
 }
 
 function timelineChartTop() {
@@ -5929,22 +5934,20 @@ function drawTimelineDayBoundariesOnTop(ctx) {
 }
 
 function drawWeekdayBadgesOnTop(ctx) {
-  const fontSize = isCompactMode()
-    ? 20
-    : isExtendedDetailedMode()
-      ? 22
-      : 24;
+  // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
+  const fontSize = 20;
   const centerY = bottomLegendCenterY();
   const bottomY = bottomLegendTextBottomY(centerY);
+  const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - 4;
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
     const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const badge = dayLegendBadgeRect(x, centerY);
+    const badge = dayLegendCircleRect(x, centerY);
     ctx.setFillColor(style.background);
-    ctx.fillRect(badge);
+    ctx.fillEllipse(badge);
     ctx.setFont(Font.blackRoundedSystemFont(fontSize));
     ctx.setTextColor(style.text);
     ctx.setTextAlignedCenter();
@@ -5953,11 +5956,12 @@ function drawWeekdayBadgesOnTop(ctx) {
       bottomAlignedLegendTextRect(
         x,
         bottomY,
-        dayLegendLabelWidth()
+        textWidth
       )
     );
   }
 }
+
 
 function drawFixedDaylightGlow(ctx, weather) {
   const lineY = solarLineY();
@@ -7665,6 +7669,16 @@ function dayLegendBadgeRect(centerX, centerY) {
     centerY - height / 2,
     width,
     height
+  );
+}
+
+function dayLegendCircleRect(centerX, centerY) {
+  const diameter = DAY_CHANGE_CIRCLE_DIAMETER;
+  return new Rect(
+    centerX - diameter / 2,
+    centerY - diameter / 2,
+    diameter,
+    diameter
   );
 }
 
