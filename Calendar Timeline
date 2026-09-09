@@ -1923,6 +1923,9 @@ async function renderWidget(items, loadError) {
   drawTimelineBackground(ctx);
   drawDatePanel(ctx, loadResult.holidayDates);
 
+  // A linha inferior fica atrás de todas as camadas da timeline.
+  drawCurrentDayBottomLineUnderlay(ctx);
+
   const timelineImage = await renderTimelinePanel(items, loadError);
   ctx.drawImageInRect(
     timelineImage,
@@ -2090,7 +2093,7 @@ function drawDatePanel(ctx, holidayDates) {
   }
 }
 
-function drawCurrentDayFrame(ctx) {
+function currentDayFrameMetrics() {
   const todayCard = titleDayCardRect(0);
   const nextDayBoundary = addDays(startOfDay(windowStart), 1);
   const boundaryX =
@@ -2104,6 +2107,51 @@ function drawCurrentDayFrame(ctx) {
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
   const lineColor = hourGridLineColor(nextDayBoundary);
+
+  return {
+    todayCard,
+    boundaryX,
+    astroCenterY,
+    boundaryBottomY,
+    cardBottomY,
+    lineWidth,
+    lineColor,
+  };
+}
+
+function drawCurrentDayBottomLineUnderlay(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    boundaryBottomY,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  if (boundaryX <= todayCard.x) return;
+
+  // Fica atrás de todos os elementos desenhados na timeline.
+  ctx.setFillColor(lineColor);
+  ctx.fillRect(
+    new Rect(
+      todayCard.x,
+      boundaryBottomY - lineWidth / 2,
+      boundaryX - todayCard.x,
+      lineWidth
+    )
+  );
+}
+
+function drawCurrentDayFrame(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    astroCenterY,
+    boundaryBottomY,
+    cardBottomY,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
 
   ctx.setFillColor(lineColor);
 
@@ -2145,19 +2193,6 @@ function drawCurrentDayFrame(ctx) {
     )
   );
 
-  // Liga a borda inferior da esquerda à linha vertical de mudança
-  // de dia, fechando o contorno na parte inferior.
-  if (boundaryX > todayCard.x) {
-    ctx.fillRect(
-      new Rect(
-        todayCard.x,
-        boundaryBottomY - lineWidth / 2,
-        boundaryX - todayCard.x,
-        lineWidth
-      )
-    );
-  }
-
   // Liga a extremidade inferior direita do cartão à linha da próxima
   // mudança de dia.
   if (boundaryX > todayCard.x + todayCard.width) {
@@ -2191,33 +2226,30 @@ function drawTitleDayCard(
   isSelected,
   isLast
 ) {
-  const borderColor = isSelected
-    ? hourGridLineColor(
-        addDays(startOfDay(windowStart), 1)
-      )
-    : new Color("#303136", 0.82);
-  const cardColor = isSelected
-    ? new Color(SETTINGS.timelineBackgroundColor, 1.0)
-    : new Color("#1D1D20", 0.92);
+  const borderColor = new Color("#303136", 0.82);
+  const cardColor = new Color("#1D1D20", 0.92);
 
   const cornerRadii = {
     topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 13,
     topRight: isLast ? 25 : 13,
-    // O cartão de hoje fica aberto na parte inferior.
+    // O cartão de hoje fica sem a moldura antiga na parte inferior.
     bottomRight: isSelected ? 0 : 13,
     bottomLeft: isSelected ? 0 : 13,
   };
 
-  // Mantém somente a moldura externa do cartão.
-  fillTitleCardShape(ctx, card, cornerRadii, borderColor);
-  const inner = new Rect(
-    card.x + 2,
-    card.y + 2,
-    card.width - 4,
-    card.height - 4
-  );
-  ctx.setFillColor(cardColor);
-  ctx.fillRect(inner);
+  // O cartão de hoje permanece transparente para revelar exatamente
+  // o fundo do widget que existe atrás dos astros.
+  if (!isSelected) {
+    fillTitleCardShape(ctx, card, cornerRadii, borderColor);
+    const inner = new Rect(
+      card.x + 2,
+      card.y + 2,
+      card.width - 4,
+      card.height - 4
+    );
+    ctx.setFillColor(cardColor);
+    ctx.fillRect(inner);
+  }
 
   // A data mantém a cor original; somente a palavra do dia recebe
   // a cor correspondente a sábado, domingo ou feriado.
