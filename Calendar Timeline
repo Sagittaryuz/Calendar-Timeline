@@ -2105,8 +2105,35 @@ function drawCurrentDayFrame(ctx) {
 
   ctx.setFillColor(lineColor);
 
-  // Prolonga a borda esquerda do cartão até o mesmo nível
-  // em que termina o retângulo vertical da mudança de dia.
+  // As bordas superior, esquerda e direita do cartão de hoje
+  // usam exatamente a espessura e a cor da mudança de dia.
+  ctx.fillRect(
+    new Rect(
+      todayCard.x - lineWidth / 2,
+      todayCard.y - lineWidth / 2,
+      todayCard.width + lineWidth,
+      lineWidth
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      todayCard.x - lineWidth / 2,
+      todayCard.y,
+      lineWidth,
+      Math.max(1, cardBottomY - todayCard.y)
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      todayCard.x + todayCard.width - lineWidth / 2,
+      todayCard.y,
+      lineWidth,
+      Math.max(1, cardBottomY - todayCard.y)
+    )
+  );
+
+  // Prolonga a borda esquerda até o nível inferior da linha
+  // vertical de mudança de dia.
   ctx.fillRect(
     new Rect(
       todayCard.x - lineWidth / 2,
@@ -2115,6 +2142,19 @@ function drawCurrentDayFrame(ctx) {
       Math.max(1, boundaryBottomY - cardBottomY)
     )
   );
+
+  // Liga a borda inferior da esquerda à linha vertical de mudança
+  // de dia, fechando o contorno na parte inferior.
+  if (boundaryX > todayCard.x) {
+    ctx.fillRect(
+      new Rect(
+        todayCard.x,
+        boundaryBottomY - lineWidth / 2,
+        boundaryX - todayCard.x,
+        lineWidth
+      )
+    );
+  }
 
   // Liga a extremidade inferior direita do cartão à linha da próxima
   // mudança de dia.
@@ -2150,7 +2190,9 @@ function drawTitleDayCard(
   isLast
 ) {
   const borderColor = isSelected
-    ? new Color("#FFFFFF", 1.0)
+    ? hourGridLineColor(
+        addDays(startOfDay(windowStart), 1)
+      )
     : new Color("#303136", 0.82);
   const cardColor = isSelected
     ? new Color(SETTINGS.timelineBackgroundColor, 1.0)
