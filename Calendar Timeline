@@ -2265,17 +2265,16 @@ function drawCurrentDayFrame(ctx) {
     lineColor
   );
 
-  // Linha que liga a base direita do cartão à mudança de dia.
-  if (boundaryX > todayCardRight) {
-    fillCurrentDayHorizontalLine(
-      ctx,
-      todayCardRight,
-      boundaryX,
-      cardBottomY,
-      lineWidth,
-      lineColor
-    );
-  }
+  // Linha que liga a base direita do cartão ao eixo da Lua.
+  // O sentido pode ser para a esquerda ou para a direita, conforme o horário.
+  fillCurrentDayHorizontalLine(
+    ctx,
+    todayCardRight,
+    boundaryX,
+    cardBottomY,
+    lineWidth,
+    lineColor
+  );
 
 }
 
