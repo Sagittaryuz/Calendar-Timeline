@@ -1956,8 +1956,8 @@ function drawDatePanel(ctx, holidayDates) {
   const cardWidth =
     (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
     cardCount;
-  const cardTop = 8;
-  const cardHeight = 99;
+  const cardTop = 13;
+  const cardHeight = 102;
   const firstDay = startOfDay(windowStart);
 
   for (let index = 0; index < cardCount; index++) {
@@ -1967,7 +1967,8 @@ function drawDatePanel(ctx, holidayDates) {
       ctx,
       date,
       new Rect(x, cardTop, cardWidth, cardHeight),
-      index === 0
+      index === 0,
+      index === cardCount - 1
     );
   }
 }
@@ -1976,7 +1977,8 @@ function drawTitleDayCard(
   ctx,
   date,
   card,
-  isSelected
+  isSelected,
+  isLast
 ) {
   const borderColor = isSelected
     ? new Color("#0A84FF", 1.0)
@@ -1985,15 +1987,34 @@ function drawTitleDayCard(
     ? new Color("#071A2E", 0.98)
     : new Color("#1D1D20", 0.92);
 
-  // Borda azul somente no dia selecionado, como na referência.
-  fillRoundedRect(ctx, card, 9, borderColor);
+  const cornerRadii = {
+    topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 9,
+    topRight:
+      isLast ? 25 : 9,
+    bottomRight: 9,
+    bottomLeft: 9,
+  };
+
+  // Borda azul somente no dia selecionado, como na referência. Os dois
+  // cantos superiores externos acompanham a curvatura do widget da Apple.
+  fillTitleCardShape(ctx, card, cornerRadii, borderColor);
   const inner = new Rect(
     card.x + 2,
     card.y + 2,
     card.width - 4,
     card.height - 4
   );
-  fillRoundedRect(ctx, inner, 7, cardColor);
+  fillTitleCardShape(
+    ctx,
+    inner,
+    {
+      topLeft: Math.max(1, cornerRadii.topLeft - 2),
+      topRight: Math.max(1, cornerRadii.topRight - 2),
+      bottomRight: 7,
+      bottomLeft: 7,
+    },
+    cardColor
+  );
 
   const weekdayColor = isSelected
     ? Color.white()
@@ -2002,18 +2023,23 @@ function drawTitleDayCard(
     ? new Color("#FFFFFF", 0.96)
     : new Color(SETTINGS.secondaryTextColor, 1.0);
   const left = card.x + 12;
-  const top = card.y + 10;
+  const top = card.y + 8;
+  const weekdayFontSize = 26;
+  const dateFontSize = 23;
 
   ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackMonospacedSystemFont(18));
+  ctx.setFont(Font.blackMonospacedSystemFont(weekdayFontSize));
   ctx.setTextColor(weekdayColor);
   ctx.drawText(
     shortWeekday(date),
     new Point(left, top)
   );
 
-  const weekdayWidth = estimatedTextWidth(shortWeekday(date), 18);
-  ctx.setFont(Font.regularMonospacedSystemFont(17));
+  const weekdayWidth = estimatedTextWidth(
+    shortWeekday(date),
+    weekdayFontSize
+  );
+  ctx.setFont(Font.regularMonospacedSystemFont(dateFontSize));
   ctx.setTextColor(dateColor);
   ctx.drawText(
     titleDayMonthLabel(date),
@@ -2039,16 +2065,22 @@ function drawTitleDayCard(
     ? `${Math.round(Number(daily.maximum))}°`
     : "--°";
   const temperatureX = card.x + 69;
-  const temperatureY = card.y + 55;
-  const temperatureFont = Font.blackMonospacedSystemFont(19);
+  const temperatureY = card.y + 58;
+  const temperatureFontSize = 25;
+  const temperatureFont = Font.blackMonospacedSystemFont(
+    temperatureFontSize
+  );
 
   ctx.setFont(temperatureFont);
   ctx.setTextAlignedLeft();
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
   ctx.drawText(minimum, new Point(temperatureX, temperatureY));
 
-  const minimumWidth = estimatedTextWidth(minimum, 19);
-  ctx.setFont(Font.regularMonospacedSystemFont(17));
+  const minimumWidth = estimatedTextWidth(
+    minimum,
+    temperatureFontSize
+  );
+  ctx.setFont(Font.regularMonospacedSystemFont(21));
   ctx.setTextColor(new Color("#D1D1D6", 0.92));
   ctx.drawText(
     "/",
@@ -2062,6 +2094,78 @@ function drawTitleDayCard(
     new Point(temperatureX + minimumWidth + 20, temperatureY)
   );
 
+}
+
+function fillTitleCardShape(ctx, rect, radii, color) {
+  const topLeft = Math.max(0, Math.min(radii.topLeft, rect.width / 2, rect.height / 2));
+  const topRight = Math.max(0, Math.min(radii.topRight, rect.width / 2, rect.height / 2));
+  const bottomRight = Math.max(0, Math.min(radii.bottomRight, rect.width / 2, rect.height / 2));
+  const bottomLeft = Math.max(0, Math.min(radii.bottomLeft, rect.width / 2, rect.height / 2));
+  const topBandHeight = Math.max(topLeft, topRight);
+  const bottomBandHeight = Math.max(bottomLeft, bottomRight);
+  const leftBandWidth = Math.max(topLeft, bottomLeft);
+  const rightBandWidth = Math.max(topRight, bottomRight);
+
+  ctx.setFillColor(color);
+  ctx.fillRect(
+    new Rect(
+      rect.x + topLeft,
+      rect.y,
+      Math.max(0, rect.width - topLeft - topRight),
+      topBandHeight
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      rect.x + bottomLeft,
+      rect.y + rect.height - bottomBandHeight,
+      Math.max(0, rect.width - bottomLeft - bottomRight),
+      bottomBandHeight
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      rect.x,
+      rect.y + topLeft,
+      leftBandWidth,
+      Math.max(0, rect.height - topLeft - bottomLeft)
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      rect.x + rect.width - rightBandWidth,
+      rect.y + topRight,
+      rightBandWidth,
+      Math.max(0, rect.height - topRight - bottomRight)
+    )
+  );
+  ctx.fillEllipse(
+    new Rect(rect.x, rect.y, topLeft * 2, topLeft * 2)
+  );
+  ctx.fillEllipse(
+    new Rect(
+      rect.x + rect.width - topRight * 2,
+      rect.y,
+      topRight * 2,
+      topRight * 2
+    )
+  );
+  ctx.fillEllipse(
+    new Rect(
+      rect.x + rect.width - bottomRight * 2,
+      rect.y + rect.height - bottomRight * 2,
+      bottomRight * 2,
+      bottomRight * 2
+    )
+  );
+  ctx.fillEllipse(
+    new Rect(
+      rect.x,
+      rect.y + rect.height - bottomLeft * 2,
+      bottomLeft * 2,
+      bottomLeft * 2
+    )
+  );
 }
 
 function titleDayMonthLabel(date) {
