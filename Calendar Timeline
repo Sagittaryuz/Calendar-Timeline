@@ -1375,11 +1375,11 @@ function extractBirthdayPersonName(value) {
     )
     .replace(/\s+\b\d{1,3}\s+(?:anos?|years?)\b[\s\S]*$/i, "")
     .replace(
-      /\s*(?:['’]s\s+)?(?:birthday|anivers[aá]rio)\b[\s\S]*$/i,
+      /^(?:anivers[aá]rio|birthday)\s*(?:de|do|da|of)?\s*[:\-–—]?\s*/i,
       ""
     )
     .replace(
-      /^(?:anivers[aá]rio|birthday)\s*(?:de|do|da|of)?\s*/i,
+      /\s*(?:['’]s\s+)?(?:birthday|anivers[aá]rio)\b[\s\S]*$/i,
       ""
     )
     .replace(/\s+/g, " ")
@@ -7861,6 +7861,16 @@ function drawReminderMarker(ctx, centerX, centerY, diameter, color) {
       centerY - diameter / 2,
       diameter,
       diameter
+    )
+  );
+  const innerDiameter = Math.max(2, diameter - 5);
+  ctx.setFillColor(new Color("#000000", 0.88));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - innerDiameter / 2,
+      centerY - innerDiameter / 2,
+      innerDiameter,
+      innerDiameter
     )
   );
 }
