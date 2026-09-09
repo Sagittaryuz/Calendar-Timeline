@@ -2087,7 +2087,7 @@ function drawTitleDayCard(
   isLast
 ) {
   const borderColor = isSelected
-    ? new Color("#0A84FF", 1.0)
+    ? new Color("#FFFFFF", 1.0)
     : new Color("#303136", 0.82);
   const cardColor = isSelected
     ? new Color("#071A2E", 0.98)
@@ -2111,9 +2111,12 @@ function drawTitleDayCard(
   ctx.setFillColor(cardColor);
   ctx.fillRect(inner);
 
-  const weekdayColor = isSelected
-    ? Color.white()
-    : new Color("#F2F2F7", 0.92);
+  // A data mantém a cor original; somente a palavra do dia recebe
+  // a cor correspondente a sábado, domingo ou feriado.
+  const weekdayColor = titleWeekdayColor(
+    date,
+    loadResult.holidayDates
+  );
   const dateColor = isSelected
     ? new Color("#FFFFFF", 0.96)
     : new Color(SETTINGS.secondaryTextColor, 1.0);
@@ -2123,9 +2126,17 @@ function drawTitleDayCard(
 
   const weekdayLabel = shortWeekday(date);
   const dateLabel = titleDayMonthLabel(date);
-  const titleLabel = weekdayLabel + " " + dateLabel;
 
-  // O cartão externo é dividido em duas linhas reais.
+  // Como a fonte é monoespaçada, o espaço entre o dia e a data
+  // ocupa exatamente uma célula. Isso mantém, por exemplo, "QUI 10/09".
+  const titleFontSize = 38;
+  const titleCharacterWidth = titleFontSize * 0.62;
+  const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
+  const dateWidth = dateLabel.length * titleCharacterWidth;
+  const titleGap = titleCharacterWidth;
+  const titleGroupWidth =
+    weekdayWidth + titleGap + dateWidth;
+
   const titleRow = new Rect(
     card.x + 8,
     card.y + 5,
@@ -2139,10 +2150,8 @@ function drawTitleDayCard(
     42
   );
 
-  const titleFontSize = 38;
   const titleStartX =
-    card.x +
-    (card.width - estimatedTextWidth(titleLabel, titleFontSize)) / 2;
+    card.x + (card.width - titleGroupWidth) / 2;
   const titleY =
     titleRow.y + (titleRow.height - titleFontSize) / 2;
 
@@ -2155,9 +2164,7 @@ function drawTitleDayCard(
   );
 
   const dateStartX =
-    titleStartX +
-    estimatedTextWidth(weekdayLabel, titleFontSize) +
-    estimatedTextWidth(" ", titleFontSize);
+    titleStartX + weekdayWidth + titleGap;
   ctx.setTextColor(dateColor);
   ctx.drawText(
     dateLabel,
@@ -2175,83 +2182,64 @@ function drawTitleDayCard(
   const countsText =
     "E:" + String(counts.events) + "|L:" + String(counts.reminders);
 
-  // Temperatura, ícone e contadores formam um único grupo contínuo.
-  const temperatureFontSize = 22;
-  const temperatureFont =
-    Font.blackMonospacedSystemFont(temperatureFontSize);
-  const minimumWidth = estimatedTextWidth(
-    minimum,
-    temperatureFontSize
-  );
-  const slashWidth = estimatedTextWidth(
-    "/",
-    temperatureFontSize
-  );
-  const maximumWidth = estimatedTextWidth(
-    maximum,
-    temperatureFontSize
-  );
+  // Temperatura, ícone e contadores formam um único grupo.
+  // Há exatamente 2 px entre a temperatura e o ícone, e 2 px
+  // entre o ícone e os contadores.
+  const detailFontSize = 22;
+  const detailCharacterWidth = detailFontSize * 0.62;
+  const minimumWidth = minimum.length * detailCharacterWidth;
+  const slashWidth = detailCharacterWidth;
+  const maximumWidth = maximum.length * detailCharacterWidth;
   const temperatureGroupWidth =
     minimumWidth + slashWidth + maximumWidth;
-
+  const countsWidth =
+    countsText.length * detailCharacterWidth;
   const iconSize = 30;
-  const baseCountsFontSize = 16;
-  const baseCountsWidth = estimatedTextWidth(
-    countsText,
-    baseCountsFontSize
-  );
-  const availableCountsWidth = Math.max(
-    1,
-    detailRow.width - temperatureGroupWidth - iconSize
-  );
-  const countsFontSize = Math.max(
-    11,
-    Math.min(
-      baseCountsFontSize,
-      baseCountsFontSize *
-        availableCountsWidth /
-        Math.max(1, baseCountsWidth)
-    )
-  );
-  const renderedCountsWidth = estimatedTextWidth(
-    countsText,
-    countsFontSize
-  );
+  const iconGap = 2;
 
   const groupWidth =
-    temperatureGroupWidth + iconSize + renderedCountsWidth;
+    temperatureGroupWidth +
+    iconGap +
+    iconSize +
+    iconGap +
+    countsWidth;
   const groupX =
     card.x + (card.width - groupWidth) / 2;
   const temperatureX = groupX;
   const iconCenterX =
-    temperatureX + temperatureGroupWidth + iconSize / 2;
+    temperatureX +
+    temperatureGroupWidth +
+    iconGap +
+    iconSize / 2;
   const countsX =
-    temperatureX + temperatureGroupWidth + iconSize;
+    temperatureX +
+    temperatureGroupWidth +
+    iconGap +
+    iconSize +
+    iconGap;
   const detailCenterY =
     detailRow.y + detailRow.height / 2;
-  const temperatureY =
-    detailCenterY - temperatureFontSize / 2;
-  const countsY =
-    detailCenterY - countsFontSize / 2;
+  const detailY =
+    detailCenterY - detailFontSize / 2;
 
   ctx.setTextAlignedLeft();
-  ctx.setFont(temperatureFont);
+  ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
   ctx.setTextColor(
     new Color(SETTINGS.minimumTemperatureColor, 1.0)
   );
   ctx.drawText(
     minimum,
-    new Point(temperatureX, temperatureY)
+    new Point(temperatureX, detailY)
   );
 
-  ctx.setFont(Font.regularMonospacedSystemFont(temperatureFontSize));
+  ctx.setFont(Font.regularMonospacedSystemFont(detailFontSize));
   ctx.setTextColor(new Color("#D1D1D6", 0.92));
   ctx.drawText(
     "/",
-    new Point(temperatureX + minimumWidth, temperatureY)
+    new Point(temperatureX + minimumWidth, detailY)
   );
 
-  ctx.setFont(temperatureFont);
+  ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
   ctx.setTextColor(
     new Color(SETTINGS.maximumTemperatureColor, 1.0)
   );
@@ -2259,18 +2247,18 @@ function drawTitleDayCard(
     maximum,
     new Point(
       temperatureX + minimumWidth + slashWidth,
-      temperatureY
+      detailY
     )
   );
 
-  ctx.setFont(Font.blackMonospacedSystemFont(countsFontSize));
+  // E:2|L:4 usa exatamente a mesma fonte e o mesmo tamanho
+  // das temperaturas.
   ctx.setTextColor(detailColor);
   ctx.drawText(
     countsText,
-    new Point(countsX, countsY)
+    new Point(countsX, detailY)
   );
 
-  // O ícone pertence ao grupo e acompanha seu centro vertical.
   drawTitleWeatherIcon(
     ctx,
     titleForecastForDay(date),
@@ -7944,28 +7932,36 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
     )
   );
   const labelY = y + (rowHeight - labelHeight) / 2;
-
-  // O fundo preto preserva a leitura sem transformar o aniversário em
-  // chart colorido.
-  fillRoundedRect(
-    ctx,
-    new Rect(labelX, labelY, labelWidth, labelHeight),
-    Math.min(6, labelHeight / 2),
-    new Color("#000000", 0.94)
+  const labelRect = new Rect(
+    labelX + 4,
+    labelY,
+    Math.max(1, labelWidth - 8),
+    labelHeight
   );
 
+  // Fundo transparente: somente a palavra recebe um contorno preto fino.
   ctx.setTextAlignedCenter();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(new Color("#000000", 0.95));
+  for (const [offsetX, offsetY] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ]) {
+    ctx.drawTextInRect(
+      label,
+      new Rect(
+        labelRect.x + offsetX,
+        labelRect.y + offsetY,
+        labelRect.width,
+        labelRect.height
+      )
+    );
+  }
+
   ctx.setTextColor(new Color("#FF69B4", 1.0));
-  ctx.drawTextInRect(
-    label,
-    new Rect(
-      labelX + 4,
-      labelY,
-      Math.max(1, labelWidth - 8),
-      labelHeight
-    )
-  );
+  ctx.drawTextInRect(label, labelRect);
 }
 
 function drawReminderMarker(ctx, centerX, centerY, diameter, color) {
