@@ -2155,8 +2155,37 @@ function drawTitleDayCard(
     new Point(dateStartX, titleTop)
   );
 
+  const daily = titleDailyWeatherForDay(date);
+  const minimum = Number.isFinite(Number(daily?.minimum))
+    ? `${Math.round(Number(daily.minimum))}°`
+    : "--°";
+  const maximum = Number.isFinite(Number(daily?.maximum))
+    ? `${Math.round(Number(daily.maximum))}°`
+    : "--°";
+  const temperatureFontSize = 29;
+  const temperatureFont = Font.blackMonospacedSystemFont(
+    temperatureFontSize
+  );
+  const temperatureX = card.x + 10;
+  const temperatureY = card.y + 70;
+  const minimumWidth = estimatedTextWidth(
+    minimum,
+    temperatureFontSize
+  );
+  const maximumWidth = estimatedTextWidth(
+    maximum,
+    temperatureFontSize
+  );
+  const temperatureBlockRight =
+    temperatureX + minimumWidth + 20 + maximumWidth;
+
+  // A temperatura fica à esquerda e o ícone à direita, sem alterar a
+  // largura do cartão nem permitir que os dois elementos se sobreponham.
   const iconSize = 36;
-  const iconCenterX = card.x + 30;
+  const iconCenterX = Math.min(
+    card.x + card.width - iconSize / 2 - 8,
+    temperatureBlockRight + iconSize / 2 + 12
+  );
   const iconCenterY = card.y + 82;
   drawTitleWeatherIcon(
     ctx,
@@ -2166,29 +2195,11 @@ function drawTitleDayCard(
     iconSize
   );
 
-  const daily = titleDailyWeatherForDay(date);
-  const minimum = Number.isFinite(Number(daily?.minimum))
-    ? `${Math.round(Number(daily.minimum))}°`
-    : "--°";
-  const maximum = Number.isFinite(Number(daily?.maximum))
-    ? `${Math.round(Number(daily.maximum))}°`
-    : "--°";
-  const temperatureX = card.x + 63;
-  const temperatureY = card.y + 78;
-  const temperatureFontSize = 29;
-  const temperatureFont = Font.blackMonospacedSystemFont(
-    temperatureFontSize
-  );
-
   ctx.setFont(temperatureFont);
   ctx.setTextAlignedLeft();
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
   ctx.drawText(minimum, new Point(temperatureX, temperatureY));
 
-  const minimumWidth = estimatedTextWidth(
-    minimum,
-    temperatureFontSize
-  );
   ctx.setFont(Font.regularMonospacedSystemFont(24));
   ctx.setTextColor(new Color("#D1D1D6", 0.92));
   ctx.drawText(
@@ -7723,12 +7734,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     visibleLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
     titleTextY
   );
+  const textCenterY = titleTextY + titleFontSize / 2;
 
   if (item.kind === "reminder") {
     drawReminderMarker(
       ctx,
       visibleLeft + 8 + reminderMarkerDiameter / 2,
-      centerY,
+      textCenterY,
       reminderMarkerDiameter,
       color
     );
