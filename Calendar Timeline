@@ -2273,7 +2273,7 @@ function drawCurrentDayFrame(ctx) {
     ctx,
     todayCardRight,
     boundaryX,
-    frameBottomY,
+    verticalFrameBottomY,
     lineWidth,
     lineColor
   );
