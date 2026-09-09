@@ -3605,6 +3605,11 @@ function weatherIconCenterY() {
   return Math.round(weatherStripBottomY() / 2);
 }
 
+function dayBoundaryAstroOuterRadius() {
+  // Considera o raio do disco e os 2 px da borda externa da Lua.
+  return weatherIconSize() / 2 + 2;
+}
+
 function weatherIconIntersectsTimeline(centerX, halfWidth) {
   // A própria borda do DrawContext faz o recorte; este teste apenas impede
   // trabalho com ícones completamente fora da janela e preserva os parciais.
@@ -4875,10 +4880,12 @@ function eclipseForDate(date) {
 
 function drawWeatherConditionStrip(ctx, weather) {
   const bottom = weatherStripBottomY();
+  const lineStart =
+    weatherIconCenterY() + dayBoundaryAstroOuterRadius();
   // Fundo transparente: o gradiente original do widget permanece visível
   // atrás das luas, dos sóis, das legendas e do grid.
-  // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
-  drawDayBoundaryOriginsBehindMoon(ctx, bottom);
+  // A linha fica atrás do astro até ultrapassar sua borda externa.
+  drawDayBoundaryOriginsBehindMoon(ctx, lineStart);
 
   // O sol central fixo foi removido. Cada horário recebe seu próprio ícone.
   drawHourlyWeatherIcons(ctx, weather, bottom);
@@ -5915,7 +5922,9 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
 
 
 function drawTimelineDayBoundariesOnTop(ctx) {
-  const lineTop = weatherStripBottomY();
+  // Começa somente depois da borda externa do astro.
+  const lineTop =
+    weatherIconCenterY() + dayBoundaryAstroOuterRadius();
   const lineBottom = bottomLegendCenterY();
   const lineWidth = dayBoundaryLineWidth();
 
