@@ -2078,6 +2078,7 @@ function drawDatePanel(ctx, holidayDates) {
   }
 }
 
+
 function drawTitleDayCard(
   ctx,
   date,
@@ -2094,14 +2095,12 @@ function drawTitleDayCard(
 
   const cornerRadii = {
     topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 13,
-    topRight:
-      isLast ? 25 : 13,
+    topRight: isLast ? 25 : 13,
     bottomRight: 13,
     bottomLeft: 13,
   };
 
-  // Borda azul somente no dia selecionado, como na referência. Os dois
-  // cantos superiores externos acompanham a curvatura do widget da Apple.
+  // Mantém somente a moldura externa do cartão.
   fillTitleCardShape(ctx, card, cornerRadii, borderColor);
   const inner = new Rect(
     card.x + 2,
@@ -2109,9 +2108,6 @@ function drawTitleDayCard(
     card.width - 4,
     card.height - 4
   );
-  // O preenchimento interno é plano: a única moldura visível é a externa.
-  // Isso evita que o arco/círculo do canto inferior direito pareça uma
-  // segunda moldura dentro do cartão.
   ctx.setFillColor(cardColor);
   ctx.fillRect(inner);
 
@@ -2121,99 +2117,238 @@ function drawTitleDayCard(
   const dateColor = isSelected
     ? new Color("#FFFFFF", 0.96)
     : new Color(SETTINGS.secondaryTextColor, 1.0);
+  const detailColor = isSelected
+    ? new Color("#FFFFFF", 0.96)
+    : new Color("#D1D1D6", 0.96);
+
   const weekdayLabel = shortWeekday(date);
   const dateLabel = titleDayMonthLabel(date);
-  const titleLabel = `${weekdayLabel} ${dateLabel}`;
-  // O tamanho é único para todos os cartões e é limitado pelo rótulo mais
-  // largo, mantendo a mesma escala visual em toda a faixa.
-  const titleFontSize = 42;
-  const titleTop = card.y + 8;
+  const titleLabel = weekdayLabel + " " + dateLabel;
+
+  // O cartão externo é dividido em duas linhas reais. Cada linha recebe
+  // seu próprio centro vertical, sem depender da altura da outra.
+  const titleRow = new Rect(
+    card.x + 8,
+    card.y + 5,
+    card.width - 16,
+    42
+  );
+  const detailRow = new Rect(
+    card.x + 8,
+    card.y + 54,
+    card.width - 16,
+    42
+  );
+
+  const titleFontSize = 38;
+  const titleStartX =
+    card.x +
+    (card.width - estimatedTextWidth(titleLabel, titleFontSize)) / 2;
+  const titleY =
+    titleRow.y + (titleRow.height - titleFontSize) / 2;
 
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
   ctx.setTextColor(weekdayColor);
   ctx.drawText(
     weekdayLabel,
-    new Point(
-      card.x +
-        (card.width - estimatedTextWidth(titleLabel, titleFontSize)) / 2,
-      titleTop
-    )
+    new Point(titleStartX, titleY)
   );
 
-  const titleStartX =
-    card.x +
-    (card.width - estimatedTextWidth(titleLabel, titleFontSize)) / 2;
   const dateStartX =
     titleStartX +
     estimatedTextWidth(weekdayLabel, titleFontSize) +
     estimatedTextWidth(" ", titleFontSize);
-  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
   ctx.setTextColor(dateColor);
   ctx.drawText(
     dateLabel,
-    new Point(dateStartX, titleTop)
+    new Point(dateStartX, titleY)
   );
 
-  const daily = titleDailyWeatherForDay(date);
+  const daily = titleDailyTemperatureForDay(date);
   const minimum = Number.isFinite(Number(daily?.minimum))
-    ? `${Math.round(Number(daily.minimum))}°`
-    : "--°";
+    ? String(Math.round(Number(daily.minimum))) + "º"
+    : "--º";
   const maximum = Number.isFinite(Number(daily?.maximum))
-    ? `${Math.round(Number(daily.maximum))}°`
-    : "--°";
-  const temperatureFontSize = 29;
-  const temperatureFont = Font.blackMonospacedSystemFont(
-    temperatureFontSize
+    ? String(Math.round(Number(daily.maximum))) + "º"
+    : "--º";
+  const counts = titleScheduleCountsForDay(date);
+  const countsText =
+    "E:" + String(counts.events) + " | L:" + String(counts.reminders);
+
+  // A temperatura ocupa a área esquerda; o ícone ocupa o centro geométrico
+  // do cartão; os contadores ocupam a área direita.
+  const iconSize = 32;
+  const detailCenterX = card.x + card.width / 2;
+  const detailCenterY =
+    detailRow.y + detailRow.height / 2;
+  const sideGap = 8;
+  const leftArea = new Rect(
+    detailRow.x,
+    detailRow.y,
+    Math.max(
+      1,
+      detailCenterX - iconSize / 2 - sideGap - detailRow.x
+    ),
+    detailRow.height
   );
-  const temperatureX = card.x + 10;
-  const iconCenterY = card.y + 82;
-  const temperatureY = iconCenterY - temperatureFontSize / 2;
+  const rightArea = new Rect(
+    detailCenterX + iconSize / 2 + sideGap,
+    detailRow.y,
+    Math.max(
+      1,
+      detailRow.x + detailRow.width -
+        (detailCenterX + iconSize / 2 + sideGap)
+    ),
+    detailRow.height
+  );
+
+  const temperatureFontSize = 22;
+  const temperatureFont =
+    Font.blackMonospacedSystemFont(temperatureFontSize);
   const minimumWidth = estimatedTextWidth(
     minimum,
+    temperatureFontSize
+  );
+  const slashWidth = estimatedTextWidth(
+    "/",
     temperatureFontSize
   );
   const maximumWidth = estimatedTextWidth(
     maximum,
     temperatureFontSize
   );
-  const temperatureBlockRight =
-    temperatureX + minimumWidth + 20 + maximumWidth;
+  const temperatureGroupWidth =
+    minimumWidth + slashWidth + maximumWidth;
+  const temperatureX =
+    leftArea.x + (leftArea.width - temperatureGroupWidth) / 2;
+  const temperatureY =
+    detailRow.y +
+    (detailRow.height - temperatureFontSize) / 2;
 
-  // A temperatura fica à esquerda e o ícone à direita, sem alterar a
-  // largura do cartão nem permitir que os dois elementos se sobreponham.
-  const iconSize = 36;
-  const iconCenterX = Math.min(
-    card.x + card.width - iconSize / 2 - 8,
-    temperatureBlockRight + iconSize / 2 + 12
-  );
-  drawTitleWeatherIcon(
-    ctx,
-    titleForecastForDay(date),
-    iconCenterX,
-    iconCenterY,
-    iconSize
-  );
-
-  ctx.setFont(temperatureFont);
   ctx.setTextAlignedLeft();
-  ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
-  ctx.drawText(minimum, new Point(temperatureX, temperatureY));
+  ctx.setFont(temperatureFont);
+  ctx.setTextColor(
+    new Color(SETTINGS.minimumTemperatureColor, 1.0)
+  );
+  ctx.drawText(
+    minimum,
+    new Point(temperatureX, temperatureY)
+  );
 
-  ctx.setFont(Font.regularMonospacedSystemFont(24));
+  // A barra é desenhada imediatamente após a mínima: não há espaço
+  // artificial entre mínima e máxima.
+  ctx.setFont(Font.regularMonospacedSystemFont(temperatureFontSize));
   ctx.setTextColor(new Color("#D1D1D6", 0.92));
   ctx.drawText(
     "/",
-    new Point(temperatureX + minimumWidth + 7, temperatureY + 1)
+    new Point(temperatureX + minimumWidth, temperatureY)
   );
 
   ctx.setFont(temperatureFont);
-  ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor, 1.0));
+  ctx.setTextColor(
+    new Color(SETTINGS.maximumTemperatureColor, 1.0)
+  );
   ctx.drawText(
     maximum,
-    new Point(temperatureX + minimumWidth + 20, temperatureY)
+    new Point(
+      temperatureX + minimumWidth + slashWidth,
+      temperatureY
+    )
   );
 
+  const baseCountsFontSize = 16;
+  const countsWidth = estimatedTextWidth(
+    countsText,
+    baseCountsFontSize
+  );
+  const countsFontSize = Math.max(
+    11,
+    Math.min(
+      baseCountsFontSize,
+      baseCountsFontSize *
+        rightArea.width /
+        Math.max(1, countsWidth)
+    )
+  );
+  const renderedCountsWidth = estimatedTextWidth(
+    countsText,
+    countsFontSize
+  );
+  const countsX =
+    rightArea.x +
+    (rightArea.width - renderedCountsWidth) / 2;
+  const countsY =
+    detailRow.y +
+    (detailRow.height - countsFontSize) / 2;
+
+  ctx.setFont(Font.blackMonospacedSystemFont(countsFontSize));
+  ctx.setTextColor(detailColor);
+  ctx.drawText(
+    countsText,
+    new Point(countsX, countsY)
+  );
+
+  // O centro do ícone coincide exatamente com o centro da segunda linha.
+  drawTitleWeatherIcon(
+    ctx,
+    titleForecastForDay(date),
+    detailCenterX,
+    detailCenterY,
+    iconSize
+  );
+}
+
+function titleDailyTemperatureForDay(date) {
+  const daily = titleDailyWeatherForDay(date);
+  if (
+    daily &&
+    Number.isFinite(Number(daily.minimum)) &&
+    Number.isFinite(Number(daily.maximum))
+  ) {
+    return daily;
+  }
+
+  return dailyTemperatureExtremes(
+    hourlyWeather?.hours ?? []
+  )[dateKey(date)] ?? null;
+}
+
+function titleScheduleCountsForDay(date) {
+  const dayStart = startOfDay(date);
+  const dayEnd = addDays(dayStart, 1);
+  let events = 0;
+  let reminders = 0;
+
+  for (const item of loadResult.items ?? []) {
+    if (
+      item.isOverflow ||
+      (item.kind !== "event" && item.kind !== "reminder")
+    ) {
+      continue;
+    }
+
+    const itemStart = item.start instanceof Date
+      ? item.start
+      : new Date(item.start);
+    const itemEnd = item.end instanceof Date
+      ? item.end
+      : new Date(item.end);
+
+    if (
+      !Number.isFinite(itemStart.getTime()) ||
+      !Number.isFinite(itemEnd.getTime()) ||
+      itemEnd <= dayStart ||
+      itemStart >= dayEnd
+    ) {
+      continue;
+    }
+
+    if (item.kind === "event") events++;
+    else reminders++;
+  }
+
+  return { events, reminders };
 }
 
 function fillTitleCardShape(ctx, rect, radii, color) {
@@ -5618,304 +5753,35 @@ function drawTimelineDayBoundariesOnTop(ctx) {
   }
 }
 
-
 function drawWeekdayBadgesOnTop(ctx) {
-  const weekdayFontSize = dayBadgeWeekdayFontSize();
-  const detailFontSize = dayBadgeDetailFontSize();
+  const fontSize = isCompactMode()
+    ? 20
+    : isExtendedDetailedMode()
+      ? 22
+      : 24;
   const centerY = bottomLegendCenterY();
-  const dailyExtremes = dailyTemperatureExtremes(
-    hourlyWeather?.hours ?? []
-  );
+  const bottomY = bottomLegendTextBottomY(centerY);
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    // O branch diagonal possui um eixo próprio para as legendas de dia.
     const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const layout = dayBadgeLayout(x, centerY);
-
-    // Este é o único retângulo do dia. A linha superior e a inferior
-    // compartilham exatamente o mesmo eixo horizontal.
+    const badge = dayLegendBadgeRect(x, centerY);
     ctx.setFillColor(style.background);
-    ctx.fillRect(layout.frame);
-
-    ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackRoundedSystemFont(weekdayFontSize));
+    ctx.fillRect(badge);
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
     ctx.setTextColor(style.text);
+    ctx.setTextAlignedCenter();
     ctx.drawTextInRect(
       shortWeekday(tick),
-      layout.firstLine
-    );
-
-    const summary = dayBadgeSummary(
-      tick,
-      dailyExtremes
-    );
-    drawDayBadgeDetail(
-      ctx,
-      layout,
-      summary,
-      style.text,
-      detailFontSize
+      bottomAlignedLegendTextRect(
+        x,
+        bottomY,
+        dayLegendLabelWidth()
+      )
     );
   }
-}
-
-function dayBadgeSummary(date, dailyExtremes) {
-  const key = dateKey(date);
-  const extreme = dailyExtremes[key];
-  const minimum = Number(extreme?.minimum);
-  const maximum = Number(extreme?.maximum);
-  const minimumText = Number.isFinite(minimum)
-    ? String(Math.round(minimum)) + "º"
-    : "--º";
-  const maximumText = Number.isFinite(maximum)
-    ? String(Math.round(maximum)) + "º"
-    : "--º";
-  const counts = dayBadgeCountsForDate(date);
-
-  return {
-    temperatureText: minimumText + "/" + maximumText,
-    weatherGlyph: weatherBadgeGlyphForDate(date),
-    countsText:
-      "E:" + String(counts.events) + " | L:" + String(counts.reminders),
-  };
-}
-
-function dayBadgeCountsForDate(date) {
-  const dayStart = startOfDay(date);
-  const dayEnd = addDays(dayStart, 1);
-  let events = 0;
-  let reminders = 0;
-
-  for (const item of loadResult.items ?? []) {
-    if (
-      item.isOverflow ||
-      (item.kind !== "event" && item.kind !== "reminder")
-    ) {
-      continue;
-    }
-
-    const start = item.start instanceof Date
-      ? item.start
-      : new Date(item.start);
-    const end = item.end instanceof Date
-      ? item.end
-      : new Date(item.end);
-
-    if (
-      !Number.isFinite(start.getTime()) ||
-      !Number.isFinite(end.getTime()) ||
-      end <= dayStart ||
-      start >= dayEnd
-    ) {
-      continue;
-    }
-
-    if (item.kind === "event") events++;
-    else reminders++;
-  }
-
-  return { events, reminders };
-}
-
-function weatherBadgeGlyphForDate(date) {
-  const key = dateKey(date);
-  const forecasts = (hourlyWeather?.hours ?? []).filter(
-    (forecast) => {
-      const timestamp = Number(forecast.timestamp);
-      return (
-        Number.isFinite(timestamp) &&
-        dateKey(new Date(timestamp)) === key
-      );
-    }
-  );
-
-  if (forecasts.length === 0) return "☀️";
-
-  return forecasts
-    .map(weatherBadgeCandidate)
-    .sort((first, second) => second.score - first.score)[0]
-    .glyph;
-}
-
-function weatherBadgeCandidate(forecast) {
-  const symbol = String(forecast?.symbol ?? "").toLowerCase();
-  const group = weatherSymbolGroup(forecast);
-  const state = weatherOverlayState(forecast);
-  const forecastDate = Number.isFinite(Number(forecast?.timestamp))
-    ? new Date(Number(forecast.timestamp))
-    : now;
-
-  if (
-    group === 6 ||
-    state.storm ||
-    symbol.includes("thunder") ||
-    symbol.includes("storm")
-  ) {
-    return { score: 100, glyph: "⛈️" };
-  }
-
-  if (
-    group === 7 ||
-    group === 8 ||
-    state.snow ||
-    symbol.includes("snow") ||
-    symbol.includes("sleet")
-  ) {
-    return { score: 90, glyph: "🌨️" };
-  }
-
-  if (
-    group === 4 ||
-    group === 5 ||
-    state.rain ||
-    symbol.includes("rain") ||
-    symbol.includes("shower")
-  ) {
-    return { score: 80, glyph: "🌧️" };
-  }
-
-  if (
-    group === 9 ||
-    state.fog ||
-    symbol.includes("fog") ||
-    symbol.includes("mist")
-  ) {
-    return { score: 70, glyph: "🌫️" };
-  }
-
-  if (
-    group === 10 ||
-    state.wind ||
-    symbol.includes("wind")
-  ) {
-    return { score: 60, glyph: "💨" };
-  }
-
-  if (
-    group === 3 ||
-    state.denseCloud ||
-    symbol.includes("overcast") ||
-    symbol.includes("cloud")
-  ) {
-    return { score: 50, glyph: "☁️" };
-  }
-
-  if (group === 2 || symbol.includes("partly")) {
-    return { score: 40, glyph: "⛅" };
-  }
-
-  return {
-    score: 20,
-    glyph: isNightWeatherHour(forecastDate) ? "🌙" : "☀️",
-  };
-}
-
-function dayBadgeLayout(centerX, centerY) {
-  const frame = dayLegendBadgeRect(centerX, centerY);
-  const horizontalPadding = isCompactMode() ? 3 : 4;
-  const verticalPadding = isCompactMode() ? 2 : 3;
-  const lineGap = 1;
-  const availableHeight =
-    frame.height - verticalPadding * 2 - lineGap;
-  const lineHeight = Math.max(1, Math.floor(availableHeight / 2));
-  const firstLine = new Rect(
-    frame.x + horizontalPadding,
-    frame.y + verticalPadding,
-    frame.width - horizontalPadding * 2,
-    lineHeight
-  );
-  const secondLine = new Rect(
-    frame.x + horizontalPadding,
-    firstLine.y + lineHeight + lineGap,
-    frame.width - horizontalPadding * 2,
-    lineHeight
-  );
-
-  return { frame, firstLine, secondLine };
-}
-
-function dayBadgeWeekdayFontSize() {
-  if (isCompactMode()) return 16;
-  if (isExtendedDetailedMode()) return 18;
-  return 20;
-}
-
-function dayBadgeDetailFontSize() {
-  if (isCompactMode()) return 9;
-  if (isExtendedDetailedMode()) return 10;
-  return 11;
-}
-
-function drawDayBadgeDetail(
-  ctx,
-  layout,
-  summary,
-  textColor,
-  fontSize
-) {
-  const centerX = layout.frame.x + layout.frame.width / 2;
-  const iconWidth = isCompactMode() ? 18 : 22;
-  const sideGap = isCompactMode() ? 2 : 3;
-  const horizontalPadding = isCompactMode() ? 3 : 4;
-  const iconRect = new Rect(
-    centerX - iconWidth / 2,
-    layout.secondLine.y,
-    iconWidth,
-    layout.secondLine.height
-  );
-  const leftRect = new Rect(
-    layout.secondLine.x + horizontalPadding,
-    layout.secondLine.y,
-    Math.max(
-      1,
-      iconRect.x -
-        sideGap -
-        (layout.secondLine.x + horizontalPadding)
-    ),
-    layout.secondLine.height
-  );
-  const rightRect = new Rect(
-    iconRect.x + iconWidth + sideGap,
-    layout.secondLine.y,
-    Math.max(
-      1,
-      layout.secondLine.x +
-        layout.secondLine.width -
-        horizontalPadding -
-        (iconRect.x + iconWidth + sideGap)
-    ),
-    layout.secondLine.height
-  );
-
-  const sideWidth = Math.min(leftRect.width, rightRect.width);
-  const longestSideTextWidth = Math.max(
-    estimatedTextWidth(summary.temperatureText, fontSize),
-    estimatedTextWidth(summary.countsText, fontSize)
-  );
-  const minimumSideFontSize = isCompactMode() ? 7 : 8;
-  const sideFontSize = Math.max(
-    minimumSideFontSize,
-    Math.min(
-      fontSize,
-      fontSize * sideWidth / Math.max(1, longestSideTextWidth)
-    )
-  );
-
-  ctx.setTextAlignedCenter();
-  ctx.setFont(Font.blackMonospacedSystemFont(sideFontSize));
-  ctx.setTextColor(textColor);
-  ctx.drawTextInRect(summary.temperatureText, leftRect);
-
-  // O centro do ícone é o centro geométrico da segunda linha, nunca o
-  // centro restante depois que os textos laterais são desenhados.
-  ctx.setFont(Font.regularSystemFont(sideFontSize + 1));
-  ctx.drawTextInRect(summary.weatherGlyph, iconRect);
-
-  ctx.setFont(Font.blackMonospacedSystemFont(sideFontSize));
-  ctx.drawTextInRect(summary.countsText, rightRect);
 }
 
 function drawFixedDaylightGlow(ctx, weather) {
@@ -7550,10 +7416,9 @@ function legendLabelWidth() {
 }
 
 function legendFrameHeight() {
-  // Cada retângulo externo agora contém duas linhas centralizadas.
-  if (isCompactMode()) return 50;
-  if (isExtendedDetailedMode()) return 52;
-  return 56;
+  if (isCompactMode()) return 34;
+  if (isExtendedDetailedMode()) return 32;
+  return 38;
 }
 
 function legendTextHeight() {
@@ -7598,11 +7463,7 @@ function bottomAlignedLegendTextRect(centerX, bottomY, width) {
 // Os badges de mudança de dia são mais largos que os rótulos numéricos.
 // Isso garante as três letras completas inclusive na janela de 36 horas.
 function dayLegendLabelWidth() {
-  // A largura comporta as três partes da segunda linha:
-  // mínima/máxima, ícone central e E:x | L:y.
-  if (isCompactMode()) return 126;
-  if (isExtendedDetailedMode()) return 144;
-  return 156;
+  return 64;
 }
 
 function legendBadgeRect(centerX, centerY) {
