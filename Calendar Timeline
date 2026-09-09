@@ -114,6 +114,10 @@ const THERMAL_COLOR_STOPS = [
 // eles não passa de seis horas.
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 
+// Raio comum dos cartões do título e das linhas de separação do dia.
+const TITLE_CARD_STANDARD_CORNER_RADIUS = 13;
+const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
+
 const CANVAS = {
   width: 1092,
   height: 510,
@@ -1927,6 +1931,10 @@ async function renderWidget(items, loadError) {
 
   drawDatePanel(ctx, loadResult.holidayDates);
 
+  // As linhas ficam abaixo dos astros; o painel da timeline será desenhado
+  // por cima delas, preservando a leitura dos ícones.
+  drawCurrentDayFrame(ctx);
+
   const timelineImage = await renderTimelinePanel(items, loadError);
   ctx.drawImageInRect(
     timelineImage,
@@ -1937,10 +1945,6 @@ async function renderWidget(items, loadError) {
       timelineHeight()
     )
   );
-
-  // O contorno do dia atual precisa ficar acima de todas as camadas
-  // desenhadas dentro da timeline.
-  drawCurrentDayFrame(ctx);
 
   return ctx.getImage();
 }
@@ -2120,6 +2124,77 @@ function currentDayFrameMetrics() {
   };
 }
 
+function currentDayLineRadius(lineWidth) {
+  // Linhas de 8 px usam a mesma referência de raio dos cartões,
+  // limitada à metade da espessura para manter um canto leve.
+  return Math.min(TITLE_CARD_STANDARD_CORNER_RADIUS, lineWidth / 2);
+}
+
+function fillCurrentDayRoundedRect(ctx, rect, color) {
+  const radius = currentDayLineRadius(Math.min(rect.width, rect.height));
+  fillTitleCardShape(
+    ctx,
+    rect,
+    {
+      topLeft: radius,
+      topRight: radius,
+      bottomRight: radius,
+      bottomLeft: radius,
+    },
+    color
+  );
+}
+
+function fillCurrentDayHorizontalLine(
+  ctx,
+  x1,
+  x2,
+  centerY,
+  lineWidth,
+  color
+) {
+  const radius = currentDayLineRadius(lineWidth);
+  const left = Math.min(x1, x2);
+  const right = Math.max(x1, x2);
+  const width = Math.max(lineWidth, right - left + radius * 2);
+
+  fillCurrentDayRoundedRect(
+    ctx,
+    new Rect(
+      left - radius,
+      centerY - lineWidth / 2,
+      width,
+      lineWidth
+    ),
+    color
+  );
+}
+
+function fillCurrentDayVerticalLine(
+  ctx,
+  x,
+  y1,
+  y2,
+  lineWidth,
+  color
+) {
+  const radius = currentDayLineRadius(lineWidth);
+  const top = Math.min(y1, y2);
+  const bottom = Math.max(y1, y2);
+  const height = Math.max(lineWidth, bottom - top + radius * 2);
+
+  fillCurrentDayRoundedRect(
+    ctx,
+    new Rect(
+      x - lineWidth / 2,
+      top - radius,
+      lineWidth,
+      height
+    ),
+    color
+  );
+}
+
 function drawCurrentDayBottomLineUnderlay(ctx) {
   const {
     todayCard,
@@ -2131,16 +2206,14 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
 
   if (boundaryX <= todayCard.x) return;
 
-  // Fica atrás de todos os elementos desenhados na timeline.
-  ctx.setFillColor(lineColor);
-  ctx.fillRect(
-    new Rect(
-      todayCard.x,
-      // A borda inferior encosta exatamente na borda inferior do retângulo.
-      boundaryBottomY - lineWidth,
-      boundaryX - todayCard.x,
-      lineWidth
-    )
+  // A borda inferior da linha coincide com a borda inferior do retângulo.
+  fillCurrentDayHorizontalLine(
+    ctx,
+    todayCard.x,
+    boundaryX,
+    boundaryBottomY - lineWidth / 2,
+    lineWidth,
+    lineColor
   );
 }
 
@@ -2155,69 +2228,65 @@ function drawCurrentDayFrame(ctx) {
     lineColor,
   } = currentDayFrameMetrics();
 
-  ctx.setFillColor(lineColor);
+  const todayCardRight = todayCard.x + todayCard.width;
 
-  // As bordas superior, esquerda e direita do cartão de hoje
-  // usam exatamente a espessura e a cor da mudança de dia.
-  ctx.fillRect(
-    new Rect(
-      todayCard.x - lineWidth / 2,
-      todayCard.y - lineWidth / 2,
-      todayCard.width + lineWidth,
-      lineWidth
-    )
+  // Moldura superior e laterais do cartão de hoje.
+  fillCurrentDayHorizontalLine(
+    ctx,
+    todayCard.x,
+    todayCardRight,
+    todayCard.y,
+    lineWidth,
+    lineColor
   );
-  ctx.fillRect(
-    new Rect(
-      todayCard.x - lineWidth / 2,
-      todayCard.y,
-      lineWidth,
-      Math.max(1, cardBottomY - todayCard.y)
-    )
+  fillCurrentDayVerticalLine(
+    ctx,
+    todayCard.x,
+    todayCard.y,
+    cardBottomY,
+    lineWidth,
+    lineColor
   );
-  ctx.fillRect(
-    new Rect(
-      todayCard.x + todayCard.width - lineWidth / 2,
-      todayCard.y,
-      lineWidth,
-      Math.max(1, cardBottomY - todayCard.y)
-    )
+  fillCurrentDayVerticalLine(
+    ctx,
+    todayCardRight,
+    todayCard.y,
+    cardBottomY,
+    lineWidth,
+    lineColor
   );
 
-  // Prolonga a borda esquerda até o nível inferior da linha
-  // vertical de mudança de dia.
-  ctx.fillRect(
-    new Rect(
-      todayCard.x - lineWidth / 2,
+  // Prolonga a borda esquerda até a linha inferior, sem criar
+  // extremidades quadradas no encontro.
+  fillCurrentDayVerticalLine(
+    ctx,
+    todayCard.x,
+    cardBottomY,
+    boundaryBottomY - lineWidth / 2,
+    lineWidth,
+    lineColor
+  );
+
+  // Linha que liga a base direita do cartão à mudança de dia.
+  if (boundaryX > todayCardRight) {
+    fillCurrentDayHorizontalLine(
+      ctx,
+      todayCardRight,
+      boundaryX,
       cardBottomY,
       lineWidth,
-      Math.max(1, boundaryBottomY - cardBottomY)
-    )
-  );
-
-  // Liga a extremidade inferior direita do cartão à linha da próxima
-  // mudança de dia.
-  if (boundaryX > todayCard.x + todayCard.width) {
-    ctx.fillRect(
-      new Rect(
-        todayCard.x + todayCard.width,
-        cardBottomY - lineWidth / 2,
-        boundaryX - (todayCard.x + todayCard.width),
-        lineWidth
-      )
+      lineColor
     );
   }
 
-  // Completa a ligação entre o centro do astro e a extremidade
-  // da linha horizontal criada acima.
-  const verticalStartY = Math.min(astroCenterY, cardBottomY);
-  ctx.fillRect(
-    new Rect(
-      boundaryX - lineWidth / 2,
-      verticalStartY,
-      lineWidth,
-      Math.max(1, Math.abs(cardBottomY - astroCenterY))
-    )
+  // Linha que sai do centro do astro até a linha da base do cartão.
+  fillCurrentDayVerticalLine(
+    ctx,
+    boundaryX,
+    cardBottomY,
+    astroCenterY,
+    lineWidth,
+    lineColor
   );
 }
 
@@ -2232,11 +2301,11 @@ function drawTitleDayCard(
   const cardColor = new Color("#1D1D20", 0.92);
 
   const cornerRadii = {
-    topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 13,
-    topRight: isLast ? 25 : 13,
+    topLeft: card.x <= CANVAS.marginX + 1 ? TITLE_CARD_OUTER_CORNER_RADIUS : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    topRight: isLast ? TITLE_CARD_OUTER_CORNER_RADIUS : TITLE_CARD_STANDARD_CORNER_RADIUS,
     // O cartão de hoje fica sem a moldura antiga na parte inferior.
-    bottomRight: isSelected ? 0 : 13,
-    bottomLeft: isSelected ? 0 : 13,
+    bottomRight: isSelected ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    bottomLeft: isSelected ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
   };
 
   // O cartão de hoje permanece transparente para revelar exatamente
