@@ -381,13 +381,17 @@ async function loadWindow() {
 
     const eventItems = [...displayEventMap.values()].map((view) => {
       const event = view.event;
+      const isBirthday = isBirthdayCalendarEvent(event);
       return {
         kind: "event",
-        title: cleanTitle(event.title, "Evento"),
+        title: isBirthday
+          ? formatBirthdayTitleFromEvent(event)
+          : cleanTitle(event.title, "Evento"),
         calendarTitle: event.calendar?.title ?? "Calendário",
         start: view.start,
         end: view.end,
         isAllDay: view.isAllDay,
+        isBirthday,
         identifier:
           event.identifier ??
           `${event.title}-${view.start.getTime()}`,
@@ -1300,15 +1304,116 @@ function prepareTimelineItems(items, referenceDate) {
 
 function isBirthdayItem(item) {
   if (item?.kind !== "event") return false;
+  if (item.isBirthday === true) return true;
 
-  const searchableText = normalizeSearchText(
+  return isBirthdayText(
     `${item.title ?? ""} ${item.calendarTitle ?? ""}`
   );
+}
+
+function isBirthdayText(value) {
+  const searchableText = normalizeSearchText(value);
   return (
     searchableText.includes("anivers") ||
     searchableText.includes("birthday") ||
-    searchableText.includes("nascimento")
+    searchableText.includes("nascimento") ||
+    /\bfaz\s+\d{1,3}\s+anos?\b/.test(searchableText) ||
+    /\bcomplet(?:a|ou|ando)\s+\d{1,3}\s+anos?\b/.test(searchableText)
   );
+}
+
+function isBirthdayCalendarEvent(event) {
+  return isBirthdayText(
+    `${event?.title ?? ""} ${event?.calendar?.title ?? ""}`
+  );
+}
+
+function formatBirthdayTitleFromEvent(event) {
+  return formatBirthdayTitle(
+    event?.title,
+    event?.notes
+  );
+}
+
+function formatBirthdayTitle(rawTitle, rawNotes) {
+  const sourceTitle = cleanTitle(rawTitle, "Aniversário");
+  const sourceNotes = cleanOptionalText(rawNotes);
+  const age = extractBirthdayAge(
+    `${sourceTitle} ${sourceNotes ?? ""}`
+  );
+  const personName = extractBirthdayPersonName(sourceTitle);
+  const shortName = shortenBirthdayName(personName);
+
+  return age === null
+    ? `🎂 ${shortName}`
+    : `🎂 ${shortName} (${age})`;
+}
+
+function extractBirthdayAge(value) {
+  const text = String(value ?? "");
+  const patterns = [
+    /\(\s*(\d{1,3})\s*\)/i,
+    /\b(?:faz|completa|completou|completando|fara|fará|turns?|is turning)\s+(\d{1,3})\s*(?:anos?|years?)?\b/i,
+    /\b(\d{1,3})\s+(?:anos?|years?)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
+function extractBirthdayPersonName(value) {
+  let name = cleanTitle(value, "Aniversário");
+  name = name
+    .replace(/🎂/g, "")
+    .replace(/\(\s*\d{1,3}\s*\)/g, "")
+    .replace(
+      /\s+\b(?:faz|completa|completou|completando|fara|fará|turns?|is turning)\b[\s\S]*$/i,
+      ""
+    )
+    .replace(/\s+\b\d{1,3}\s+(?:anos?|years?)\b[\s\S]*$/i, "")
+    .replace(
+      /\s*(?:['’]s\s+)?(?:birthday|anivers[aá]rio)\b[\s\S]*$/i,
+      ""
+    )
+    .replace(
+      /^(?:anivers[aá]rio|birthday)\s*(?:de|do|da|of)?\s*/i,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return name || "Aniversário";
+}
+
+function shortenBirthdayName(value) {
+  const words = String(value ?? "")
+    .replace(/[,:;]+/g, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .filter((word) => !/^(da|das|de|do|dos|e)$/i.test(word));
+
+  if (words.length === 0) return "Aniversário";
+
+  const firstName = titleCaseBirthdayWord(words[0]);
+  if (words.length === 1) return firstName;
+
+  // Usa o primeiro sobrenome para manter o padrão pedido, inclusive
+  // quando o nome completo possui mais de dois sobrenomes.
+  const surname = words[1].replace(/[^\p{L}]/gu, "");
+  if (!surname) return firstName;
+
+  return `${firstName} ${surname.charAt(0).toLocaleUpperCase("pt-BR")}.`;
+}
+
+function titleCaseBirthdayWord(value) {
+  const word = String(value ?? "").replace(/[^\p{L}-]/gu, "");
+  if (!word) return "";
+  const lower = word.toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
 }
 
 
@@ -7032,6 +7137,7 @@ function prioritizedEvents(items) {
     .filter(
       (item) =>
         item.kind === "event" &&
+        !isBirthdayItem(item) &&
         !item.isAllDay &&
         item.end > windowStart &&
         item.start < windowEnd
@@ -7511,6 +7617,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     return;
   }
 
+  // Aniversários ocupam a linha reservada, mas são exibidos somente como
+  // texto. Eles não recebem chart nem barra de ligação.
+  if (isBirthdayItem(item)) {
+    drawBirthdayLabel(ctx, item, y, rowHeight);
+    return;
+  }
+
   const originalX = timeToX(item.start);
   const x =
     item.kind === "reminder"
@@ -7599,7 +7712,27 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
   const titleTextY =
     barY + Math.max(0, (barHeight - titleFontSize) / 2 - 2);
-  const textPoint = new Point(visibleLeft + 7, titleTextY);
+  const reminderMarkerDiameter =
+    item.kind === "reminder"
+      ? isCompactMode()
+        ? Math.max(9, compactTimelineScale() * 10)
+        : 12
+      : 0;
+  const reminderMarkerGap = item.kind === "reminder" ? 5 : 0;
+  const textPoint = new Point(
+    visibleLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
+    titleTextY
+  );
+
+  if (item.kind === "reminder") {
+    drawReminderMarker(
+      ctx,
+      visibleLeft + 8 + reminderMarkerDiameter / 2,
+      centerY,
+      reminderMarkerDiameter,
+      color
+    );
+  }
 
   if (visibleTitle) {
     ctx.setTextAlignedLeft();
@@ -7647,6 +7780,89 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       )
     );
   }
+}
+
+function drawBirthdayLabel(ctx, item, y, rowHeight) {
+  const startX = timeToX(
+    new Date(Math.max(windowStart.getTime(), item.start.getTime()))
+  );
+  const endX = timeToX(
+    new Date(Math.min(windowEnd.getTime(), item.end.getTime()))
+  );
+  const visibleLeft = Math.max(0, startX);
+  const visibleRight = Math.min(timelineWidth(), endX);
+  if (visibleRight <= visibleLeft) return;
+
+  const fontSize = isCompactMode()
+    ? compactTimelineFontSize(21)
+    : windowHours > 24
+      ? 25
+      : 28;
+  const maximumWidth = Math.max(1, visibleRight - visibleLeft - 10);
+  const label = truncateTitle(item.title, maximumWidth, fontSize);
+  if (!label) return;
+
+  const labelWidth = Math.min(
+    maximumWidth,
+    estimatedTextWidth(label, fontSize) + 12
+  );
+  const labelHeight = Math.max(
+    18,
+    Math.min(rowHeight - 4, fontSize + 8)
+  );
+  const labelCenterX = (visibleLeft + visibleRight) / 2;
+  const labelX = Math.max(
+    0,
+    Math.min(
+      timelineWidth() - labelWidth,
+      labelCenterX - labelWidth / 2
+    )
+  );
+  const labelY = y + (rowHeight - labelHeight) / 2;
+
+  // O fundo preto preserva a leitura sem transformar o aniversário em
+  // chart colorido.
+  fillRoundedRect(
+    ctx,
+    new Rect(labelX, labelY, labelWidth, labelHeight),
+    Math.min(6, labelHeight / 2),
+    new Color("#000000", 0.94)
+  );
+
+  ctx.setTextAlignedCenter();
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(new Color("#FF69B4", 1.0));
+  ctx.drawTextInRect(
+    label,
+    new Rect(
+      labelX + 4,
+      labelY,
+      Math.max(1, labelWidth - 8),
+      labelHeight
+    )
+  );
+}
+
+function drawReminderMarker(ctx, centerX, centerY, diameter, color) {
+  const outerDiameter = diameter + 2;
+  ctx.setFillColor(new Color("#000000", 0.95));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - outerDiameter / 2,
+      centerY - outerDiameter / 2,
+      outerDiameter,
+      outerDiameter
+    )
+  );
+  ctx.setFillColor(color);
+  ctx.fillEllipse(
+    new Rect(
+      centerX - diameter / 2,
+      centerY - diameter / 2,
+      diameter,
+      diameter
+    )
+  );
 }
 
 function drawTimelineBar(ctx, rect, color, item) {
