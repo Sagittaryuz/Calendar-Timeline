@@ -120,7 +120,7 @@ const TITLE_CARD_OUTER_CORNER_RADIUS = 25;
 const DAY_CHANGE_CIRCLE_DIAMETER = 52;
 // Dimensão única dos astros: a faixa superior acompanha o módulo de 24 h.
 const WEATHER_ICON_SIZE_24H = 44;
-const WEATHER_ASTRO_STRIP_HEIGHT_24H = 56;
+const WEATHER_ASTRO_STRIP_HEIGHT_24H = 60;
 
 const CANVAS = {
   width: 1092,
@@ -4989,6 +4989,75 @@ function drawWeatherConditionStrip(ctx, weather) {
   }
 }
 
+function drawDayBoundaryMoonsOnTop(ctx, weather) {
+  const moonSize = weatherIconSize();
+  const moonCenterY = weatherIconCenterY();
+  let nightDay = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+
+  while (nightDay <= finalDay) {
+    const start = dateAtHour(nightDay, SETTINGS.nightStartHour);
+    const end = dateAtHour(addDays(nightDay, 1), SETTINGS.nightEndHour);
+
+    if (intervalIsVisible(start, end)) {
+      const centerTime = (start.getTime() + end.getTime()) / 2;
+      const moonDate = new Date(centerTime);
+      const moonCenterX = timeToX(moonDate);
+
+      if (
+        moonDate.getHours() === 0 &&
+        weatherIconIntersectsTimeline(moonCenterX, moonSize)
+      ) {
+        const nightEclipse = eclipseForDate(moonDate);
+        const moonForecast = weatherForecastNearest(
+          weather?.hours ?? [],
+          moonDate.getTime()
+        );
+
+        if (nightEclipse?.type === "lunar") {
+          drawWeatherEclipseIcon(
+            ctx,
+            moonCenterX,
+            moonCenterY,
+            moonSize,
+            nightEclipse,
+            moonDate
+          );
+        } else {
+          drawMoonPhase(
+            ctx,
+            predominantMoonPhaseForNight(moonDate),
+            moonCenterX - moonSize / 2,
+            moonCenterY - moonSize / 2,
+            moonSize,
+            moonDate
+          );
+        }
+
+        drawCelestialWeatherOverlay(
+          ctx,
+          moonForecast,
+          moonCenterX,
+          moonCenterY,
+          moonSize
+        );
+
+        // Última operação: a borda não pode ser coberta por nenhum
+        // elemento desenhado anteriormente.
+        drawDayBoundaryMoonBorder(
+          ctx,
+          moonCenterX,
+          moonCenterY,
+          moonSize,
+          moonDate
+        );
+      }
+    }
+
+    nightDay = addDays(nightDay, 1);
+  }
+}
+
 function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
   const moonCenterY = weatherIconCenterY();
   const lineWidth = dayBoundaryLineWidth();
@@ -5605,6 +5674,8 @@ async function renderTimelinePanel(items, loadError) {
   // As divisões de dia e seus badges prevalecem sobre todas as camadas.
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
+  // A Lua de mudança de dia e sua borda ficam acima de toda a timeline.
+  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
   return ctx.getImage();
 }
 
