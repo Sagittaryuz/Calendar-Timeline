@@ -2246,6 +2246,7 @@ function drawCurrentDayFrame(ctx) {
   } = currentDayFrameMetrics();
 
   const todayCardRight = todayCard.x + todayCard.width;
+  const frameBottomY = cardBottomY + 1;
 
   // Mantém a borda superior e a lateral direita do cartão de hoje.
   fillCurrentDayHorizontalLine(
@@ -2260,7 +2261,7 @@ function drawCurrentDayFrame(ctx) {
     ctx,
     todayCardRight,
     todayCard.y,
-    cardBottomY,
+    frameBottomY,
     lineWidth,
     lineColor
   );
@@ -2271,7 +2272,7 @@ function drawCurrentDayFrame(ctx) {
     ctx,
     todayCardRight,
     boundaryX,
-    cardBottomY,
+    frameBottomY,
     lineWidth,
     lineColor
   );
@@ -3595,7 +3596,7 @@ function weatherIconSize() {
 
 function weatherIconCenterY() {
   // Ajuste óptico de 1 px para cima, mantendo a faixa com 62 px.
-  return Math.round(weatherStripBottomY() / 2) - 2;
+  return Math.round(weatherStripBottomY() / 2) - 1;
 }
 
 function dayBoundaryAstroOuterRadius() {
