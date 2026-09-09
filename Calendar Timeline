@@ -3606,8 +3606,8 @@ function weatherIconCenterY() {
 }
 
 function dayBoundaryAstroOuterRadius() {
-  // Considera o raio do disco e os 2 px da borda externa da Lua.
-  return weatherIconSize() / 2 + 2;
+  // Considera o raio do disco e metade da borda externa da Lua.
+  return weatherIconSize() / 2 + dayBoundaryLineWidth() / 2;
 }
 
 function weatherIconIntersectsTimeline(centerX, halfWidth) {
@@ -4491,7 +4491,7 @@ function drawWeatherEclipseIcon(
       ctx,
       rect,
       new Color("#B8A7FF", 0.96),
-      4
+      dayBoundaryLineWidth()
     );
     return;
   }
@@ -4621,6 +4621,16 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       centerY,
       iconSize
     );
+    // A borda da Lua de mudança de dia fica acima da sobreposição climática.
+    if (isNight && eclipse?.type !== "solar") {
+      drawDayBoundaryMoonBorder(
+        ctx,
+        centerX,
+        centerY,
+        iconSize,
+        entry.tick
+      );
+    }
   }
 }
 
@@ -4961,6 +4971,14 @@ function drawWeatherConditionStrip(ctx, weather) {
         moonCenterX,
         moonCenterY,
         moonSize
+      );
+      // Mantém a borda acima da nuvem, chuva e demais elementos adjacentes.
+      drawDayBoundaryMoonBorder(
+        ctx,
+        moonCenterX,
+        moonCenterY,
+        moonSize,
+        moonDate
       );
     }
 
@@ -7160,7 +7178,7 @@ function drawMoonPhase(
         borderDate,
         loadResult.holidayDates
       ),
-      4
+      dayBoundaryLineWidth()
     );
   };
 
@@ -7188,6 +7206,35 @@ function drawMoonPhase(
   // Textura monocromática discreta em ambos os hemisférios.
   drawMoonCraters(ctx, x, y, size, 0.34);
   drawOuterBorder();
+}
+
+function drawDayBoundaryMoonBorder(
+  ctx,
+  centerX,
+  centerY,
+  size,
+  borderDate
+) {
+  const isDayBoundary =
+    borderDate instanceof Date &&
+    borderDate.getHours() === 0 &&
+    borderDate.getMinutes() === 0;
+  if (!isDayBoundary) return;
+
+  strokeMoonEllipseOutside(
+    ctx,
+    new Rect(
+      centerX - size / 2,
+      centerY - size / 2,
+      size,
+      size
+    ),
+    dayBoundaryLineColor(
+      borderDate,
+      loadResult.holidayDates
+    ),
+    dayBoundaryLineWidth()
+  );
 }
 
 function drawMoonCraters(ctx, x, y, size, opacity) {
