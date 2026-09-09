@@ -2222,7 +2222,6 @@ function drawCurrentDayFrame(ctx) {
     todayCard,
     boundaryX,
     astroCenterY,
-    boundaryBottomY,
     cardBottomY,
     lineWidth,
     lineColor,
@@ -2230,7 +2229,7 @@ function drawCurrentDayFrame(ctx) {
 
   const todayCardRight = todayCard.x + todayCard.width;
 
-  // Moldura superior e laterais do cartão de hoje.
+  // Mantém somente a borda superior e a lateral direita do cartão de hoje.
   fillCurrentDayHorizontalLine(
     ctx,
     todayCard.x,
@@ -2241,28 +2240,9 @@ function drawCurrentDayFrame(ctx) {
   );
   fillCurrentDayVerticalLine(
     ctx,
-    todayCard.x,
-    todayCard.y,
-    cardBottomY,
-    lineWidth,
-    lineColor
-  );
-  fillCurrentDayVerticalLine(
-    ctx,
     todayCardRight,
     todayCard.y,
     cardBottomY,
-    lineWidth,
-    lineColor
-  );
-
-  // Prolonga a borda esquerda até a linha inferior, sem criar
-  // extremidades quadradas no encontro.
-  fillCurrentDayVerticalLine(
-    ctx,
-    todayCard.x,
-    cardBottomY,
-    boundaryBottomY - lineWidth / 2,
     lineWidth,
     lineColor
   );
