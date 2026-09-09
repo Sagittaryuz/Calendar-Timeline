@@ -1988,11 +1988,11 @@ function drawTitleDayCard(
     : new Color("#1D1D20", 0.92);
 
   const cornerRadii = {
-    topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 9,
+    topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 13,
     topRight:
-      isLast ? 25 : 9,
-    bottomRight: 9,
-    bottomLeft: 9,
+      isLast ? 25 : 13,
+    bottomRight: 13,
+    bottomLeft: 13,
   };
 
   // Borda azul somente no dia selecionado, como na referência. Os dois
@@ -2010,8 +2010,8 @@ function drawTitleDayCard(
     {
       topLeft: Math.max(1, cornerRadii.topLeft - 2),
       topRight: Math.max(1, cornerRadii.topRight - 2),
-      bottomRight: 7,
-      bottomLeft: 7,
+      bottomRight: 11,
+      bottomLeft: 11,
     },
     cardColor
   );
@@ -2022,33 +2022,43 @@ function drawTitleDayCard(
   const dateColor = isSelected
     ? new Color("#FFFFFF", 0.96)
     : new Color(SETTINGS.secondaryTextColor, 1.0);
-  const left = card.x + 12;
-  const top = card.y + 8;
-  const weekdayFontSize = 26;
-  const dateFontSize = 23;
+  const weekdayLabel = shortWeekday(date);
+  const dateLabel = titleDayMonthLabel(date);
+  const titleLabel = `${weekdayLabel} ${dateLabel}`;
+  // O tamanho é único para todos os cartões e é limitado pelo rótulo mais
+  // largo, mantendo a mesma escala visual em toda a faixa.
+  const titleFontSize = 42;
+  const titleTop = card.y + 8;
 
   ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackMonospacedSystemFont(weekdayFontSize));
+  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
   ctx.setTextColor(weekdayColor);
   ctx.drawText(
-    shortWeekday(date),
-    new Point(left, top)
+    weekdayLabel,
+    new Point(
+      card.x +
+        (card.width - estimatedTextWidth(titleLabel, titleFontSize)) / 2,
+      titleTop
+    )
   );
 
-  const weekdayWidth = estimatedTextWidth(
-    shortWeekday(date),
-    weekdayFontSize
-  );
-  ctx.setFont(Font.regularMonospacedSystemFont(dateFontSize));
+  const titleStartX =
+    card.x +
+    (card.width - estimatedTextWidth(titleLabel, titleFontSize)) / 2;
+  const dateStartX =
+    titleStartX +
+    estimatedTextWidth(weekdayLabel, titleFontSize) +
+    estimatedTextWidth(" ", titleFontSize);
+  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
   ctx.setTextColor(dateColor);
   ctx.drawText(
-    titleDayMonthLabel(date),
-    new Point(left + weekdayWidth + 10, top + 1)
+    dateLabel,
+    new Point(dateStartX, titleTop)
   );
 
-  const iconSize = 46;
-  const iconCenterX = card.x + 34;
-  const iconCenterY = card.y + 65;
+  const iconSize = 36;
+  const iconCenterX = card.x + 30;
+  const iconCenterY = card.y + 82;
   drawTitleWeatherIcon(
     ctx,
     titleForecastForDay(date),
@@ -2064,9 +2074,9 @@ function drawTitleDayCard(
   const maximum = Number.isFinite(Number(daily?.maximum))
     ? `${Math.round(Number(daily.maximum))}°`
     : "--°";
-  const temperatureX = card.x + 69;
-  const temperatureY = card.y + 58;
-  const temperatureFontSize = 25;
+  const temperatureX = card.x + 63;
+  const temperatureY = card.y + 72;
+  const temperatureFontSize = 29;
   const temperatureFont = Font.blackMonospacedSystemFont(
     temperatureFontSize
   );
@@ -2080,7 +2090,7 @@ function drawTitleDayCard(
     minimum,
     temperatureFontSize
   );
-  ctx.setFont(Font.regularMonospacedSystemFont(21));
+  ctx.setFont(Font.regularMonospacedSystemFont(24));
   ctx.setTextColor(new Color("#D1D1D6", 0.92));
   ctx.drawText(
     "/",
