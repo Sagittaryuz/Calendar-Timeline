@@ -1921,10 +1921,11 @@ async function renderWidget(items, loadError) {
 
   drawIOSDarkGradient(ctx);
   drawTimelineBackground(ctx);
-  drawDatePanel(ctx, loadResult.holidayDates);
 
-  // A linha inferior fica atrás de todas as camadas da timeline.
+  // A linha inferior fica na camada mais baixa, antes dos demais elementos.
   drawCurrentDayBottomLineUnderlay(ctx);
+
+  drawDatePanel(ctx, loadResult.holidayDates);
 
   const timelineImage = await renderTimelinePanel(items, loadError);
   ctx.drawImageInRect(
@@ -2135,7 +2136,8 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
   ctx.fillRect(
     new Rect(
       todayCard.x,
-      boundaryBottomY - lineWidth / 2,
+      // A borda inferior encosta exatamente na borda inferior do retângulo.
+      boundaryBottomY - lineWidth,
       boundaryX - todayCard.x,
       lineWidth
     )
