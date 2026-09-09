@@ -3595,7 +3595,7 @@ function weatherIconSize() {
 
 function weatherIconCenterY() {
   // Ajuste óptico de 1 px para cima, mantendo a faixa com 62 px.
-  return Math.round(weatherStripBottomY() / 2) - 1;
+  return Math.round(weatherStripBottomY() / 2) - 2;
 }
 
 function dayBoundaryAstroOuterRadius() {
