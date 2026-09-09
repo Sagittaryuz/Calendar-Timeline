@@ -145,6 +145,9 @@ CANVAS.timelineBottom += CANVAS.timelineVerticalOffset;
 CANVAS.footerTop += CANVAS.timelineVerticalOffset;
 CANVAS.footerBottom += CANVAS.timelineVerticalOffset;
 
+// Desloca o composto visual inteiro, preservando a escala original.
+const WIDGET_DRAW_OFFSET_Y = 17.5;
+
 const now = new Date();
 now.setSeconds(0, 0);
 const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
@@ -1918,25 +1921,25 @@ function accessoryEventStatus(event) {
 }
 
 async function renderWidget(items, loadError) {
-  const ctx = new DrawContext();
-  ctx.size = new Size(CANVAS.width, CANVAS.height);
-  ctx.opaque = true;
-  ctx.respectScreenScale = false;
+  const contentCtx = new DrawContext();
+  contentCtx.size = new Size(CANVAS.width, CANVAS.height);
+  contentCtx.opaque = true;
+  contentCtx.respectScreenScale = false;
 
-  drawIOSDarkGradient(ctx);
-  drawTimelineBackground(ctx);
+  drawIOSDarkGradient(contentCtx);
+  drawTimelineBackground(contentCtx);
 
   // A linha inferior fica na camada mais baixa, antes dos demais elementos.
-  drawCurrentDayBottomLineUnderlay(ctx);
+  drawCurrentDayBottomLineUnderlay(contentCtx);
 
-  drawDatePanel(ctx, loadResult.holidayDates);
+  drawDatePanel(contentCtx, loadResult.holidayDates);
 
   // As linhas ficam abaixo dos astros; o painel da timeline será desenhado
   // por cima delas, preservando a leitura dos ícones.
-  drawCurrentDayFrame(ctx);
+  drawCurrentDayFrame(contentCtx);
 
   const timelineImage = await renderTimelinePanel(items, loadError);
-  ctx.drawImageInRect(
+  contentCtx.drawImageInRect(
     timelineImage,
     new Rect(
       CANVAS.plotLeft,
@@ -1946,8 +1949,20 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  return ctx.getImage();
+  // O fundo transparente acima preserva a cor de fundo do ListWidget,
+  // enquanto o composto inteiro é deslocado sem redimensionamento.
+  const shiftedCtx = new DrawContext();
+  shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
+  shiftedCtx.opaque = false;
+  shiftedCtx.respectScreenScale = false;
+  shiftedCtx.drawImageAtPoint(
+    contentCtx.getImage(),
+    new Point(0, WIDGET_DRAW_OFFSET_Y)
+  );
+
+  return shiftedCtx.getImage();
 }
+
 
 function timelineBackgroundColorForDate(
   date,
