@@ -7694,11 +7694,14 @@ function dayLegendCircleRect(centerX, centerY) {
 }
 
 function centeredDayLegendTextRect(centerX, centerY, width, fontSize) {
-  // O retângulo do texto usa o mesmo centro geométrico do círculo.
+  // A caixa usa a mesma referência do círculo, mas compensa metade
+  // da descida visual causada pela redução da altura da caixa.
   const height = fontSize;
+  const verticalCorrection =
+    (legendTextHeight() - height) / 4;
   return new Rect(
     centerX - width / 2,
-    centerY - height / 2,
+    centerY - height / 2 - verticalCorrection,
     width,
     height
   );
