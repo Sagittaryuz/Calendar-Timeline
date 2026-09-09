@@ -1934,6 +1934,10 @@ async function renderWidget(items, loadError) {
     )
   );
 
+  // O contorno do dia atual precisa ficar acima de todas as camadas
+  // desenhadas dentro da timeline.
+  drawCurrentDayFrame(ctx);
+
   return ctx.getImage();
 }
 
@@ -2051,9 +2055,7 @@ function hexToRGB(hex) {
   };
 }
 
-function drawDatePanel(ctx, holidayDates) {
-  // A área do título agora é uma faixa compacta de previsão. O restante
-  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
+function titleDayCardRect(index) {
   const cardCount = 4;
   const cardGap = 8;
   const cardsLeft = CANVAS.marginX;
@@ -2061,23 +2063,84 @@ function drawDatePanel(ctx, holidayDates) {
   const cardWidth =
     (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
     cardCount;
-  const cardTop = 13;
-  const cardHeight = 102;
+
+  return new Rect(
+    cardsLeft + index * (cardWidth + cardGap),
+    13,
+    cardWidth,
+    102
+  );
+}
+
+function drawDatePanel(ctx, holidayDates) {
+  // A área do título agora é uma faixa compacta de previsão. O restante
+  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
+  const cardCount = 4;
   const firstDay = startOfDay(windowStart);
 
   for (let index = 0; index < cardCount; index++) {
     const date = addDays(firstDay, index);
-    const x = cardsLeft + index * (cardWidth + cardGap);
     drawTitleDayCard(
       ctx,
       date,
-      new Rect(x, cardTop, cardWidth, cardHeight),
+      titleDayCardRect(index),
       index === 0,
       index === cardCount - 1
     );
   }
 }
 
+function drawCurrentDayFrame(ctx) {
+  const todayCard = titleDayCardRect(0);
+  const nextDayBoundary = addDays(startOfDay(windowStart), 1);
+  const boundaryX =
+    CANVAS.plotLeft + timeToX(nextDayBoundary);
+  const astroCenterY =
+    CANVAS.timelineTop + weatherIconCenterY();
+  const boundaryBottomY =
+    CANVAS.timelineTop + bottomLegendCenterY();
+  const cardBottomY = todayCard.y + todayCard.height;
+  const lineWidth = dayBoundaryLineWidth();
+  const lineColor = hourGridLineColor(nextDayBoundary);
+
+  ctx.setFillColor(lineColor);
+
+  // Prolonga a borda esquerda do cartão até o mesmo nível
+  // em que termina o retângulo vertical da mudança de dia.
+  ctx.fillRect(
+    new Rect(
+      todayCard.x - lineWidth / 2,
+      cardBottomY,
+      lineWidth,
+      Math.max(1, boundaryBottomY - cardBottomY)
+    )
+  );
+
+  // Liga a extremidade inferior direita do cartão à linha da próxima
+  // mudança de dia.
+  if (boundaryX > todayCard.x + todayCard.width) {
+    ctx.fillRect(
+      new Rect(
+        todayCard.x + todayCard.width,
+        cardBottomY - lineWidth / 2,
+        boundaryX - (todayCard.x + todayCard.width),
+        lineWidth
+      )
+    );
+  }
+
+  // Completa a ligação entre o centro do astro e a extremidade
+  // da linha horizontal criada acima.
+  const verticalStartY = Math.min(astroCenterY, cardBottomY);
+  ctx.fillRect(
+    new Rect(
+      boundaryX - lineWidth / 2,
+      verticalStartY,
+      lineWidth,
+      Math.max(1, Math.abs(cardBottomY - astroCenterY))
+    )
+  );
+}
 
 function drawTitleDayCard(
   ctx,
@@ -2090,14 +2153,15 @@ function drawTitleDayCard(
     ? new Color("#FFFFFF", 1.0)
     : new Color("#303136", 0.82);
   const cardColor = isSelected
-    ? new Color("#071A2E", 0.98)
+    ? new Color(SETTINGS.timelineBackgroundColor, 1.0)
     : new Color("#1D1D20", 0.92);
 
   const cornerRadii = {
     topLeft: card.x <= CANVAS.marginX + 1 ? 25 : 13,
     topRight: isLast ? 25 : 13,
-    bottomRight: 13,
-    bottomLeft: 13,
+    // O cartão de hoje fica aberto na parte inferior.
+    bottomRight: isSelected ? 0 : 13,
+    bottomLeft: isSelected ? 0 : 13,
   };
 
   // Mantém somente a moldura externa do cartão.
@@ -4750,6 +4814,7 @@ function drawWeatherConditionStrip(ctx, weather) {
 
 function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
   const moonCenterY = weatherIconCenterY();
+  const lineWidth = dayBoundaryLineWidth();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -4758,9 +4823,9 @@ function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
-        x - 4,
+        x - lineWidth / 2,
         moonCenterY,
-        8,
+        lineWidth,
         Math.max(1, stripBottom - moonCenterY)
       )
     );
@@ -5703,6 +5768,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
 function drawTimelineDayBoundariesOnTop(ctx) {
   const lineTop = weatherStripBottomY();
   const lineBottom = bottomLegendCenterY();
+  const lineWidth = dayBoundaryLineWidth();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -5711,9 +5777,9 @@ function drawTimelineDayBoundariesOnTop(ctx) {
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
-        x - 4,
+        x - lineWidth / 2,
         lineTop,
-        8,
+        lineWidth,
         Math.max(1, lineBottom - lineTop)
       )
     );
@@ -7334,6 +7400,11 @@ function compactEventHourMarkers() {
   return markers;
 }
 
+function dayBoundaryLineWidth() {
+  // A linha de mudança de dia usa oito pixels em toda a timeline.
+  return 8;
+}
+
 function hourGridLineColor(tick) {
   return tick.getHours() === 0
     ? dayBoundaryLineColor(tick, loadResult.holidayDates)
@@ -7613,7 +7684,13 @@ function drawHourAxis(ctx, items) {
     const isNoon = hour === 12;
 
     ctx.setStrokeColor(hourGridLineColor(tick));
-    ctx.setLineWidth(isMidnight ? 8 : isNoon ? 2 : 1);
+    ctx.setLineWidth(
+      isMidnight
+        ? dayBoundaryLineWidth()
+        : isNoon
+          ? 2
+          : 1
+    );
     ctx.strokeRect(
       new Rect(
         x,
