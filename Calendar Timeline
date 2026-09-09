@@ -2004,17 +2004,11 @@ function drawTitleDayCard(
     card.width - 4,
     card.height - 4
   );
-  fillTitleCardShape(
-    ctx,
-    inner,
-    {
-      topLeft: Math.max(1, cornerRadii.topLeft - 2),
-      topRight: Math.max(1, cornerRadii.topRight - 2),
-      bottomRight: 11,
-      bottomLeft: 11,
-    },
-    cardColor
-  );
+  // O preenchimento interno é plano: a única moldura visível é a externa.
+  // Isso evita que o arco/círculo do canto inferior direito pareça uma
+  // segunda moldura dentro do cartão.
+  ctx.setFillColor(cardColor);
+  ctx.fillRect(inner);
 
   const weekdayColor = isSelected
     ? Color.white()
@@ -2075,7 +2069,7 @@ function drawTitleDayCard(
     ? `${Math.round(Number(daily.maximum))}°`
     : "--°";
   const temperatureX = card.x + 63;
-  const temperatureY = card.y + 72;
+  const temperatureY = card.y + 78;
   const temperatureFontSize = 29;
   const temperatureFont = Font.blackMonospacedSystemFont(
     temperatureFontSize
