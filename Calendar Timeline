@@ -8284,36 +8284,28 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
     : windowHours > 24
       ? 25
       : 28;
-  const maximumWidth = Math.max(1, visibleRight - visibleLeft - 10);
+  // O dia determina a visibilidade, mas não limita a largura do nome.
+  // Como os títulos dos charts, o texto começa na parte visível do item.
+  const labelX = visibleLeft + 7;
+  const maximumWidth = Math.max(1, timelineWidth() - labelX - 4);
   const label = truncateTitle(item.title, maximumWidth, fontSize);
   if (!label) return;
 
-  const labelWidth = Math.min(
-    maximumWidth,
-    estimatedTextWidth(label, fontSize) + 12
-  );
+  const labelWidth = maximumWidth;
   const labelHeight = Math.max(
     18,
     Math.min(rowHeight - 4, fontSize + 8)
   );
-  const labelCenterX = (visibleLeft + visibleRight) / 2;
-  const labelX = Math.max(
-    0,
-    Math.min(
-      timelineWidth() - labelWidth,
-      labelCenterX - labelWidth / 2
-    )
-  );
   const labelY = y + (rowHeight - labelHeight) / 2;
   const labelRect = new Rect(
-    labelX + 4,
+    labelX,
     labelY,
-    Math.max(1, labelWidth - 8),
+    labelWidth,
     labelHeight
   );
 
   // Fundo transparente: somente a palavra recebe um contorno preto fino.
-  ctx.setTextAlignedCenter();
+  ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
   ctx.setTextColor(new Color("#000000", 0.95));
   for (const [offsetX, offsetY] of [
