@@ -2227,14 +2227,76 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
   if (boundaryX <= todayCard.x) return;
 
   // A borda inferior da linha coincide com a borda inferior do retângulo.
+  const cornerRadius = currentDayFrameCornerRadius(todayCard);
+  const bottomLineCenterY = boundaryBottomY - lineWidth / 2;
   fillCurrentDayHorizontalLine(
     ctx,
-    todayCard.x,
+    todayCard.x + cornerRadius,
     boundaryX,
-    boundaryBottomY - lineWidth / 2,
+    bottomLineCenterY,
     lineWidth,
     lineColor
   );
+
+  drawCurrentDayRoundedLeftFrame(
+    ctx,
+    todayCard,
+    bottomLineCenterY,
+    lineWidth,
+    lineColor
+  );
+}
+
+function currentDayFrameCornerRadius(card) {
+  return Math.min(
+    TITLE_CARD_STANDARD_CORNER_RADIUS,
+    card.width / 2,
+    card.height / 2
+  );
+}
+
+function drawCurrentDayRoundedLeftFrame(
+  ctx,
+  card,
+  bottomY,
+  lineWidth,
+  color
+) {
+  const radius = currentDayFrameCornerRadius(card);
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  // A linha esquerda conecta os dois trechos horizontais com
+  // curvas geométricas de 52 px nos dois vértices.
+  path.move(new Point(card.x + radius, card.y));
+  path.addCurve(
+    new Point(card.x, card.y + radius),
+    new Point(
+      card.x + radius - radius * curveFactor,
+      card.y
+    ),
+    new Point(
+      card.x,
+      card.y + radius - radius * curveFactor
+    )
+  );
+  path.addLine(new Point(card.x, bottomY - radius));
+  path.addCurve(
+    new Point(card.x + radius, bottomY),
+    new Point(
+      card.x,
+      bottomY - radius + radius * curveFactor
+    ),
+    new Point(
+      card.x + radius - radius * curveFactor,
+      bottomY
+    )
+  );
+
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
 }
 
 function drawCurrentDayRoundedTopRightFrame(
@@ -2244,18 +2306,14 @@ function drawCurrentDayRoundedTopRightFrame(
   lineWidth,
   color
 ) {
-  const radius = Math.min(
-    TITLE_CARD_STANDARD_CORNER_RADIUS,
-    card.width / 2,
-    card.height / 2
-  );
+  const radius = currentDayFrameCornerRadius(card);
   const right = card.x + card.width;
   const curveFactor = 0.5522847498;
   const path = new Path();
 
-  // O lado esquerdo permanece aberto; o canto superior direito usa
-  // o mesmo raio de 52 px dos demais cartões.
-  path.move(new Point(card.x, card.y));
+  // O canto superior direito usa o mesmo raio de 52 px
+  // dos demais cartões; a curva esquerda é desenhada no underlay.
+  path.move(new Point(card.x + radius, card.y));
   path.addLine(new Point(right - radius, card.y));
   path.addCurve(
     new Point(right, card.y + radius),
@@ -2275,16 +2333,6 @@ function drawCurrentDayRoundedTopRightFrame(
   ctx.addPath(path);
   ctx.strokePath();
 
-  // Preserva a ponta arredondada do início aberto da linha superior.
-  ctx.setFillColor(color);
-  ctx.fillEllipse(
-    new Rect(
-      card.x - lineWidth / 2,
-      card.y - lineWidth / 2,
-      lineWidth,
-      lineWidth
-    )
-  );
 }
 
 function drawCurrentDayFrame(ctx) {
