@@ -114,42 +114,61 @@ const THERMAL_COLOR_STOPS = [
 // eles não passa de seis horas.
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 
-// Raio comum dos cartões do título e das linhas de separação do dia.
-const TITLE_CARD_HEIGHT = 104;
-const WIDGET_CONTENT_TOP_MARGIN = 13;
-const WIDGET_CONTENT_BOTTOM_MARGIN = 13;
-const TITLE_CARD_STANDARD_CORNER_RADIUS = 52;
-const TITLE_CARD_OUTER_CORNER_RADIUS = 52;
-const DAY_CHANGE_CIRCLE_DIAMETER = 52;
-// Dimensão única dos astros: a faixa superior acompanha o módulo de 24 h.
-const WEATHER_ICON_SIZE_24H = 44;
-const WEATHER_ASTRO_STRIP_HEIGHT_24H = 60;
+// O canvas continua completo para preservar o background. O conteúdo é
+// comprimido somente no eixo vertical para respeitar 30 px em cada margem,
+// exatamente como as margens laterais.
+const WIDGET_CANVAS_HEIGHT = 510;
+const LEGACY_CONTENT_TOP = 13;
+const LEGACY_CONTENT_BOTTOM_EDGE = 497;
+const WIDGET_CONTENT_TOP_MARGIN = 30;
+const WIDGET_CONTENT_BOTTOM_MARGIN = 30;
+const VERTICAL_LAYOUT_SCALE =
+  (WIDGET_CANVAS_HEIGHT -
+    WIDGET_CONTENT_TOP_MARGIN -
+    WIDGET_CONTENT_BOTTOM_MARGIN) /
+  (LEGACY_CONTENT_BOTTOM_EDGE - LEGACY_CONTENT_TOP);
+
+function scaleVertical(value) {
+  return value * VERTICAL_LAYOUT_SCALE;
+}
+
+function scaleFontSize(value) {
+  return Math.max(1, Math.round(scaleVertical(value)));
+}
+
+function mapLegacyContentY(value) {
+  return (
+    WIDGET_CONTENT_TOP_MARGIN +
+    (value - LEGACY_CONTENT_TOP) * VERTICAL_LAYOUT_SCALE
+  );
+}
+
+const TITLE_CARD_HEIGHT = scaleVertical(104);
+const TITLE_CARD_STANDARD_CORNER_RADIUS = scaleVertical(52);
+const TITLE_CARD_OUTER_CORNER_RADIUS = scaleVertical(52);
+const DAY_CHANGE_CIRCLE_DIAMETER = scaleVertical(52);
+// Dimensão única dos astros, reduzida junto com a faixa superior.
+const WEATHER_ICON_SIZE_24H = scaleVertical(44);
+const WEATHER_ASTRO_STRIP_HEIGHT_24H = scaleVertical(60);
 
 const CANVAS = {
   width: 1092,
-  height: 510,
-  headerHeight: 128, // 25% da altura total
+  height: WIDGET_CANVAS_HEIGHT,
+  headerHeight: scaleVertical(128),
   marginX: 30,
   plotLeft: 30,
   plotRight: 1062,
-  // Após o deslocamento vertical de -5 px, o topo efetivo fica em
-  // 120 px: permitindo que a Lua encoste na linha sob o título.
-  timelineTop: 125,
-  // Após o deslocamento vertical de -5 px, o limite efetivo fica em
-  // 499 px; o círculo inferior termina em 497 px, preservando 2 px
-  // de segurança dentro da área interna de desenho.
-  timelineBottom: 504,
-  footerTop: 459,
-  // Com o deslocamento vertical de -5 px, 505 resulta em 500 px efetivos,
-  // preservando 10 px até o fim do canvas de 510 px.
-  footerBottom: 505,
-  localPlotTop: 48,
-  // Distância espelhada entre a legenda e o grid.
-  timelineLegendGap: 7,
-  // Deslocamento específico da legenda numérica de temperatura.
-  temperatureLegendVerticalOffset: 7,
-  // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
-  timelineVerticalOffset: -5,
+  // Coordenadas verticais mapeadas para a nova caixa interna.
+  timelineTop: mapLegacyContentY(120),
+  // O painel termina 2 px depois da borda inferior do círculo, sem recortá-lo.
+  timelineBottom: mapLegacyContentY(499),
+  footerTop: mapLegacyContentY(454),
+  footerBottom: mapLegacyContentY(500),
+  localPlotTop: scaleVertical(48),
+  timelineLegendGap: scaleVertical(7),
+  temperatureLegendVerticalOffset: scaleVertical(7),
+  // As coordenadas já estão mapeadas; não há deslocamento pós-composição.
+  timelineVerticalOffset: 0,
 };
 
 CANVAS.timelineTop += CANVAS.timelineVerticalOffset;
@@ -2327,17 +2346,17 @@ function drawCurrentDayFrame(ctx) {
   const {
     todayCard,
     boundaryX,
-    cardBottomY,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
 
   const todayCardRight = todayCard.x + todayCard.width;
-  const frameBottomY = cardBottomY + 1;
-  const verticalFrameBottomY = frameBottomY + 7;
+  // A linha superior usa a mesma coordenada da borda superior da Lua.
+  // Assim, a compressão vertical nunca desconecta os dois elementos.
+  const verticalFrameBottomY = dayBoundaryMoonBorderTopY();
 
-  // Mantém a moldura aberta do dia atual, agora com raio de 52 px
-  // no canto superior direito.
+  // Mantém a moldura aberta do dia atual com o raio proporcional
+  // ao cartão comprimido no eixo vertical.
   drawCurrentDayRoundedTopRightFrame(
     ctx,
     todayCard,
@@ -2383,18 +2402,18 @@ function drawTitleDayCard(
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
       card.x + 2,
-      card.y + 2,
+      card.y + scaleVertical(2),
       card.width - 4,
-      card.height - 4
+      card.height - scaleVertical(4)
     );
     fillTitleCardShape(
       ctx,
       inner,
       {
-        topLeft: Math.max(0, cornerRadii.topLeft - 2),
-        topRight: Math.max(0, cornerRadii.topRight - 2),
-        bottomRight: Math.max(0, cornerRadii.bottomRight - 2),
-        bottomLeft: Math.max(0, cornerRadii.bottomLeft - 2),
+        topLeft: Math.max(0, cornerRadii.topLeft - scaleVertical(2)),
+        topRight: Math.max(0, cornerRadii.topRight - scaleVertical(2)),
+        bottomRight: Math.max(0, cornerRadii.bottomRight - scaleVertical(2)),
+        bottomLeft: Math.max(0, cornerRadii.bottomLeft - scaleVertical(2)),
       },
       cardColor
     );
@@ -2418,7 +2437,7 @@ function drawTitleDayCard(
 
   // Como a fonte é monoespaçada, o espaço entre o dia e a data
   // ocupa exatamente uma célula. Isso mantém, por exemplo, "QUI 10/09".
-  const titleFontSize = 38;
+  const titleFontSize = scaleFontSize(38);
   const titleCharacterWidth = titleFontSize * 0.62;
   const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
   const dateWidth = dateLabel.length * titleCharacterWidth;
@@ -2428,15 +2447,15 @@ function drawTitleDayCard(
 
   const titleRow = new Rect(
     card.x + 8,
-    card.y + 5,
+    card.y + scaleVertical(5),
     card.width - 16,
-    42
+    scaleVertical(42)
   );
   const detailRow = new Rect(
     card.x + 8,
-    card.y + 54,
+    card.y + scaleVertical(54),
     card.width - 16,
-    42
+    scaleVertical(42)
   );
 
   const titleStartX =
@@ -2474,7 +2493,7 @@ function drawTitleDayCard(
   // Temperatura, ícone e contadores formam um único grupo.
   // Há exatamente 2 px entre a temperatura e o ícone, e 2 px
   // entre o ícone e os contadores.
-  const detailFontSize = 22;
+  const detailFontSize = scaleFontSize(22);
   const detailCharacterWidth = detailFontSize * 0.62;
   const minimumWidth = minimum.length * detailCharacterWidth;
   const slashWidth = detailCharacterWidth;
@@ -2483,8 +2502,8 @@ function drawTitleDayCard(
     minimumWidth + slashWidth + maximumWidth;
   const countsWidth =
     countsText.length * detailCharacterWidth;
-  const iconSize = 30;
-  const iconGap = 2;
+  const iconSize = scaleVertical(30);
+  const iconGap = scaleVertical(2);
 
   const groupWidth =
     temperatureGroupWidth +
@@ -3096,8 +3115,8 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   if (maximumRain <= 0) return;
 
   const maximumBarHeight = Math.max(
-    4,
-    graphBottom - graphTop - 2
+    scaleVertical(4),
+    graphBottom - graphTop - scaleVertical(2)
   );
 
   // Mantém as barras espessas; em janelas longas, adapta a largura
@@ -3120,7 +3139,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       Math.min(1, entry.amount / maximumRain)
     );
     const height = Math.max(
-      2,
+      scaleVertical(2),
       maximumBarHeight * normalized
     );
     const centerX = timeToX(new Date(entry.timestamp));
@@ -3545,7 +3564,9 @@ function drawThermalCurve(
   }
   ctx.addPath(glowPath);
   ctx.setStrokeColor(new Color("#000000", 0.48));
-  ctx.setLineWidth(isCompactMode() ? 5 : 6);
+  ctx.setLineWidth(
+    scaleVertical(isCompactMode() ? 5 : 6)
+  );
   ctx.strokePath();
 
   // A linha superior permanece branca e independente da escala térmica.
@@ -3556,7 +3577,9 @@ function drawThermalCurve(
   }
   ctx.addPath(curvePath);
   ctx.setStrokeColor(new Color("#FFFFFF", 0.95));
-  ctx.setLineWidth(isCompactMode() ? 2 : 2.6);
+  ctx.setLineWidth(
+    scaleVertical(isCompactMode() ? 2 : 2.6)
+  );
   ctx.strokePath();
 }
 
@@ -3672,8 +3695,7 @@ function temperatureHeatColor(
 
 
 function weatherStripBottomY() {
-  // Uma única altura vale para todos os modos e acomoda o astro ampliado
-  // com a borda de 8 px, sem cortar sua parte superior.
+  // A faixa superior reduz na mesma proporção do conteúdo vertical.
   return WEATHER_ASTRO_STRIP_HEIGHT_24H;
 }
 
@@ -3684,8 +3706,18 @@ function weatherIconSize() {
 }
 
 function weatherIconCenterY() {
-  // Ajuste óptico de 1 px para cima, mantendo a faixa com 60 px.
-  return Math.round(weatherStripBottomY() / 2) - 1;
+  // O ajuste óptico de 1 px também acompanha a escala.
+  return weatherStripBottomY() / 2 - scaleVertical(1);
+}
+
+function dayBoundaryMoonBorderTopY() {
+  // Coordenada global do centro do stroke superior da Lua de mudança de dia.
+  return (
+    CANVAS.timelineTop +
+    weatherIconCenterY() -
+    weatherIconSize() / 2 -
+    dayBoundaryLineWidth() / 2
+  );
 }
 
 function dayBoundaryAstroOuterRadius() {
@@ -3710,20 +3742,21 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // No modo compacto, o bloco térmico total fica com 40 px:
+  // No modo compacto, o bloco térmico mantém a proporção original:
   // 12 px para a curva + 28 px para a legenda de temperaturas.
-  return thermalBandBottomY() - (isCompactMode() ? 12 : 30);
+  return thermalBandBottomY() -
+    scaleVertical(isCompactMode() ? 12 : 30);
 }
 
 function thermalTemperatureLabelTopY() {
-  // A legenda numérica pertence ao módulo térmico. Esta reserva inclui
-  // as fontes maiores de máxima/mínima e impede que os charts a atravessem.
-  return thermalBandTopY() - (isCompactMode() ? 28 : 32);
+  // A legenda numérica continua separada dos charts e também é comprimida.
+  return thermalBandTopY() -
+    scaleVertical(isCompactMode() ? 28 : 32);
 }
 
 function thermalBandBottomY() {
-  // Reserva espaço para o círculo de mudança de dia e mantém
-  // dois pixels de afastamento antes dele.
+  // Reserva espaço para o círculo e mantém dois pixels reais de
+  // afastamento antes dele, evitando qualquer recorte.
   return (
     bottomLegendCenterY() -
     DAY_CHANGE_CIRCLE_DIAMETER / 2 -
@@ -3732,8 +3765,8 @@ function thermalBandBottomY() {
 }
 
 function bottomLegendCenterY() {
-  // A extremidade inferior do círculo fica 13 px acima do limite do canvas.
-  // A área interna recebe 2 px extras para que o círculo nunca seja recortado.
+  // A borda inferior do círculo fica exatamente 30 px acima do canvas.
+  // A coordenada retornada é local ao painel da timeline.
   return (
     CANVAS.height -
     WIDGET_CONTENT_BOTTOM_MARGIN -
@@ -3743,13 +3776,13 @@ function bottomLegendCenterY() {
 }
 
 function timelineChartTop() {
-  return weatherStripBottomY() + 5;
+  return weatherStripBottomY() + scaleVertical(5);
 }
 
 function timelineChartBottom() {
-  // Mantém exatamente o início atual da agenda e reduz somente seu limite
-  // inferior, reservando uma margem real antes da legenda térmica.
-  return thermalTemperatureLabelTopY() - 5;
+  // O início da agenda e o espaço antes da legenda térmica acompanham
+  // a mesma escala vertical.
+  return thermalTemperatureLabelTopY() - scaleVertical(5);
 }
 
 function timelineRowHeight() {
@@ -3763,10 +3796,8 @@ function timelineRowHeight() {
 function compactTimelineScale() {
   if (!isCompactMode()) return 1;
 
-  // Desde o desenho compacto original, o bloco térmico caiu de 51 px
-  // para 40 px. Os 11 px liberados são distribuídos igualmente entre
-  // as cinco linhas: 2,2 px adicionais por linha.
-  const originalCompactThermalHeight = 51;
+  // A proporção do módulo compacto é preservada depois da compressão.
+  const originalCompactThermalHeight = scaleVertical(51);
   const currentCompactThermalHeight =
     thermalBandBottomY() - thermalTemperatureLabelTopY();
   const expansionPerRow = Math.max(
@@ -3782,25 +3813,25 @@ function compactTimelineScale() {
 }
 
 function compactTimelineFontSize(size) {
-  return size * compactTimelineScale();
+  return scaleFontSize(size) * compactTimelineScale();
 }
 
 function timelineBarHeight(item) {
   const compactScale = compactTimelineScale();
   const preferredHeight = item?.isOverflow
     ? isCompactMode()
-      ? 29 * compactScale
-      : 34
+      ? scaleVertical(29) * compactScale
+      : scaleVertical(34)
     : isCompactMode()
-      ? 30 * compactScale
+      ? scaleVertical(30) * compactScale
       : isExtendedDetailedMode()
-        ? 35
-        : 38;
+        ? scaleVertical(35)
+        : scaleVertical(38);
 
   // Ao comprimir as cinco linhas, preserva uma separação mínima entre charts.
   return Math.min(
     preferredHeight,
-    Math.max(22, timelineRowHeight() - 4)
+    Math.max(scaleVertical(22), timelineRowHeight() - scaleVertical(4))
   );
 }
 
@@ -3829,10 +3860,11 @@ function drawBottomHourLegend(ctx) {
   const bottomY = bottomLegendTextBottomY(centerY);
   // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
   // aumentamos levemente a fonte sem alterar o modo de 24 h.
-  const hourFontSize =
+  const hourFontSize = scaleFontSize(
     windowHours > 24 && isCompactMode()
       ? 22
-      : 24;
+      : 24
+  );
 
   ctx.setTextAlignedCenter();
   for (const tick of hourTicks()) {
@@ -5002,10 +5034,10 @@ function drawWeatherConditionStrip(ctx, weather) {
       const width = x1 - x0;
 
       for (const [fraction, y, radius] of [
-        [0.10, 10, 2.2],
-        [0.24, 28, 1.6],
-        [0.72, 12, 1.8],
-        [0.88, 30, 2.2],
+        [0.10, scaleVertical(10), scaleVertical(2.2)],
+        [0.24, scaleVertical(28), scaleVertical(1.6)],
+        [0.72, scaleVertical(12), scaleVertical(1.8)],
+        [0.88, scaleVertical(30), scaleVertical(2.2)],
       ]) {
         drawFivePointStar(
           ctx,
@@ -5529,8 +5561,12 @@ function drawVisibleDailyExtremes(
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
   const visibleEnd = windowEnd.getTime();
-  const normalFontSize = isCompactMode() ? 18 : 21;
-  const extremeFontSize = isCompactMode() ? 23 : 27;
+  const normalFontSize = scaleFontSize(
+    isCompactMode() ? 18 : 21
+  );
+  const extremeFontSize = scaleFontSize(
+    isCompactMode() ? 23 : 27
+  );
   const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
@@ -5610,7 +5646,7 @@ function drawVisibleDailyExtremes(
       x - 34,
       y,
       68,
-      fontSize + 8
+      fontSize + scaleVertical(8)
     );
     ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
@@ -5660,8 +5696,8 @@ function drawVisibleDailyExtremes(
       graphBottom
     );
     const labelY = Math.max(
-      thermalTemperatureLabelTopY() + 4,
-      y - (normalFontSize + 5)
+      thermalTemperatureLabelTopY() + scaleVertical(4),
+      y - (normalFontSize + scaleVertical(5))
     );
     const hour = evenTick.getHours();
     const isNight = isSecondaryNightLegendHour(hour);
@@ -5692,8 +5728,8 @@ function drawVisibleDailyExtremes(
       graphBottom
     );
     const labelY = Math.max(
-      thermalTemperatureLabelTopY() + 2,
-      y - (extremeFontSize + 6)
+      thermalTemperatureLabelTopY() + scaleVertical(2),
+      y - (extremeFontSize + scaleVertical(6))
     );
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
@@ -5884,16 +5920,22 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    const blue = parseInt(value.slice(4, 6), 16);",
     "    return 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';",
     "  };",
-    "  const minFontSize = " + (isCompactMode() ? 26 : 30) + ";",
+    "  const minFontSize = " +
+      scaleFontSize(isCompactMode() ? 26 : 30) +
+      ";",
     "  const maxFontSize = " +
-      (isCompactMode()
-        ? 92
-        : isExtendedDetailedMode()
-          ? 108
-          : 132) +
+      scaleFontSize(
+        isCompactMode()
+          ? 92
+          : isExtendedDetailedMode()
+            ? 108
+            : 132
+      ) +
       ";",
     "  const fontFamily = 'Arial Narrow, HelveticaNeue-CondensedBlack, Impact, Arial Black, sans-serif';",
-    "  const verticalScale = 1.05;",
+    "  const verticalScale = " +
+      (1.05 * VERTICAL_LAYOUT_SCALE) +
+      ";",
     "  const minimumHorizontalScale = 0.62;",
     "  const maximumHorizontalScale = 1.45;",
     "  const chooseTypography = function(entry) {",
@@ -6018,12 +6060,16 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
   );
 }
 function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
-  const maxFontSize = isCompactMode()
-    ? 72
-    : isExtendedDetailedMode()
-      ? 84
-      : 96;
-  const minFontSize = isCompactMode() ? 26 : 30;
+  const maxFontSize = scaleFontSize(
+    isCompactMode()
+      ? 72
+      : isExtendedDetailedMode()
+        ? 84
+        : 96
+  );
+  const minFontSize = scaleFontSize(
+    isCompactMode() ? 26 : 30
+  );
 
   ctx.setTextAlignedCenter();
   for (const entry of entries) {
@@ -6125,9 +6171,10 @@ function drawTimelineDayBoundariesOnTop(ctx) {
 
 function drawWeekdayBadgesOnTop(ctx) {
   // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
-  const fontSize = 20;
+  const fontSize = scaleFontSize(20);
   const centerY = bottomLegendCenterY();
-  const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - 4;
+  const textWidth =
+    DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
@@ -6169,7 +6216,11 @@ function drawFixedDaylightGlow(ctx, weather) {
     for (const slice of slices) {
       // Uma faixa de um pixel por vez, sem sobreposição, mantém o
       // gradiente contínuo e elimina as bordas horizontais.
-      for (let y = lineY + 1; y < glowEndY; y += 1) {
+      for (
+        let y = lineY + scaleVertical(1);
+        y < glowEndY;
+        y += scaleVertical(1)
+      ) {
         const verticalProgress =
           (y - lineY) / Math.max(1, glowEndY - lineY);
         const verticalStrength = Math.pow(
@@ -6202,7 +6253,12 @@ function drawFixedDaylightGlow(ctx, weather) {
         )
       );
       ctx.fillRect(
-        new Rect(slice.x - 1, lineY, slice.width + 3, 10)
+        new Rect(
+          slice.x - 1,
+          lineY,
+          slice.width + 3,
+          scaleVertical(10)
+        )
       );
 
       // O gradiente contínuo fornece a intensidade abaixo da linha, sem
@@ -6213,9 +6269,9 @@ function drawFixedDaylightGlow(ctx, weather) {
     for (const endpointX of [interval.x0, interval.x1]) {
       const visibility = 1;
       for (const [radius, opacity] of [
-        [12, 0.10],
-        [8, 0.18],
-        [5, 0.28],
+        [scaleVertical(12), 0.10],
+        [scaleVertical(8), 0.18],
+        [scaleVertical(5), 0.28],
       ]) {
         ctx.setFillColor(
           new Color(
@@ -7766,8 +7822,8 @@ function compactEventHourMarkers() {
 }
 
 function dayBoundaryLineWidth() {
-  // A linha estrutural de mudança de dia usa quatro pixels em toda a timeline.
-  return 4;
+  // A espessura acompanha a mesma escala vertical dos demais elementos.
+  return scaleVertical(4);
 }
 
 function hourGridLineColor(tick) {
@@ -7819,23 +7875,22 @@ function legendLabelWidth() {
 }
 
 function legendFrameHeight() {
-  if (isCompactMode()) return 34;
-  if (isExtendedDetailedMode()) return 32;
-  return 38;
+  if (isCompactMode()) return scaleVertical(34);
+  if (isExtendedDetailedMode()) return scaleVertical(32);
+  return scaleVertical(38);
 }
 
 function legendTextHeight() {
-  if (isCompactMode()) return 29;
-  if (isExtendedDetailedMode()) return 28;
-  return 31;
+  if (isCompactMode()) return scaleVertical(29);
+  if (isExtendedDetailedMode()) return scaleVertical(28);
+  return scaleVertical(31);
 }
 
 function topLegendCenterY() {
-  // Preserva o eixo vertical anterior enquanto a moldura cresce igualmente
-  // para cima e para baixo.
-  if (isCompactMode()) return 18;
-  if (isExtendedDetailedMode()) return 17;
-  return 20;
+  // Preserva o eixo vertical anterior, agora proporcional ao painel.
+  if (isCompactMode()) return scaleVertical(18);
+  if (isExtendedDetailedMode()) return scaleVertical(17);
+  return scaleVertical(20);
 }
 
 function centeredLegendTextRect(centerX, centerY) {
@@ -7998,7 +8053,7 @@ function eventStartsAtDayChange(event) {
 
 function drawEventStartLines(ctx, items) {
   const events = prioritizedEvents(items);
-  const lineWidth = 4;
+  const lineWidth = scaleVertical(4);
   const curveBottom = thermalBandBottomY();
 
   // A linha principal permanece atrás dos charts e chega até a
@@ -8030,7 +8085,7 @@ function drawEventStartLines(ctx, items) {
 
 function drawEventStartLineAnchors(ctx, items) {
   const events = prioritizedEvents(items);
-  const lineWidth = 4;
+  const lineWidth = scaleVertical(4);
 
   // Este trecho alcança o centro do chart, mas fica atrás dele.
   // A coordenada da hora de início permanece inalterada.
@@ -8191,7 +8246,12 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
       item.title,
-      new Rect(markerX, barY + 3, markerWidth, barHeight - 3)
+      new Rect(
+        markerX,
+        barY + scaleVertical(3),
+        markerWidth,
+        barHeight - scaleVertical(3)
+      )
     );
     return;
   }
@@ -8254,15 +8314,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode()
     ? compactTimelineFontSize(21)
-    : windowHours > 24
-      ? 25
-      : 28;
+    : scaleFontSize(windowHours > 24 ? 25 : 28);
   const statusFontSize = isCompactMode()
     ? compactTimelineFontSize(13)
-    : 16;
+    : scaleFontSize(16);
   const metadataFontSize = isCompactMode()
     ? compactTimelineFontSize(12)
-    : 16;
+    : scaleFontSize(16);
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
@@ -8290,12 +8348,16 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   if (!visibleTitle && statusWidth === 0) return;
 
   const titleTextY =
-    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 4);
+    barY +
+    Math.max(
+      0,
+      (barHeight - titleFontSize) / 2 - scaleVertical(4)
+    );
   const reminderMarkerDiameter =
     item.kind === "reminder"
       ? isCompactMode()
-        ? Math.max(9, compactTimelineScale() * 10)
-        : 12
+        ? Math.max(9, compactTimelineScale() * scaleVertical(10))
+        : scaleVertical(12)
       : 0;
   const reminderMarkerGap = item.kind === "reminder" ? 5 : 0;
   const textPoint = new Point(
@@ -8338,9 +8400,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       statusText,
       new Rect(
         visibleRight - statusWidth,
-        barY + 6,
+        barY + scaleVertical(6),
         statusWidth,
-        barHeight - 6
+        barHeight - scaleVertical(6)
       )
     );
   }
@@ -8353,9 +8415,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       metadataText,
       new Rect(
         visibleRight - statusWidth - metadataWidth,
-        barY + 6,
+        barY + scaleVertical(6),
         metadataWidth,
-        barHeight - 6
+        barHeight - scaleVertical(6)
       )
     );
   }
@@ -8374,9 +8436,7 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
 
   const fontSize = isCompactMode()
     ? compactTimelineFontSize(21)
-    : windowHours > 24
-      ? 25
-      : 28;
+    : scaleFontSize(windowHours > 24 ? 25 : 28);
   // O dia determina a visibilidade, mas não limita a largura do nome.
   // Como os títulos dos charts, o texto começa na parte visível do item.
   const labelX = visibleLeft + 7;
@@ -8386,8 +8446,11 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
 
   const labelWidth = maximumWidth;
   const labelHeight = Math.max(
-    18,
-    Math.min(rowHeight - 4, fontSize + 8)
+    scaleVertical(18),
+    Math.min(
+      rowHeight - scaleVertical(4),
+      fontSize + scaleVertical(8)
+    )
   );
   const labelY = y + (rowHeight - labelHeight) / 2;
   const labelRect = new Rect(
@@ -8464,10 +8527,15 @@ function drawTimelineBar(ctx, rect, color, item) {
   }
 
   // Contorno preto comum a todos os charts.
-  const cornerRadius = isCompactMode() ? 6 : 7;
+  const cornerRadius = isCompactMode()
+    ? scaleVertical(6)
+    : scaleVertical(7);
   const outlineWidth = Math.min(
-    2,
-    Math.max(0.75, Math.min(rect.width, rect.height) / 4)
+    scaleVertical(2),
+    Math.max(
+      scaleVertical(0.75),
+      Math.min(rect.width, rect.height) / 4
+    )
   );
   const outlinedRect = new Rect(
     rect.x + outlineWidth,
@@ -8493,7 +8561,9 @@ function drawTimelineBar(ctx, rect, color, item) {
     return;
   }
 
-  const accentBorderWidth = item.isCurrentEvent ? 4 : 3;
+  const accentBorderWidth = item.isCurrentEvent
+    ? scaleVertical(4)
+    : scaleVertical(3);
   fillRoundedRect(
     ctx,
     outlinedRect,
