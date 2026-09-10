@@ -116,8 +116,8 @@ const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 
 // Raio comum dos cartões do título e das linhas de separação do dia.
 const TITLE_CARD_HEIGHT = 104;
-const WIDGET_CONTENT_TOP_MARGIN = 10;
-const WIDGET_CONTENT_BOTTOM_MARGIN = 10;
+const WIDGET_CONTENT_TOP_MARGIN = 18;
+const WIDGET_CONTENT_BOTTOM_MARGIN = 18;
 const TITLE_CARD_STANDARD_CORNER_RADIUS = 52;
 const TITLE_CARD_OUTER_CORNER_RADIUS = 52;
 const DAY_CHANGE_CIRCLE_DIAMETER = 52;
@@ -135,7 +135,10 @@ const CANVAS = {
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 120 px: permitindo que a Lua encoste na linha sob o título.
   timelineTop: 125,
-  timelineBottom: 491,
+  // Após o deslocamento vertical de -5 px, o limite efetivo fica em
+  // 494 px; o círculo inferior termina em 492 px, preservando 2 px
+  // de segurança dentro da área interna de desenho.
+  timelineBottom: 499,
   footerTop: 459,
   // Com o deslocamento vertical de -5 px, 505 resulta em 500 px efetivos,
   // preservando 10 px até o fim do canvas de 510 px.
@@ -3729,13 +3732,12 @@ function thermalBandBottomY() {
 }
 
 function bottomLegendCenterY() {
-  // A extremidade inferior do círculo fica a 10 px do limite inferior
-  // do canvas, igualando a margem superior de 10 px.
+  // Mantém dois pixels de segurança antes do fim da área interna da timeline.
+  // A margem externa resultante fica igual à margem superior.
   return (
-    CANVAS.height -
-    WIDGET_CONTENT_BOTTOM_MARGIN -
-    CANVAS.timelineTop -
-    DAY_CHANGE_CIRCLE_DIAMETER / 2
+    timelineHeight() -
+    DAY_CHANGE_CIRCLE_DIAMETER / 2 -
+    2
   );
 }
 
