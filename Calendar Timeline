@@ -2247,7 +2247,7 @@ function drawCurrentDayFrame(ctx) {
 
   const todayCardRight = todayCard.x + todayCard.width;
   const frameBottomY = cardBottomY + 1;
-  const verticalFrameBottomY = frameBottomY + 5;
+  const verticalFrameBottomY = frameBottomY + 6;
 
   // Mantém a borda superior e a lateral direita do cartão de hoje.
   fillCurrentDayHorizontalLine(
