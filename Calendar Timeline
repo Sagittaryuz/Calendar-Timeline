@@ -2237,6 +2237,56 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
   );
 }
 
+function drawCurrentDayRoundedTopRightFrame(
+  ctx,
+  card,
+  bottomY,
+  lineWidth,
+  color
+) {
+  const radius = Math.min(
+    TITLE_CARD_STANDARD_CORNER_RADIUS,
+    card.width / 2,
+    card.height / 2
+  );
+  const right = card.x + card.width;
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  // O lado esquerdo permanece aberto; o canto superior direito usa
+  // o mesmo raio de 52 px dos demais cartões.
+  path.move(new Point(card.x, card.y));
+  path.addLine(new Point(right - radius, card.y));
+  path.addCurve(
+    new Point(right, card.y + radius),
+    new Point(
+      right - radius + radius * curveFactor,
+      card.y
+    ),
+    new Point(
+      right,
+      card.y + radius - radius * curveFactor
+    )
+  );
+  path.addLine(new Point(right, bottomY));
+
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+
+  // Preserva a ponta arredondada do início aberto da linha superior.
+  ctx.setFillColor(color);
+  ctx.fillEllipse(
+    new Rect(
+      card.x - lineWidth / 2,
+      card.y - lineWidth / 2,
+      lineWidth,
+      lineWidth
+    )
+  );
+}
+
 function drawCurrentDayFrame(ctx) {
   const {
     todayCard,
@@ -2250,19 +2300,11 @@ function drawCurrentDayFrame(ctx) {
   const frameBottomY = cardBottomY + 1;
   const verticalFrameBottomY = frameBottomY + 7;
 
-  // Mantém a borda superior e a lateral direita do cartão de hoje.
-  fillCurrentDayHorizontalLine(
+  // Mantém a moldura aberta do dia atual, agora com raio de 52 px
+  // no canto superior direito.
+  drawCurrentDayRoundedTopRightFrame(
     ctx,
-    todayCard.x,
-    todayCardRight,
-    todayCard.y,
-    lineWidth,
-    lineColor
-  );
-  fillCurrentDayVerticalLine(
-    ctx,
-    todayCardRight,
-    todayCard.y,
+    todayCard,
     verticalFrameBottomY,
     lineWidth,
     lineColor
