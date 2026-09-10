@@ -5644,6 +5644,9 @@ async function renderTimelinePanel(items, loadError) {
     const chartHeight = Math.max(1, chartBottom - chartTop);
     const rowHeight = chartHeight / SETTINGS.maxItems;
 
+    // As ligações são desenhadas antes dos charts, que as encobrem.
+    drawEventStartLineAnchors(ctx, items);
+
     for (let row = 0; row < SETTINGS.maxItems; row++) {
       const y = chartTop + row * rowHeight;
       const rowItems = items
@@ -5659,8 +5662,6 @@ async function renderTimelinePanel(items, loadError) {
       );
     }
 
-    // A ligação entra no próprio chart até seu centro.
-    drawEventStartLineAnchors(ctx, items);
   }
 
   drawBottomHourLegend(ctx);
@@ -7938,8 +7939,8 @@ function drawEventStartLineAnchors(ctx, items) {
   const events = prioritizedEvents(items);
   const lineWidth = 4;
 
-  // Este trecho é desenhado sobre o próprio chart para que a ligação
-  // visual alcance o centro do chart sem alterar sua hora de início.
+  // Este trecho alcança o centro do chart, mas fica atrás dele.
+  // A coordenada da hora de início permanece inalterada.
   for (const event of [...events].reverse()) {
     // Eventos iniciados às 00:00 já coincidem com a divisão do dia.
     if (eventStartsAtDayChange(event)) continue;
@@ -8079,7 +8080,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     const markerX = Math.max(
       0,
       Math.min(timelineWidth() - markerWidth, timeToX(item.start))
-    );
+    ) - 1;
 
     drawTimelineBar(
       ctx,
@@ -8126,7 +8127,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     item,
     x,
     x + width
-  );
+  ).map((segment) => ({ ...segment, x: segment.x - 1 }));
 
   for (const segment of barSegments) {
     drawTimelineBar(
