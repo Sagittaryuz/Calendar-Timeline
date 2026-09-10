@@ -8240,7 +8240,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ctx.setTextAlignedCenter();
     ctx.setFont(
       Font.blackRoundedSystemFont(
-        isCompactMode() ? compactTimelineFontSize(21) : 25
+        isCompactMode() ? compactTimelineFontSize(21) : scaleFontSize(25)
       )
     );
     ctx.setTextColor(Color.white());
