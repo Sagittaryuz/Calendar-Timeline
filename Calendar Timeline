@@ -1954,12 +1954,14 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O fundo transparente acima preserva a cor de fundo do ListWidget,
-  // enquanto o composto inteiro é deslocado sem redimensionamento.
+  // O gradiente cobre o canvas final inteiro. Depois o composto é
+  // deslocado, evitando uma faixa transparente no topo e o recorte
+  // visual do gradiente na parte inferior.
   const shiftedCtx = new DrawContext();
   shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
-  shiftedCtx.opaque = false;
+  shiftedCtx.opaque = true;
   shiftedCtx.respectScreenScale = false;
+  drawIOSDarkGradient(shiftedCtx);
   shiftedCtx.drawImageAtPoint(
     contentCtx.getImage(),
     new Point(0, WIDGET_DRAW_OFFSET_Y)
