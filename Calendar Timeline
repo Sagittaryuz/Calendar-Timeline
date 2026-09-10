@@ -116,6 +116,7 @@ const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 
 // Raio comum dos cartões do título e das linhas de separação do dia.
 const TITLE_CARD_HEIGHT = 104;
+const WIDGET_CONTENT_TOP_MARGIN = 10;
 const TITLE_CARD_STANDARD_CORNER_RADIUS = 52;
 const TITLE_CARD_OUTER_CORNER_RADIUS = 52;
 const DAY_CHANGE_CIRCLE_DIAMETER = 52;
@@ -127,15 +128,17 @@ const CANVAS = {
   width: 1092,
   height: 510,
   headerHeight: 128, // 25% da altura total
-  marginX: 34,
-  plotLeft: 34,
-  plotRight: 1058,
+  marginX: 30,
+  plotLeft: 30,
+  plotRight: 1062,
   // Após o deslocamento vertical de -5 px, o topo efetivo fica em
   // 120 px: permitindo que a Lua encoste na linha sob o título.
   timelineTop: 125,
   timelineBottom: 491,
   footerTop: 459,
-  footerBottom: 510,
+  // Com o deslocamento vertical de -5 px, 505 resulta em 500 px efetivos,
+  // preservando 10 px até o fim do canvas de 510 px.
+  footerBottom: 505,
   localPlotTop: 48,
   // Distância espelhada entre a legenda e o grid.
   timelineLegendGap: 7,
@@ -2075,7 +2078,7 @@ function titleDayCardRect(index) {
 
   return new Rect(
     cardsLeft + index * (cardWidth + cardGap),
-    13,
+    WIDGET_CONTENT_TOP_MARGIN,
     cardWidth,
     TITLE_CARD_HEIGHT
   );
