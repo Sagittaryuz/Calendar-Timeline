@@ -7208,7 +7208,7 @@ function strokeMoonEllipseOutside(
   color,
   lineWidth
 ) {
-  // O retângulo recebido contém os 40 px do desenho da Lua.
+  // O retângulo recebido contém os 44 px do desenho da Lua.
   // A borda é deslocada para fora, preservando integralmente
   // o tamanho visual do disco lunar.
   const outset = lineWidth / 2;
@@ -7673,8 +7673,8 @@ function compactEventHourMarkers() {
 }
 
 function dayBoundaryLineWidth() {
-  // A linha de mudança de dia usa oito pixels em toda a timeline.
-  return 8;
+  // A linha estrutural de mudança de dia usa quatro pixels em toda a timeline.
+  return 4;
 }
 
 function hourGridLineColor(tick) {
