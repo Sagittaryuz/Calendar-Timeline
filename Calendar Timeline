@@ -150,9 +150,6 @@ CANVAS.timelineBottom += CANVAS.timelineVerticalOffset;
 CANVAS.footerTop += CANVAS.timelineVerticalOffset;
 CANVAS.footerBottom += CANVAS.timelineVerticalOffset;
 
-// Desloca o composto visual inteiro, preservando a escala original.
-const WIDGET_DRAW_OFFSET_Y = 8.5;
-
 const now = new Date();
 now.setSeconds(0, 0);
 const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
@@ -1931,16 +1928,12 @@ async function renderWidget(items, loadError) {
   contentCtx.opaque = true;
   contentCtx.respectScreenScale = false;
 
+  // O gradiente precisa ser a primeira camada. O restante do widget é
+  // desenhado depois, sem deslocar o composto inteiro.
   drawIOSDarkGradient(contentCtx);
   drawTimelineBackground(contentCtx);
-
-  // A linha inferior fica na camada mais baixa, antes dos demais elementos.
   drawCurrentDayBottomLineUnderlay(contentCtx);
-
   drawDatePanel(contentCtx, loadResult.holidayDates);
-
-  // As linhas ficam abaixo dos astros; o painel da timeline será desenhado
-  // por cima delas, preservando a leitura dos ícones.
   drawCurrentDayFrame(contentCtx);
 
   const timelineImage = await renderTimelinePanel(items, loadError);
@@ -1954,24 +1947,8 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O gradiente cobre o canvas final inteiro. Depois o composto é
-  // deslocado, evitando uma faixa transparente no topo e o recorte
-  // visual do gradiente na parte inferior.
-  const shiftedCtx = new DrawContext();
-  shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
-  // O gradiente já preenche todo o canvas; manter o contexto não opaco
-  // preserva a composição da imagem da timeline sobre esse fundo.
-  shiftedCtx.opaque = false;
-  shiftedCtx.respectScreenScale = false;
-  drawIOSDarkGradient(shiftedCtx);
-  shiftedCtx.drawImageAtPoint(
-    contentCtx.getImage(),
-    new Point(0, WIDGET_DRAW_OFFSET_Y)
-  );
-
-  return shiftedCtx.getImage();
+  return contentCtx.getImage();
 }
-
 
 function timelineBackgroundColorForDate(
   date,
