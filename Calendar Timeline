@@ -1959,7 +1959,9 @@ async function renderWidget(items, loadError) {
   // visual do gradiente na parte inferior.
   const shiftedCtx = new DrawContext();
   shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
-  shiftedCtx.opaque = true;
+  // O gradiente já preenche todo o canvas; manter o contexto não opaco
+  // preserva a composição da imagem da timeline sobre esse fundo.
+  shiftedCtx.opaque = false;
   shiftedCtx.respectScreenScale = false;
   drawIOSDarkGradient(shiftedCtx);
   shiftedCtx.drawImageAtPoint(
