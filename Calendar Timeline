@@ -9122,22 +9122,24 @@ function dateKey(date) {
 }
 
 function dayBadgeStyle(date, holidayDates) {
+  // O círculo permanece branco em qualquer data. Somente a legenda
+  // interna recebe a cor temática do sábado, domingo ou feriado.
   if (holidayDates.has(dateKey(date))) {
     return {
-      background: new Color("#FFCC00"),
-      text: Color.black(),
+      background: Color.white(),
+      text: new Color("#FFCC00", 1.0),
     };
   }
   if (date.getDay() === 6) {
     return {
-      background: new Color("#0A84FF"),
-      text: Color.white(),
+      background: Color.white(),
+      text: new Color("#0A84FF", 1.0),
     };
   }
   if (date.getDay() === 0) {
     return {
-      background: new Color("#FF453A"),
-      text: Color.white(),
+      background: Color.white(),
+      text: new Color("#FF453A", 1.0),
     };
   }
   return {
@@ -9146,10 +9148,9 @@ function dayBadgeStyle(date, holidayDates) {
   };
 }
 
-function dayBoundaryLineColor(date, holidayDates) {
-  if (holidayDates.has(dateKey(date))) return new Color("#FFCC00", 1.0);
-  if (date.getDay() === 6) return new Color("#0A84FF", 1.0);
-  if (date.getDay() === 0) return new Color("#FF453A", 1.0);
+function dayBoundaryLineColor(_, __) {
+  // A linha vertical e o aro da Lua de mudança de dia são estruturais:
+  // ambos permanecem brancos, independentemente do dia representado.
   return Color.white();
 }
 
