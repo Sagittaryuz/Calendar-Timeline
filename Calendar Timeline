@@ -2010,6 +2010,11 @@ async function renderWidget(items, loadError) {
     currentDayFrame.lineWidth / 2
   );
 
+  // A imagem da timeline é composta depois da moldura e cobre a ponte
+  // superior na interface entre o título e os astros. Reaplicamos somente
+  // esse trecho após a composição, preservando o restante da moldura.
+  drawCurrentDayBridgeOverlay(contentCtx);
+
   // O cartão final já possui sua própria geometria arredondada.
 
   return contentCtx.getImage();
@@ -2750,6 +2755,65 @@ function currentDayFrameHorizontalDirection(
   return boundaryX >= card.x + card.width / 2
     ? "right"
     : "left";
+}
+
+function drawCurrentDayBridgeOverlay(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    bridgeY,
+    frameRadius,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  const horizontalDirection =
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
+  const bridge = currentDayBridgeMetrics(
+    todayCard,
+    boundaryX,
+    bridgeY,
+    frameRadius,
+    horizontalDirection
+  );
+
+  // Reaplica a transição curva entre a lateral da moldura e a ponte.
+  // Isso mantém o raio máximo e a flexibilização quando o espaço diminui.
+  if (
+    bridge.outwardDistance > 0 &&
+    bridge.bridgeRadius > 0
+  ) {
+    const path = new Path();
+    const edgeX =
+      horizontalDirection === "right"
+        ? todayCard.x + todayCard.width
+        : todayCard.x;
+    path.move(new Point(edgeX, bridge.startY));
+    appendCurrentDayBridgeCurve(
+      path,
+      bridge,
+      bridgeY,
+      frameRadius
+    );
+    ctx.setStrokeColor(lineColor);
+    ctx.setLineWidth(lineWidth);
+    ctx.addPath(path);
+    ctx.strokePath();
+  }
+
+  // A parte horizontal é desenhada por último para não ser coberta
+  // pelo bitmap opaco/translúcido da timeline.
+  fillCurrentDayHorizontalLine(
+    ctx,
+    bridge.endpointX,
+    boundaryX,
+    bridgeY,
+    lineWidth,
+    lineColor
+  );
 }
 
 function drawCurrentDayFrame(ctx) {
