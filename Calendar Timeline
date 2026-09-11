@@ -2442,18 +2442,18 @@ function drawCurrentDayRoundedTopRightFrame(
         card.y + radius - radius * curveFactor
       )
     );
-    // Quando a linha sai para a esquerda, o arco também se
-    // abre para fora, no lado esquerdo do cartão.
+    // Espelhamento exato da mesma curva no eixo vertical
+    // x = card.x, agora abrindo para a esquerda.
     path.addLine(new Point(card.x, bottomY - radius));
     path.addCurve(
       new Point(card.x - radius, bottomY),
       new Point(
-        card.x - radius * curveFactor,
-        bottomY - radius
+        card.x,
+        bottomY - radius + radius * curveFactor
       ),
       new Point(
-        card.x - radius,
-        bottomY - radius * curveFactor
+        card.x - radius + radius * curveFactor,
+        bottomY
       )
     );
   } else {
@@ -2473,18 +2473,18 @@ function drawCurrentDayRoundedTopRightFrame(
         card.y + radius - radius * curveFactor
       )
     );
-    // O arco se abre para o mesmo lado da linha horizontal:
-    // para fora do cartão, e não para dentro dele.
+    // Espelhamento exato da curva original no eixo vertical
+    // x = right: mesmos pontos, controles e raio, com x invertido.
     path.addLine(new Point(right, bottomY - radius));
     path.addCurve(
       new Point(right + radius, bottomY),
       new Point(
-        right + radius * curveFactor,
-        bottomY - radius
+        right,
+        bottomY - radius + radius * curveFactor
       ),
       new Point(
-        right + radius,
-        bottomY - radius * curveFactor
+        right + radius - radius * curveFactor,
+        bottomY
       )
     );
   }
