@@ -2117,9 +2117,17 @@ function titleDayCardRect(index) {
     (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
     cardCount;
 
+  // A linha superior do dia atual é um traço centrado na borda,
+  // então os demais quadros sobem metade da espessura para alinhar
+  // seus limites visuais superiores.
+  const titleCardTop =
+    index === 0
+      ? WIDGET_CONTENT_TOP_MARGIN
+      : WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+
   return new Rect(
     cardsLeft + index * (cardWidth + cardGap),
-    WIDGET_CONTENT_TOP_MARGIN,
+    titleCardTop,
     cardWidth,
     TITLE_CARD_HEIGHT
   );
