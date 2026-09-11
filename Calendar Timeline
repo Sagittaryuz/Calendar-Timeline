@@ -9117,10 +9117,10 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
     labelHeight
   );
 
-  // Fundo transparente: somente a palavra recebe um contorno branco fino.
+  // Fundo transparente: somente a palavra recebe um contorno preto fino.
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-  ctx.setTextColor(new Color("#FFFFFF", 1.0));
+  ctx.setTextColor(new Color("#000000", 1.0));
   for (const [offsetX, offsetY] of [
     [-1, -1], [0, -1], [1, -1],
     [-1, 0],             [1, 0],
