@@ -2127,7 +2127,8 @@ function drawDatePanel(ctx, holidayDates) {
 
 function currentDayFrameMetrics() {
   const todayCard = titleDayCardRect(0);
-  const nextDayBoundary = addDays(startOfDay(windowStart), 1);
+  const todayBoundary = startOfDay(windowStart);
+  const nextDayBoundary = addDays(todayBoundary, 1);
   const boundaryX =
     CANVAS.plotLeft + timeToX(nextDayBoundary);
   const astroCenterY =
@@ -2138,7 +2139,9 @@ function currentDayFrameMetrics() {
     DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
-  const lineColor = hourGridLineColor(nextDayBoundary);
+  // A moldura pertence ao dia do cartão atual. O X continua apontando
+  // para a próxima virada, mas a cor vem da virada do próprio dia.
+  const lineColor = hourGridLineColor(todayBoundary);
 
   return {
     todayCard,
