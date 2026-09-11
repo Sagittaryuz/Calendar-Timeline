@@ -2442,16 +2442,18 @@ function drawCurrentDayRoundedTopRightFrame(
         card.y + radius - radius * curveFactor
       )
     );
+    // Quando a linha sai para a esquerda, o arco também se
+    // abre para fora, no lado esquerdo do cartão.
     path.addLine(new Point(card.x, bottomY - radius));
     path.addCurve(
-      new Point(card.x + radius, bottomY),
+      new Point(card.x - radius, bottomY),
       new Point(
-        card.x,
-        bottomY - radius + radius * curveFactor
+        card.x - radius * curveFactor,
+        bottomY - radius
       ),
       new Point(
-        card.x + radius - radius * curveFactor,
-        bottomY
+        card.x - radius,
+        bottomY - radius * curveFactor
       )
     );
   } else {
@@ -2471,16 +2473,18 @@ function drawCurrentDayRoundedTopRightFrame(
         card.y + radius - radius * curveFactor
       )
     );
+    // O arco se abre para o mesmo lado da linha horizontal:
+    // para fora do cartão, e não para dentro dele.
     path.addLine(new Point(right, bottomY - radius));
     path.addCurve(
-      new Point(right - radius, bottomY),
+      new Point(right + radius, bottomY),
       new Point(
-        right,
-        bottomY - radius + radius * curveFactor
+        right + radius * curveFactor,
+        bottomY - radius
       ),
       new Point(
-        right - radius + radius * curveFactor,
-        bottomY
+        right + radius,
+        bottomY - radius * curveFactor
       )
     );
   }
@@ -2507,8 +2511,8 @@ function drawCurrentDayFrame(ctx) {
   const cornerRadius = currentDayFrameCornerRadius(todayCard);
   const horizontalStartX =
     horizontalDirection === "right"
-      ? todayCardRight - cornerRadius
-      : todayCard.x + cornerRadius;
+      ? todayCardRight + cornerRadius
+      : todayCard.x - cornerRadius;
 
   // A linha superior usa a mesma coordenada da borda superior da Lua.
   // Assim, a compressão vertical nunca desconecta os dois elementos.
