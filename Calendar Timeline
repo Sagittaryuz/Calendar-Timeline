@@ -1981,10 +1981,21 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // A timeline é uma superfície retangular internamente, mas seus
-  // dois vértices direitos precisam respeitar o raio visual do widget.
-  // Recompomos os pixels externos com o gradiente original: isso funciona
-  // como uma máscara real sem deixar quinas perpendiculares.
+  // O painel da timeline é composto em um retângulo, mas seus dois cantos
+  // direitos precisam acompanhar o raio visual. Recompomos somente a área
+  // externa dos cantos com o gradiente explicitamente opaco, sem tocar na
+  // faixa central do painel.
+  restoreRoundedRightCorners(
+    contentCtx,
+    new Rect(
+      CANVAS.plotLeft,
+      CANVAS.timelineTop,
+      timelineWidth(),
+      timelineHeight()
+    ),
+    TITLE_CARD_OUTER_CORNER_RADIUS
+  );
+
   // A curva da moldura do dia atual também funciona como limite
   // visual dos astros e demais elementos do cartão selecionado.
   const currentDayFrame = currentDayFrameMetrics();
@@ -1999,8 +2010,6 @@ async function renderWidget(items, loadError) {
   );
 
   // O cartão final já possui sua própria geometria arredondada.
-  // Não reaplicamos máscara externa sobre a timeline: isso criava um
-  // resquício perpendicular na borda superior do painel.
 
   return contentCtx.getImage();
 }
@@ -2195,7 +2204,8 @@ function widgetGradientColorAtY(y) {
   );
 
   return new Color(
-    interpolateHexColor(colors[segment], colors[segment + 1], progress)
+    interpolateHexColor(colors[segment], colors[segment + 1], progress),
+    1.0
   );
 }
 
