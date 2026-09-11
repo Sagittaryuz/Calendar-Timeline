@@ -22,7 +22,10 @@ const SETTINGS = {
   showMoon: true,
   showNightTexture: false,
   showSolarGlow: true,
-  solarGlowIntensity: 1.0,
+  // Opacidades visuais reduzidas para manter a agenda em primeiro plano.
+  solarGlowIntensity: 0.55,
+  thermalGradientOpacity: 0.55,
+  weatherIconOpacity: 0.78,
   nightStartHour: 18,
   nightEndHour: 6,
   daylightStartHour: 6,
@@ -3518,8 +3521,9 @@ function drawThermalArea(
   // que o preenchimento acompanhe a mesma suavidade da curva.
   const horizontalStep = 1;
   const verticalStep = 2;
-  const topAlpha = 0.80;
-  const bottomAlpha = 0.10;
+  const gradientOpacity = SETTINGS.thermalGradientOpacity;
+  const topAlpha = 0.80 * gradientOpacity;
+  const bottomAlpha = 0.10 * gradientOpacity;
 
   for (let index = 0; index < points.length - 1; index++) {
     const first = points[index];
@@ -4072,6 +4076,13 @@ function weatherSunRadius(size) {
   return size * 0.28;
 }
 
+function weatherElementOpacity(opacity) {
+  return Math.max(
+    0,
+    Math.min(1, Number(opacity) * SETTINGS.weatherIconOpacity)
+  );
+}
+
 function drawWeatherPathSegment(
   ctx,
   x1,
@@ -4081,7 +4092,7 @@ function drawWeatherPathSegment(
   color,
   lineWidth
 ) {
-  ctx.setStrokeColor(new Color(color, 0.96));
+  ctx.setStrokeColor(new Color(color, weatherElementOpacity(0.96)));
   ctx.setLineWidth(lineWidth);
   const path = new Path();
   path.move(new Point(x1, y1));
@@ -4154,7 +4165,7 @@ function drawWeatherWaveLine(
     }
   }
 
-  ctx.setStrokeColor(new Color(color, 0.96));
+  ctx.setStrokeColor(new Color(color, weatherElementOpacity(0.96)));
   ctx.setLineWidth(lineWidth);
   ctx.addPath(path);
   ctx.strokePath();
@@ -4290,7 +4301,7 @@ function drawWeatherLightning(ctx, centerX, centerY, size) {
       centerY + size * 0.18
     )
   );
-  ctx.setFillColor(new Color("#FFD60A", 0.98));
+  ctx.setFillColor(new Color("#FFD60A", weatherElementOpacity(0.98)));
   ctx.addPath(path);
   ctx.fillPath();
 }
@@ -4622,7 +4633,10 @@ function drawWeatherEclipseIcon(
         penumbraSize,
         penumbraSize
       ),
-      new Color("#6E1721", 0.22 + coverage * 0.24)
+      new Color(
+        "#6E1721",
+        weatherElementOpacity(0.22 + coverage * 0.24)
+      )
     );
     fillEllipseIntersection(
       ctx,
@@ -4633,13 +4647,16 @@ function drawWeatherEclipseIcon(
         umbraSize,
         umbraSize
       ),
-      new Color("#481018", 0.34 + coverage * 0.42)
+      new Color(
+        "#481018",
+        weatherElementOpacity(0.34 + coverage * 0.42)
+      )
     );
 
     strokeMoonEllipseOutside(
       ctx,
       rect,
-      new Color("#B8A7FF", 0.96),
+      new Color("#B8A7FF", weatherElementOpacity(0.96)),
       dayBoundaryLineWidth()
     );
     return;
@@ -4671,11 +4688,17 @@ function drawWeatherEclipseIcon(
     ctx,
     sunRect,
     moonRect,
-    new Color("#111116", 0.88 + coverage * 0.12)
+    new Color(
+      "#111116",
+      weatherElementOpacity(0.88 + coverage * 0.12)
+    )
   );
 
   ctx.setStrokeColor(
-    new Color("#FFD000", 0.72 + coverage * 0.26)
+    new Color(
+      "#FFD000",
+      weatherElementOpacity(0.72 + coverage * 0.26)
+    )
   );
   ctx.setLineWidth(Math.max(2, size * 0.07));
   ctx.strokeEllipse(sunRect);
@@ -5072,7 +5095,10 @@ function drawWeatherConditionStrip(ctx, weather) {
           x0 + width * fraction,
           y,
           radius,
-          new Color(SETTINGS.nightStarColor, 0.66)
+          new Color(
+           SETTINGS.nightStarColor,
+           weatherElementOpacity(0.66)
+         )
         );
       }
 
@@ -5273,11 +5299,11 @@ function drawSunBurst(
   }
   path.addLine(points[0]);
 
-  ctx.setFillColor(new Color(rayColor, 1.0));
+  ctx.setFillColor(new Color(rayColor, weatherElementOpacity(1.0)));
   ctx.addPath(path);
   ctx.fillPath();
 
-  ctx.setFillColor(new Color(coreColor, 1.0));
+  ctx.setFillColor(new Color(coreColor, weatherElementOpacity(1.0)));
   ctx.fillEllipse(
     new Rect(
       centerX - radius,
@@ -5306,7 +5332,10 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
   const y = centerY - height / 2;
 
   ctx.setFillColor(
-    new Color(rainy ? "#D7DCE3" : "#EEF1F5", rainy ? 0.88 : 0.78)
+    new Color(
+      rainy ? "#D7DCE3" : "#EEF1F5",
+      weatherElementOpacity(rainy ? 0.88 : 0.78)
+    )
   );
   ctx.fillEllipse(
     new Rect(x, y + 11 * scale, 38 * scale, 20 * scale)
@@ -5321,7 +5350,10 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
     new Rect(x + 8 * scale, y + 17 * scale, 63 * scale, 15 * scale)
   );
 
-  ctx.setFillColor(new Color("#7B8490", rainy ? 0.52 : 0.34));
+  ctx.setFillColor(new Color(
+      "#7B8490",
+      weatherElementOpacity(rainy ? 0.52 : 0.34)
+    ));
   ctx.fillRect(
     new Rect(x + 10 * scale, y + 27 * scale, 59 * scale, 3 * scale)
   );
@@ -5793,6 +5825,13 @@ async function renderTimelinePanel(items, loadError) {
   // Assim nenhuma barra atravessa os charts dos eventos e lembretes.
   drawCompactThermalBand(ctx, hourlyWeather);
 
+  // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
+  // eventos e lembretes permanecem como a camada visual superior da agenda.
+  drawBottomHourLegend(ctx);
+  drawTimelineDayBoundariesOnTop(ctx);
+  drawWeekdayBadgesOnTop(ctx);
+  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
+
   if (loadError) {
     drawPermissionState(ctx);
   } else {
@@ -5804,6 +5843,7 @@ async function renderTimelinePanel(items, loadError) {
     // As ligações são desenhadas antes dos charts, que as encobrem.
     drawEventStartLineAnchors(ctx, items);
 
+    // Última camada da agenda: charts, eventos e lembretes.
     for (let row = 0; row < SETTINGS.maxItems; row++) {
       const y = chartTop + row * rowHeight;
       const rowItems = items
@@ -5818,15 +5858,7 @@ async function renderTimelinePanel(items, loadError) {
         drawTimelineItem(ctx, item, y, rowHeight)
       );
     }
-
   }
-
-  drawBottomHourLegend(ctx);
-  // As divisões de dia e seus badges prevalecem sobre todas as camadas.
-  drawTimelineDayBoundariesOnTop(ctx);
-  drawWeekdayBadgesOnTop(ctx);
-  // A Lua de mudança de dia e sua borda ficam acima de toda a timeline.
-  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
   return ctx.getImage();
 }
 
@@ -7216,7 +7248,10 @@ function drawNightSegment(
       x0 + sceneWidth * relativeX,
       CANVAS.localPlotTop + 12 + (sceneHeight - 70) * relativeY,
       radius * starScale,
-      new Color(SETTINGS.nightStarColor, 0.72)
+      new Color(
+        SETTINGS.nightStarColor,
+        weatherElementOpacity(0.72)
+      )
     );
   }
 
@@ -7333,7 +7368,10 @@ function fillMoonLitSurface(
   const terminatorFactor = 1 - 2 * normalizedIllumination;
 
   ctx.setFillColor(
-    new Color(SETTINGS.nightMoonColor, 0.98)
+    new Color(
+      SETTINGS.nightMoonColor,
+      weatherElementOpacity(0.98)
+    )
   );
 
   for (
@@ -7429,7 +7467,10 @@ function drawMoonPhase(
 
   // A base escura permanece visível em todas as fases, inclusive na Lua nova.
   ctx.setFillColor(
-    new Color(SETTINGS.nightMoonShadowColor, 0.98)
+    new Color(
+      SETTINGS.nightMoonShadowColor,
+      weatherElementOpacity(0.98)
+    )
   );
   ctx.fillEllipse(moonRect);
 
@@ -7499,7 +7540,10 @@ function drawMoonCraters(ctx, x, y, size, opacity) {
   ];
 
   ctx.setFillColor(
-    new Color(SETTINGS.nightMoonCraterColor, opacity)
+    new Color(
+      SETTINGS.nightMoonCraterColor,
+      weatherElementOpacity(opacity)
+    )
   );
   for (const [relativeX, relativeY, diameter] of craters) {
     ctx.fillEllipse(
@@ -7516,7 +7560,7 @@ function drawMoonCraters(ctx, x, y, size, opacity) {
   ctx.setFillColor(
     new Color(
       SETTINGS.nightMoonCraterHighlightColor,
-      opacity * 0.28
+      weatherElementOpacity(opacity * 0.28)
     )
   );
   for (const [relativeX, relativeY, diameter] of craters.slice(1, 9)) {
@@ -7535,7 +7579,10 @@ function drawMoonCloud(ctx, x, y, scale) {
   const width = 74 * scale;
   const height = 35 * scale;
 
-  ctx.setFillColor(new Color(SETTINGS.nightCloudColor, 0.94));
+  ctx.setFillColor(new Color(
+    SETTINGS.nightCloudColor,
+    weatherElementOpacity(0.94)
+  ));
   ctx.fillEllipse(new Rect(x, y + 11 * scale, 43 * scale, 23 * scale));
   ctx.fillEllipse(
     new Rect(x + 14 * scale, y, 31 * scale, 31 * scale)
@@ -7548,7 +7595,10 @@ function drawMoonCloud(ctx, x, y, scale) {
   );
 
   // Sombra interna clara para dar volume sem escurecer a nuvem.
-  ctx.setFillColor(new Color(SETTINGS.nightCloudShadeColor, 0.72));
+  ctx.setFillColor(new Color(
+    SETTINGS.nightCloudShadeColor,
+    weatherElementOpacity(0.72)
+  ));
   ctx.fillEllipse(
     new Rect(
       x + width * 0.23,
@@ -8488,15 +8538,14 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
     labelHeight
   );
 
-  // Fundo transparente: somente a palavra recebe um contorno preto fino.
+  // Fundo transparente: somente a palavra recebe um contorno branco fino.
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-  ctx.setTextColor(new Color("#000000", 0.95));
+  ctx.setTextColor(new Color("#FFFFFF", 1.0));
   for (const [offsetX, offsetY] of [
-    [-1, 0],
-    [1, 0],
-    [0, -1],
-    [0, 1],
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0],             [1, 0],
+    [-1, 1],  [0, 1],  [1, 1],
   ]) {
     ctx.drawTextInRect(
       label,
