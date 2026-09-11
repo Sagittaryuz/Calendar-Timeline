@@ -2916,15 +2916,22 @@ function drawTitleDayCard(
   const titleGroupWidth =
     weekdayWidth + titleGap + dateWidth;
 
+  // O traço superior dos cartões seguintes fica 2 px acima do
+  // retângulo lógico do cartão atual. Os textos e o conteúdo da
+  // segunda linha usam a mesma referência visual para manter todos
+  // os dias, inclusive hoje, alinhados horizontalmente.
+  const sharedTextTop =
+    WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+
   const titleRow = new Rect(
     card.x + 8,
-    card.y + scaleVertical(5),
+    sharedTextTop + scaleVertical(5),
     card.width - 16,
     scaleVertical(42)
   );
   const detailRow = new Rect(
     card.x + 8,
-    card.y + scaleVertical(54),
+    sharedTextTop + scaleVertical(54),
     card.width - 16,
     scaleVertical(42)
   );
