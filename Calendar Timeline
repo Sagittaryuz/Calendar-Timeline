@@ -2002,15 +2002,13 @@ async function renderWidget(items, loadError) {
   restoreRoundedSideCorners(
     contentCtx,
     currentDayFrame.todayCard,
-    TITLE_CARD_OUTER_CORNER_RADIUS,
+    currentDayFrame.frameRadius,
     currentDayFrameHorizontalDirection(
       currentDayFrame.todayCard,
       currentDayFrame.boundaryX
-    )
+    ),
+    currentDayFrame.lineWidth / 2
   );
-
-  // A máscara recorta os astros, mas não pode esconder a espessura da curva.
-  drawCurrentDayUpperCornerForeground(contentCtx);
 
   // O cartão final já possui sua própria geometria arredondada.
 
@@ -2021,7 +2019,8 @@ function restoreRoundedSideCorners(
   ctx,
   rect,
   radius,
-  side
+  side,
+  protectedStrokeOutset = 0
 ) {
   const direction = side === "left" ? "left" : "right";
   const boundedRadius = Math.max(
@@ -2030,6 +2029,11 @@ function restoreRoundedSideCorners(
   );
   if (boundedRadius <= 0) return;
 
+  // A máscara acompanha a borda externa da curva. Assim, quando há
+  // uma linha branca sobre ela, o recorte começa depois do stroke e
+  // não come metade da espessura.
+  const maskRadius =
+    boundedRadius + Math.max(0, Number(protectedStrokeOutset) || 0);
   const left = rect.x;
   const right = rect.x + rect.width;
   const top = rect.y;
@@ -2040,9 +2044,6 @@ function restoreRoundedSideCorners(
 
   for (let row = 0; row < rect.height; row++) {
     const sampleY = row + 0.5;
-    // Fora das duas extremidades, não há máscara: a linha central
-    // deve permanecer intacta. A versão anterior iniciava no retângulo
-    // inteiro e repintava toda a timeline com o gradiente.
     let outsideStart = direction === "right" ? right : left;
     let outsideEnd = direction === "left" ? left : right;
 
@@ -2050,22 +2051,26 @@ function restoreRoundedSideCorners(
       sampleY < boundedRadius ||
       sampleY > rect.height - boundedRadius
     ) {
-      const distanceFromCenter =
+      const cornerCenterY =
         sampleY < boundedRadius
-          ? boundedRadius - sampleY
-          : sampleY - (rect.height - boundedRadius);
-      const horizontalDistance = Math.sqrt(
-        Math.max(
-          0,
-          boundedRadius * boundedRadius -
-            distanceFromCenter * distanceFromCenter
-        )
-      );
+          ? boundedRadius
+          : rect.height - boundedRadius;
+      const verticalDistance = Math.abs(sampleY - cornerCenterY);
 
-      if (direction === "right") {
-        outsideStart = circleCenterX + horizontalDistance;
-      } else {
-        outsideEnd = circleCenterX - horizontalDistance;
+      if (verticalDistance <= maskRadius) {
+        const horizontalDistance = Math.sqrt(
+          Math.max(
+            0,
+            maskRadius * maskRadius -
+              verticalDistance * verticalDistance
+          )
+        );
+
+        if (direction === "right") {
+          outsideStart = circleCenterX + horizontalDistance;
+        } else {
+          outsideEnd = circleCenterX - horizontalDistance;
+        }
       }
     }
 
@@ -2101,192 +2106,6 @@ function restoreRoundedSideCorners(
   }
 }
 
-function restoreRoundedRightCorners(ctx, rect, radius) {
-  restoreRoundedSideCorners(ctx, rect, radius, "right");
-}
-
-function timelineBackgroundColorForDate(
-  date,
-  holidayDates = loadResult.holidayDates
-) {
-  if (holidayDates?.has(dateKey(date))) {
-    return SETTINGS.holidayTimelineBackgroundColor;
-  }
-  if (date.getDay() === 6) {
-    return (
-      SETTINGS.saturdayTimelineBackgroundColor ??
-      SETTINGS.nonTodayTimelineOverlayColor
-    );
-  }
-  if (date.getDay() === 0) {
-    return SETTINGS.sundayTimelineBackgroundColor;
-  }
-  return SETTINGS.timelineBackgroundColor;
-}
-
-function drawTimelineBackground(
-  ctx,
-  localToTimeline = false
-) {
-  let dayStart = startOfDay(windowStart);
-  const finalDay = startOfDay(windowEnd);
-  const todayKey = dateKey(startOfDay(windowStart));
-
-  while (dayStart <= finalDay) {
-    const dayEnd = addDays(dayStart, 1);
-    const visibleStart = new Date(
-      Math.max(dayStart.getTime(), windowStart.getTime())
-    );
-    const visibleEnd = new Date(
-      Math.min(dayEnd.getTime(), windowEnd.getTime())
-    );
-    const x0 = Math.max(0, timeToX(visibleStart));
-    const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
-    const isToday = dateKey(dayStart) === todayKey;
-    const backgroundColor = timelineBackgroundColorForDate(dayStart);
-    const isSpecialDay =
-      backgroundColor !== SETTINGS.timelineBackgroundColor;
-
-    // O HOJE comum mantém o gradiente. Sábados, domingos e feriados
-    // conservam suas cores próprias mesmo quando não são o dia atual.
-    if (x1 > x0 && (isSpecialDay || !isToday)) {
-      ctx.setFillColor(
-        new Color(
-          isSpecialDay
-            ? backgroundColor
-            : SETTINGS.nonTodayTimelineOverlayColor,
-          isSpecialDay
-            ? 1.0
-            : SETTINGS.nonTodayTimelineOverlayOpacity
-        )
-      );
-      ctx.fillRect(
-        new Rect(
-          localToTimeline
-            ? x0
-            : CANVAS.plotLeft + x0,
-          localToTimeline
-            ? 0
-            : CANVAS.timelineTop,
-          x1 - x0,
-          timelineHeight()
-        )
-      );
-    }
-    dayStart = dayEnd;
-  }
-}
-
-function widgetGradientColorAtY(y) {
-  const locations =
-    THEME_MODE === "black"
-      ? [0.0, 0.2, 1.0]
-      : [0.0, 0.5, 1.0];
-  const colors =
-    THEME_MODE === "black"
-      ? ["#1C1C1C", "#161616", "#000000"]
-      : ["#383838", "#212121", "#181818"];
-  const position = Math.max(
-    0,
-    Math.min(1, y / Math.max(1, CANVAS.height - 1))
-  );
-  let segment = 0;
-
-  while (
-    segment < locations.length - 2 &&
-    position > locations[segment + 1]
-  ) {
-    segment++;
-  }
-
-  const start = locations[segment];
-  const end = locations[segment + 1];
-  const progress = Math.max(
-    0,
-    Math.min(1, (position - start) / Math.max(0.0001, end - start))
-  );
-
-  return new Color(
-    interpolateHexColor(colors[segment], colors[segment + 1], progress),
-    1.0
-  );
-}
-
-function drawIOSDarkGradient(ctx) {
-  for (let y = 0; y < CANVAS.height; y++) {
-    ctx.setFillColor(widgetGradientColorAtY(y));
-    ctx.fillRect(new Rect(0, y, CANVAS.width, 1));
-  }
-}
-
-function interpolateHexColor(startHex, endHex, progress) {
-  const start = hexToRGB(startHex);
-  const end = hexToRGB(endHex);
-  const channel = (from, to) =>
-    Math.round(from + (to - from) * progress)
-      .toString(16)
-      .padStart(2, "0");
-
-  return (
-    "#" +
-    channel(start.r, end.r) +
-    channel(start.g, end.g) +
-    channel(start.b, end.b)
-  );
-}
-
-function hexToRGB(hex) {
-  const value = hex.replace("#", "");
-  return {
-    r: parseInt(value.slice(0, 2), 16),
-    g: parseInt(value.slice(2, 4), 16),
-    b: parseInt(value.slice(4, 6), 16),
-  };
-}
-
-function titleDayCardRect(index) {
-  const cardCount = 4;
-  const cardGap = 8;
-  const cardsLeft = CANVAS.marginX;
-  const cardsRight = CANVAS.width - CANVAS.marginX;
-  const cardWidth =
-    (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
-    cardCount;
-
-  // A linha superior do dia atual é um traço centrado na borda,
-  // então os demais quadros sobem metade da espessura para alinhar
-  // seus limites visuais superiores.
-  const titleCardTop =
-    index === 0
-      ? WIDGET_CONTENT_TOP_MARGIN
-      : WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
-
-  return new Rect(
-    cardsLeft + index * (cardWidth + cardGap),
-    titleCardTop,
-    cardWidth,
-    TITLE_CARD_HEIGHT
-  );
-}
-
-function drawDatePanel(ctx, holidayDates) {
-  // A área do título agora é uma faixa compacta de previsão. O restante
-  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
-  const cardCount = 4;
-  const firstDay = startOfDay(windowStart);
-
-  for (let index = 0; index < cardCount; index++) {
-    const date = addDays(firstDay, index);
-    drawTitleDayCard(
-      ctx,
-      date,
-      titleDayCardRect(index),
-      index === 0,
-      index === cardCount - 1
-    );
-  }
-}
-
 function currentDayFrameMetrics() {
   const todayCard = titleDayCardRect(0);
   const todayBoundary = startOfDay(windowStart);
@@ -2301,6 +2120,13 @@ function currentDayFrameMetrics() {
     DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
+  const bridgeY = dayBoundaryMoonBorderTopY();
+  const bottomLineCenterY = boundaryBottomY - lineWidth / 2;
+  const frameRadius = Math.min(
+    currentDayFrameCornerRadius(todayCard),
+    Math.max(0, (bridgeY - todayCard.y) / 2),
+    Math.max(0, (bottomLineCenterY - todayCard.y) / 2)
+  );
   // A moldura pertence ao dia do cartão atual. O X continua apontando
   // para a próxima virada, mas a cor vem da virada do próprio dia.
   const lineColor = hourGridLineColor(todayBoundary);
@@ -2311,6 +2137,9 @@ function currentDayFrameMetrics() {
     astroCenterY,
     boundaryBottomY,
     cardBottomY,
+    bridgeY,
+    bottomLineCenterY,
+    frameRadius,
     lineWidth,
     lineColor,
   };
@@ -2391,31 +2220,43 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
   const {
     todayCard,
     boundaryX,
-    boundaryBottomY,
+    bottomLineCenterY,
+    frameRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
 
-  if (boundaryX <= todayCard.x) return;
+  const direction =
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
+  const stationarySide =
+    direction === "right" ? "left" : "right";
+  const stationaryBottomX =
+    stationarySide === "left"
+      ? todayCard.x + frameRadius
+      : todayCard.x + todayCard.width - frameRadius;
 
-  // A borda inferior da linha coincide com a borda inferior do retângulo.
-  const cornerRadius = currentDayFrameCornerRadius(todayCard);
-  const bottomLineCenterY = boundaryBottomY - lineWidth / 2;
+  // A linha inferior pertence à mesma moldura que a ponte superior.
+  // Por isso ela também é espelhada quando a virada está à esquerda.
   fillCurrentDayHorizontalLine(
     ctx,
-    todayCard.x + cornerRadius,
+    stationaryBottomX,
     boundaryX,
     bottomLineCenterY,
     lineWidth,
     lineColor
   );
 
-  drawCurrentDayRoundedLeftFrame(
+  drawCurrentDayRoundedSideFrame(
     ctx,
     todayCard,
     bottomLineCenterY,
     lineWidth,
-    lineColor
+    lineColor,
+    stationarySide,
+    frameRadius
   );
 }
 
@@ -2427,121 +2268,83 @@ function currentDayFrameCornerRadius(card) {
   );
 }
 
-function drawCurrentDayRoundedLeftFrame(
-  ctx,
-  card,
-  bottomY,
-  lineWidth,
-  color
-) {
-  const radius = currentDayFrameCornerRadius(card);
-  const curveFactor = 0.5522847498;
-  const path = new Path();
-
-  // A linha esquerda conecta os dois trechos horizontais com
-  // curvas geométricas de 52 px nos dois vértices.
-  path.move(new Point(card.x + radius, card.y));
-  path.addCurve(
-    new Point(card.x, card.y + radius),
-    new Point(
-      card.x + radius - radius * curveFactor,
-      card.y
-    ),
-    new Point(
-      card.x,
-      card.y + radius - radius * curveFactor
-    )
-  );
-  path.addLine(new Point(card.x, bottomY - radius));
-  path.addCurve(
-    new Point(card.x + radius, bottomY),
-    new Point(
-      card.x,
-      bottomY - radius + radius * curveFactor
-    ),
-    new Point(
-      card.x + radius - radius * curveFactor,
-      bottomY
-    )
-  );
-
-  ctx.setStrokeColor(color);
-  ctx.setLineWidth(lineWidth);
-  ctx.addPath(path);
-  ctx.strokePath();
-}
-
-function drawCurrentDayRoundedTopRightFrame(
+function drawCurrentDayRoundedSideFrame(
   ctx,
   card,
   bottomY,
   lineWidth,
   color,
-  horizontalDirection
+  side,
+  radius
 ) {
-  const radius = currentDayFrameCornerRadius(card);
+  const boundedRadius = Math.max(
+    0,
+    Math.min(
+      radius,
+      card.width / 2,
+      Math.max(0, (bottomY - card.y) / 2)
+    )
+  );
   const curveFactor = 0.5522847498;
   const path = new Path();
-  const direction =
-    horizontalDirection === "left" ? "left" : "right";
+  const left = card.x;
+  const right = card.x + card.width;
 
-  if (direction === "left") {
-    // Quando a linha sai para a esquerda, os dois vértices
-    // acompanham a extremidade esquerda do cartão.
-    path.move(new Point(card.x + radius, card.y));
+  if (boundedRadius <= 0) {
+    const x = side === "right" ? right : left;
+    path.move(new Point(x, card.y));
+    path.addLine(new Point(x, bottomY));
+  } else if (side === "right") {
+    path.move(new Point(right - boundedRadius, card.y));
     path.addCurve(
-      new Point(card.x, card.y + radius),
+      new Point(right, card.y + boundedRadius),
       new Point(
-        card.x + radius - radius * curveFactor,
+        right - boundedRadius + boundedRadius * curveFactor,
         card.y
       ),
       new Point(
-        card.x,
-        card.y + radius - radius * curveFactor
+        right,
+        card.y + boundedRadius - boundedRadius * curveFactor
       )
     );
-    // Espelhamento exato da mesma curva no eixo vertical
-    // x = card.x, agora abrindo para a esquerda.
-    path.addLine(new Point(card.x, bottomY - radius));
+    path.addLine(
+      new Point(right, bottomY - boundedRadius)
+    );
     path.addCurve(
-      new Point(card.x - radius, bottomY),
+      new Point(right - boundedRadius, bottomY),
       new Point(
-        card.x,
-        bottomY - radius + radius * curveFactor
+        right,
+        bottomY - boundedRadius + boundedRadius * curveFactor
       ),
       new Point(
-        card.x - radius + radius * curveFactor,
+        right - boundedRadius + boundedRadius * curveFactor,
         bottomY
       )
     );
   } else {
-    // Quando a linha sai para a direita, os dois vértices
-    // acompanham a extremidade direita do cartão.
-    const right = card.x + card.width;
-    path.move(new Point(card.x + radius, card.y));
-    path.addLine(new Point(right - radius, card.y));
+    path.move(new Point(left + boundedRadius, card.y));
     path.addCurve(
-      new Point(right, card.y + radius),
+      new Point(left, card.y + boundedRadius),
       new Point(
-        right - radius + radius * curveFactor,
+        left + boundedRadius - boundedRadius * curveFactor,
         card.y
       ),
       new Point(
-        right,
-        card.y + radius - radius * curveFactor
+        left,
+        card.y + boundedRadius - boundedRadius * curveFactor
       )
     );
-    // Espelhamento exato da curva original no eixo vertical
-    // x = right: mesmos pontos, controles e raio, com x invertido.
-    path.addLine(new Point(right, bottomY - radius));
+    path.addLine(
+      new Point(left, bottomY - boundedRadius)
+    );
     path.addCurve(
-      new Point(right + radius, bottomY),
+      new Point(left + boundedRadius, bottomY),
       new Point(
-        right,
-        bottomY - radius + radius * curveFactor
+        left,
+        bottomY - boundedRadius + boundedRadius * curveFactor
       ),
       new Point(
-        right + radius - radius * curveFactor,
+        left + boundedRadius - boundedRadius * curveFactor,
         bottomY
       )
     );
@@ -2551,6 +2354,206 @@ function drawCurrentDayRoundedTopRightFrame(
   ctx.setLineWidth(lineWidth);
   ctx.addPath(path);
   ctx.strokePath();
+}
+
+function currentDayBridgeMetrics(
+  card,
+  boundaryX,
+  bridgeY,
+  radius,
+  horizontalDirection
+) {
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
+  const directionSign = direction === "right" ? 1 : -1;
+  const edgeX =
+    direction === "right"
+      ? card.x + card.width
+      : card.x;
+  const signedDistance =
+    direction === "right"
+      ? boundaryX - edgeX
+      : edgeX - boundaryX;
+  const outwardDistance = Math.max(0, signedDistance);
+  const bridgeRadius = Math.min(
+    Math.max(0, radius),
+    outwardDistance
+  );
+  const isFlexible =
+    outwardDistance > 0 &&
+    outwardDistance < Math.max(0, radius);
+  const endpointX =
+    isFlexible
+      ? boundaryX
+      : edgeX + directionSign * bridgeRadius;
+
+  return {
+    direction,
+    directionSign,
+    edgeX,
+    signedDistance,
+    outwardDistance,
+    bridgeRadius,
+    isFlexible,
+    endpointX,
+    startY: bridgeY - bridgeRadius,
+  };
+}
+
+function appendCurrentDayBridgeCurve(
+  path,
+  bridge,
+  bridgeY,
+  radius
+) {
+  if (
+    bridge.outwardDistance <= 0 ||
+    bridge.bridgeRadius <= 0
+  ) {
+    return;
+  }
+
+  const curveFactor = 0.5522847498;
+  if (!bridge.isFlexible) {
+    const endpoint = new Point(
+      bridge.endpointX,
+      bridgeY
+    );
+    path.addCurve(
+      endpoint,
+      new Point(
+        bridge.edgeX,
+        bridgeY - bridge.bridgeRadius +
+          bridge.bridgeRadius * curveFactor
+      ),
+      new Point(
+        bridge.endpointX -
+          bridge.directionSign *
+            bridge.bridgeRadius * curveFactor,
+        bridgeY
+      )
+    );
+    return;
+  }
+
+  // Quando a distância fica menor que o raio máximo, a ponte
+  // deixa de forçar um quarto de círculo. O ângulo de saída
+  // diminui gradualmente até zero quando as linhas coincidem.
+  const progress =
+    bridge.outwardDistance /
+    Math.max(0.0001, radius);
+  const endAngle =
+    (1 - Math.min(1, progress)) * Math.PI / 2;
+  const controlLength =
+    bridge.bridgeRadius *
+    (0.35 + 0.2022847498 * Math.min(1, progress));
+  const tangentX =
+    bridge.directionSign * Math.cos(endAngle);
+  const tangentY = Math.sin(endAngle);
+
+  path.addCurve(
+    new Point(bridge.endpointX, bridgeY),
+    new Point(
+      bridge.edgeX,
+      bridge.startY + controlLength
+    ),
+    new Point(
+      bridge.endpointX - tangentX * controlLength,
+      bridgeY - tangentY * controlLength
+    )
+  );
+}
+
+function drawCurrentDayRoundedTopRightFrame(
+  ctx,
+  card,
+  bridgeY,
+  lineWidth,
+  color,
+  horizontalDirection,
+  boundaryX,
+  radius
+) {
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
+  const curveFactor = 0.5522847498;
+  const bridge = currentDayBridgeMetrics(
+    card,
+    boundaryX,
+    bridgeY,
+    radius,
+    direction
+  );
+  const path = new Path();
+  const left = card.x;
+  const right = card.x + card.width;
+
+  if (direction === "left") {
+    // Espelhamento completo do trecho superior: a ponte
+    // nasce no lado esquerdo e a lateral oposta fica contínua.
+    if (radius <= 0) {
+      path.move(new Point(right, card.y));
+      path.addLine(new Point(left, card.y));
+    } else {
+      path.move(new Point(right - radius, card.y));
+      path.addLine(new Point(left + radius, card.y));
+      path.addCurve(
+        new Point(left, card.y + radius),
+        new Point(
+          left + radius - radius * curveFactor,
+          card.y
+        ),
+        new Point(
+          left,
+          card.y + radius - radius * curveFactor
+        )
+      );
+    }
+    path.addLine(
+      new Point(left, bridge.startY)
+    );
+    appendCurrentDayBridgeCurve(
+      path,
+      bridge,
+      bridgeY,
+      radius
+    );
+  } else {
+    if (radius <= 0) {
+      path.move(new Point(left, card.y));
+      path.addLine(new Point(right, card.y));
+    } else {
+      path.move(new Point(left + radius, card.y));
+      path.addLine(new Point(right - radius, card.y));
+      path.addCurve(
+        new Point(right, card.y + radius),
+        new Point(
+          right - radius + radius * curveFactor,
+          card.y
+        ),
+        new Point(
+          right,
+          card.y + radius - radius * curveFactor
+        )
+      );
+    }
+    path.addLine(
+      new Point(right, bridge.startY)
+    );
+    appendCurrentDayBridgeCurve(
+      path,
+      bridge,
+      bridgeY,
+      radius
+    );
+  }
+
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+
+  return bridge;
 }
 
 function currentDayFrameHorizontalDirection(
@@ -2566,102 +2569,38 @@ function drawCurrentDayFrame(ctx) {
   const {
     todayCard,
     boundaryX,
+    bridgeY,
+    frameRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
 
-  const todayCardRight = todayCard.x + todayCard.width;
   const horizontalDirection =
     currentDayFrameHorizontalDirection(
       todayCard,
       boundaryX
     );
-  const cornerRadius = currentDayFrameCornerRadius(todayCard);
-  const horizontalStartX =
-    horizontalDirection === "right"
-      ? todayCardRight + cornerRadius
-      : todayCard.x - cornerRadius;
-
-  // A linha superior usa a mesma coordenada da borda superior da Lua.
-  // Assim, a compressão vertical nunca desconecta os dois elementos.
-  const verticalFrameBottomY = dayBoundaryMoonBorderTopY();
-
-  // A curva acompanha o lado para o qual a linha horizontal realmente sai.
-  drawCurrentDayRoundedTopRightFrame(
+  const bridge = drawCurrentDayRoundedTopRightFrame(
     ctx,
     todayCard,
-    verticalFrameBottomY,
+    bridgeY,
     lineWidth,
     lineColor,
-    horizontalDirection
+    horizontalDirection,
+    boundaryX,
+    frameRadius
   );
 
-  // Linha que liga a moldura à virada do dia, para qualquer sentido.
+  // A linha sempre parte do ponto final efetivo da curva.
+  // Com pouco espaço, o próprio arco chega até a linha vertical.
   fillCurrentDayHorizontalLine(
     ctx,
-    horizontalStartX,
+    bridge.endpointX,
     boundaryX,
-    verticalFrameBottomY,
+    bridgeY,
     lineWidth,
     lineColor
   );
-
-}
-
-function drawCurrentDayUpperCornerForeground(ctx) {
-  const {
-    todayCard,
-    boundaryX,
-    lineWidth,
-    lineColor,
-  } = currentDayFrameMetrics();
-
-  const direction =
-    currentDayFrameHorizontalDirection(
-      todayCard,
-      boundaryX
-    );
-  const radius = currentDayFrameCornerRadius(todayCard);
-  const curveFactor = 0.5522847498;
-  const path = new Path();
-
-  if (direction === "left") {
-    // Redesenha somente o arco superior esquerdo, que pode ser
-    // parcialmente coberto pela máscara de recorte.
-    path.move(new Point(todayCard.x + radius, todayCard.y));
-    path.addCurve(
-      new Point(todayCard.x, todayCard.y + radius),
-      new Point(
-        todayCard.x + radius - radius * curveFactor,
-        todayCard.y
-      ),
-      new Point(
-        todayCard.x,
-        todayCard.y + radius - radius * curveFactor
-      )
-    );
-  } else {
-    // Redesenha somente o arco superior direito, que pode ser
-    // parcialmente coberto pela máscara de recorte.
-    const right = todayCard.x + todayCard.width;
-    path.move(new Point(right - radius, todayCard.y));
-    path.addCurve(
-      new Point(right, todayCard.y + radius),
-      new Point(
-        right - radius + radius * curveFactor,
-        todayCard.y
-      ),
-      new Point(
-        right,
-        todayCard.y + radius - radius * curveFactor
-      )
-    );
-  }
-
-  ctx.setStrokeColor(lineColor);
-  ctx.setLineWidth(lineWidth);
-  ctx.addPath(path);
-  ctx.strokePath();
 }
 
 function drawTitleDayCard(
