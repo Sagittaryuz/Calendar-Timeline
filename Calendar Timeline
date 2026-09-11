@@ -1966,9 +1966,7 @@ async function renderWidget(items, loadError) {
   drawIOSDarkGradient(contentCtx);
   // O fundo da timeline é composto dentro do próprio painel,
   // antes de qualquer astro, linha ou chart.
-  drawCurrentDayBottomLineUnderlay(contentCtx);
   drawDatePanel(contentCtx, loadResult.holidayDates);
-  drawCurrentDayFrame(contentCtx);
 
   const timelineImage = await renderTimelinePanel(items, loadError);
   contentCtx.drawImageInRect(
@@ -2010,10 +2008,10 @@ async function renderWidget(items, loadError) {
     currentDayFrame.lineWidth / 2
   );
 
-  // A imagem da timeline é composta depois da moldura e cobre a ponte
-  // superior na interface entre o título e os astros. Reaplicamos somente
-  // esse trecho após a composição, preservando o restante da moldura.
-  drawCurrentDayBridgeOverlay(contentCtx);
+  // Todas as partes da moldura são desenhadas depois da timeline.
+  // Assim, superior, ponte, laterais e inferior usam a mesma espessura
+  // e não são parcialmente cobertas pelo bitmap do painel.
+  drawCurrentDayFrameOverlay(contentCtx);
 
   // O cartão final já possui sua própria geometria arredondada.
 
@@ -2757,62 +2755,42 @@ function currentDayFrameHorizontalDirection(
     : "left";
 }
 
-function drawCurrentDayBridgeOverlay(ctx) {
+function drawCurrentDayFrameOverlay(ctx) {
+  // A moldura completa precisa ficar na camada de primeiro plano.
+  drawCurrentDayBottomLineUnderlay(ctx);
+  drawCurrentDayFrame(ctx);
+  drawCurrentDayBoundaryVerticalOverlay(ctx);
+}
+
+function drawCurrentDayBoundaryVerticalOverlay(ctx) {
   const {
-    todayCard,
     boundaryX,
-    bridgeY,
-    frameRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
 
-  const horizontalDirection =
-    currentDayFrameHorizontalDirection(
-      todayCard,
-      boundaryX
-    );
-  const bridge = currentDayBridgeMetrics(
-    todayCard,
-    boundaryX,
-    bridgeY,
-    frameRadius,
-    horizontalDirection
-  );
+  // A divisão vertical começa depois da borda inferior do astro e
+  // termina no topo do círculo da legenda. O círculo continua sendo
+  // desenhado sem ser coberto pela linha.
+  const lineTop =
+    CANVAS.timelineTop +
+    weatherIconCenterY() +
+    dayBoundaryAstroOuterRadius();
+  const lineBottom =
+    CANVAS.timelineTop +
+    bottomLegendCenterY() -
+    DAY_CHANGE_CIRCLE_DIAMETER / 2;
+  const rasterWidth = Math.max(1, Math.round(lineWidth));
+  const rasterLeftX = Math.round(boundaryX - rasterWidth / 2);
 
-  // Reaplica a transição curva entre a lateral da moldura e a ponte.
-  // Isso mantém o raio máximo e a flexibilização quando o espaço diminui.
-  if (
-    bridge.outwardDistance > 0 &&
-    bridge.bridgeRadius > 0
-  ) {
-    const path = new Path();
-    const edgeX =
-      horizontalDirection === "right"
-        ? todayCard.x + todayCard.width
-        : todayCard.x;
-    path.move(new Point(edgeX, bridge.startY));
-    appendCurrentDayBridgeCurve(
-      path,
-      bridge,
-      bridgeY,
-      frameRadius
-    );
-    ctx.setStrokeColor(lineColor);
-    ctx.setLineWidth(lineWidth);
-    ctx.addPath(path);
-    ctx.strokePath();
-  }
-
-  // A parte horizontal é desenhada por último para não ser coberta
-  // pelo bitmap opaco/translúcido da timeline.
-  fillCurrentDayHorizontalLine(
-    ctx,
-    bridge.endpointX,
-    boundaryX,
-    bridgeY,
-    lineWidth,
-    lineColor
+  ctx.setFillColor(lineColor);
+  ctx.fillRect(
+    new Rect(
+      rasterLeftX,
+      lineTop,
+      rasterWidth,
+      Math.max(1, lineBottom - lineTop)
+    )
   );
 }
 
