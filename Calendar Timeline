@@ -45,6 +45,7 @@ const SETTINGS = {
   nonTodayTimelineOverlayColor: "#5A5A5F",
   nonTodayTimelineOverlayOpacity: 0.64,
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
+  saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
   holidayTimelineBackgroundColor: "#3A2A00",
   primaryTextColor: "#FFFFFF",
@@ -1986,7 +1987,10 @@ function timelineBackgroundColorForDate(
     return SETTINGS.holidayTimelineBackgroundColor;
   }
   if (date.getDay() === 6) {
-    return SETTINGS.saturdayTimelineBackgroundColor;
+    return (
+      SETTINGS.saturdayTimelineBackgroundColor ??
+      SETTINGS.nonTodayTimelineOverlayColor
+    );
   }
   if (date.getDay() === 0) {
     return SETTINGS.sundayTimelineBackgroundColor;
