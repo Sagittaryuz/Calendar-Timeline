@@ -2393,7 +2393,11 @@ function drawTitleDayCard(
   isLast
 ) {
   const borderColor = new Color("#303136", 0.82);
-  const cardColor = new Color("#1D1D20", 0.92);
+  // Os outros dias usam exatamente o mesmo cinza neutro da timeline.
+  const cardColor = new Color(
+    SETTINGS.nonTodayTimelineOverlayColor,
+    1.0
+  );
 
   const cornerRadii = {
     topLeft: card.x <= CANVAS.marginX + 1 ? TITLE_CARD_OUTER_CORNER_RADIUS : TITLE_CARD_STANDARD_CORNER_RADIUS,
