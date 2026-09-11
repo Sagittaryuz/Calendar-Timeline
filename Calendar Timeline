@@ -41,8 +41,10 @@ const SETTINGS = {
   rainLineColor: "#14C1F5",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
+  // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
+  nonTodayTimelineOverlayColor: "#5A5A5F",
+  nonTodayTimelineOverlayOpacity: 0.64,
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
-  saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
   holidayTimelineBackgroundColor: "#3A2A00",
   primaryTextColor: "#FFFFFF",
@@ -1995,7 +1997,7 @@ function timelineBackgroundColorForDate(
 function drawTimelineBackground(ctx) {
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
-  const coloredHeight = thermalBandBottomY();
+  const todayKey = dateKey(startOfDay(windowStart));
 
   while (dayStart <= finalDay) {
     const dayEnd = addDays(dayStart, 1);
@@ -2007,22 +2009,24 @@ function drawTimelineBackground(ctx) {
     );
     const x0 = Math.max(0, timeToX(visibleStart));
     const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+    const isToday = dateKey(dayStart) === todayKey;
 
-    const backgroundColor = timelineBackgroundColorForDate(dayStart);
-    const isSpecialDay =
-      backgroundColor !== SETTINGS.timelineBackgroundColor;
-
-    // Dias comuns permanecem transparentes para revelar o gradiente original
-    // desenhado no fundo do widget. Mantemos apenas as tintas específicas
-    // de sábado, domingo e feriados.
-    if (x1 > x0 && isSpecialDay) {
-      ctx.setFillColor(new Color(backgroundColor, 1.0));
+    // O HOJE permanece transparente para revelar o gradiente completo.
+    // Os demais dias recebem um cinza translúcido em toda a altura da
+    // timeline, reduzindo a visibilidade do fundo sem esconder os charts.
+    if (x1 > x0 && !isToday) {
+      ctx.setFillColor(
+        new Color(
+          SETTINGS.nonTodayTimelineOverlayColor,
+          SETTINGS.nonTodayTimelineOverlayOpacity
+        )
+      );
       ctx.fillRect(
         new Rect(
           CANVAS.plotLeft + x0,
           CANVAS.timelineTop,
           x1 - x0,
-          coloredHeight
+          timelineHeight()
         )
       );
     }
