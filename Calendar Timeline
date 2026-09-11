@@ -2009,6 +2009,9 @@ async function renderWidget(items, loadError) {
     )
   );
 
+  // A máscara recorta os astros, mas não pode esconder a espessura da curva.
+  drawCurrentDayUpperCornerForeground(contentCtx);
+
   // O cartão final já possui sua própria geometria arredondada.
 
   return contentCtx.getImage();
@@ -2603,6 +2606,62 @@ function drawCurrentDayFrame(ctx) {
     lineColor
   );
 
+}
+
+function drawCurrentDayUpperCornerForeground(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  const direction =
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
+  const radius = currentDayFrameCornerRadius(todayCard);
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  if (direction === "left") {
+    // Redesenha somente o arco superior esquerdo, que pode ser
+    // parcialmente coberto pela máscara de recorte.
+    path.move(new Point(todayCard.x + radius, todayCard.y));
+    path.addCurve(
+      new Point(todayCard.x, todayCard.y + radius),
+      new Point(
+        todayCard.x + radius - radius * curveFactor,
+        todayCard.y
+      ),
+      new Point(
+        todayCard.x,
+        todayCard.y + radius - radius * curveFactor
+      )
+    );
+  } else {
+    // Redesenha somente o arco superior direito, que pode ser
+    // parcialmente coberto pela máscara de recorte.
+    const right = todayCard.x + todayCard.width;
+    path.move(new Point(right - radius, todayCard.y));
+    path.addCurve(
+      new Point(right, todayCard.y + radius),
+      new Point(
+        right - radius + radius * curveFactor,
+        todayCard.y
+      ),
+      new Point(
+        right,
+        todayCard.y + radius - radius * curveFactor
+      )
+    );
+  }
+
+  ctx.setStrokeColor(lineColor);
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
 }
 
 function drawTitleDayCard(
