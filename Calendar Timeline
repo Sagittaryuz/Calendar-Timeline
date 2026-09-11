@@ -2010,15 +2010,21 @@ function drawTimelineBackground(ctx) {
     const x0 = Math.max(0, timeToX(visibleStart));
     const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
     const isToday = dateKey(dayStart) === todayKey;
+    const backgroundColor = timelineBackgroundColorForDate(dayStart);
+    const isSpecialDay =
+      backgroundColor !== SETTINGS.timelineBackgroundColor;
 
-    // O HOJE permanece transparente para revelar o gradiente completo.
-    // Os demais dias recebem um cinza translúcido em toda a altura da
-    // timeline, reduzindo a visibilidade do fundo sem esconder os charts.
-    if (x1 > x0 && !isToday) {
+    // O HOJE comum mantém o gradiente. Sábados, domingos e feriados
+    // conservam suas cores próprias mesmo quando não são o dia atual.
+    if (x1 > x0 && (isSpecialDay || !isToday)) {
       ctx.setFillColor(
         new Color(
-          SETTINGS.nonTodayTimelineOverlayColor,
-          SETTINGS.nonTodayTimelineOverlayOpacity
+          isSpecialDay
+            ? backgroundColor
+            : SETTINGS.nonTodayTimelineOverlayColor,
+          isSpecialDay
+            ? 1.0
+            : SETTINGS.nonTodayTimelineOverlayOpacity
         )
       );
       ctx.fillRect(
@@ -2393,9 +2399,15 @@ function drawTitleDayCard(
   isLast
 ) {
   const borderColor = new Color("#303136", 0.82);
-  // Os outros dias usam exatamente o mesmo cinza neutro da timeline.
+  const dayBackgroundColor = timelineBackgroundColorForDate(date);
+  const isSpecialDay =
+    dayBackgroundColor !== SETTINGS.timelineBackgroundColor;
+  // Dias úteis não atuais usam o cinza da timeline; sábado, domingo e
+  // feriado preservam respectivamente azul, vermelho e amarelo.
   const cardColor = new Color(
-    SETTINGS.nonTodayTimelineOverlayColor,
+    isSpecialDay
+      ? dayBackgroundColor
+      : SETTINGS.nonTodayTimelineOverlayColor,
     1.0
   );
 
@@ -2409,7 +2421,7 @@ function drawTitleDayCard(
 
   // O cartão de hoje permanece transparente para revelar exatamente
   // o fundo do widget que existe atrás dos astros.
-  if (!isSelected) {
+  if (!isSelected || isSpecialDay) {
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
       card.x + 2,
