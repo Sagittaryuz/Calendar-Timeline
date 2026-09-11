@@ -6686,12 +6686,16 @@ function drawTimelineDayBoundariesOnTop(ctx) {
     if (tick.getHours() !== 0) continue;
 
     const x = timelineLegendCenterX(tick);
+    const rasterWidth = Math.max(1, Math.round(lineWidth));
+    // O início inteiro impede que o antialiasing reduza visualmente
+    // a divisão de meia-noite em uma coluna mais fina.
+    const rasterLeftX = Math.round(x - rasterWidth / 2);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
-        x - lineWidth / 2,
+        rasterLeftX,
         lineTop,
-        lineWidth,
+        rasterWidth,
         Math.max(1, lineBottom - lineTop)
       )
     );
