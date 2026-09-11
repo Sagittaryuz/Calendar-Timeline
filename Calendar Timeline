@@ -2418,40 +2418,72 @@ function drawCurrentDayRoundedTopRightFrame(
   card,
   bottomY,
   lineWidth,
-  color
+  color,
+  horizontalDirection
 ) {
   const radius = currentDayFrameCornerRadius(card);
-  const right = card.x + card.width;
   const curveFactor = 0.5522847498;
   const path = new Path();
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
 
-  // O mesmo raio é aplicado no canto superior e no canto inferior
-  // da extremidade direita. A linha deixa de terminar em ângulo reto.
-  path.move(new Point(card.x + radius, card.y));
-  path.addLine(new Point(right - radius, card.y));
-  path.addCurve(
-    new Point(right, card.y + radius),
-    new Point(
-      right - radius + radius * curveFactor,
-      card.y
-    ),
-    new Point(
-      right,
-      card.y + radius - radius * curveFactor
-    )
-  );
-  path.addLine(new Point(right, bottomY - radius));
-  path.addCurve(
-    new Point(right - radius, bottomY),
-    new Point(
-      right,
-      bottomY - radius + radius * curveFactor
-    ),
-    new Point(
-      right - radius + radius * curveFactor,
-      bottomY
-    )
-  );
+  if (direction === "left") {
+    // Quando a linha sai para a esquerda, os dois vértices
+    // acompanham a extremidade esquerda do cartão.
+    path.move(new Point(card.x + radius, card.y));
+    path.addCurve(
+      new Point(card.x, card.y + radius),
+      new Point(
+        card.x + radius - radius * curveFactor,
+        card.y
+      ),
+      new Point(
+        card.x,
+        card.y + radius - radius * curveFactor
+      )
+    );
+    path.addLine(new Point(card.x, bottomY - radius));
+    path.addCurve(
+      new Point(card.x + radius, bottomY),
+      new Point(
+        card.x,
+        bottomY - radius + radius * curveFactor
+      ),
+      new Point(
+        card.x + radius - radius * curveFactor,
+        bottomY
+      )
+    );
+  } else {
+    // Quando a linha sai para a direita, os dois vértices
+    // acompanham a extremidade direita do cartão.
+    const right = card.x + card.width;
+    path.move(new Point(card.x + radius, card.y));
+    path.addLine(new Point(right - radius, card.y));
+    path.addCurve(
+      new Point(right, card.y + radius),
+      new Point(
+        right - radius + radius * curveFactor,
+        card.y
+      ),
+      new Point(
+        right,
+        card.y + radius - radius * curveFactor
+      )
+    );
+    path.addLine(new Point(right, bottomY - radius));
+    path.addCurve(
+      new Point(right - radius, bottomY),
+      new Point(
+        right,
+        bottomY - radius + radius * curveFactor
+      ),
+      new Point(
+        right - radius + radius * curveFactor,
+        bottomY
+      )
+    );
+  }
 
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
@@ -2468,25 +2500,34 @@ function drawCurrentDayFrame(ctx) {
   } = currentDayFrameMetrics();
 
   const todayCardRight = todayCard.x + todayCard.width;
+  const todayCardCenterX =
+    todayCard.x + todayCard.width / 2;
+  const horizontalDirection =
+    boundaryX >= todayCardCenterX ? "right" : "left";
+  const cornerRadius = currentDayFrameCornerRadius(todayCard);
+  const horizontalStartX =
+    horizontalDirection === "right"
+      ? todayCardRight - cornerRadius
+      : todayCard.x + cornerRadius;
+
   // A linha superior usa a mesma coordenada da borda superior da Lua.
   // Assim, a compressão vertical nunca desconecta os dois elementos.
   const verticalFrameBottomY = dayBoundaryMoonBorderTopY();
 
-  // Mantém a moldura aberta do dia atual com o raio proporcional
-  // ao cartão comprimido no eixo vertical.
+  // A curva acompanha o lado para o qual a linha horizontal realmente sai.
   drawCurrentDayRoundedTopRightFrame(
     ctx,
     todayCard,
     verticalFrameBottomY,
     lineWidth,
-    lineColor
+    lineColor,
+    horizontalDirection
   );
 
-  // Linha que liga a base direita do cartão ao eixo da Lua.
-  // O sentido pode ser para a esquerda ou para a direita, conforme o horário.
+  // Linha que liga a moldura à virada do dia, para qualquer sentido.
   fillCurrentDayHorizontalLine(
     ctx,
-    todayCardRight - currentDayFrameCornerRadius(todayCard),
+    horizontalStartX,
     boundaryX,
     verticalFrameBottomY,
     lineWidth,
