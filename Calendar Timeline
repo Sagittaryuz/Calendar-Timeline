@@ -2042,8 +2042,11 @@ function restoreRoundedSideCorners(
 
   for (let row = 0; row < rect.height; row++) {
     const sampleY = row + 0.5;
-    let outsideStart = left;
-    let outsideEnd = right;
+    // Fora das duas extremidades, não há máscara: a linha central
+    // deve permanecer intacta. A versão anterior iniciava no retângulo
+    // inteiro e repintava toda a timeline com o gradiente.
+    let outsideStart = direction === "right" ? right : left;
+    let outsideEnd = direction === "left" ? left : right;
 
     if (
       sampleY < boundedRadius ||
