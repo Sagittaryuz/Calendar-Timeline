@@ -1964,7 +1964,8 @@ async function renderWidget(items, loadError) {
   // O gradiente precisa ser a primeira camada. O restante do widget é
   // desenhado depois, sem deslocar o composto inteiro.
   drawIOSDarkGradient(contentCtx);
-  drawTimelineBackground(contentCtx);
+  // O fundo da timeline é composto dentro do próprio painel,
+  // antes de qualquer astro, linha ou chart.
   drawCurrentDayBottomLineUnderlay(contentCtx);
   drawDatePanel(contentCtx, loadResult.holidayDates);
   drawCurrentDayFrame(contentCtx);
@@ -2122,7 +2123,10 @@ function timelineBackgroundColorForDate(
   return SETTINGS.timelineBackgroundColor;
 }
 
-function drawTimelineBackground(ctx) {
+function drawTimelineBackground(
+  ctx,
+  localToTimeline = false
+) {
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
   const todayKey = dateKey(startOfDay(windowStart));
@@ -2157,8 +2161,12 @@ function drawTimelineBackground(ctx) {
       );
       ctx.fillRect(
         new Rect(
-          CANVAS.plotLeft + x0,
-          CANVAS.timelineTop,
+          localToTimeline
+            ? x0
+            : CANVAS.plotLeft + x0,
+          localToTimeline
+            ? 0
+            : CANVAS.timelineTop,
           x1 - x0,
           timelineHeight()
         )
@@ -6019,6 +6027,10 @@ async function renderTimelinePanel(items, loadError) {
   ctx.size = new Size(timelineWidth(), timelineHeight());
   ctx.opaque = false;
   ctx.respectScreenScale = false;
+
+  // Primeira camada do painel: o background dos dias.
+  // Todos os elementos desenhados abaixo ficam acima dele.
+  drawTimelineBackground(ctx, true);
 
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
