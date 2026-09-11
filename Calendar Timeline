@@ -2106,6 +2106,193 @@ function restoreRoundedSideCorners(
   }
 }
 
+function restoreRoundedRightCorners(ctx, rect, radius) {
+  restoreRoundedSideCorners(ctx, rect, radius, "right");
+}
+
+function timelineBackgroundColorForDate(
+  date,
+  holidayDates = loadResult.holidayDates
+) {
+  if (holidayDates?.has(dateKey(date))) {
+    return SETTINGS.holidayTimelineBackgroundColor;
+  }
+  if (date.getDay() === 6) {
+    return (
+      SETTINGS.saturdayTimelineBackgroundColor ??
+      SETTINGS.nonTodayTimelineOverlayColor
+    );
+  }
+  if (date.getDay() === 0) {
+    return SETTINGS.sundayTimelineBackgroundColor;
+  }
+  return SETTINGS.timelineBackgroundColor;
+}
+
+function drawTimelineBackground(
+  ctx,
+  localToTimeline = false
+) {
+  let dayStart = startOfDay(windowStart);
+  const finalDay = startOfDay(windowEnd);
+  const todayKey = dateKey(startOfDay(windowStart));
+
+  while (dayStart <= finalDay) {
+    const dayEnd = addDays(dayStart, 1);
+    const visibleStart = new Date(
+      Math.max(dayStart.getTime(), windowStart.getTime())
+    );
+    const visibleEnd = new Date(
+      Math.min(dayEnd.getTime(), windowEnd.getTime())
+    );
+    const x0 = Math.max(0, timeToX(visibleStart));
+    const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
+    const isToday = dateKey(dayStart) === todayKey;
+    const backgroundColor = timelineBackgroundColorForDate(dayStart);
+    const isSpecialDay =
+      backgroundColor !== SETTINGS.timelineBackgroundColor;
+
+    // O HOJE comum mantém o gradiente. Sábados, domingos e feriados
+    // conservam suas cores próprias mesmo quando não são o dia atual.
+    if (x1 > x0 && (isSpecialDay || !isToday)) {
+      ctx.setFillColor(
+        new Color(
+          isSpecialDay
+            ? backgroundColor
+            : SETTINGS.nonTodayTimelineOverlayColor,
+          isSpecialDay
+            ? 1.0
+            : SETTINGS.nonTodayTimelineOverlayOpacity
+        )
+      );
+      ctx.fillRect(
+        new Rect(
+          localToTimeline
+            ? x0
+            : CANVAS.plotLeft + x0,
+          localToTimeline
+            ? 0
+            : CANVAS.timelineTop,
+          x1 - x0,
+          timelineHeight()
+        )
+      );
+    }
+    dayStart = dayEnd;
+  }
+}
+
+function widgetGradientColorAtY(y) {
+  const locations =
+    THEME_MODE === "black"
+      ? [0.0, 0.2, 1.0]
+      : [0.0, 0.5, 1.0];
+  const colors =
+    THEME_MODE === "black"
+      ? ["#1C1C1C", "#161616", "#000000"]
+      : ["#383838", "#212121", "#181818"];
+  const position = Math.max(
+    0,
+    Math.min(1, y / Math.max(1, CANVAS.height - 1))
+  );
+  let segment = 0;
+
+  while (
+    segment < locations.length - 2 &&
+    position > locations[segment + 1]
+  ) {
+    segment++;
+  }
+
+  const start = locations[segment];
+  const end = locations[segment + 1];
+  const progress = Math.max(
+    0,
+    Math.min(1, (position - start) / Math.max(0.0001, end - start))
+  );
+
+  return new Color(
+    interpolateHexColor(colors[segment], colors[segment + 1], progress),
+    1.0
+  );
+}
+
+function drawIOSDarkGradient(ctx) {
+  for (let y = 0; y < CANVAS.height; y++) {
+    ctx.setFillColor(widgetGradientColorAtY(y));
+    ctx.fillRect(new Rect(0, y, CANVAS.width, 1));
+  }
+}
+
+function interpolateHexColor(startHex, endHex, progress) {
+  const start = hexToRGB(startHex);
+  const end = hexToRGB(endHex);
+  const channel = (from, to) =>
+    Math.round(from + (to - from) * progress)
+      .toString(16)
+      .padStart(2, "0");
+
+  return (
+    "#" +
+    channel(start.r, end.r) +
+    channel(start.g, end.g) +
+    channel(start.b, end.b)
+  );
+}
+
+function hexToRGB(hex) {
+  const value = hex.replace("#", "");
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+  };
+}
+
+function titleDayCardRect(index) {
+  const cardCount = 4;
+  const cardGap = 8;
+  const cardsLeft = CANVAS.marginX;
+  const cardsRight = CANVAS.width - CANVAS.marginX;
+  const cardWidth =
+    (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
+    cardCount;
+
+  // A linha superior do dia atual é um traço centrado na borda,
+  // então os demais quadros sobem metade da espessura para alinhar
+  // seus limites visuais superiores.
+  const titleCardTop =
+    index === 0
+      ? WIDGET_CONTENT_TOP_MARGIN
+      : WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+
+  return new Rect(
+    cardsLeft + index * (cardWidth + cardGap),
+    titleCardTop,
+    cardWidth,
+    TITLE_CARD_HEIGHT
+  );
+}
+
+function drawDatePanel(ctx, holidayDates) {
+  // A área do título agora é uma faixa compacta de previsão. O restante
+  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
+  const cardCount = 4;
+  const firstDay = startOfDay(windowStart);
+
+  for (let index = 0; index < cardCount; index++) {
+    const date = addDays(firstDay, index);
+    drawTitleDayCard(
+      ctx,
+      date,
+      titleDayCardRect(index),
+      index === 0,
+      index === cardCount - 1
+    );
+  }
+}
+
+
 function currentDayFrameMetrics() {
   const todayCard = titleDayCardRect(0);
   const todayBoundary = startOfDay(windowStart);
