@@ -8120,8 +8120,10 @@ function compactEventHourMarkers() {
 }
 
 function dayBoundaryLineWidth() {
-  // A espessura acompanha a mesma escala vertical dos demais elementos.
-  return scaleVertical(4);
+  // A linha estrutural usa quatro pixels reais em todas as primitivas.
+  // O valor inteiro evita diferenças de rasterização entre fillRect,
+  // strokePath e strokeEllipse depois da compressão vertical do layout.
+  return 4;
 }
 
 function hourGridLineColor(tick) {
@@ -8548,19 +8550,17 @@ function drawHourAxis(ctx, items) {
   const gridBottom = thermalBandBottomY();
 
   for (const tick of ticks) {
-    const x = timelineLegendCenterX(tick);
     const hour = tick.getHours();
-    const isMidnight = hour === 0;
+
+    // A divisão de meia-noite é desenhada uma única vez pela camada
+    // estrutural, que também continua a linha até o aro da Lua e o círculo.
+    if (hour === 0) continue;
+
+    const x = timelineLegendCenterX(tick);
     const isNoon = hour === 12;
 
     ctx.setStrokeColor(hourGridLineColor(tick));
-    ctx.setLineWidth(
-      isMidnight
-        ? dayBoundaryLineWidth()
-        : isNoon
-          ? 2
-          : 1
-    );
+    ctx.setLineWidth(isNoon ? 2 : 1);
     ctx.strokeRect(
       new Rect(
         x,
