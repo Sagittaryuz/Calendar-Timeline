@@ -1998,23 +1998,9 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O último cartão e o painel da timeline mantêm seus dois vértices
-  // direitos arredondados; o mesmo recorte vale para os astros.
-  restoreRoundedRightCorners(
-    contentCtx,
-    titleDayCardRect(3),
-    TITLE_CARD_OUTER_CORNER_RADIUS
-  );
-  restoreRoundedRightCorners(
-    contentCtx,
-    new Rect(
-      CANVAS.plotLeft,
-      CANVAS.timelineTop,
-      timelineWidth(),
-      timelineHeight()
-    ),
-    TITLE_CARD_OUTER_CORNER_RADIUS
-  );
+  // O cartão final já possui sua própria geometria arredondada.
+  // Não reaplicamos máscara externa sobre a timeline: isso criava um
+  // resquício perpendicular na borda superior do painel.
 
   return contentCtx.getImage();
 }
