@@ -1743,7 +1743,8 @@ function isExtendedDetailedMode() {
 }
 
 function usesEvenHourCadence() {
-  return windowHours >= 24;
+  // Janelas de até 12 horas exibem todos os elementos de hora em hora.
+  return windowHours > 12;
 }
 
 function itemImportance(item) {
@@ -3612,7 +3613,7 @@ function drawThermalCurve(
 
 function thermalLabelTicks(ticks) {
   if (usesEvenHourCadence()) {
-    // A partir de 24 h, os textos aparecem somente nas horas pares.
+    // Acima de 12 h, os textos aparecem somente nas horas pares.
     return ticks.filter((tick) => tick.getHours() % 2 === 0);
   }
 
@@ -3944,7 +3945,7 @@ function weatherForecastNearest(hours, timestamp) {
 }
 
 function weatherConditionTicks(weather) {
-  // A partir de 24 horas, os ícones também acompanham somente horas pares.
+  // Acima de 12 horas, os ícones também acompanham somente horas pares.
   const stepHours = usesEvenHourCadence() ? 2 : 1;
   const ticks = [];
   let tick = floorToHour(windowStart);
@@ -7878,7 +7879,7 @@ function daylightHourColor(tick) {
 }
 
 function isSecondaryNightLegendHour(hour) {
-  // Abaixo de 24 horas, toda a faixa noturna — 18:00 a 06:00,
+  // Em janelas de até 12 horas, toda a faixa noturna — 18:00 a 06:00,
   // incluindo os dois limites — usa o mesmo cinza.
   if (!usesEvenHourCadence()) {
     return (
