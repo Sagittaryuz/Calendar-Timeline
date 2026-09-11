@@ -1984,6 +1984,21 @@ async function renderWidget(items, loadError) {
   // dois vértices direitos precisam respeitar o raio visual do widget.
   // Recompomos os pixels externos com o gradiente original: isso funciona
   // como uma máscara real sem deixar quinas perpendiculares.
+  // A curva da moldura do dia atual também funciona como limite
+  // visual dos astros e demais elementos do cartão selecionado.
+  const currentDayFrame = currentDayFrameMetrics();
+  restoreRoundedSideCorners(
+    contentCtx,
+    currentDayFrame.todayCard,
+    TITLE_CARD_OUTER_CORNER_RADIUS,
+    currentDayFrameHorizontalDirection(
+      currentDayFrame.todayCard,
+      currentDayFrame.boundaryX
+    )
+  );
+
+  // O último cartão e o painel da timeline mantêm seus dois vértices
+  // direitos arredondados; o mesmo recorte vale para os astros.
   restoreRoundedRightCorners(
     contentCtx,
     titleDayCardRect(3),
@@ -2003,34 +2018,40 @@ async function renderWidget(items, loadError) {
   return contentCtx.getImage();
 }
 
-function restoreRoundedRightCorners(ctx, rect, radius) {
+function restoreRoundedSideCorners(
+  ctx,
+  rect,
+  radius,
+  side
+) {
+  const direction = side === "left" ? "left" : "right";
   const boundedRadius = Math.max(
     0,
     Math.min(radius, rect.width / 2, rect.height / 2)
   );
   if (boundedRadius <= 0) return;
 
+  const left = rect.x;
   const right = rect.x + rect.width;
   const top = rect.y;
-  const circleCenterX = right - boundedRadius;
+  const circleCenterX =
+    direction === "left"
+      ? left + boundedRadius
+      : right - boundedRadius;
 
   for (let row = 0; row < rect.height; row++) {
     const sampleY = row + 0.5;
-    let outsideStart = right;
+    let outsideStart = left;
+    let outsideEnd = right;
 
-    if (sampleY < boundedRadius) {
-      const distanceFromCenter = boundedRadius - sampleY;
-      const horizontalDistance = Math.sqrt(
-        Math.max(
-          0,
-          boundedRadius * boundedRadius -
-            distanceFromCenter * distanceFromCenter
-        )
-      );
-      outsideStart = circleCenterX + horizontalDistance;
-    } else if (sampleY > rect.height - boundedRadius) {
+    if (
+      sampleY < boundedRadius ||
+      sampleY > rect.height - boundedRadius
+    ) {
       const distanceFromCenter =
-        sampleY - (rect.height - boundedRadius);
+        sampleY < boundedRadius
+          ? boundedRadius - sampleY
+          : sampleY - (rect.height - boundedRadius);
       const horizontalDistance = Math.sqrt(
         Math.max(
           0,
@@ -2038,21 +2059,48 @@ function restoreRoundedRightCorners(ctx, rect, radius) {
             distanceFromCenter * distanceFromCenter
         )
       );
-      outsideStart = circleCenterX + horizontalDistance;
+
+      if (direction === "right") {
+        outsideStart = circleCenterX + horizontalDistance;
+      } else {
+        outsideEnd = circleCenterX - horizontalDistance;
+      }
     }
 
-    if (outsideStart >= right) continue;
+    if (
+      direction === "right" &&
+      outsideStart < right
+    ) {
+      ctx.setFillColor(widgetGradientColorAtY(top + row));
+      ctx.fillRect(
+        new Rect(
+          outsideStart,
+          top + row,
+          right - outsideStart,
+          1
+        )
+      );
+    }
 
-    ctx.setFillColor(widgetGradientColorAtY(top + row));
-    ctx.fillRect(
-      new Rect(
-        outsideStart,
-        top + row,
-        right - outsideStart,
-        1
-      )
-    );
+    if (
+      direction === "left" &&
+      outsideEnd > left
+    ) {
+      ctx.setFillColor(widgetGradientColorAtY(top + row));
+      ctx.fillRect(
+        new Rect(
+          left,
+          top + row,
+          outsideEnd - left,
+          1
+        )
+      );
+    }
   }
+}
+
+function restoreRoundedRightCorners(ctx, rect, radius) {
+  restoreRoundedSideCorners(ctx, rect, radius, "right");
 }
 
 function timelineBackgroundColorForDate(
@@ -2495,6 +2543,15 @@ function drawCurrentDayRoundedTopRightFrame(
   ctx.strokePath();
 }
 
+function currentDayFrameHorizontalDirection(
+  card,
+  boundaryX
+) {
+  return boundaryX >= card.x + card.width / 2
+    ? "right"
+    : "left";
+}
+
 function drawCurrentDayFrame(ctx) {
   const {
     todayCard,
@@ -2504,10 +2561,11 @@ function drawCurrentDayFrame(ctx) {
   } = currentDayFrameMetrics();
 
   const todayCardRight = todayCard.x + todayCard.width;
-  const todayCardCenterX =
-    todayCard.x + todayCard.width / 2;
   const horizontalDirection =
-    boundaryX >= todayCardCenterX ? "right" : "left";
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
   const cornerRadius = currentDayFrameCornerRadius(todayCard);
   const horizontalStartX =
     horizontalDirection === "right"
