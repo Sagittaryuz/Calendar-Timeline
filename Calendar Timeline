@@ -1980,7 +1980,79 @@ async function renderWidget(items, loadError) {
     )
   );
 
+  // A timeline é uma superfície retangular internamente, mas seus
+  // dois vértices direitos precisam respeitar o raio visual do widget.
+  // Recompomos os pixels externos com o gradiente original: isso funciona
+  // como uma máscara real sem deixar quinas perpendiculares.
+  restoreRoundedRightCorners(
+    contentCtx,
+    titleDayCardRect(3),
+    TITLE_CARD_OUTER_CORNER_RADIUS
+  );
+  restoreRoundedRightCorners(
+    contentCtx,
+    new Rect(
+      CANVAS.plotLeft,
+      CANVAS.timelineTop,
+      timelineWidth(),
+      timelineHeight()
+    ),
+    TITLE_CARD_OUTER_CORNER_RADIUS
+  );
+
   return contentCtx.getImage();
+}
+
+function restoreRoundedRightCorners(ctx, rect, radius) {
+  const boundedRadius = Math.max(
+    0,
+    Math.min(radius, rect.width / 2, rect.height / 2)
+  );
+  if (boundedRadius <= 0) return;
+
+  const right = rect.x + rect.width;
+  const top = rect.y;
+  const circleCenterX = right - boundedRadius;
+
+  for (let row = 0; row < rect.height; row++) {
+    const sampleY = row + 0.5;
+    let outsideStart = right;
+
+    if (sampleY < boundedRadius) {
+      const distanceFromCenter = boundedRadius - sampleY;
+      const horizontalDistance = Math.sqrt(
+        Math.max(
+          0,
+          boundedRadius * boundedRadius -
+            distanceFromCenter * distanceFromCenter
+        )
+      );
+      outsideStart = circleCenterX + horizontalDistance;
+    } else if (sampleY > rect.height - boundedRadius) {
+      const distanceFromCenter =
+        sampleY - (rect.height - boundedRadius);
+      const horizontalDistance = Math.sqrt(
+        Math.max(
+          0,
+          boundedRadius * boundedRadius -
+            distanceFromCenter * distanceFromCenter
+        )
+      );
+      outsideStart = circleCenterX + horizontalDistance;
+    }
+
+    if (outsideStart >= right) continue;
+
+    ctx.setFillColor(widgetGradientColorAtY(top + row));
+    ctx.fillRect(
+      new Rect(
+        outsideStart,
+        top + row,
+        right - outsideStart,
+        1
+      )
+    );
+  }
 }
 
 function timelineBackgroundColorForDate(
@@ -2048,7 +2120,7 @@ function drawTimelineBackground(ctx) {
   }
 }
 
-function drawIOSDarkGradient(ctx) {
+function widgetGradientColorAtY(y) {
   const locations =
     THEME_MODE === "black"
       ? [0.0, 0.2, 1.0]
@@ -2057,28 +2129,34 @@ function drawIOSDarkGradient(ctx) {
     THEME_MODE === "black"
       ? ["#1C1C1C", "#161616", "#000000"]
       : ["#383838", "#212121", "#181818"];
+  const position = Math.max(
+    0,
+    Math.min(1, y / Math.max(1, CANVAS.height - 1))
+  );
+  let segment = 0;
 
+  while (
+    segment < locations.length - 2 &&
+    position > locations[segment + 1]
+  ) {
+    segment++;
+  }
+
+  const start = locations[segment];
+  const end = locations[segment + 1];
+  const progress = Math.max(
+    0,
+    Math.min(1, (position - start) / Math.max(0.0001, end - start))
+  );
+
+  return new Color(
+    interpolateHexColor(colors[segment], colors[segment + 1], progress)
+  );
+}
+
+function drawIOSDarkGradient(ctx) {
   for (let y = 0; y < CANVAS.height; y++) {
-    const position = y / Math.max(1, CANVAS.height - 1);
-    let segment = 0;
-
-    while (
-      segment < locations.length - 2 &&
-      position > locations[segment + 1]
-    ) {
-      segment++;
-    }
-
-    const start = locations[segment];
-    const end = locations[segment + 1];
-    const progress = Math.max(
-      0,
-      Math.min(1, (position - start) / Math.max(0.0001, end - start))
-    );
-
-    ctx.setFillColor(
-      new Color(interpolateHexColor(colors[segment], colors[segment + 1], progress))
-    );
+    ctx.setFillColor(widgetGradientColorAtY(y));
     ctx.fillRect(new Rect(0, y, CANVAS.width, 1));
   }
 }
@@ -2347,8 +2425,8 @@ function drawCurrentDayRoundedTopRightFrame(
   const curveFactor = 0.5522847498;
   const path = new Path();
 
-  // O canto superior direito usa o mesmo raio de 52 px
-  // dos demais cartões; a curva esquerda é desenhada no underlay.
+  // O mesmo raio é aplicado no canto superior e no canto inferior
+  // da extremidade direita. A linha deixa de terminar em ângulo reto.
   path.move(new Point(card.x + radius, card.y));
   path.addLine(new Point(right - radius, card.y));
   path.addCurve(
@@ -2362,13 +2440,23 @@ function drawCurrentDayRoundedTopRightFrame(
       card.y + radius - radius * curveFactor
     )
   );
-  path.addLine(new Point(right, bottomY));
+  path.addLine(new Point(right, bottomY - radius));
+  path.addCurve(
+    new Point(right - radius, bottomY),
+    new Point(
+      right,
+      bottomY - radius + radius * curveFactor
+    ),
+    new Point(
+      right - radius + radius * curveFactor,
+      bottomY
+    )
+  );
 
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
   ctx.addPath(path);
   ctx.strokePath();
-
 }
 
 function drawCurrentDayFrame(ctx) {
@@ -2398,7 +2486,7 @@ function drawCurrentDayFrame(ctx) {
   // O sentido pode ser para a esquerda ou para a direita, conforme o horário.
   fillCurrentDayHorizontalLine(
     ctx,
-    todayCardRight,
+    todayCardRight - currentDayFrameCornerRadius(todayCard),
     boundaryX,
     verticalFrameBottomY,
     lineWidth,
