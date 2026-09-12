@@ -1979,19 +1979,28 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O painel da timeline é composto em um retângulo, mas seus dois cantos
-  // direitos precisam acompanhar o raio visual. Recompomos somente a área
-  // externa dos cantos com o gradiente explicitamente opaco, sem tocar na
-  // faixa central do painel.
-  restoreRoundedRightCorners(
+  // O painel da timeline é composto em um retângulo, mas as quatro
+  // extremidades precisam acompanhar o mesmo raio visual dos cartões.
+  // Recompomos somente as áreas externas dos cantos com o gradiente,
+  // truncando a legenda e as linhas superior/inferior sem deixar cortes
+  // quadrados nas bordas.
+  const timelineRect = new Rect(
+    CANVAS.plotLeft,
+    CANVAS.timelineTop,
+    timelineWidth(),
+    timelineHeight()
+  );
+  restoreRoundedSideCorners(
     contentCtx,
-    new Rect(
-      CANVAS.plotLeft,
-      CANVAS.timelineTop,
-      timelineWidth(),
-      timelineHeight()
-    ),
-    TITLE_CARD_OUTER_CORNER_RADIUS
+    timelineRect,
+    TITLE_CARD_OUTER_CORNER_RADIUS,
+    "left"
+  );
+  restoreRoundedSideCorners(
+    contentCtx,
+    timelineRect,
+    TITLE_CARD_OUTER_CORNER_RADIUS,
+    "right"
   );
 
   // A curva da moldura do dia atual também funciona como limite
@@ -2867,33 +2876,33 @@ function drawTitleDayCard(
       ? TITLE_CARD_OUTER_CORNER_RADIUS
       : TITLE_CARD_STANDARD_CORNER_RADIUS,
     topRight: rightCornerRadius,
-    // O cartão de hoje fica sem a moldura antiga na parte inferior.
-    bottomRight: isSelected ? 0 : rightCornerRadius,
-    bottomLeft: isSelected ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    // O cartão de hoje usa exatamente os mesmos quatro raios
+    // geométricos dos demais cartões. A moldura branca é desenhada
+    // depois, como uma camada adicional.
+    bottomRight: rightCornerRadius,
+    bottomLeft: TITLE_CARD_STANDARD_CORNER_RADIUS,
   };
 
-  // O cartão de hoje permanece transparente para revelar exatamente
-  // o fundo do widget que existe atrás dos astros.
-  if (!isSelected || isSpecialDay) {
-    fillTitleCardShape(ctx, card, cornerRadii, borderColor);
-    const inner = new Rect(
-      card.x + 2,
-      card.y + scaleVertical(2),
-      card.width - 4,
-      card.height - scaleVertical(4)
-    );
-    fillTitleCardShape(
-      ctx,
-      inner,
-      {
-        topLeft: Math.max(0, cornerRadii.topLeft - scaleVertical(2)),
-        topRight: Math.max(0, cornerRadii.topRight - scaleVertical(2)),
-        bottomRight: Math.max(0, cornerRadii.bottomRight - scaleVertical(2)),
-        bottomLeft: Math.max(0, cornerRadii.bottomLeft - scaleVertical(2)),
-      },
-      cardColor
-    );
-  }
+  // Todos os cartões recebem a mesma geometria e o mesmo preenchimento.
+  // O cartão de hoje se diferencia somente pela moldura branca externa.
+  fillTitleCardShape(ctx, card, cornerRadii, borderColor);
+  const inner = new Rect(
+    card.x + 2,
+    card.y + scaleVertical(2),
+    card.width - 4,
+    card.height - scaleVertical(4)
+  );
+  fillTitleCardShape(
+    ctx,
+    inner,
+    {
+      topLeft: Math.max(0, cornerRadii.topLeft - scaleVertical(2)),
+      topRight: Math.max(0, cornerRadii.topRight - scaleVertical(2)),
+      bottomRight: Math.max(0, cornerRadii.bottomRight - scaleVertical(2)),
+      bottomLeft: Math.max(0, cornerRadii.bottomLeft - scaleVertical(2)),
+    },
+    cardColor
+  );
 
   // A data mantém a cor original; somente a palavra do dia recebe
   // a cor correspondente a sábado, domingo ou feriado.
