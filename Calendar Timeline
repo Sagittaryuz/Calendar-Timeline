@@ -2005,6 +2005,9 @@ async function renderWidget(items, loadError) {
 
   // A curva da moldura do dia atual também funciona como limite
   // visual dos astros e demais elementos do cartão selecionado.
+  // O contorno da timeline fica abaixo da moldura branca do dia atual.
+  drawTimelineOuterBorder(contentCtx);
+
   const currentDayFrame = currentDayFrameMetrics();
   restoreRoundedSideCorners(
     contentCtx,
@@ -2120,6 +2123,96 @@ function restoreRoundedSideCorners(
 
 function restoreRoundedRightCorners(ctx, rect, radius) {
   restoreRoundedSideCorners(ctx, rect, radius, "right");
+}
+
+function drawTimelineOuterBorder(ctx) {
+  const rect = new Rect(
+    CANVAS.plotLeft,
+    CANVAS.timelineTop,
+    timelineWidth(),
+    timelineHeight()
+  );
+  const borderWidth = 2;
+  const outerRadius = Math.max(
+    0,
+    Math.min(
+      TITLE_CARD_OUTER_CORNER_RADIUS,
+      rect.width / 2,
+      rect.height / 2
+    )
+  );
+  const inset = borderWidth / 2;
+  const centerRadius = Math.max(0, outerRadius - inset);
+  const left = rect.x + inset;
+  const top = rect.y + inset;
+  const right = rect.x + rect.width - inset;
+  const bottom = rect.y + rect.height - inset;
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  if (centerRadius <= 0) {
+    path.move(new Point(left, top));
+    path.addLine(new Point(right, top));
+    path.addLine(new Point(right, bottom));
+    path.addLine(new Point(left, bottom));
+    path.addLine(new Point(left, top));
+  } else {
+    path.move(new Point(left + centerRadius, top));
+    path.addLine(new Point(right - centerRadius, top));
+    path.addCurve(
+      new Point(right, top + centerRadius),
+      new Point(
+        right - centerRadius + centerRadius * curveFactor,
+        top
+      ),
+      new Point(
+        right,
+        top + centerRadius - centerRadius * curveFactor
+      )
+    );
+    path.addLine(new Point(right, bottom - centerRadius));
+    path.addCurve(
+      new Point(right - centerRadius, bottom),
+      new Point(
+        right,
+        bottom - centerRadius + centerRadius * curveFactor
+      ),
+      new Point(
+        right - centerRadius + centerRadius * curveFactor,
+        bottom
+      )
+    );
+    path.addLine(new Point(left + centerRadius, bottom));
+    path.addCurve(
+      new Point(left, bottom - centerRadius),
+      new Point(
+        left + centerRadius - centerRadius * curveFactor,
+        bottom
+      ),
+      new Point(
+        left,
+        bottom - centerRadius + centerRadius * curveFactor
+      )
+    );
+    path.addLine(new Point(left, top + centerRadius));
+    path.addCurve(
+      new Point(left + centerRadius, top),
+      new Point(
+        left,
+        top + centerRadius - centerRadius * curveFactor
+      ),
+      new Point(
+        left + centerRadius - centerRadius * curveFactor,
+        top
+      )
+    );
+  }
+
+  // É a mesma cor da borda fina dos quadros dos dias.
+  ctx.setStrokeColor(new Color("#303136", 0.82));
+  ctx.setLineWidth(borderWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
 }
 
 function timelineBackgroundColorForDate(
