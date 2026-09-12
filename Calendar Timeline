@@ -2976,12 +2976,17 @@ function drawTitleDayCard(
     bottomLeft: TITLE_CARD_STANDARD_CORNER_RADIUS,
   };
 
-  // Os demais cartões conservam a borda fina escura.
-  // O cartão de hoje fica fundido ao interior da moldura branca:
-  // não recebe uma segunda moldura independente.
+  // O cartão de hoje fica fundido ao interior da moldura branca.
+  // Em dias úteis, nenhum retângulo é pintado: o gradiente geral do
+  // widget aparece diretamente sob os textos.
+  // Em sábado, domingo ou feriado, a cor especial é espalhada no
+  // cartão para coincidir com o fundo colorido da respectiva timeline.
   if (isSelected) {
-    fillTitleCardShape(ctx, card, cornerRadii, cardColor);
+    if (isSpecialDay) {
+      fillTitleCardShape(ctx, card, cornerRadii, cardColor);
+    }
   } else {
+    // Os demais cartões conservam a borda fina escura.
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
       card.x + 2,
