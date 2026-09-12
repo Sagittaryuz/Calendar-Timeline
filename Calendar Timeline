@@ -2096,30 +2096,14 @@ function restoreRoundedSideCorners(
       direction === "right" &&
       outsideStart < right
     ) {
-      ctx.setFillColor(widgetGradientColorAtY(top + row));
-      ctx.fillRect(
-        new Rect(
-          outsideStart,
-          top + row,
-          right - outsideStart,
-          1
-        )
-      );
+      restoreWidgetBackgroundSpan(ctx, outsideStart, top + row, right - outsideStart);
     }
 
     if (
       direction === "left" &&
       outsideEnd > left
     ) {
-      ctx.setFillColor(widgetGradientColorAtY(top + row));
-      ctx.fillRect(
-        new Rect(
-          left,
-          top + row,
-          outsideEnd - left,
-          1
-        )
-      );
+      restoreWidgetBackgroundSpan(ctx, left, top + row, outsideEnd - left);
     }
   }
 }
@@ -2152,17 +2136,39 @@ function drawTimelineOuterBorder(ctx) {
   const bottom = rect.y + rect.height - inset;
   const curveFactor = 0.5522847498;
   const path = new Path();
+  let lastPoint = null;
+  const outline = {
+    move(p) { lastPoint = p; path.move(p); },
+    addLine(p) {
+      const a = lastPoint;
+      const steps = Math.max(1, Math.ceil(Math.hypot(p.x - a.x, p.y - a.y)));
+      for (let i = 1; i <= steps; i++) {
+        const q = new Point(a.x + (p.x-a.x)*i/steps, a.y + (p.y-a.y)*i/steps);
+        if (insideCurrentDayUnifiedShape((lastPoint.x+q.x)/2, (lastPoint.y+q.y)/2)) path.move(q);
+        else path.addLine(q);
+        lastPoint = q;
+      }
+    },
+    addCurve(p, a, b) {
+      const start = lastPoint;
+      for (let i = 1; i <= 64; i++) {
+        const t=i/64, u=1-t;
+        this.addLine(new Point(u*u*u*start.x+3*u*u*t*a.x+3*u*t*t*b.x+t*t*t*p.x,
+          u*u*u*start.y+3*u*u*t*a.y+3*u*t*t*b.y+t*t*t*p.y));
+      }
+    }
+  };
 
   if (centerRadius <= 0) {
-    path.move(new Point(left, top));
-    path.addLine(new Point(right, top));
-    path.addLine(new Point(right, bottom));
-    path.addLine(new Point(left, bottom));
-    path.addLine(new Point(left, top));
+    outline.move(new Point(left, top));
+    outline.addLine(new Point(right, top));
+    outline.addLine(new Point(right, bottom));
+    outline.addLine(new Point(left, bottom));
+    outline.addLine(new Point(left, top));
   } else {
-    path.move(new Point(left + centerRadius, top));
-    path.addLine(new Point(right - centerRadius, top));
-    path.addCurve(
+    outline.move(new Point(left + centerRadius, top));
+    outline.addLine(new Point(right - centerRadius, top));
+    outline.addCurve(
       new Point(right, top + centerRadius),
       new Point(
         right - centerRadius + centerRadius * curveFactor,
@@ -2173,8 +2179,8 @@ function drawTimelineOuterBorder(ctx) {
         top + centerRadius - centerRadius * curveFactor
       )
     );
-    path.addLine(new Point(right, bottom - centerRadius));
-    path.addCurve(
+    outline.addLine(new Point(right, bottom - centerRadius));
+    outline.addCurve(
       new Point(right - centerRadius, bottom),
       new Point(
         right,
@@ -2185,8 +2191,8 @@ function drawTimelineOuterBorder(ctx) {
         bottom
       )
     );
-    path.addLine(new Point(left + centerRadius, bottom));
-    path.addCurve(
+    outline.addLine(new Point(left + centerRadius, bottom));
+    outline.addCurve(
       new Point(left, bottom - centerRadius),
       new Point(
         left + centerRadius - centerRadius * curveFactor,
@@ -2197,8 +2203,8 @@ function drawTimelineOuterBorder(ctx) {
         bottom - centerRadius + centerRadius * curveFactor
       )
     );
-    path.addLine(new Point(left, top + centerRadius));
-    path.addCurve(
+    outline.addLine(new Point(left, top + centerRadius));
+    outline.addCurve(
       new Point(left + centerRadius, top),
       new Point(
         left,
@@ -2218,86 +2224,78 @@ function drawTimelineOuterBorder(ctx) {
   ctx.strokePath();
 }
 
+function currentDayUnifiedShape(path = new Path()) {
+  const m = currentDayFrameMetrics();
+  const c = m.todayCard;
+  const r = m.frameRadius;
+  const k = 0.5522847498;
+  // O preenchimento reutiliza exatamente a ponte e as curvas do contorno.
+  buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
+    "right", m.boundaryX, r, path);
+  path.addLine(new Point(m.boundaryX, m.bridgeY));
+  path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
+  path.addLine(new Point(c.x + r, m.bottomLineCenterY));
+  path.addCurve(new Point(c.x, m.bottomLineCenterY - r),
+    new Point(c.x + r - r * k, m.bottomLineCenterY),
+    new Point(c.x, m.bottomLineCenterY - r + r * k));
+  path.addLine(new Point(c.x, c.y + r));
+  path.addCurve(new Point(c.x + r, c.y),
+    new Point(c.x, c.y + r - r * k),
+    new Point(c.x + r - r * k, c.y));
+  return path;
+}
+
+function currentDayUnifiedPolygon() {
+  if (currentDayUnifiedPolygon.points) return currentDayUnifiedPolygon.points;
+  const points = [];
+  const recorder = {
+    move(p) { points.push(p); },
+    addLine(p) { points.push(p); },
+    addCurve(end, a, b) {
+      const start = points[points.length - 1];
+      for (let i = 1; i <= 48; i++) {
+        const t = i / 48, u = 1 - t;
+        points.push(new Point(
+          u*u*u*start.x + 3*u*u*t*a.x + 3*u*t*t*b.x + t*t*t*end.x,
+          u*u*u*start.y + 3*u*u*t*a.y + 3*u*t*t*b.y + t*t*t*end.y));
+      }
+    }
+  };
+  currentDayUnifiedShape(recorder);
+  currentDayUnifiedPolygon.points = points;
+  return points;
+}
+
+function insideCurrentDayUnifiedShape(x, y) {
+  const points = currentDayUnifiedPolygon();
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i], b = points[j];
+    if ((a.y > y) !== (b.y > y) &&
+        x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 function drawCurrentDaySpecialBackground(ctx) {
-  const today = startOfDay(windowStart);
-  const specialColor = timelineBackgroundColorForDate(today);
-  if (specialColor === SETTINGS.timelineBackgroundColor) return;
-
-  const card = titleDayCardRect(0);
-  const left = card.x;
-  const cardRight = card.x + card.width;
-  const top = card.y;
-  const timelineTopY = CANVAS.timelineTop;
-  const timelineBottomY =
-    CANVAS.timelineTop + timelineHeight();
-  const boundaryX = Math.max(
-    left,
-    Math.min(
-      CANVAS.plotRight,
-      CANVAS.plotLeft + timeToX(addDays(today, 1))
-    )
-  );
-  const topLeftRadius = Math.max(
-    0,
-    Math.min(
-      TITLE_CARD_OUTER_CORNER_RADIUS,
-      card.width / 2,
-      card.height / 2
-    )
-  );
-  const topRightRadius = Math.max(
-    0,
-    Math.min(
-      TITLE_CARD_STANDARD_CORNER_RADIUS,
-      card.width / 2,
-      card.height / 2
-    )
-  );
-  const curveFactor = 0.5522847498;
-  const path = new Path();
-
-  // A única forma reúne o cartão superior e a faixa da timeline.
-  // Os cantos inferiores do cartão deixam de existir porque a cor
-  // continua diretamente para a área da timeline.
-  path.move(new Point(left + topLeftRadius, top));
-  path.addLine(
-    new Point(cardRight - topRightRadius, top)
-  );
-  path.addCurve(
-    new Point(cardRight, top + topRightRadius),
-    new Point(
-      cardRight - topRightRadius +
-        topRightRadius * curveFactor,
-      top
-    ),
-    new Point(
-      cardRight,
-      top + topRightRadius -
-        topRightRadius * curveFactor
-    )
-  );
-  path.addLine(new Point(cardRight, timelineTopY));
-  path.addLine(new Point(boundaryX, timelineTopY));
-  path.addLine(new Point(boundaryX, timelineBottomY));
-  path.addLine(new Point(left, timelineBottomY));
-  path.addLine(new Point(left, top + topLeftRadius));
-  path.addCurve(
-    new Point(left + topLeftRadius, top),
-    new Point(
-      left,
-      top + topLeftRadius -
-        topLeftRadius * curveFactor
-    ),
-    new Point(
-      left + topLeftRadius -
-        topLeftRadius * curveFactor,
-      top
-    )
-  );
-
-  ctx.setFillColor(new Color(specialColor, 1.0));
-  ctx.addPath(path);
+  const color = timelineBackgroundColorForDate(startOfDay(windowStart));
+  if (color === SETTINGS.timelineBackgroundColor) return;
+  ctx.setFillColor(new Color(color, 1));
+  ctx.addPath(currentDayUnifiedShape());
   ctx.fillPath();
+}
+
+function restoreWidgetBackgroundSpan(ctx, x, y, width) {
+  const color = timelineBackgroundColorForDate(startOfDay(windowStart));
+  const special = color !== SETTINGS.timelineBackgroundColor;
+  // Os recortes restauram o fundo verdadeiro, nunca uma máscara escura
+  // sobre a união entre o título e a timeline.
+  for (let start = x; start < x + width; start += 1) {
+    const w = Math.min(1, x + width - start);
+    ctx.setFillColor(special && insideCurrentDayUnifiedShape(start + w / 2, y + 0.5)
+      ? new Color(color, 1) : widgetGradientColorAtY(y));
+    ctx.fillRect(new Rect(start, y, w, 1));
+  }
 }
 
 function timelineBackgroundColorForDate(
@@ -2852,7 +2850,7 @@ function appendCurrentDayBridgeCurve(
   );
 }
 
-function drawCurrentDayRoundedTopRightFrame(
+function buildCurrentDayUpperPath(
   ctx,
   card,
   bridgeY,
@@ -2860,7 +2858,8 @@ function drawCurrentDayRoundedTopRightFrame(
   color,
   horizontalDirection,
   boundaryX,
-  radius
+  radius,
+  path = new Path()
 ) {
   const direction =
     horizontalDirection === "left" ? "left" : "right";
@@ -2872,7 +2871,6 @@ function drawCurrentDayRoundedTopRightFrame(
     radius,
     direction
   );
-  const path = new Path();
   const left = card.x;
   const right = card.x + card.width;
 
@@ -2936,12 +2934,16 @@ function drawCurrentDayRoundedTopRightFrame(
     );
   }
 
+  return { path, bridge };
+}
+
+function drawCurrentDayRoundedTopRightFrame(ctx, card, bridgeY, lineWidth, color, horizontalDirection, boundaryX, radius) {
+  const result = buildCurrentDayUpperPath(ctx, card, bridgeY, lineWidth, color, horizontalDirection, boundaryX, radius);
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
-  ctx.addPath(path);
+  ctx.addPath(result.path);
   ctx.strokePath();
-
-  return bridge;
+  return result.bridge;
 }
 
 function currentDayFrameHorizontalDirection(
