@@ -2560,29 +2560,32 @@ function currentDayBridgeMetrics(
     direction === "right"
       ? card.x + card.width
       : card.x;
-  const signedDistance =
-    direction === "right"
-      ? boundaryX - edgeX
-      : edgeX - boundaryX;
-  const outwardDistance = Math.max(0, signedDistance);
+  const deltaX = boundaryX - edgeX;
+  const distance = Math.abs(deltaX);
+  // A ponte pode flexionar para fora ou para dentro do cartão.
+  // Isso é essencial quando faltam poucas horas para a meia-noite
+  // e a próxima virada ainda está dentro do primeiro cartão.
+  const curveDirectionSign =
+    deltaX === 0 ? directionSign : Math.sign(deltaX);
   const bridgeRadius = Math.min(
     Math.max(0, radius),
-    outwardDistance
+    distance
   );
   const isFlexible =
-    outwardDistance > 0 &&
-    outwardDistance < Math.max(0, radius);
+    distance > 0 &&
+    distance < Math.max(0, radius);
   const endpointX =
     isFlexible
       ? boundaryX
-      : edgeX + directionSign * bridgeRadius;
+      : edgeX + curveDirectionSign * bridgeRadius;
 
   return {
     direction,
     directionSign,
+    curveDirectionSign,
     edgeX,
-    signedDistance,
-    outwardDistance,
+    signedDistance: deltaX,
+    distance,
     bridgeRadius,
     isFlexible,
     endpointX,
@@ -2597,7 +2600,7 @@ function appendCurrentDayBridgeCurve(
   radius
 ) {
   if (
-    bridge.outwardDistance <= 0 ||
+    bridge.distance <= 0 ||
     bridge.bridgeRadius <= 0
   ) {
     return;
@@ -2618,7 +2621,7 @@ function appendCurrentDayBridgeCurve(
       ),
       new Point(
         bridge.endpointX -
-          bridge.directionSign *
+          bridge.curveDirectionSign *
             bridge.bridgeRadius * curveFactor,
         bridgeY
       )
@@ -2630,7 +2633,7 @@ function appendCurrentDayBridgeCurve(
   // deixa de forçar um quarto de círculo. O ângulo de saída
   // diminui gradualmente até zero quando as linhas coincidem.
   const progress =
-    bridge.outwardDistance /
+    bridge.distance /
     Math.max(0.0001, radius);
   const endAngle =
     (1 - Math.min(1, progress)) * Math.PI / 2;
@@ -2638,7 +2641,7 @@ function appendCurrentDayBridgeCurve(
     bridge.bridgeRadius *
     (0.35 + 0.2022847498 * Math.min(1, progress));
   const tangentX =
-    bridge.directionSign * Math.cos(endAngle);
+    bridge.curveDirectionSign * Math.cos(endAngle);
   const tangentY = Math.sin(endAngle);
 
   path.addCurve(
@@ -2750,9 +2753,11 @@ function currentDayFrameHorizontalDirection(
   card,
   boundaryX
 ) {
-  return boundaryX >= card.x + card.width / 2
-    ? "right"
-    : "left";
+  // A janela começa no instante atual, na borda esquerda da timeline.
+  // Portanto, o intervalo do dia atual é sempre o trecho à esquerda
+  // da próxima meia-noite. Mesmo quando a virada fica dentro do
+  // primeiro cartão, a moldura deve fechar esse lado, nunca o dia seguinte.
+  return "right";
 }
 
 function drawCurrentDayFrameOverlay(ctx) {
