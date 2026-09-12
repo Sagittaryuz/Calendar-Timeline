@@ -1964,6 +1964,9 @@ async function renderWidget(items, loadError) {
   // O gradiente precisa ser a primeira camada. O restante do widget é
   // desenhado depois, sem deslocar o composto inteiro.
   drawIOSDarkGradient(contentCtx);
+  // Sábados, domingos e feriados atuais usam uma única geometria
+  // contínua entre o cartão e a respectiva faixa da timeline.
+  drawCurrentDaySpecialBackground(contentCtx);
   // O fundo da timeline é composto dentro do próprio painel,
   // antes de qualquer astro, linha ou chart.
   drawDatePanel(contentCtx, loadResult.holidayDates);
@@ -2215,6 +2218,88 @@ function drawTimelineOuterBorder(ctx) {
   ctx.strokePath();
 }
 
+function drawCurrentDaySpecialBackground(ctx) {
+  const today = startOfDay(windowStart);
+  const specialColor = timelineBackgroundColorForDate(today);
+  if (specialColor === SETTINGS.timelineBackgroundColor) return;
+
+  const card = titleDayCardRect(0);
+  const left = card.x;
+  const cardRight = card.x + card.width;
+  const top = card.y;
+  const timelineTopY = CANVAS.timelineTop;
+  const timelineBottomY =
+    CANVAS.timelineTop + timelineHeight();
+  const boundaryX = Math.max(
+    left,
+    Math.min(
+      CANVAS.plotRight,
+      CANVAS.plotLeft + timeToX(addDays(today, 1))
+    )
+  );
+  const topLeftRadius = Math.max(
+    0,
+    Math.min(
+      TITLE_CARD_OUTER_CORNER_RADIUS,
+      card.width / 2,
+      card.height / 2
+    )
+  );
+  const topRightRadius = Math.max(
+    0,
+    Math.min(
+      TITLE_CARD_STANDARD_CORNER_RADIUS,
+      card.width / 2,
+      card.height / 2
+    )
+  );
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  // A única forma reúne o cartão superior e a faixa da timeline.
+  // Os cantos inferiores do cartão deixam de existir porque a cor
+  // continua diretamente para a área da timeline.
+  path.move(new Point(left + topLeftRadius, top));
+  path.addLine(
+    new Point(cardRight - topRightRadius, top)
+  );
+  path.addCurve(
+    new Point(cardRight, top + topRightRadius),
+    new Point(
+      cardRight - topRightRadius +
+        topRightRadius * curveFactor,
+      top
+    ),
+    new Point(
+      cardRight,
+      top + topRightRadius -
+        topRightRadius * curveFactor
+    )
+  );
+  path.addLine(new Point(cardRight, timelineTopY));
+  path.addLine(new Point(boundaryX, timelineTopY));
+  path.addLine(new Point(boundaryX, timelineBottomY));
+  path.addLine(new Point(left, timelineBottomY));
+  path.addLine(new Point(left, top + topLeftRadius));
+  path.addCurve(
+    new Point(left + topLeftRadius, top),
+    new Point(
+      left,
+      top + topLeftRadius -
+        topLeftRadius * curveFactor
+    ),
+    new Point(
+      left + topLeftRadius -
+        topLeftRadius * curveFactor,
+      top
+    )
+  );
+
+  ctx.setFillColor(new Color(specialColor, 1.0));
+  ctx.addPath(path);
+  ctx.fillPath();
+}
+
 function timelineBackgroundColorForDate(
   date,
   holidayDates = loadResult.holidayDates
@@ -2257,9 +2342,17 @@ function drawTimelineBackground(
     const isSpecialDay =
       backgroundColor !== SETTINGS.timelineBackgroundColor;
 
-    // O HOJE comum mantém o gradiente. Sábados, domingos e feriados
-    // conservam suas cores próprias mesmo quando não são o dia atual.
-    if (x1 > x0 && (isSpecialDay || !isToday)) {
+    // Quando hoje é sábado, domingo ou feriado, sua cor já foi
+    // desenhada na geometria contínua do canvas principal. O painel
+    // permanece transparente nesse trecho para não criar uma segunda
+    // forma sobreposta.
+    const isUnifiedCurrentDay =
+      localToTimeline && isToday && isSpecialDay;
+    if (
+      x1 > x0 &&
+      !isUnifiedCurrentDay &&
+      (isSpecialDay || !isToday)
+    ) {
       ctx.setFillColor(
         new Color(
           isSpecialDay
@@ -2976,16 +3069,10 @@ function drawTitleDayCard(
     bottomLeft: TITLE_CARD_STANDARD_CORNER_RADIUS,
   };
 
-  // O cartão de hoje fica fundido ao interior da moldura branca.
-  // Em dias úteis, nenhum retângulo é pintado: o gradiente geral do
-  // widget aparece diretamente sob os textos.
-  // Em sábado, domingo ou feriado, a cor especial é espalhada no
-  // cartão para coincidir com o fundo colorido da respectiva timeline.
-  if (isSelected) {
-    if (isSpecialDay) {
-      fillTitleCardShape(ctx, card, cornerRadii, cardColor);
-    }
-  } else {
+  // O cartão de hoje já foi preenchido pela geometria contínua
+  // que também cobre sua faixa na timeline. Não desenhamos uma segunda
+  // forma aqui, evitando a separação entre duas geometrias.
+  if (!isSelected) {
     // Os demais cartões conservam a borda fina escura.
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
