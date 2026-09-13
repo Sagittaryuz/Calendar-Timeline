@@ -2468,9 +2468,22 @@ function hexToRGB(hex) {
   };
 }
 
+function titleCardGap() {
+  // O vão horizontal usa a mesma distância vertical existente entre
+  // a borda inferior dos cartões comuns e a moldura superior da timeline.
+  const regularCardTop =
+    WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+  const regularCardBottom =
+    regularCardTop + TITLE_CARD_HEIGHT;
+  return Math.max(
+    0,
+    CANVAS.timelineTop - regularCardBottom
+  );
+}
+
 function titleDayCardRect(index) {
   const cardCount = 4;
-  const cardGap = 8;
+  const cardGap = titleCardGap();
   const cardsLeft = CANVAS.marginX;
   const cardsRight = CANVAS.width - CANVAS.marginX;
   const cardWidth =
@@ -2484,12 +2497,22 @@ function titleDayCardRect(index) {
     index === 0
       ? WIDGET_CONTENT_TOP_MARGIN
       : WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+  // O cartão atual termina na mesma altura dos demais. Seu topo lógico
+  // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
+  // altura preserva o alinhamento externo superior sem encurtar o vão.
+  const titleCardHeight =
+    index === 0
+      ? Math.max(
+          1,
+          TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2
+        )
+      : TITLE_CARD_HEIGHT;
 
   return new Rect(
     cardsLeft + index * (cardWidth + cardGap),
     titleCardTop,
     cardWidth,
-    TITLE_CARD_HEIGHT
+    titleCardHeight
   );
 }
 
@@ -2676,10 +2699,12 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
 }
 
 function currentDayFrameCornerRadius(card) {
+  // O raio é definido pela geometria externa compartilhada. A moldura
+  // inferior e a ponte superior já possuem limites verticais próprios;
+  // a altura lógica reduzida do cartão atual não deve reduzir seu raio.
   return Math.min(
     TITLE_CARD_STANDARD_CORNER_RADIUS,
-    card.width / 2,
-    card.height / 2
+    card.width / 2
   );
 }
 
