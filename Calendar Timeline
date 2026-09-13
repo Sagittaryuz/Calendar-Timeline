@@ -155,18 +155,29 @@ const TITLE_CARD_OUTER_CORNER_RADIUS = scaleVertical(52);
 const DAY_CHANGE_CIRCLE_DIAMETER = scaleVertical(52);
 // Dimensão única dos astros, reduzida junto com a faixa superior.
 const WEATHER_ICON_SIZE_24H = scaleVertical(44);
-// A faixa diminui 2,7 unidades da escala legada (= 2,51 px renderizados),
-// para que sua borda inferior suba junto com a linha branca.
+// A primeira redução subiu a borda inferior em 2,51 px renderizados.
+// O centro dos astros ficou 2,35 unidades da escala legada acima do
+// centro geométrico da faixa reduzida.
 const ASTRO_STRIP_BASE_HEIGHT_LEGACY = 60;
 const ASTRO_STRIP_REDUCTION_LEGACY = 2.7;
 const ASTRO_TOTAL_VERTICAL_LIFT_LEGACY = 2.7;
+const ASTRO_CENTER_OFFSET_LEGACY =
+  1 +
+  (ASTRO_TOTAL_VERTICAL_LIFT_LEGACY -
+    ASTRO_STRIP_REDUCTION_LEGACY / 2);
+// Reduzir a borda inferior em duas vezes essa diferença faz o novo
+// centro geométrico coincidir com o centro absoluto já usado pelos astros.
+const ASTRO_AREA_CENTERING_REDUCTION_LEGACY =
+  ASTRO_CENTER_OFFSET_LEGACY * 2;
 const WEATHER_ASTRO_STRIP_HEIGHT_24H = scaleVertical(
-  ASTRO_STRIP_BASE_HEIGHT_LEGACY - ASTRO_STRIP_REDUCTION_LEGACY
+  ASTRO_STRIP_BASE_HEIGHT_LEGACY -
+    ASTRO_STRIP_REDUCTION_LEGACY -
+    ASTRO_AREA_CENTERING_REDUCTION_LEGACY
 );
-// Reduzir a faixa desloca o centro apenas pela metade da redução. Este
-// complemento garante que astros, Lua e ponte subam 2,51 px no total.
-const ASTRO_CENTER_EXTRA_LIFT_24H = scaleVertical(
-  ASTRO_TOTAL_VERTICAL_LIFT_LEGACY - ASTRO_STRIP_REDUCTION_LEGACY / 2
+const ASTRO_CENTER_TARGET_24H = scaleVertical(
+  (ASTRO_STRIP_BASE_HEIGHT_LEGACY -
+    ASTRO_STRIP_REDUCTION_LEGACY) / 2 -
+  ASTRO_CENTER_OFFSET_LEGACY
 );
 
 const CANVAS = {
@@ -4477,13 +4488,10 @@ function weatherIconSize() {
 }
 
 function weatherIconCenterY() {
-  // O ajuste óptico de 1 px também acompanha a escala. A faixa já foi
-  // reduzida; o complemento abaixo completa o deslocamento total desejado.
-  return (
-    weatherStripBottomY() / 2 -
-    scaleVertical(1) -
-    ASTRO_CENTER_EXTRA_LIFT_24H
-  );
+  // O centro absoluto dos astros permanece fixo. A borda inferior da
+  // faixa foi reduzida até coincidir com esse centro, sem subir os astros
+  // novamente.
+  return ASTRO_CENTER_TARGET_24H;
 }
 
 function dayBoundaryMoonBorderTopY() {
