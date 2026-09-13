@@ -2060,8 +2060,10 @@ function restoreRoundedSideCorners(
       ? left + boundedRadius
       : right - boundedRadius;
 
-  for (let row = 0; row < rect.height; row++) {
-    const sampleY = row + 0.5;
+  // Restaura pixels inteiros: faixas em Y fracionado deixam emendas
+  // semitransparentes mesmo usando uma cor com opacidade 1.
+  for (let pixelY = Math.floor(top); pixelY < Math.ceil(top + rect.height); pixelY++) {
+    const sampleY = Math.max(0, Math.min(rect.height, pixelY + 0.5 - top));
     let outsideStart = direction === "right" ? right : left;
     let outsideEnd = direction === "left" ? left : right;
 
@@ -2096,14 +2098,14 @@ function restoreRoundedSideCorners(
       direction === "right" &&
       outsideStart < right
     ) {
-      restoreWidgetBackgroundSpan(ctx, outsideStart, top + row, right - outsideStart);
+      restoreWidgetBackgroundSpan(ctx, outsideStart, pixelY, right - outsideStart);
     }
 
     if (
       direction === "left" &&
       outsideEnd > left
     ) {
-      restoreWidgetBackgroundSpan(ctx, left, top + row, outsideEnd - left);
+      restoreWidgetBackgroundSpan(ctx, left, pixelY, outsideEnd - left);
     }
   }
 }
@@ -2290,11 +2292,16 @@ function restoreWidgetBackgroundSpan(ctx, x, y, width) {
   const special = color !== SETTINGS.timelineBackgroundColor;
   // Os recortes restauram o fundo verdadeiro, nunca uma máscara escura
   // sobre a união entre o título e a timeline.
-  for (let start = x; start < x + width; start += 1) {
-    const w = Math.min(1, x + width - start);
-    ctx.setFillColor(special && insideCurrentDayUnifiedShape(start + w / 2, y + 0.5)
-      ? new Color(color, 1) : widgetGradientColorAtY(y));
-    ctx.fillRect(new Rect(start, y, w, 1));
+  // O arco da direita produz X fracionado. Pintar quadrados de 1 px
+  // a partir desse X suaviza TODAS as emendas e deixa a cor vazar.
+  // Cubra integralmente os pixels tocados pela máscara, nos dois lados.
+  if (width <= 0) return;
+  const pixelY = Math.floor(y);
+  const end = Math.ceil(x + width);
+  for (let start = Math.floor(x); start < end; start += 1) {
+    ctx.setFillColor(special && insideCurrentDayUnifiedShape(start + 0.5, pixelY + 0.5)
+      ? new Color(color, 1) : widgetGradientColorAtY(pixelY));
+    ctx.fillRect(new Rect(start, pixelY, 1, 1));
   }
 }
 
