@@ -3233,6 +3233,7 @@ function drawCurrentDayFrame(ctx) {
     boundaryX,
     bridgeY,
     framePathRadius,
+    frameRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
