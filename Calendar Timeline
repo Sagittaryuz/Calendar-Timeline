@@ -2533,6 +2533,13 @@ function currentDayFrameMetrics() {
     Math.max(0, (bridgeY - todayCard.y) / 2),
     Math.max(0, (bottomLineCenterY - todayCard.y) / 2)
   );
+  // O raio do caminho central é compensado pela metade da espessura.
+  // Assim, o raio externo visível da linha branca coincide com o raio
+  // externo dos quadros vizinhos.
+  const framePathRadius = Math.max(
+    0,
+    frameRadius - lineWidth / 2
+  );
   // A moldura pertence ao dia do cartão atual. O X continua apontando
   // para a próxima virada, mas a cor vem da virada do próprio dia.
   const lineColor = hourGridLineColor(todayBoundary);
@@ -2546,6 +2553,7 @@ function currentDayFrameMetrics() {
     bridgeY,
     bottomLineCenterY,
     frameRadius,
+    framePathRadius,
     lineWidth,
     lineColor,
   };
@@ -2628,6 +2636,7 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
     boundaryX,
     bottomLineCenterY,
     frameRadius,
+    framePathRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
@@ -2662,7 +2671,7 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
     lineWidth,
     lineColor,
     stationarySide,
-    frameRadius
+    framePathRadius
   );
 }
 
@@ -2693,8 +2702,15 @@ function drawCurrentDayRoundedSideFrame(
   );
   const curveFactor = 0.5522847498;
   const path = new Path();
-  const left = card.x;
-  const right = card.x + card.width;
+  const strokeInset = Math.max(
+    0,
+    Math.min(
+      Math.max(0, Number(lineWidth) || 0) / 2,
+      card.width / 2
+    )
+  );
+  const left = card.x + strokeInset;
+  const right = card.x + card.width - strokeInset;
 
   if (boundedRadius <= 0) {
     const x = side === "right" ? right : left;
@@ -2767,15 +2783,20 @@ function currentDayBridgeMetrics(
   boundaryX,
   bridgeY,
   radius,
-  horizontalDirection
+  horizontalDirection,
+  pathInset = 0
 ) {
   const direction =
     horizontalDirection === "left" ? "left" : "right";
   const directionSign = direction === "right" ? 1 : -1;
+  const inset = Math.max(
+    0,
+    Math.min(Number(pathInset) || 0, card.width / 2)
+  );
   const edgeX =
     direction === "right"
-      ? card.x + card.width
-      : card.x;
+      ? card.x + card.width - inset
+      : card.x + inset;
   const deltaX = boundaryX - edgeX;
   const distance = Math.abs(deltaX);
   // A ponte pode flexionar para fora ou para dentro do cartão.
@@ -2882,20 +2903,26 @@ function buildCurrentDayUpperPath(
   horizontalDirection,
   boundaryX,
   radius,
-  path = new Path()
+  path = new Path(),
+  pathInset = 0
 ) {
   const direction =
     horizontalDirection === "left" ? "left" : "right";
   const curveFactor = 0.5522847498;
+  const inset = Math.max(
+    0,
+    Math.min(Number(pathInset) || 0, card.width / 2)
+  );
   const bridge = currentDayBridgeMetrics(
     card,
     boundaryX,
     bridgeY,
     radius,
-    direction
+    direction,
+    inset
   );
-  const left = card.x;
-  const right = card.x + card.width;
+  const left = card.x + inset;
+  const right = card.x + card.width - inset;
 
   if (direction === "left") {
     // Espelhamento completo do trecho superior: a ponte
@@ -2961,7 +2988,18 @@ function buildCurrentDayUpperPath(
 }
 
 function drawCurrentDayRoundedTopRightFrame(ctx, card, bridgeY, lineWidth, color, horizontalDirection, boundaryX, radius) {
-  const result = buildCurrentDayUpperPath(ctx, card, bridgeY, lineWidth, color, horizontalDirection, boundaryX, radius);
+  const result = buildCurrentDayUpperPath(
+    ctx,
+    card,
+    bridgeY,
+    lineWidth,
+    color,
+    horizontalDirection,
+    boundaryX,
+    radius,
+    new Path(),
+    lineWidth / 2
+  );
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
   ctx.addPath(result.path);
@@ -3024,7 +3062,7 @@ function drawCurrentDayFrame(ctx) {
     todayCard,
     boundaryX,
     bridgeY,
-    frameRadius,
+    framePathRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
@@ -3042,7 +3080,7 @@ function drawCurrentDayFrame(ctx) {
     lineColor,
     horizontalDirection,
     boundaryX,
-    frameRadius
+    framePathRadius
   );
 
   // A linha sempre parte do ponto final efetivo da curva.
