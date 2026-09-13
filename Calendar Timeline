@@ -150,9 +150,19 @@ function mapLegacyContentY(value) {
 }
 
 const TITLE_CARD_COUNT = 4;
+// Raio estrutural comum: 52 unidades da geometria-base,
+// equivalentes a 48,35 px depois da compressão vertical do widget.
+// Ele é a referência externa única dos cartões, da timeline e da
+// moldura branca do dia atual.
+const WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS = 52;
+const WIDGET_COMMON_CORNER_RADIUS = scaleVertical(
+  WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS
+);
 const TITLE_CARD_HEIGHT = scaleVertical(104);
-const TITLE_CARD_STANDARD_CORNER_RADIUS = scaleVertical(52);
-const TITLE_CARD_OUTER_CORNER_RADIUS = scaleVertical(52);
+const TITLE_CARD_STANDARD_CORNER_RADIUS =
+  WIDGET_COMMON_CORNER_RADIUS;
+const TITLE_CARD_OUTER_CORNER_RADIUS =
+  WIDGET_COMMON_CORNER_RADIUS;
 const DAY_CHANGE_CIRCLE_DIAMETER = scaleVertical(52);
 // Dimensão única dos astros, reduzida junto com a faixa superior.
 const WEATHER_ICON_SIZE_24H = scaleVertical(44);
@@ -2254,7 +2264,7 @@ function drawTimelineOuterBorder(ctx) {
   const outerRadius = Math.max(
     0,
     Math.min(
-      TITLE_CARD_OUTER_CORNER_RADIUS,
+      WIDGET_COMMON_CORNER_RADIUS,
       rect.width / 2,
       rect.height / 2
     )
@@ -2362,7 +2372,7 @@ function currentDayUnifiedShape(path = new Path()) {
   const k = 0.5522847498;
   // O preenchimento reutiliza exatamente a ponte e as curvas do contorno.
   buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
-    "right", m.boundaryX, r, path);
+    "right", m.boundaryX, r, path, 0, r);
   path.addLine(new Point(m.boundaryX, m.bridgeY));
   path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
   path.addLine(new Point(c.x + r, m.bottomLineCenterY));
@@ -2665,7 +2675,7 @@ function currentDayFrameMetrics() {
   const bridgeY = dayBoundaryMoonBorderTopY();
   const bottomLineCenterY = boundaryBottomY - lineWidth / 2;
   const frameRadius = Math.min(
-    currentDayFrameCornerRadius(todayCard),
+    WIDGET_COMMON_CORNER_RADIUS,
     Math.max(0, (bridgeY - todayCard.y) / 2),
     Math.max(0, (bottomLineCenterY - todayCard.y) / 2)
   );
@@ -2816,7 +2826,7 @@ function currentDayFrameCornerRadius(card) {
   // inferior e a ponte superior já possuem limites verticais próprios;
   // a altura lógica reduzida do cartão atual não deve reduzir seu raio.
   return Math.min(
-    TITLE_CARD_STANDARD_CORNER_RADIUS,
+    WIDGET_COMMON_CORNER_RADIUS,
     card.width / 2
   );
 }
@@ -3042,7 +3052,8 @@ function buildCurrentDayUpperPath(
   boundaryX,
   radius,
   path = new Path(),
-  pathInset = 0
+  pathInset = 0,
+  outerRadius = radius
 ) {
   const direction =
     horizontalDirection === "left" ? "left" : "right";
@@ -3051,11 +3062,21 @@ function buildCurrentDayUpperPath(
     0,
     Math.min(Number(pathInset) || 0, card.width / 2)
   );
+  // O raio comum é externo. Para um traço centrado, o raio do caminho
+  // da ponte também recua exatamente metade da espessura.
+  const bridgeOuterRadius = Math.max(
+    0,
+    Number(outerRadius) || 0
+  );
+  const bridgePathRadius = Math.max(
+    0,
+    bridgeOuterRadius - inset
+  );
   const bridge = currentDayBridgeMetrics(
     card,
     boundaryX,
     bridgeY,
-    radius,
+    bridgePathRadius,
     direction,
     inset
   );
@@ -3090,7 +3111,7 @@ function buildCurrentDayUpperPath(
       path,
       bridge,
       bridgeY,
-      radius
+      bridgePathRadius
     );
   } else {
     if (radius <= 0) {
@@ -3118,14 +3139,24 @@ function buildCurrentDayUpperPath(
       path,
       bridge,
       bridgeY,
-      radius
+      bridgePathRadius
     );
   }
 
   return { path, bridge };
 }
 
-function drawCurrentDayRoundedTopRightFrame(ctx, card, bridgeY, lineWidth, color, horizontalDirection, boundaryX, radius) {
+function drawCurrentDayRoundedTopRightFrame(
+  ctx,
+  card,
+  bridgeY,
+  lineWidth,
+  color,
+  horizontalDirection,
+  boundaryX,
+  radius,
+  outerRadius
+) {
   const result = buildCurrentDayUpperPath(
     ctx,
     card,
@@ -3136,7 +3167,8 @@ function drawCurrentDayRoundedTopRightFrame(ctx, card, bridgeY, lineWidth, color
     boundaryX,
     radius,
     new Path(),
-    lineWidth / 2
+    lineWidth / 2,
+    outerRadius
   );
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
@@ -3218,7 +3250,8 @@ function drawCurrentDayFrame(ctx) {
     lineColor,
     horizontalDirection,
     boundaryX,
-    framePathRadius
+    framePathRadius,
+    frameRadius
   );
 
   // A linha sempre parte do ponto final efetivo da curva.
