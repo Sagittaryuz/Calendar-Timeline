@@ -2040,6 +2040,10 @@ async function renderWidget(items, loadError) {
   // e não são parcialmente cobertas pelo bitmap do painel.
   drawCurrentDayFrameOverlay(contentCtx);
 
+  // A borda da Lua é redesenhada após o contorno externo da timeline.
+  // A borda superior da timeline não pode cobrir seu aro branco.
+  drawDayBoundaryMoonBordersOnForeground(contentCtx);
+
   // O cartão final já possui sua própria geometria arredondada.
 
   return contentCtx.getImage();
@@ -5902,6 +5906,42 @@ function drawDayBoundaryMoonsOnTop(ctx, weather) {
           ctx,
           moonCenterX,
           moonCenterY,
+          moonSize,
+          moonDate
+        );
+      }
+    }
+
+    nightDay = addDays(nightDay, 1);
+  }
+}
+
+function drawDayBoundaryMoonBordersOnForeground(ctx) {
+  const moonSize = weatherIconSize();
+  const moonCenterY = weatherIconCenterY();
+  let nightDay = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+
+  while (nightDay <= finalDay) {
+    const start = dateAtHour(nightDay, SETTINGS.nightStartHour);
+    const end = dateAtHour(addDays(nightDay, 1), SETTINGS.nightEndHour);
+
+    if (intervalIsVisible(start, end)) {
+      const centerTime = (start.getTime() + end.getTime()) / 2;
+      const moonDate = new Date(centerTime);
+      const moonCenterX = timeToX(moonDate);
+
+      if (
+        moonDate.getHours() === 0 &&
+        weatherIconIntersectsTimeline(moonCenterX, moonSize)
+      ) {
+        // A imagem da timeline é limitada ao seu retângulo. Aqui usamos
+        // o canvas principal para recolocar o aro que a borda superior
+        // poderia cobrir depois da composição.
+        drawDayBoundaryMoonBorder(
+          ctx,
+          CANVAS.plotLeft + moonCenterX,
+          CANVAS.timelineTop + moonCenterY,
           moonSize,
           moonDate
         );
