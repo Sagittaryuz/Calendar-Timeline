@@ -527,6 +527,10 @@ async function loadWindow() {
 
       if (!eventStart || !eventEnd) return;
 
+      // Eventos de dia inteiro continuam disponíveis para a timeline,
+      // mas não entram no quantitativo "E:n" dos cartões.
+      if (isAllDay) return;
+
       // A ocorrência confirmada por CalendarEvent.today() prevalece
       // inclusive quando o fim bruto de um evento de dia inteiro vem
       // antes da meia-noite real.
