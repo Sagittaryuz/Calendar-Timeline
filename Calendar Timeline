@@ -4130,6 +4130,10 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         rainByQuarter.set(timestamp, {
           amount,
           timestamp,
+          rainChance: Math.max(
+            0,
+            Math.min(100, Number(hour.rainChance) || 0)
+          ),
         });
       }
     }
