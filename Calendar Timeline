@@ -35,6 +35,9 @@ const SETTINGS = {
   forecaTokenHours: 24,
   // Margem visual para não transformar uma probabilidade isolada em chuva.
   rainEvidenceMinMM: 0.10,
+  // Régua fixa da altura das barras: 10 mm/h alcança o teto visual.
+  // O maior valor visível da janela não altera essa escala.
+  rainBarReferenceMMPerHour: 10,
   rainEvidenceMinChance: 55,
   rainEvidenceMinCloudiness: 40,
   rainSymbolMinChance: 35,
@@ -775,7 +778,7 @@ async function loadHourlyWeather(location) {
   const fm = FileManager.local();
   const cachePath = fm.joinPath(
     fm.documentsDirectory(),
-    "Calendar-Timeline-foreca-weather-v1.json"
+    "Calendar-Timeline-foreca-weather-v2.json"
   );
   let cached = null;
 
@@ -850,9 +853,9 @@ async function loadHourlyWeather(location) {
         Math.min(100, rainChanceValue ?? 0)
       );
 
-      // A API pode fornecer o acumulado horário com nomes diferentes,
-      // dependendo do produto/feed. O precipRate fica como último fallback,
-      // pois representa uma taxa e não necessariamente um acumulado.
+      // Somente campos de quantidade/acumulado entram no volume horário.
+      // precipRate é uma taxa e fica separado; misturá-lo com mm acumulados
+      // faria uma taxa parecer um volume de chuva.
       const explicitRain = firstFiniteWeatherNumber(
         forecast.precip,
         forecast.precipitation,
@@ -862,7 +865,9 @@ async function loadHourlyWeather(location) {
         forecast.precipitationSum,
         forecast.rain,
         forecast.rainAmount,
-        forecast.pr,
+        forecast.pr
+      );
+      const rainRate = firstFiniteWeatherNumber(
         forecast.precipRate
       );
       const rawCloudiness = firstFiniteWeatherNumber(
@@ -879,6 +884,10 @@ async function loadHourlyWeather(location) {
         rainMM: Math.max(
           0,
           Number.isFinite(explicitRain) ? explicitRain : 0
+        ),
+        rainRate: Math.max(
+          0,
+          Number.isFinite(rainRate) ? rainRate : 0
         ),
         symbol: String(forecast.symbol ?? ""),
         // Ausência de cloudiness não significa céu limpo. O valor nulo
@@ -1068,6 +1077,7 @@ function buildHourlyWeather(hours) {
           Math.min(100, Number(hour.rainChance) || 0)
         ),
         rainMM: Math.max(0, Number(hour.rainMM) || 0),
+        rainRate: Math.max(0, Number(hour.rainRate) || 0),
         symbol: String(hour.symbol ?? ""),
         cloudiness,
       };
@@ -4097,7 +4107,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
 
     if (
       !evidence.hasRain ||
-      amount <= 0 ||
+      amount < SETTINGS.rainEvidenceMinMM ||
       intervalEnd <= intervalStart
     ) {
       continue;
@@ -4130,12 +4140,6 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
 
   if (!rainEntries.length) return;
 
-  const maximumRain = Math.max(
-    0,
-    ...rainEntries.map((entry) => entry.amount)
-  );
-  if (maximumRain <= 0) return;
-
   const maximumBarHeight = Math.max(
     scaleVertical(4),
     graphBottom - graphTop - scaleVertical(2)
@@ -4156,13 +4160,29 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   );
 
   for (const entry of rainEntries) {
+    // A altura representa volume real, não a posição relativa dentro
+    // da janela. Assim, 0,10 mm continua pequeno mesmo se for o maior
+    // valor encontrado no período.
+    const referenceVolume = Math.max(
+      0.1,
+      Number(SETTINGS.rainBarReferenceMMPerHour) || 10
+    );
     const normalized = Math.max(
       0,
-      Math.min(1, entry.amount / maximumRain)
+      Math.min(1, entry.amount / referenceVolume)
     );
     const height = Math.max(
       scaleVertical(2),
       maximumBarHeight * normalized
+    );
+    // A probabilidade influencia a transparência, não a altura.
+    const probability = Math.max(
+      0,
+      Math.min(100, Number(entry.rainChance) || 0)
+    );
+    const opacity = Math.max(
+      0.42,
+      Math.min(1.0, 0.42 + (probability / 100) * 0.58)
     );
     const centerX = timeToX(new Date(entry.timestamp));
     if (
@@ -4180,7 +4200,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         barWidth,
         height
       ),
-      new Color(SETTINGS.rainLineColor, 1.0)
+      new Color(SETTINGS.rainLineColor, opacity)
     );
   }
 }
@@ -4211,19 +4231,11 @@ function drawOutlinedRainBar(ctx, rect, fillColor) {
 }
 
 function rainMillimetersForHour(hour) {
+  // Probabilidade não é volume. Sem um valor de precipitação em mm,
+  // não desenhamos uma barra de volume.
   const explicit = Number(hour.rainMM);
-  if (Number.isFinite(explicit) && explicit > 0) {
-    return explicit;
-  }
-
-  // Algumas respostas da Foreca fornecem apenas a probabilidade. Ela ainda
-  // merece uma barra discreta, mas nunca domina uma previsão com mm reais.
-  const probability = Math.max(
-    0,
-    Math.min(100, Number(hour.rainChance) || 0)
-  );
-  return probability > 0
-    ? Math.max(0.05, probability / 100)
+  return Number.isFinite(explicit) && explicit > 0
+    ? explicit
     : 0;
 }
 
