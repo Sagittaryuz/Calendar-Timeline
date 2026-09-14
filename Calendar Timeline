@@ -2142,7 +2142,9 @@ async function renderWidget(items, loadError) {
     contentCtx,
     timelineRect,
     TITLE_CARD_OUTER_CORNER_RADIUS,
-    "right"
+    "right",
+    0,
+    false
   );
 
   // A curva da moldura do dia atual também funciona como limite
@@ -2181,7 +2183,8 @@ function restoreRoundedSideCorners(
   rect,
   radius,
   side,
-  protectedStrokeOutset = 0
+  protectedStrokeOutset = 0,
+  roundTopCorner = true
 ) {
   const direction = side === "left" ? "left" : "right";
   const boundedRadius = Math.max(
@@ -2191,7 +2194,7 @@ function restoreRoundedSideCorners(
   if (boundedRadius <= 0) return;
 
   // A máscara acompanha a borda externa da curva. Assim, quando há
-  // uma linha branca sobre ela, o recorte começa depois do stroke e
+  // uma linha sobre ela, o recorte começa depois do stroke e
   // não come metade da espessura.
   const maskRadius =
     boundedRadius + Math.max(0, Number(protectedStrokeOutset) || 0);
@@ -2205,19 +2208,26 @@ function restoreRoundedSideCorners(
 
   // Restaura pixels inteiros: faixas em Y fracionado deixam emendas
   // semitransparentes mesmo usando uma cor com opacidade 1.
-  for (let pixelY = Math.floor(top); pixelY < Math.ceil(top + rect.height); pixelY++) {
-    const sampleY = Math.max(0, Math.min(rect.height, pixelY + 0.5 - top));
+  for (
+    let pixelY = Math.floor(top);
+    pixelY < Math.ceil(top + rect.height);
+    pixelY++
+  ) {
+    const sampleY = Math.max(
+      0,
+      Math.min(rect.height, pixelY + 0.5 - top)
+    );
     let outsideStart = direction === "right" ? right : left;
     let outsideEnd = direction === "left" ? left : right;
+    const isTopCorner =
+      roundTopCorner && sampleY < boundedRadius;
+    const isBottomCorner =
+      sampleY > rect.height - boundedRadius;
 
-    if (
-      sampleY < boundedRadius ||
-      sampleY > rect.height - boundedRadius
-    ) {
-      const cornerCenterY =
-        sampleY < boundedRadius
-          ? boundedRadius
-          : rect.height - boundedRadius;
+    if (isTopCorner || isBottomCorner) {
+      const cornerCenterY = isTopCorner
+        ? boundedRadius
+        : rect.height - boundedRadius;
       const verticalDistance = Math.abs(sampleY - cornerCenterY);
 
       if (verticalDistance <= maskRadius) {
@@ -2241,14 +2251,24 @@ function restoreRoundedSideCorners(
       direction === "right" &&
       outsideStart < right
     ) {
-      restoreWidgetBackgroundSpan(ctx, outsideStart, pixelY, right - outsideStart);
+      restoreWidgetBackgroundSpan(
+        ctx,
+        outsideStart,
+        pixelY,
+        right - outsideStart
+      );
     }
 
     if (
       direction === "left" &&
       outsideEnd > left
     ) {
-      restoreWidgetBackgroundSpan(ctx, left, pixelY, outsideEnd - left);
+      restoreWidgetBackgroundSpan(
+        ctx,
+        left,
+        pixelY,
+        outsideEnd - left
+      );
     }
   }
 }
@@ -2312,19 +2332,11 @@ function drawTimelineOuterBorder(ctx) {
     outline.addLine(new Point(left, top));
   } else {
     outline.move(new Point(left + centerRadius, top));
-    outline.addLine(new Point(right - centerRadius, top));
-    outline.addCurve(
-      new Point(right, top + centerRadius),
-      new Point(
-        right - centerRadius + centerRadius * curveFactor,
-        top
-      ),
-      new Point(
-        right,
-        top + centerRadius - centerRadius * curveFactor
-      )
-    );
+
+    // O canto superior direito da timeline é perpendicular.
+    outline.addLine(new Point(right, top));
     outline.addLine(new Point(right, bottom - centerRadius));
+
     outline.addCurve(
       new Point(right - centerRadius, bottom),
       new Point(
@@ -3419,9 +3431,9 @@ function drawTitleDayCard(
       : TITLE_CARD_STANDARD_CORNER_RADIUS,
     topRight: rightCornerRadius,
     // O cartão de hoje usa exatamente os mesmos quatro raios
-    // geométricos dos demais cartões. A moldura branca é desenhada
-    // depois, como uma camada adicional.
-    bottomRight: rightCornerRadius,
+    // geométricos dos demais cartões. O último quadro termina
+    // perpendicularmente no canto inferior direito.
+    bottomRight: isLast ? 0 : rightCornerRadius,
     bottomLeft: TITLE_CARD_STANDARD_CORNER_RADIUS,
   };
 
@@ -6306,6 +6318,26 @@ function timelineMoonPointIsVisible(x, y) {
       x >= clippedRect.x &&
       x <= clippedRect.x + clippedRect.width
     );
+  }
+
+  if (
+    x < clippedRect.x ||
+    x > clippedRect.x + clippedRect.width
+  ) {
+    return false;
+  }
+
+  // O canto superior direito da timeline é quadrado; a Lua pode
+  // ocupar essa região até o limite reto do painel.
+  const topRightStartX =
+    clippedRect.x + clippedRect.width - clippedRadius;
+  const topRightEndY =
+    clippedRect.y + clippedRadius;
+  if (
+    x >= topRightStartX &&
+    y <= topRightEndY
+  ) {
+    return true;
   }
 
   return roundedRectContainsPoint(
