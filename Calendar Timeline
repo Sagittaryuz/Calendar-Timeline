@@ -6801,10 +6801,13 @@ function drawCompactThermalBand(ctx, weather) {
   );
 
   // Barras opacas sobre a curva e antes dos textos de temperatura.
+  // A chuva ocupa a faixa livre até quase a base dos astros.
+  // Os charts são desenhados depois e continuam visualmente por cima.
+  const rainBarTop = weatherStripBottomY();
   drawThermalRainBars(
     ctx,
     sourceHours,
-    graphTop,
+    rainBarTop,
     graphBottom
   );
   drawVisibleDailyExtremes(
