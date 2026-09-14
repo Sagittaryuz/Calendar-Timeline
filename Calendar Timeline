@@ -2162,9 +2162,9 @@ async function renderWidget(items, loadError) {
     currentDayFrame.lineWidth / 2
   );
 
-  // Todas as partes da moldura são desenhadas depois da timeline.
-  // Assim, superior, ponte, laterais e inferior usam a mesma espessura
-  // e não são parcialmente cobertas pelo bitmap do painel.
+  // A linha inferior horizontal foi desenhada dentro do painel,
+  // atrás do círculo da mudança de dia. Ponte, topo e laterais
+  // permanecem em primeiro plano para não serem cobertos pelo bitmap.
   drawCurrentDayFrameOverlay(contentCtx);
 
   // A borda da Lua é redesenhada após o contorno externo da timeline.
@@ -2780,12 +2780,11 @@ function fillCurrentDayVerticalLine(
   );
 }
 
-function drawCurrentDayBottomLineUnderlay(ctx) {
+function drawCurrentDayBottomLineOnTimelinePanel(ctx) {
   const {
     todayCard,
     boundaryX,
     bottomLineCenterY,
-    frameRadius,
     framePathRadius,
     lineWidth,
     lineColor,
@@ -2796,32 +2795,65 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
       todayCard,
       boundaryX
     );
-  const stationarySide =
-    direction === "right" ? "left" : "right";
-  const stationaryBottomX =
-    stationarySide === "left"
-      ? todayCard.x + frameRadius
-      : todayCard.x + todayCard.width - frameRadius;
+  const bottomBridge = currentDayBottomBridgeMetrics(
+    todayCard,
+    boundaryX,
+    lineWidth,
+    framePathRadius,
+    direction
+  );
+  const localStartX =
+    bottomBridge.endpointX - CANVAS.plotLeft;
+  const localBoundaryX =
+    boundaryX - CANVAS.plotLeft;
+  const localCenterY =
+    bottomLineCenterY - CANVAS.timelineTop;
 
-  // A linha inferior pertence à mesma moldura que a ponte superior.
-  // Por isso ela também é espelhada quando a virada está à esquerda.
   fillCurrentDayHorizontalLine(
     ctx,
-    stationaryBottomX,
-    boundaryX,
-    bottomLineCenterY,
+    localStartX,
+    localBoundaryX,
+    localCenterY,
     lineWidth,
     lineColor
   );
+}
 
+function drawCurrentDayBottomLineUnderlay(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    bottomLineCenterY,
+    framePathRadius,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  const direction =
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
+  const bottomBridge = currentDayBottomBridgeMetrics(
+    todayCard,
+    boundaryX,
+    lineWidth,
+    framePathRadius,
+    direction
+  );
+
+  // A lateral continua no canvas principal para não ser coberta
+  // pela composição retangular da timeline. A linha horizontal é
+  // desenhada dentro do painel, antes do círculo da mudança de dia.
   drawCurrentDayRoundedSideFrame(
     ctx,
     todayCard,
     bottomLineCenterY,
     lineWidth,
     lineColor,
-    stationarySide,
-    framePathRadius
+    direction === "right" ? "left" : "right",
+    framePathRadius,
+    bottomBridge.pathRadius
   );
 }
 
@@ -2835,6 +2867,57 @@ function currentDayFrameCornerRadius(card) {
   );
 }
 
+
+function currentDayBottomBridgeMetrics(
+  card,
+  boundaryX,
+  lineWidth,
+  radius,
+  horizontalDirection
+) {
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
+  const directionSign = direction === "right" ? 1 : -1;
+  const strokeInset = Math.max(
+    0,
+    Math.min(
+      Math.max(0, Number(lineWidth) || 0) / 2,
+      card.width / 2
+    )
+  );
+  const sideEdgeX =
+    direction === "right"
+      ? card.x + strokeInset
+      : card.x + card.width - strokeInset;
+  const signedDistance = boundaryX - sideEdgeX;
+  const distance = Math.abs(signedDistance);
+  const maximumRadius = Math.max(
+    0,
+    Math.min(Number(radius) || 0, card.width / 2)
+  );
+  const pathRadius = Math.min(maximumRadius, distance);
+  const curveDirectionSign =
+    signedDistance === 0
+      ? directionSign
+      : Math.sign(signedDistance);
+  const endpointX =
+    distance < maximumRadius
+      ? boundaryX
+      : sideEdgeX + curveDirectionSign * pathRadius;
+
+  return {
+    direction,
+    sideEdgeX,
+    signedDistance,
+    distance,
+    pathRadius,
+    endpointX,
+    isFlexible:
+      distance > 0 &&
+      distance < maximumRadius,
+  };
+}
+
 function drawCurrentDayRoundedSideFrame(
   ctx,
   card,
@@ -2842,14 +2925,27 @@ function drawCurrentDayRoundedSideFrame(
   lineWidth,
   color,
   side,
-  radius
+  radius,
+  bottomRadius = radius
 ) {
-  const boundedRadius = Math.max(
+  const availableHeight = Math.max(
+    0,
+    (bottomY - card.y) / 2
+  );
+  const boundedTopRadius = Math.max(
     0,
     Math.min(
-      radius,
+      Number(radius) || 0,
       card.width / 2,
-      Math.max(0, (bottomY - card.y) / 2)
+      availableHeight
+    )
+  );
+  const boundedBottomRadius = Math.max(
+    0,
+    Math.min(
+      Number(bottomRadius) || 0,
+      card.width / 2,
+      availableHeight
     )
   );
   const curveFactor = 0.5522847498;
@@ -2864,64 +2960,108 @@ function drawCurrentDayRoundedSideFrame(
   const left = card.x + strokeInset;
   const right = card.x + card.width - strokeInset;
 
-  if (boundedRadius <= 0) {
-    const x = side === "right" ? right : left;
-    path.move(new Point(x, card.y));
-    path.addLine(new Point(x, bottomY));
-  } else if (side === "right") {
-    path.move(new Point(right - boundedRadius, card.y));
-    path.addCurve(
-      new Point(right, card.y + boundedRadius),
-      new Point(
-        right - boundedRadius + boundedRadius * curveFactor,
-        card.y
-      ),
-      new Point(
-        right,
-        card.y + boundedRadius - boundedRadius * curveFactor
-      )
-    );
-    path.addLine(
-      new Point(right, bottomY - boundedRadius)
-    );
-    path.addCurve(
-      new Point(right - boundedRadius, bottomY),
-      new Point(
-        right,
-        bottomY - boundedRadius + boundedRadius * curveFactor
-      ),
-      new Point(
-        right - boundedRadius + boundedRadius * curveFactor,
-        bottomY
-      )
-    );
+  if (side === "right") {
+    if (boundedTopRadius > 0) {
+      path.move(
+        new Point(right - boundedTopRadius, card.y)
+      );
+      path.addCurve(
+        new Point(
+          right,
+          card.y + boundedTopRadius
+        ),
+        new Point(
+          right - boundedTopRadius +
+            boundedTopRadius * curveFactor,
+          card.y
+        ),
+        new Point(
+          right,
+          card.y + boundedTopRadius -
+            boundedTopRadius * curveFactor
+        )
+      );
+    } else {
+      path.move(new Point(right, card.y));
+    }
+
+    if (boundedBottomRadius > 0) {
+      path.addLine(
+        new Point(
+          right,
+          bottomY - boundedBottomRadius
+        )
+      );
+      path.addCurve(
+        new Point(
+          right - boundedBottomRadius,
+          bottomY
+        ),
+        new Point(
+          right,
+          bottomY - boundedBottomRadius +
+            boundedBottomRadius * curveFactor
+        ),
+        new Point(
+          right - boundedBottomRadius +
+            boundedBottomRadius * curveFactor,
+          bottomY
+        )
+      );
+    } else {
+      path.addLine(new Point(right, bottomY));
+    }
   } else {
-    path.move(new Point(left + boundedRadius, card.y));
-    path.addCurve(
-      new Point(left, card.y + boundedRadius),
-      new Point(
-        left + boundedRadius - boundedRadius * curveFactor,
-        card.y
-      ),
-      new Point(
-        left,
-        card.y + boundedRadius - boundedRadius * curveFactor
-      )
-    );
-    path.addLine(
-      new Point(left, bottomY - boundedRadius)
-    );
-    path.addCurve(
-      new Point(left + boundedRadius, bottomY),
-      new Point(
-        left,
-        bottomY - boundedRadius + boundedRadius * curveFactor
-      ),
-      new Point(
-        left + boundedRadius - boundedRadius * curveFactor,
-        bottomY
-      )
-    );
+    if (boundedTopRadius > 0) {
+      path.move(
+        new Point(left + boundedTopRadius, card.y)
+      );
+      path.addCurve(
+        new Point(
+          left,
+          card.y + boundedTopRadius
+        ),
+        new Point(
+          left + boundedTopRadius -
+            boundedTopRadius * curveFactor,
+          card.y
+        ),
+        new Point(
+          left,
+          card.y + boundedTopRadius -
+            boundedTopRadius * curveFactor
+        )
+      );
+    } else {
+      path.move(new Point(left, card.y));
+    }
+
+    if (boundedBottomRadius > 0) {
+      path.addLine(
+        new Point(
+          left,
+          bottomY - boundedBottomRadius
+        )
+      );
+      path.addCurve(
+        new Point(
+          left + boundedBottomRadius,
+          bottomY
+        ),
+        new Point(
+          left,
+          bottomY - boundedBottomRadius +
+            boundedBottomRadius * curveFactor
+        ),
+        new Point(
+          left + boundedBottomRadius -
+            boundedBottomRadius * curveFactor,
+          bottomY
+        )
+      );
+    } else {
+      path.addLine(new Point(left, bottomY));
+    }
   }
 
   ctx.setStrokeColor(color);
@@ -6099,6 +6239,160 @@ function drawDayBoundaryMoonsOnTop(ctx, weather) {
   }
 }
 
+
+function roundedRectContainsPoint(rect, radius, x, y) {
+  const left = rect.x;
+  const right = rect.x + rect.width;
+  const top = rect.y;
+  const bottom = rect.y + rect.height;
+  if (
+    x < left ||
+    x > right ||
+    y < top ||
+    y > bottom
+  ) {
+    return false;
+  }
+
+  const boundedRadius = Math.max(
+    0,
+    Math.min(
+      Number(radius) || 0,
+      rect.width / 2,
+      rect.height / 2
+    )
+  );
+  if (boundedRadius <= 0) return true;
+
+  if (
+    x >= left + boundedRadius &&
+    x <= right - boundedRadius
+  ) {
+    return true;
+  }
+  if (
+    y >= top + boundedRadius &&
+    y <= bottom - boundedRadius
+  ) {
+    return true;
+  }
+
+  const cornerCenterX =
+    x < left + boundedRadius
+      ? left + boundedRadius
+      : right - boundedRadius;
+  const cornerCenterY =
+    y < top + boundedRadius
+      ? top + boundedRadius
+      : bottom - boundedRadius;
+  return (
+    Math.hypot(
+      x - cornerCenterX,
+      y - cornerCenterY
+    ) <= boundedRadius
+  );
+}
+
+function timelineMoonPointIsVisible(x, y) {
+  const rect = new Rect(
+    CANVAS.plotLeft,
+    CANVAS.timelineTop,
+    timelineWidth(),
+    timelineHeight()
+  );
+  // O aro tem 4 px. Recuar 2 px o centro do traço faz sua borda
+  // externa coincidir exatamente com o limite visível da timeline.
+  const strokeInset = dayBoundaryLineWidth() / 2;
+  const clippedRect = new Rect(
+    rect.x + strokeInset,
+    rect.y + strokeInset,
+    Math.max(1, rect.width - strokeInset * 2),
+    Math.max(1, rect.height - strokeInset * 2)
+  );
+  const clippedRadius = Math.max(
+    0,
+    Math.min(
+      WIDGET_COMMON_CORNER_RADIUS,
+      rect.width / 2,
+      rect.height / 2
+    ) - strokeInset
+  );
+
+  // O aro pode atravessar ligeiramente as bordas horizontais,
+  // como já acontecia visualmente sobre a linha superior. O limite
+  // lateral, porém, nunca pode escapar do retângulo arredondado.
+  if (
+    y < clippedRect.y ||
+    y > clippedRect.y + clippedRect.height
+  ) {
+    return (
+      x >= clippedRect.x &&
+      x <= clippedRect.x + clippedRect.width
+    );
+  }
+
+  return roundedRectContainsPoint(
+    clippedRect,
+    clippedRadius,
+    x,
+    y
+  );
+}
+
+function drawClippedDayBoundaryMoonBorder(
+  ctx,
+  centerX,
+  centerY,
+  size,
+  borderDate
+) {
+  const isDayBoundary =
+    borderDate instanceof Date &&
+    borderDate.getHours() === 0 &&
+    borderDate.getMinutes() === 0;
+  if (!isDayBoundary) return;
+
+  const lineWidth = dayBoundaryLineWidth();
+  const ringRadius = size / 2 + lineWidth / 2;
+  const sampleCount = 720;
+  const path = new Path();
+  let previousVisible = false;
+  let hasVisibleSegment = false;
+
+  for (let index = 0; index <= sampleCount; index++) {
+    const angle =
+      -Math.PI / 2 +
+      (index * Math.PI * 2) / sampleCount;
+    const point = new Point(
+      centerX + Math.cos(angle) * ringRadius,
+      centerY + Math.sin(angle) * ringRadius
+    );
+    const visible = timelineMoonPointIsVisible(
+      point.x,
+      point.y
+    );
+
+    if (visible) {
+      if (previousVisible) path.addLine(point);
+      else path.move(point);
+      hasVisibleSegment = true;
+    }
+    previousVisible = visible;
+  }
+
+  if (!hasVisibleSegment) return;
+
+  ctx.setStrokeColor(
+    dayBoundaryLineColor(
+      borderDate,
+      loadResult.holidayDates
+    )
+  );
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
 function drawDayBoundaryMoonBordersOnForeground(ctx) {
   const moonSize = weatherIconSize();
   const moonCenterY = weatherIconCenterY();
@@ -6118,10 +6412,9 @@ function drawDayBoundaryMoonBordersOnForeground(ctx) {
         moonDate.getHours() === 0 &&
         weatherIconIntersectsTimeline(moonCenterX, moonSize)
       ) {
-        // A imagem da timeline é limitada ao seu retângulo. Aqui usamos
-        // o canvas principal para recolocar o aro que a borda superior
-        // poderia cobrir depois da composição.
-        drawDayBoundaryMoonBorder(
+        // O aro é recolocado depois da composição, mas agora
+        // segue a mesma geometria arredondada da timeline.
+        drawClippedDayBoundaryMoonBorder(
           ctx,
           CANVAS.plotLeft + moonCenterX,
           CANVAS.timelineTop + moonCenterY,
@@ -6735,6 +7028,7 @@ async function renderTimelinePanel(items, loadError) {
   // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
   // eventos e lembretes permanecem como a camada visual superior da agenda.
   drawBottomHourLegend(ctx);
+  drawCurrentDayBottomLineOnTimelinePanel(ctx);
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
