@@ -2162,9 +2162,9 @@ async function renderWidget(items, loadError) {
     currentDayFrame.lineWidth / 2
   );
 
-  // A linha inferior horizontal foi desenhada dentro do painel,
-  // atrás do círculo da mudança de dia. Ponte, topo e laterais
-  // permanecem em primeiro plano para não serem cobertos pelo bitmap.
+  // A linha inferior é prolongamento da curva lateral e é desenhada
+  // no mesmo Path, em primeiro plano. O círculo da mudança de dia
+  // continua sendo composto no painel e permanece visualmente à frente.
   drawCurrentDayFrameOverlay(contentCtx);
 
   // A borda da Lua é redesenhada após o contorno externo da timeline.
@@ -2780,45 +2780,6 @@ function fillCurrentDayVerticalLine(
   );
 }
 
-function drawCurrentDayBottomLineOnTimelinePanel(ctx) {
-  const {
-    todayCard,
-    boundaryX,
-    bottomLineCenterY,
-    framePathRadius,
-    lineWidth,
-    lineColor,
-  } = currentDayFrameMetrics();
-
-  const direction =
-    currentDayFrameHorizontalDirection(
-      todayCard,
-      boundaryX
-    );
-  const bottomBridge = currentDayBottomBridgeMetrics(
-    todayCard,
-    boundaryX,
-    lineWidth,
-    framePathRadius,
-    direction
-  );
-  const localStartX =
-    bottomBridge.endpointX - CANVAS.plotLeft;
-  const localBoundaryX =
-    boundaryX - CANVAS.plotLeft;
-  const localCenterY =
-    bottomLineCenterY - CANVAS.timelineTop;
-
-  fillCurrentDayHorizontalLine(
-    ctx,
-    localStartX,
-    localBoundaryX,
-    localCenterY,
-    lineWidth,
-    lineColor
-  );
-}
-
 function drawCurrentDayBottomLineUnderlay(ctx) {
   const {
     todayCard,
@@ -2842,9 +2803,9 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
     direction
   );
 
-  // A lateral continua no canvas principal para não ser coberta
-  // pela composição retangular da timeline. A linha horizontal é
-  // desenhada dentro do painel, antes do círculo da mudança de dia.
+  // Curva inferior e linha horizontal usam um único Path e um único stroke.
+  // O ponto de união é tangente: a curva termina horizontalmente e o
+  // segmento continua até o centro da virada, sem emenda visual.
   drawCurrentDayRoundedSideFrame(
     ctx,
     todayCard,
@@ -2853,7 +2814,8 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
     lineColor,
     direction === "right" ? "left" : "right",
     framePathRadius,
-    bottomBridge.pathRadius
+    bottomBridge.pathRadius,
+    boundaryX
   );
 }
 
@@ -2926,7 +2888,8 @@ function drawCurrentDayRoundedSideFrame(
   color,
   side,
   radius,
-  bottomRadius = radius
+  bottomRadius = radius,
+  continuationX = null
 ) {
   const availableHeight = Math.max(
     0,
@@ -3062,6 +3025,12 @@ function drawCurrentDayRoundedSideFrame(
     } else {
       path.addLine(new Point(left, bottomY));
     }
+  }
+
+  // A linha inferior é prolongamento direto do último ponto da curva.
+  // Não há uma segunda tampa nem uma segunda rasterização no encontro.
+  if (Number.isFinite(Number(continuationX))) {
+    path.addLine(new Point(Number(continuationX), bottomY));
   }
 
   ctx.setStrokeColor(color);
@@ -7028,7 +6997,8 @@ async function renderTimelinePanel(items, loadError) {
   // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
   // eventos e lembretes permanecem como a camada visual superior da agenda.
   drawBottomHourLegend(ctx);
-  drawCurrentDayBottomLineOnTimelinePanel(ctx);
+  // A moldura inferior contínua é composta depois, no canvas principal,
+  // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
