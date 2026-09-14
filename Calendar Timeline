@@ -3175,15 +3175,22 @@ function buildCurrentDayUpperPath(
     0,
     Math.min(Number(pathInset) || 0, card.width / 2)
   );
-  // O raio comum é externo. Para um traço centrado, o raio do caminho
-  // da ponte também recua exatamente metade da espessura.
+  // No canto convexo, o limite visível tem raio caminho + meio traço.
+  // Na ponte côncava, esse limite tem raio caminho - meio traço.
+  // A classificação acompanha o sentido real da saída, inclusive espelhada.
   const bridgeOuterRadius = Math.max(
     0,
     Number(outerRadius) || 0
   );
+  const bridgeEdgeX = direction === "right"
+    ? card.x + card.width - inset
+    : card.x + inset;
+  const outwardSign = direction === "right" ? 1 : -1;
+  const bridgeIsConcave =
+    (boundaryX - bridgeEdgeX) * outwardSign >= 0;
   const bridgePathRadius = Math.max(
     0,
-    bridgeOuterRadius - inset
+    bridgeOuterRadius + (bridgeIsConcave ? inset : -inset)
   );
   const bridge = currentDayBridgeMetrics(
     card,
