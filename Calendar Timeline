@@ -3268,7 +3268,8 @@ function drawCurrentDayRoundedTopRightFrame(
   horizontalDirection,
   boundaryX,
   radius,
-  outerRadius
+  outerRadius,
+  continuationX = null
 ) {
   const result = buildCurrentDayUpperPath(
     ctx,
@@ -3283,6 +3284,14 @@ function drawCurrentDayRoundedTopRightFrame(
     lineWidth / 2,
     outerRadius
   );
+  // O trecho horizontal continua o último ponto da curva superior
+  // no mesmo Path, sem tampa ou rasterização independente.
+  if (Number.isFinite(Number(continuationX))) {
+    result.path.addLine(
+      new Point(Number(continuationX), bridgeY)
+    );
+  }
+
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
   ctx.addPath(result.path);
@@ -3356,7 +3365,9 @@ function drawCurrentDayFrame(ctx) {
       todayCard,
       boundaryX
     );
-  const bridge = drawCurrentDayRoundedTopRightFrame(
+  // O arco superior e a linha horizontal até a virada do dia
+  // são uma única trajetória contínua.
+  drawCurrentDayRoundedTopRightFrame(
     ctx,
     todayCard,
     bridgeY,
@@ -3365,18 +3376,8 @@ function drawCurrentDayFrame(ctx) {
     horizontalDirection,
     boundaryX,
     framePathRadius,
-    frameRadius
-  );
-
-  // A linha sempre parte do ponto final efetivo da curva.
-  // Com pouco espaço, o próprio arco chega até a linha vertical.
-  fillCurrentDayHorizontalLine(
-    ctx,
-    bridge.endpointX,
-    boundaryX,
-    bridgeY,
-    lineWidth,
-    lineColor
+    frameRadius,
+    boundaryX
   );
 }
 
