@@ -7032,9 +7032,9 @@ async function renderTimelinePanel(items, loadError) {
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
-  // O espaço abaixo do background solar permanece livre para a timeline.
-  // A chuva é desenhada somente dentro da faixa térmica inferior.
-  // Assim nenhuma barra atravessa os charts dos eventos e lembretes.
+  // A chuva parte da base térmica e pode subir até quase a faixa dos astros.
+  // Ela é desenhada antes dos charts, eventos e lembretes, que permanecem
+  // visualmente por cima das barras.
   drawCompactThermalBand(ctx, hourlyWeather);
 
   // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
