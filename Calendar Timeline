@@ -50,6 +50,12 @@ const SETTINGS = {
   // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
   nonTodayTimelineOverlayColor: "#5A5A5F",
   nonTodayTimelineOverlayOpacity: 0.64,
+  // Desfoque de foco aplicado somente aos dias posteriores
+  // enquanto ainda houver compromissos ou pendências válidas hoje.
+  futureTimelineBlurEnabled: true,
+  futureTimelineBlurDownsampleFactor: 0.24,
+  futureTimelineBlurTintColor: "#111216",
+  futureTimelineBlurTintOpacity: 0.36,
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
   saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
@@ -2140,6 +2146,16 @@ async function renderWidget(items, loadError) {
     )
   );
 
+  // O futuro é suavizado depois da composição completa do painel, mas
+  // antes da máscara geométrica. Assim os charts, eventos, lembretes,
+  // astros e fundo posterior recebem o mesmo tratamento sem criar
+  // retângulos fora dos cantos da timeline.
+  if (shouldBlurFutureTimeline()) {
+    drawFutureTimelineBlurLayer(contentCtx);
+    // O círculo da próxima mudança de dia é estrutural e permanece nítido.
+    drawCurrentDayBoundaryBadgeOnForeground(contentCtx);
+  }
+
   // O painel da timeline usa o perfil comum de cantos. O mesmo perfil
   // também será aplicado ao contorno e ao recorte dos astros.
   const timelineRect = new Rect(
@@ -2196,6 +2212,209 @@ async function renderWidget(items, loadError) {
   // O cartão final já possui sua própria geometria arredondada.
 
   return contentCtx.getImage();
+}
+
+function shouldBlurFutureTimeline() {
+  if (!SETTINGS.futureTimelineBlurEnabled) return false;
+
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return false;
+
+  // Sem conseguir verificar o Calendário/Lembretes, mantém o futuro
+  // protegido até que a leitura volte a funcionar.
+  if (loadResult?.error) return true;
+
+  return hasBlockingTodayTimelineItems(loadResult?.items ?? []);
+}
+
+function hasBlockingTodayTimelineItems(items) {
+  const todayStart = startOfDay(windowStart);
+  const tomorrowStart = addDays(todayStart, 1);
+  const todayStartMs = todayStart.getTime();
+  const tomorrowStartMs = tomorrowStart.getTime();
+  const nowMs = now.getTime();
+
+  return (Array.isArray(items) ? items : []).some((item) => {
+    if (
+      !item ||
+      !(item.start instanceof Date) ||
+      !(item.end instanceof Date)
+    ) {
+      return false;
+    }
+
+    const startMs = item.start.getTime();
+    const endMs = item.end.getTime();
+    if (
+      !Number.isFinite(startMs) ||
+      !Number.isFinite(endMs)
+    ) {
+      return false;
+    }
+
+    // O item precisa ainda estar pendente/ativo e pertencer ao dia atual.
+    // Isso inclui compromissos que atravessam a meia-noite.
+    if (
+      endMs <= nowMs ||
+      endMs <= todayStartMs ||
+      startMs >= tomorrowStartMs
+    ) {
+      return false;
+    }
+
+    if (item.kind === "event") {
+      // Eventos de dia inteiro e aniversários não bloqueiam o futuro.
+      return !item.isAllDay && !isBirthdayItem(item);
+    }
+
+    // Os itens retornados pelo EventKit são lembretes incompletos.
+    // Lembretes sem horário continuam sendo pendências válidas.
+    return item.kind === "reminder";
+  });
+}
+
+function futureTimelineBlurMetrics() {
+  const tomorrowStart = addDays(startOfDay(windowStart), 1);
+  const rawStartX = timeToX(tomorrowStart);
+  const panelWidth = Math.max(1, Math.round(timelineWidth()));
+  const startX = Math.max(
+    0,
+    Math.min(panelWidth, Math.round(rawStartX))
+  );
+
+  return {
+    startX,
+    width: Math.max(0, panelWidth - startX),
+    height: Math.max(1, Math.round(timelineHeight())),
+    absoluteX: CANVAS.plotLeft + startX,
+    absoluteY: Math.round(CANVAS.timelineTop),
+  };
+}
+
+function drawFutureTimelineBlurLayer(ctx) {
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return;
+
+  const blurRect = new Rect(
+    metrics.absoluteX,
+    CANVAS.timelineTop,
+    metrics.width,
+    timelineHeight()
+  );
+
+  // O snapshot vem do canvas principal, já com o gradiente e o fundo
+  // contínuo incorporados. Isso impede que a imagem desfocada preserve
+  // transparências que deixariam o texto original nítido por baixo.
+  try {
+    const composedImage = ctx.getImage();
+    const futureImage = cropCanvasImage(
+      composedImage,
+      metrics.absoluteX,
+      metrics.absoluteY,
+      metrics.width,
+      metrics.height
+    );
+    const softenedImage = softenTimelineImage(
+      futureImage,
+      metrics.width,
+      metrics.height
+    );
+    ctx.drawImageInRect(softenedImage, blurRect);
+  } catch (_) {
+    // A camada translúcida abaixo continua funcionando mesmo se o
+    // redimensionamento rasterizado não estiver disponível.
+  }
+
+  // Reduz o contraste restante e mantém o futuro parcialmente visível.
+  ctx.setFillColor(
+    new Color(
+      SETTINGS.futureTimelineBlurTintColor,
+      SETTINGS.futureTimelineBlurTintOpacity
+    )
+  );
+  ctx.fillRect(blurRect);
+}
+
+function cropCanvasImage(image, x, y, width, height) {
+  const cropCtx = new DrawContext();
+  cropCtx.size = new Size(width, height);
+  cropCtx.opaque = true;
+  cropCtx.respectScreenScale = false;
+  cropCtx.drawImageAtPoint(
+    image,
+    new Point(-Math.round(x), -Math.round(y))
+  );
+  return cropCtx.getImage();
+}
+
+function softenTimelineImage(image, width, height) {
+  const factor = Math.max(
+    0.12,
+    Math.min(
+      0.50,
+      Number(SETTINGS.futureTimelineBlurDownsampleFactor) || 0.24
+    )
+  );
+  const reducedWidth = Math.max(1, Math.round(width * factor));
+  const reducedHeight = Math.max(1, Math.round(height * factor));
+
+  const reducedCtx = new DrawContext();
+  reducedCtx.size = new Size(reducedWidth, reducedHeight);
+  reducedCtx.opaque = true;
+  reducedCtx.respectScreenScale = false;
+  reducedCtx.drawImageInRect(
+    image,
+    new Rect(0, 0, reducedWidth, reducedHeight)
+  );
+
+  const expandedCtx = new DrawContext();
+  expandedCtx.size = new Size(width, height);
+  expandedCtx.opaque = true;
+  expandedCtx.respectScreenScale = false;
+  expandedCtx.drawImageInRect(
+    reducedCtx.getImage(),
+    new Rect(0, 0, width, height)
+  );
+  return expandedCtx.getImage();
+}
+
+function drawCurrentDayBoundaryBadgeOnForeground(ctx) {
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return;
+
+  const boundaryDate = addDays(startOfDay(windowStart), 1);
+  const localX = timelineLegendCenterX(boundaryDate);
+  if (
+    localX < 0 ||
+    localX > timelineWidth()
+  ) {
+    return;
+  }
+
+  const centerX = CANVAS.plotLeft + localX;
+  const centerY = CANVAS.timelineTop + bottomLegendCenterY();
+  const style = dayBadgeStyle(
+    boundaryDate,
+    loadResult.holidayDates
+  );
+  const badge = dayLegendCircleRect(centerX, centerY);
+  const fontSize = scaleFontSize(20);
+  const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
+
+  ctx.setFillColor(style.background);
+  ctx.fillEllipse(badge);
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(style.text);
+  ctx.setTextAlignedCenter();
+  ctx.drawTextInRect(
+    shortWeekday(boundaryDate),
+    centeredDayLegendTextRect(
+      centerX,
+      centerY,
+      textWidth,
+      fontSize
+    )
+  );
 }
 
 function restoreRoundedSideCorners(
