@@ -3658,10 +3658,14 @@ function drawTitleDayCard(
     dayBackgroundColor !== SETTINGS.timelineBackgroundColor;
   // Dias úteis não atuais usam o cinza da timeline; sábado, domingo e
   // feriado preservam respectivamente azul, vermelho e amarelo.
+  // Durante o blur, todos os quadros não atuais usam o mesmo
+  // cinza neutro, sem alterar a aparência quando o futuro está livre.
   const cardColor = new Color(
-    isSpecialDay
-      ? dayBackgroundColor
-      : SETTINGS.nonTodayTimelineOverlayColor,
+    shouldBlurFutureTimeline()
+      ? "#2D2D31"
+      : isSpecialDay
+        ? dayBackgroundColor
+        : SETTINGS.nonTodayTimelineOverlayColor,
     1.0
   );
 
