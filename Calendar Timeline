@@ -2302,7 +2302,7 @@ async function renderWidget(items, loadError) {
   // A linha inferior é prolongamento da curva lateral e é desenhada
   // no mesmo Path, em primeiro plano. O círculo da mudança de dia
   // continua sendo composto no painel e permanece visualmente à frente.
-  drawCurrentDayFrameOverlay(contentCtx);
+  drawCurrentDayFrameOverlay(contentCtx, items);
 
   // A borda da Lua é redesenhada após o contorno externo da timeline.
   // A borda superior da timeline não pode cobrir seu aro branco.
@@ -3679,14 +3679,72 @@ function currentDayFrameHorizontalDirection(
   return "right";
 }
 
-function drawCurrentDayFrameOverlay(ctx) {
+function drawCurrentDayFrameOverlay(ctx, items = []) {
   // A moldura completa precisa ficar na camada de primeiro plano.
   drawCurrentDayBottomLineUnderlay(ctx);
   drawCurrentDayFrame(ctx);
-  drawCurrentDayBoundaryVerticalOverlay(ctx);
+  drawCurrentDayBoundaryVerticalOverlay(ctx, items);
 }
 
-function drawCurrentDayBoundaryVerticalOverlay(ctx) {
+function pendingDayCarryoverBorderOutset() {
+  const gap = Math.max(
+    0,
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderGap) || 0
+    )
+  );
+  const borderWidth = Math.max(
+    scaleVertical(1),
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderWidth) || 1
+    )
+  );
+  return gap + borderWidth / 2;
+}
+
+function pendingCarryoverChartVerticalSpans(items, boundaryDate) {
+  const spans = [];
+  const candidates = Array.isArray(items) ? items : [];
+  const boundaryMs =
+    boundaryDate instanceof Date ? boundaryDate.getTime() : NaN;
+  const outset = pendingDayCarryoverBorderOutset();
+
+  for (const item of candidates) {
+    if (
+      !item?.isPendingDayCarryover ||
+      item.isOverflow ||
+      !(item.start instanceof Date) ||
+      !(item.end instanceof Date) ||
+      !Number.isFinite(boundaryMs) ||
+      item.start.getTime() >= boundaryMs ||
+      item.end.getTime() <= boundaryMs
+    ) {
+      continue;
+    }
+
+    const bar = timelineBarVerticalRect(item);
+    if (!bar) continue;
+
+    spans.push({
+      top: CANVAS.timelineTop + bar.top - outset,
+      bottom: CANVAS.timelineTop + bar.bottom + outset,
+    });
+  }
+
+  return spans
+    .sort((first, second) => first.top - second.top)
+    .reduce((merged, span) => {
+      const previous = merged[merged.length - 1];
+      if (previous && span.top <= previous.bottom) {
+        previous.bottom = Math.max(previous.bottom, span.bottom);
+      } else {
+        merged.push({ ...span });
+      }
+      return merged;
+    }, []);
+}
+
+function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
   const {
     boundaryX,
     lineWidth,
@@ -3706,16 +3764,39 @@ function drawCurrentDayBoundaryVerticalOverlay(ctx) {
     DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const rasterWidth = Math.max(1, Math.round(lineWidth));
   const rasterLeftX = Math.round(boundaryX - rasterWidth / 2);
-
-  ctx.setFillColor(lineColor);
-  ctx.fillRect(
-    new Rect(
-      rasterLeftX,
-      lineTop,
-      rasterWidth,
-      Math.max(1, lineBottom - lineTop)
-    )
+  const spans = pendingCarryoverChartVerticalSpans(
+    items,
+    addDays(startOfDay(windowStart), 1)
   );
+
+  // Fragmenta apenas o traço estrutural. O chart e sua borda externa
+  // permanecem intactos e aparecem acima da linha vertical.
+  const drawLineSpan = (startY, endY) => {
+    const clippedStart = Math.max(lineTop, startY);
+    const clippedEnd = Math.min(lineBottom, endY);
+    if (clippedEnd <= clippedStart) return;
+
+    ctx.setFillColor(lineColor);
+    ctx.fillRect(
+      new Rect(
+        rasterLeftX,
+        clippedStart,
+        rasterWidth,
+        clippedEnd - clippedStart
+      )
+    );
+  };
+
+  let cursorY = lineTop;
+  for (const span of spans) {
+    const spanTop = Math.max(lineTop, span.top);
+    const spanBottom = Math.min(lineBottom, span.bottom);
+    if (spanBottom <= lineTop || spanTop >= lineBottom) continue;
+
+    drawLineSpan(cursorY, spanTop);
+    cursorY = Math.max(cursorY, spanBottom);
+  }
+  drawLineSpan(cursorY, lineBottom);
 }
 
 function drawCurrentDayFrame(ctx) {
