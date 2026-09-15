@@ -7512,46 +7512,63 @@ function drawVisibleDailyExtremes(
 }
 
 async function renderTimelinePanel(items, loadError) {
+  // Mantém a base visual separada da composição final. Isso impede que
+  // a rasterização do blur substitua pixels transparentes do dia atual.
+  const baseCtx = new DrawContext();
+  baseCtx.size = new Size(timelineWidth(), timelineHeight());
+  baseCtx.opaque = false;
+  baseCtx.respectScreenScale = false;
+
+  // Primeira camada do painel: o background dos dias.
+  drawTimelineBackground(baseCtx, true);
+
+  // Weathergraph: clima em uma faixa estreita, agenda no centro,
+  // curva térmica compacta e horas na base.
+  drawWeatherConditionStrip(baseCtx, hourlyWeather);
+  drawHourAxis(baseCtx, items);
+  // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
+  // atrás da curva térmica e dos charts de agenda.
+  if (SETTINGS.showSolarGlow) {
+    drawFixedDaylightGlow(baseCtx, hourlyWeather);
+  }
+  // A chuva parte da base térmica e pode subir até quase a faixa dos astros.
+  // Ela é desenhada antes dos charts, eventos e lembretes, que permanecem
+  // visualmente por cima das barras.
+  drawCompactThermalBand(baseCtx, hourlyWeather);
+
+  // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
+  // eventos e lembretes permanecem como a camada visual superior da agenda.
+  drawBottomHourLegend(baseCtx);
+  // A moldura inferior contínua é composta depois, no canvas principal,
+  // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
+  drawTimelineDayBoundariesOnTop(baseCtx);
+  drawWeekdayBadgesOnTop(baseCtx);
+  drawDayBoundaryMoonsOnTop(baseCtx, hourlyWeather);
+
+  const baseImage = baseCtx.getImage();
   const ctx = new DrawContext();
   ctx.size = new Size(timelineWidth(), timelineHeight());
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  // Primeira camada do painel: o background dos dias.
-  drawTimelineBackground(ctx, true);
-
-  // Weathergraph: clima em uma faixa estreita, agenda no centro,
-  // curva térmica compacta e horas na base.
-  drawWeatherConditionStrip(ctx, hourlyWeather);
-  drawHourAxis(ctx, items);
-  // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
-  // atrás da curva térmica e dos charts de agenda.
-  if (SETTINGS.showSolarGlow) {
-    drawFixedDaylightGlow(ctx, hourlyWeather);
-  }
-  // A chuva parte da base térmica e pode subir até quase a faixa dos astros.
-  // Ela é desenhada antes dos charts, eventos e lembretes, que permanecem
-  // visualmente por cima das barras.
-  drawCompactThermalBand(ctx, hourlyWeather);
-
-  // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
-  // eventos e lembretes permanecem como a camada visual superior da agenda.
-  drawBottomHourLegend(ctx);
-  // A moldura inferior contínua é composta depois, no canvas principal,
-  // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
-  drawTimelineDayBoundariesOnTop(ctx);
-  drawWeekdayBadgesOnTop(ctx);
-  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
+  // Primeiro preserva a imagem completa da base, inclusive a transparência
+  // do dia atual. O recorte desfocado é uma camada independente.
+  ctx.drawImageAtPoint(baseImage, new Point(0, 0));
 
   // Desfoca o contexto visual somente a partir da próxima meia-noite.
   // Astros, temperaturas, curva, brilho solar e horas ficam abaixo;
   // os charts (inclusive prolongamentos de hoje) ficam acima.
   if (shouldBlurFutureTimeline()) {
+    const blurCtx = new DrawContext();
+    blurCtx.size = new Size(timelineWidth(), timelineHeight());
+    blurCtx.opaque = false;
+    blurCtx.respectScreenScale = false;
     drawFutureTimelineBlurLayer(
-      ctx,
-      ctx.getImage(),
+      blurCtx,
+      baseImage,
       true
     );
+    ctx.drawImageAtPoint(blurCtx.getImage(), new Point(0, 0));
   }
 
   if (loadError) {
