@@ -96,6 +96,12 @@ const SETTINGS = {
   conflictColor: "#FF9F0A",
   nextEventColor: "#FFFFFF",
   overdueReminderColor: "#FF453A",
+  // Pendências temporizadas que atravessam a meia-noite recebem
+  // uma borda intensa, com espaçamento preservado dentro do chart.
+  pendingDayCarryoverEnabled: true,
+  pendingDayCarryoverBorderColor: "#FF1F1F",
+  pendingDayCarryoverBorderWidth: 3,
+  pendingDayCarryoverBorderGap: 2,
   priorityReminderColor: "#FFCC00",
   // Localização de reserva: Jataí-GO.
   fallbackLatitude: -17.8814,
@@ -128,6 +134,8 @@ const THERMAL_COLOR_STOPS = [
 // Lembretes podem subir para uma linha de evento quando a distância entre
 // eles não passa de seis horas.
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
+const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
+const PENDING_DAY_CARRYOVER_END_HOUR = 6;
 
 // O canvas continua completo para preservar o background. O conteúdo é
 // comprimido somente no eixo vertical para respeitar 30 px em cada margem,
@@ -473,7 +481,24 @@ async function loadWindow() {
         }
       }
 
-      if (eventEnd <= windowStart || eventStart >= windowEnd) return;
+      const carryoverCandidate = {
+        kind: "event",
+        title: event.title,
+        calendarTitle: event.calendar?.title ?? "Calendário",
+        start: eventStart,
+        end: eventEnd,
+        isAllDay,
+        isBirthday: isBirthdayCalendarEvent(event),
+      };
+      const keepForPendingCarryover =
+        isPendingDayCarryoverCandidate(carryoverCandidate, now);
+
+      // Depois das 12h, um evento temporizado que terminou hoje continua
+      // disponível para ser estendido até 06:00 do dia seguinte.
+      if (
+        (eventEnd <= windowStart || eventStart >= windowEnd) &&
+        !keepForPendingCarryover
+      ) return;
 
       displayEventMap.set(eventOccurrenceKey(event), {
         event,
@@ -1481,14 +1506,22 @@ function calculateScheduleSummary(events, rangeStart, rangeEnd) {
 }
 
 function prepareTimelineItems(items, referenceDate) {
-  const prepared = items.map((item) => ({ ...item }));
+  const prepared = items.map((item) => {
+    const copy = { ...item };
+    applyPendingDayCarryover(copy, referenceDate);
+    return copy;
+  });
   const events = prepared.filter(
     (item) => item.kind === "event" && !item.isAllDay
   );
 
   for (const event of events) {
+    // Um chart estendido representa um compromisso que já terminou;
+    // ele não deve ser classificado como "AGORA".
     event.isCurrentEvent =
-      event.start <= referenceDate && event.end > referenceDate;
+      !event.isPendingDayCarryover &&
+      event.start <= referenceDate &&
+      event.end > referenceDate;
     event.conflictCount = events.filter(
       (candidate) => candidate !== event && itemsOverlap(event, candidate)
     ).length;
@@ -1505,6 +1538,82 @@ function prepareTimelineItems(items, referenceDate) {
     )[0];
   if (nextEvent) nextEvent.isNextEvent = true;
   return prepared;
+}
+
+function isPendingDayCarryoverCandidate(item, referenceDate) {
+  if (!SETTINGS.pendingDayCarryoverEnabled) return false;
+  if (
+    !item ||
+    (item.kind !== "event" && item.kind !== "reminder") ||
+    !(item.start instanceof Date) ||
+    !(item.end instanceof Date)
+  ) {
+    return false;
+  }
+
+  const reference =
+    referenceDate instanceof Date ? referenceDate : now;
+  const todayStart = startOfDay(reference);
+  const tomorrowStart = addDays(todayStart, 1);
+  const cutoff = dateAtHour(
+    todayStart,
+    PENDING_DAY_CARRYOVER_CUTOFF_HOUR
+  );
+  const startMs = item.start.getTime();
+  const endMs = item.end.getTime();
+  const referenceMs = reference.getTime();
+
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    reference < cutoff ||
+    endMs <= todayStart.getTime() ||
+    startMs >= tomorrowStart.getTime()
+  ) {
+    return false;
+  }
+
+  if (item.kind === "event") {
+    // O EventKit não fornece conclusão para eventos. Um evento com horário
+    // já encerrado hoje é tratado como não cumprido para esta sinalização.
+    return (
+      !item.isAllDay &&
+      !isBirthdayItem(item) &&
+      endMs <= referenceMs
+    );
+  }
+
+  // Reminder.scheduled/incompleteDue* retorna somente lembretes pendentes.
+  // Lembretes sem horário vencem ao longo do dia; os com horário só entram
+  // depois que o horário devido já passou.
+  return (
+    item.isOverdue ||
+    item.sourceIsAllDay ||
+    startMs <= referenceMs
+  );
+}
+
+function pendingDayCarryoverEnd(referenceDate) {
+  return dateAtHour(
+    addDays(startOfDay(referenceDate), 1),
+    PENDING_DAY_CARRYOVER_END_HOUR
+  );
+}
+
+function applyPendingDayCarryover(item, referenceDate) {
+  if (!isPendingDayCarryoverCandidate(item, referenceDate)) {
+    return item;
+  }
+
+  const targetEnd = pendingDayCarryoverEnd(referenceDate);
+  if (
+    !(item.end instanceof Date) ||
+    item.end.getTime() < targetEnd.getTime()
+  ) {
+    item.end = targetEnd;
+  }
+  item.isPendingDayCarryover = true;
+  return item;
 }
 
 function isBirthdayItem(item) {
@@ -1641,8 +1750,8 @@ function chooseItems(items, _referenceDate, limit) {
   // Um lembrete atrasado pertence visualmente ao dia selecionado, mesmo
   // quando seu horário de origem está antes do início da janela.
   const displayDayKey = (item) =>
-    item.kind === "reminder" &&
-    item.isOverdue &&
+    ((item.kind === "reminder" && item.isOverdue) ||
+      item.isPendingDayCarryover) &&
     item.start < windowStart
       ? dateKey(windowStart)
       : dateKey(item.start);
@@ -2254,10 +2363,12 @@ function hasBlockingTodayTimelineItems(items) {
 
     // O item precisa ainda estar pendente/ativo e pertencer ao dia atual.
     // Isso inclui compromissos que atravessam a meia-noite.
+    const isCarryover = isPendingDayCarryoverCandidate(item, now);
+
     if (
-      endMs <= nowMs ||
       endMs <= todayStartMs ||
-      startMs >= tomorrowStartMs
+      startMs >= tomorrowStartMs ||
+      (endMs <= nowMs && !isCarryover)
     ) {
       return false;
     }
@@ -10246,6 +10357,23 @@ function drawTimelineBar(ctx, rect, color, item) {
     new Color("#000000", 1.0)
   );
 
+  if (item.isPendingDayCarryover) {
+    // A borda é desenhada dentro da geometria do chart. Isso preserva a
+    // separação da linha de mudança de dia e não invade as linhas vizinhas.
+    fillRoundedRect(
+      ctx,
+      outlinedRect,
+      Math.max(1, cornerRadius - outlineWidth),
+      color
+    );
+    drawPendingDayCarryoverBorder(
+      ctx,
+      outlinedRect,
+      Math.max(1, cornerRadius - outlineWidth)
+    );
+    return;
+  }
+
   if (!accent || rect.width < 8 || rect.height < 8) {
     fillRoundedRect(
       ctx,
@@ -10625,6 +10753,144 @@ function safeCalendarColor(calendar, fallback) {
   } catch (_) {
     return fallback;
   }
+}
+
+function drawPendingDayCarryoverBorder(ctx, rect, chartRadius) {
+  const gap = Math.max(
+    0,
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderGap) || 0
+    )
+  );
+  const borderWidth = Math.max(
+    scaleVertical(1),
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderWidth) || 1
+    )
+  );
+  const inset = gap + borderWidth / 2;
+  const borderRect = new Rect(
+    rect.x + inset,
+    rect.y + inset,
+    rect.width - inset * 2,
+    rect.height - inset * 2
+  );
+
+  if (borderRect.width <= 1 || borderRect.height <= 1) return;
+
+  drawRoundedRectOutline(
+    ctx,
+    borderRect,
+    Math.max(1, chartRadius - inset),
+    new Color(
+      SETTINGS.pendingDayCarryoverBorderColor,
+      1.0
+    ),
+    borderWidth
+  );
+}
+
+function drawRoundedRectOutline(
+  ctx,
+  rect,
+  radius,
+  color,
+  lineWidth
+) {
+  const width = Math.max(0, Number(rect.width) || 0);
+  const height = Math.max(0, Number(rect.height) || 0);
+  const strokeWidth = Math.max(
+    0.5,
+    Number(lineWidth) || 1
+  );
+  if (width <= 0 || height <= 0) return;
+
+  const left = rect.x;
+  const top = rect.y;
+  const right = rect.x + width;
+  const bottom = rect.y + height;
+  const boundedRadius = Math.max(
+    0,
+    Math.min(
+      Number(radius) || 0,
+      width / 2,
+      height / 2
+    )
+  );
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  if (boundedRadius <= 0) {
+    path.move(new Point(left, top));
+    path.addLine(new Point(right, top));
+    path.addLine(new Point(right, bottom));
+    path.addLine(new Point(left, bottom));
+    path.closeSubpath();
+  } else {
+    path.move(new Point(left + boundedRadius, top));
+    path.addLine(new Point(right - boundedRadius, top));
+    path.addCurve(
+      new Point(right, top + boundedRadius),
+      new Point(
+        right - boundedRadius +
+          boundedRadius * curveFactor,
+        top
+      ),
+      new Point(
+        right,
+        top + boundedRadius -
+          boundedRadius * curveFactor
+      )
+    );
+    path.addLine(new Point(right, bottom - boundedRadius));
+    path.addCurve(
+      new Point(right - boundedRadius, bottom),
+      new Point(
+        right,
+        bottom - boundedRadius +
+          boundedRadius * curveFactor
+      ),
+      new Point(
+        right - boundedRadius +
+          boundedRadius * curveFactor,
+        bottom
+      )
+    );
+    path.addLine(new Point(left + boundedRadius, bottom));
+    path.addCurve(
+      new Point(left, bottom - boundedRadius),
+      new Point(
+        left + boundedRadius -
+          boundedRadius * curveFactor,
+        bottom
+      ),
+      new Point(
+        left,
+        bottom - boundedRadius +
+          boundedRadius * curveFactor
+      )
+    );
+    path.addLine(new Point(left, top + boundedRadius));
+    path.addCurve(
+      new Point(left + boundedRadius, top),
+      new Point(
+        left,
+        top + boundedRadius -
+          boundedRadius * curveFactor
+      ),
+      new Point(
+        left + boundedRadius -
+          boundedRadius * curveFactor,
+        top
+      )
+    );
+    path.closeSubpath();
+  }
+
+  ctx.addPath(path);
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(strokeWidth);
+  ctx.strokePath();
 }
 
 function fillRoundedRect(ctx, rect, radius, color) {
