@@ -481,23 +481,11 @@ async function loadWindow() {
         }
       }
 
-      const carryoverCandidate = {
-        kind: "event",
-        title: event.title,
-        calendarTitle: event.calendar?.title ?? "Calendário",
-        start: eventStart,
-        end: eventEnd,
-        isAllDay,
-        isBirthday: isBirthdayCalendarEvent(event),
-      };
-      const keepForPendingCarryover =
-        isPendingDayCarryoverCandidate(carryoverCandidate, now);
-
-      // Depois das 12h, um evento temporizado que terminou hoje continua
-      // disponível para ser estendido até 06:00 do dia seguinte.
+      // Eventos nunca recebem extensão artificial para o dia seguinte.
+      // Somente lembretes pendentes passam pela regra de carryover.
       if (
-        (eventEnd <= windowStart || eventStart >= windowEnd) &&
-        !keepForPendingCarryover
+        eventEnd <= windowStart ||
+        eventStart >= windowEnd
       ) return;
 
       displayEventMap.set(eventOccurrenceKey(event), {
@@ -1516,10 +1504,9 @@ function prepareTimelineItems(items, referenceDate) {
   );
 
   for (const event of events) {
-    // Um chart estendido representa um compromisso que já terminou;
-    // ele não deve ser classificado como "AGORA".
+    // Eventos seguem sempre o horário real do Calendário. Somente lembretes
+    // pendentes podem receber a extensão especial da virada do dia.
     event.isCurrentEvent =
-      !event.isPendingDayCarryover &&
       event.start <= referenceDate &&
       event.end > referenceDate;
     event.conflictCount = events.filter(
@@ -1544,7 +1531,7 @@ function isPendingDayCarryoverCandidate(item, referenceDate) {
   if (!SETTINGS.pendingDayCarryoverEnabled) return false;
   if (
     !item ||
-    (item.kind !== "event" && item.kind !== "reminder") ||
+    item.kind !== "reminder" ||
     !(item.start instanceof Date) ||
     !(item.end instanceof Date)
   ) {
@@ -1571,16 +1558,6 @@ function isPendingDayCarryoverCandidate(item, referenceDate) {
     startMs >= tomorrowStart.getTime()
   ) {
     return false;
-  }
-
-  if (item.kind === "event") {
-    // O EventKit não fornece conclusão para eventos. Um evento com horário
-    // já encerrado hoje é tratado como não cumprido para esta sinalização.
-    return (
-      !item.isAllDay &&
-      !isBirthdayItem(item) &&
-      endMs <= referenceMs
-    );
   }
 
   // Reminder.scheduled/incompleteDue* retorna somente lembretes pendentes.
