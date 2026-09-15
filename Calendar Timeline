@@ -2255,16 +2255,6 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O futuro é suavizado depois da composição completa do painel, mas
-  // antes da máscara geométrica. Assim os charts, eventos, lembretes,
-  // astros e fundo posterior recebem o mesmo tratamento sem criar
-  // retângulos fora dos cantos da timeline.
-  if (shouldBlurFutureTimeline()) {
-    drawFutureTimelineBlurLayer(contentCtx, timelineImage);
-    // O círculo da próxima mudança de dia é estrutural e permanece nítido.
-    drawCurrentDayBoundaryBadgeOnForeground(contentCtx);
-  }
-
   // O painel da timeline usa o perfil comum de cantos. O mesmo perfil
   // também será aplicado ao contorno e ao recorte dos astros.
   const timelineRect = new Rect(
@@ -2402,20 +2392,24 @@ function futureTimelineBlurMetrics() {
   };
 }
 
-function drawFutureTimelineBlurLayer(ctx, timelineImage) {
+function drawFutureTimelineBlurLayer(
+  ctx,
+  timelineImage,
+  localToTimeline = false
+) {
   const metrics = futureTimelineBlurMetrics();
   if (metrics.width <= 0) return;
 
   const blurRect = new Rect(
-    metrics.absoluteX,
-    CANVAS.timelineTop,
+    localToTimeline ? metrics.startX : metrics.absoluteX,
+    localToTimeline ? 0 : CANVAS.timelineTop,
     metrics.width,
     timelineHeight()
   );
 
-  // O recorte é feito da imagem da própria timeline, e não do canvas
-  // completo. Assim, o blur nunca substitui o background do cabeçalho
-  // nem o trecho de hoje.
+  // O recorte é feito da imagem-base da própria timeline, antes dos
+  // elementos de primeiro plano. Assim, o blur não atinge charts,
+  // temperaturas, curva, horários ou astros.
   try {
     const futureImage = cropTimelinePanelImage(
       timelineImage,
@@ -7403,8 +7397,17 @@ async function renderTimelinePanel(items, loadError) {
   ctx.respectScreenScale = false;
 
   // Primeira camada do painel: o background dos dias.
-  // Todos os elementos desenhados abaixo ficam acima dele.
   drawTimelineBackground(ctx, true);
+
+  // O blur é composto sobre a imagem-base, antes dos elementos que
+  // precisam permanecer legíveis no dia seguinte.
+  if (shouldBlurFutureTimeline()) {
+    drawFutureTimelineBlurLayer(
+      ctx,
+      ctx.getImage(),
+      true
+    );
+  }
 
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
@@ -9976,6 +9979,12 @@ function timelineBarSegments(item, startX, endX) {
     return [{ x: startX, width }];
   }
 
+  // Um chart de carryover é uma única geometria contínua: ele atravessa
+  // a meia-noite sem criar dois retângulos nem um recuo junto à linha.
+  if (item?.isPendingDayCarryover) {
+    return [{ x: startX, width }];
+  }
+
   const gap = timelineDayBoundaryGap();
   const boundaries = [];
 
@@ -10358,8 +10367,8 @@ function drawTimelineBar(ctx, rect, color, item) {
   );
 
   if (item.isPendingDayCarryover) {
-    // A borda é desenhada dentro da geometria do chart. Isso preserva a
-    // separação da linha de mudança de dia e não invade as linhas vizinhas.
+    // O chart permanece normal por dentro; o destaque abraça sua
+    // geometria pelo lado externo, com afastamento visual definido.
     fillRoundedRect(
       ctx,
       outlinedRect,
@@ -10368,8 +10377,8 @@ function drawTimelineBar(ctx, rect, color, item) {
     );
     drawPendingDayCarryoverBorder(
       ctx,
-      outlinedRect,
-      Math.max(1, cornerRadius - outlineWidth)
+      rect,
+      cornerRadius
     );
     return;
   }
@@ -10768,12 +10777,12 @@ function drawPendingDayCarryoverBorder(ctx, rect, chartRadius) {
       Number(SETTINGS.pendingDayCarryoverBorderWidth) || 1
     )
   );
-  const inset = gap + borderWidth / 2;
+  const outset = gap + borderWidth / 2;
   const borderRect = new Rect(
-    rect.x + inset,
-    rect.y + inset,
-    rect.width - inset * 2,
-    rect.height - inset * 2
+    rect.x - outset,
+    rect.y - outset,
+    rect.width + outset * 2,
+    rect.height + outset * 2
   );
 
   if (borderRect.width <= 1 || borderRect.height <= 1) return;
@@ -10781,7 +10790,7 @@ function drawPendingDayCarryoverBorder(ctx, rect, chartRadius) {
   drawRoundedRectOutline(
     ctx,
     borderRect,
-    Math.max(1, chartRadius - inset),
+    Math.max(1, chartRadius + outset),
     new Color(
       SETTINGS.pendingDayCarryoverBorderColor,
       1.0
