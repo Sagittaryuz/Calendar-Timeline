@@ -22,7 +22,10 @@ const SETTINGS = {
   showMoon: true,
   showNightTexture: false,
   showSolarGlow: true,
-  solarGlowIntensity: 1.0,
+  // Opacidades visuais reduzidas para manter a agenda em primeiro plano.
+  solarGlowIntensity: 0.35,
+  thermalGradientOpacity: 0.55,
+  weatherIconOpacity: 0.78,
   nightStartHour: 18,
   nightEndHour: 6,
   daylightStartHour: 6,
@@ -32,6 +35,9 @@ const SETTINGS = {
   forecaTokenHours: 24,
   // Margem visual para não transformar uma probabilidade isolada em chuva.
   rainEvidenceMinMM: 0.10,
+  // Régua fixa da altura das barras: 10 mm/h alcança o teto visual.
+  // O maior valor visível da janela não altera essa escala.
+  rainBarReferenceMMPerHour: 10,
   rainEvidenceMinChance: 55,
   rainEvidenceMinCloudiness: 40,
   rainSymbolMinChance: 35,
@@ -41,6 +47,15 @@ const SETTINGS = {
   rainLineColor: "#14C1F5",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
+  // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
+  nonTodayTimelineOverlayColor: "#5A5A5F",
+  nonTodayTimelineOverlayOpacity: 0.64,
+  // Desfoque de foco aplicado somente aos dias posteriores
+  // enquanto ainda houver compromissos ou pendências válidas hoje.
+  futureTimelineBlurEnabled: true,
+  futureTimelineBlurDownsampleFactor: 0.24,
+  futureTimelineBlurTintColor: "#111216",
+  futureTimelineBlurTintOpacity: 0.36,
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
   saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
@@ -81,6 +96,12 @@ const SETTINGS = {
   conflictColor: "#FF9F0A",
   nextEventColor: "#FFFFFF",
   overdueReminderColor: "#FF453A",
+  // Pendências temporizadas que atravessam a meia-noite recebem
+  // uma borda intensa, com espaçamento preservado dentro do chart.
+  pendingDayCarryoverEnabled: true,
+  pendingDayCarryoverBorderColor: "#FF1F1F",
+  pendingDayCarryoverBorderWidth: 3,
+  pendingDayCarryoverBorderGap: 2,
   priorityReminderColor: "#FFCC00",
   // Localização de reserva: Jataí-GO.
   fallbackLatitude: -17.8814,
@@ -110,26 +131,110 @@ const THERMAL_COLOR_STOPS = [
   [33, "#FF1F1F"],
 ];
 
+// Lembretes podem subir para uma linha de evento quando a distância entre
+// eles não passa de seis horas.
+const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
+const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
+const PENDING_DAY_CARRYOVER_END_HOUR = 6;
+
+// O canvas continua completo para preservar o background. O conteúdo é
+// comprimido somente no eixo vertical para respeitar 30 px em cada margem,
+// exatamente como as margens laterais.
+const WIDGET_CANVAS_HEIGHT = 510;
+const LEGACY_CONTENT_TOP = 13;
+const LEGACY_CONTENT_BOTTOM_EDGE = 497;
+const WIDGET_CONTENT_TOP_MARGIN = 30;
+const WIDGET_CONTENT_BOTTOM_MARGIN = 30;
+const VERTICAL_LAYOUT_SCALE =
+  (WIDGET_CANVAS_HEIGHT -
+    WIDGET_CONTENT_TOP_MARGIN -
+    WIDGET_CONTENT_BOTTOM_MARGIN) /
+  (LEGACY_CONTENT_BOTTOM_EDGE - LEGACY_CONTENT_TOP);
+
+function scaleVertical(value) {
+  return value * VERTICAL_LAYOUT_SCALE;
+}
+
+function scaleFontSize(value) {
+  return Math.max(1, Math.round(scaleVertical(value)));
+}
+
+function mapLegacyContentY(value) {
+  return (
+    WIDGET_CONTENT_TOP_MARGIN +
+    (value - LEGACY_CONTENT_TOP) * VERTICAL_LAYOUT_SCALE
+  );
+}
+
+const TITLE_CARD_COUNT = 4;
+// Raio estrutural comum: 52 unidades da geometria-base,
+// equivalentes a 48,35 px depois da compressão vertical do widget.
+// Ele é a referência externa única dos cartões, da timeline e da
+// moldura branca do dia atual.
+const WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS = 52;
+const WIDGET_COMMON_CORNER_RADIUS = scaleVertical(
+  WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS
+);
+const TITLE_CARD_HEIGHT = scaleVertical(104);
+const TITLE_CARD_STANDARD_CORNER_RADIUS =
+  WIDGET_COMMON_CORNER_RADIUS;
+const TITLE_CARD_OUTER_CORNER_RADIUS =
+  WIDGET_COMMON_CORNER_RADIUS;
+// Geometria única do painel da timeline e do recorte dos astros.
+// A esquerda e o topo direito são perpendiculares; somente o
+// canto inferior direito conserva o raio comum.
+const TIMELINE_CORNER_PROFILE = {
+  topLeftRounded: false,
+  bottomLeftRounded: false,
+  topRightRounded: false,
+  bottomRightRounded: true,
+};
+const DAY_CHANGE_CIRCLE_DIAMETER = scaleVertical(52);
+// Dimensão única dos astros, reduzida junto com a faixa superior.
+const WEATHER_ICON_SIZE_24H = scaleVertical(44);
+// A primeira redução subiu a borda inferior em 2,51 px renderizados.
+// O centro dos astros ficou 2,35 unidades da escala legada acima do
+// centro geométrico da faixa reduzida.
+const ASTRO_STRIP_BASE_HEIGHT_LEGACY = 60;
+const ASTRO_STRIP_REDUCTION_LEGACY = 2.7;
+const ASTRO_TOTAL_VERTICAL_LIFT_LEGACY = 2.7;
+const ASTRO_CENTER_OFFSET_LEGACY =
+  1 +
+  (ASTRO_TOTAL_VERTICAL_LIFT_LEGACY -
+    ASTRO_STRIP_REDUCTION_LEGACY / 2);
+// Reduzir a borda inferior em duas vezes essa diferença faz o novo
+// centro geométrico coincidir com o centro absoluto já usado pelos astros.
+const ASTRO_AREA_CENTERING_REDUCTION_LEGACY =
+  ASTRO_CENTER_OFFSET_LEGACY * 2;
+const WEATHER_ASTRO_STRIP_HEIGHT_24H = scaleVertical(
+  ASTRO_STRIP_BASE_HEIGHT_LEGACY -
+    ASTRO_STRIP_REDUCTION_LEGACY -
+    ASTRO_AREA_CENTERING_REDUCTION_LEGACY
+);
+const ASTRO_CENTER_TARGET_24H = scaleVertical(
+  (ASTRO_STRIP_BASE_HEIGHT_LEGACY -
+    ASTRO_STRIP_REDUCTION_LEGACY) / 2 -
+  ASTRO_CENTER_OFFSET_LEGACY
+);
+
 const CANVAS = {
   width: 1092,
-  height: 510,
-  headerHeight: 128, // 25% da altura total
-  marginX: 34,
-  plotLeft: 34,
-  plotRight: 1058,
-  // Após o deslocamento vertical de -5 px, o topo efetivo fica em
-  // 125 px: exatamente no antigo nível da linha sob o título.
-  timelineTop: 130,
-  timelineBottom: 491,
-  footerTop: 459,
-  footerBottom: 510,
-  localPlotTop: 48,
-  // Distância espelhada entre a legenda e o grid.
-  timelineLegendGap: 7,
-  // Deslocamento específico da legenda numérica de temperatura.
-  temperatureLegendVerticalOffset: 7,
-  // Deslocamento vertical de toda a linha do tempo. Valor negativo sobe.
-  timelineVerticalOffset: -5,
+  height: WIDGET_CANVAS_HEIGHT,
+  headerHeight: scaleVertical(128),
+  marginX: 30,
+  plotLeft: 30,
+  plotRight: 1062,
+  // Coordenadas verticais mapeadas para a nova caixa interna.
+  timelineTop: mapLegacyContentY(120),
+  // O painel termina 2 px depois da borda inferior do círculo, sem recortá-lo.
+  timelineBottom: mapLegacyContentY(499),
+  footerTop: mapLegacyContentY(454),
+  footerBottom: mapLegacyContentY(500),
+  localPlotTop: scaleVertical(48),
+  timelineLegendGap: scaleVertical(7),
+  temperatureLegendVerticalOffset: scaleVertical(7),
+  // As coordenadas já estão mapeadas; não há deslocamento pós-composição.
+  timelineVerticalOffset: 0,
 };
 
 CANVAS.timelineTop += CANVAS.timelineVerticalOffset;
@@ -203,13 +308,29 @@ async function loadWindow() {
     // nativos de acesso ao Calendário e aos Lembretes.
     // Lembretes sem horário podem chegar do EventKit como 00:00 UTC. Em
     // fusos negativos, isso aparece localmente na noite do dia anterior.
+    // Os cartões mostram quatro dias completos. A consulta de dados precisa
+    // alcançar todos eles, mesmo quando a timeline visível tem só 24 horas.
+    const titleScheduleStart = startOfDay(windowStart);
+    const titleScheduleEnd = addDays(
+      titleScheduleStart,
+      TITLE_CARD_COUNT
+    );
+    const scheduleQueryEnd = new Date(
+      Math.max(
+        windowEnd.getTime(),
+        titleScheduleEnd.getTime()
+      )
+    );
     // A margem de um dia garante que eles entrem na consulta; abaixo a data
     // é normalizada antes de decidir se pertence à janela visível.
-    const reminderQueryStart = addDays(startOfToday(), -1);
-    const reminderQueryEnd = addDays(startOfDay(windowEnd), 1);
+    const reminderQueryStart = addDays(titleScheduleStart, -1);
+    const reminderQueryEnd = addDays(
+      startOfDay(scheduleQueryEnd),
+      1
+    );
     // A consulta também recua um dia para capturar eventos que começaram
     // ontem e continuam ocupando o dia atual.
-    const eventQueryStart = addDays(startOfDay(windowStart), -1);
+    const eventQueryStart = addDays(titleScheduleStart, -1);
     const [
       events,
       reminders,
@@ -218,7 +339,7 @@ async function loadWindow() {
       scheduledReminders,
     ] =
       await Promise.all([
-        CalendarEvent.between(eventQueryStart, windowEnd),
+        CalendarEvent.between(eventQueryStart, scheduleQueryEnd),
         Reminder.incompleteDueBetween(reminderQueryStart, reminderQueryEnd),
         CalendarEvent.today(),
         Reminder.incompleteDueToday(),
@@ -360,7 +481,24 @@ async function loadWindow() {
         }
       }
 
-      if (eventEnd <= windowStart || eventStart >= windowEnd) return;
+      const carryoverCandidate = {
+        kind: "event",
+        title: event.title,
+        calendarTitle: event.calendar?.title ?? "Calendário",
+        start: eventStart,
+        end: eventEnd,
+        isAllDay,
+        isBirthday: isBirthdayCalendarEvent(event),
+      };
+      const keepForPendingCarryover =
+        isPendingDayCarryoverCandidate(carryoverCandidate, now);
+
+      // Depois das 12h, um evento temporizado que terminou hoje continua
+      // disponível para ser estendido até 06:00 do dia seguinte.
+      if (
+        (eventEnd <= windowStart || eventStart >= windowEnd) &&
+        !keepForPendingCarryover
+      ) return;
 
       displayEventMap.set(eventOccurrenceKey(event), {
         event,
@@ -377,13 +515,17 @@ async function loadWindow() {
 
     const eventItems = [...displayEventMap.values()].map((view) => {
       const event = view.event;
+      const isBirthday = isBirthdayCalendarEvent(event);
       return {
         kind: "event",
-        title: cleanTitle(event.title, "Evento"),
+        title: isBirthday
+          ? formatBirthdayTitleFromEvent(event)
+          : cleanTitle(event.title, "Evento"),
         calendarTitle: event.calendar?.title ?? "Calendário",
         start: view.start,
         end: view.end,
         isAllDay: view.isAllDay,
+        isBirthday,
         identifier:
           event.identifier ??
           `${event.title}-${view.start.getTime()}`,
@@ -401,6 +543,93 @@ async function loadWindow() {
         ),
       };
     });
+
+    // Os contadores do cabeçalho não podem reutilizar eventItems e
+    // reminderItems: esses arrays já foram recortados pela janela visível.
+    // Aqui contamos as ocorrências reais de cada dia dos quatro cartões.
+    const scheduleCountsByDay = {};
+    for (let index = 0; index < TITLE_CARD_COUNT; index++) {
+      const day = addDays(titleScheduleStart, index);
+      scheduleCountsByDay[dateKey(day)] = {
+        events: 0,
+        reminders: 0,
+      };
+    }
+
+    const countEventMap = new Map();
+    const collectCountEvent = (event, occursToday = false) => {
+      if (!includeCalendar(event.calendar)) return;
+
+      const eventStart = event.startDate
+        ? new Date(event.startDate)
+        : null;
+      let eventEnd = event.endDate
+        ? new Date(event.endDate)
+        : null;
+      const isAllDay = Boolean(event.isAllDay);
+
+      if (!eventStart || !eventEnd) return;
+
+      // Eventos de dia inteiro continuam disponíveis para a timeline,
+      // mas não entram no quantitativo "E:n" dos cartões.
+      if (isAllDay) return;
+
+      // A ocorrência confirmada por CalendarEvent.today() prevalece
+      // inclusive quando o fim bruto de um evento de dia inteiro vem
+      // antes da meia-noite real.
+      if (isAllDay && occursToday) {
+        const currentDayEnd = addDays(titleScheduleStart, 1);
+        if (eventEnd < currentDayEnd) {
+          eventEnd = currentDayEnd;
+        }
+      }
+
+      if (
+        !Number.isFinite(eventStart.getTime()) ||
+        !Number.isFinite(eventEnd.getTime()) ||
+        eventEnd <= titleScheduleStart ||
+        eventStart >= titleScheduleEnd
+      ) {
+        return;
+      }
+
+      countEventMap.set(eventOccurrenceKey(event), {
+        start: eventStart,
+        end: eventEnd,
+      });
+    };
+
+    events.forEach((event) => collectCountEvent(event, false));
+    // A consulta específica de hoje também corrige recorrências e
+    // substitui eventual duplicata da consulta por intervalo.
+    todayEvents.forEach((event) => collectCountEvent(event, true));
+
+    for (const event of countEventMap.values()) {
+      for (
+        let day = new Date(titleScheduleStart);
+        day < titleScheduleEnd;
+        day = addDays(day, 1)
+      ) {
+        const dayEnd = addDays(day, 1);
+        // Para hoje, eventos já encerrados não são futuros; para os dias
+        // seguintes, toda a ocorrência daquele dia entra no quantitativo.
+        const countStart =
+          dateKey(day) === dateKey(titleScheduleStart)
+            ? windowStart
+            : day;
+        if (event.end > countStart && event.start < dayEnd) {
+          scheduleCountsByDay[dateKey(day)].events++;
+        }
+      }
+    }
+
+    for (const reminder of displayReminders) {
+      const dayStart = normalizedReminderDayStart(reminder);
+      const key = dayStart ? dateKey(dayStart) : null;
+      if (key && scheduleCountsByDay[key]) {
+        scheduleCountsByDay[key].reminders++;
+      }
+    }
 
     const reminderItems = displayReminders
       .filter((reminder) => {
@@ -499,6 +728,7 @@ async function loadWindow() {
 
     return {
       items: [...eventItems, ...reminderItems, ...overdueReminderItems],
+      scheduleCountsByDay,
       todayEventCount: todayEvents.length,
       todayReminderCount: todayReminders.length,
       todayBusyMinutes: todayScheduleSummary.busyMinutes,
@@ -509,6 +739,7 @@ async function loadWindow() {
   } catch (error) {
     return {
       items: [],
+      scheduleCountsByDay: {},
       todayEventCount: 0,
       todayReminderCount: 0,
       todayBusyMinutes: 0,
@@ -587,7 +818,7 @@ async function loadHourlyWeather(location) {
   const fm = FileManager.local();
   const cachePath = fm.joinPath(
     fm.documentsDirectory(),
-    "Calendar-Timeline-foreca-weather-v1.json"
+    "Calendar-Timeline-foreca-weather-v2.json"
   );
   let cached = null;
 
@@ -662,9 +893,9 @@ async function loadHourlyWeather(location) {
         Math.min(100, rainChanceValue ?? 0)
       );
 
-      // A API pode fornecer o acumulado horário com nomes diferentes,
-      // dependendo do produto/feed. O precipRate fica como último fallback,
-      // pois representa uma taxa e não necessariamente um acumulado.
+      // Somente campos de quantidade/acumulado entram no volume horário.
+      // precipRate é uma taxa e fica separado; misturá-lo com mm acumulados
+      // faria uma taxa parecer um volume de chuva.
       const explicitRain = firstFiniteWeatherNumber(
         forecast.precip,
         forecast.precipitation,
@@ -674,7 +905,9 @@ async function loadHourlyWeather(location) {
         forecast.precipitationSum,
         forecast.rain,
         forecast.rainAmount,
-        forecast.pr,
+        forecast.pr
+      );
+      const rainRate = firstFiniteWeatherNumber(
         forecast.precipRate
       );
       const rawCloudiness = firstFiniteWeatherNumber(
@@ -691,6 +924,10 @@ async function loadHourlyWeather(location) {
         rainMM: Math.max(
           0,
           Number.isFinite(explicitRain) ? explicitRain : 0
+        ),
+        rainRate: Math.max(
+          0,
+          Number.isFinite(rainRate) ? rainRate : 0
         ),
         symbol: String(forecast.symbol ?? ""),
         // Ausência de cloudiness não significa céu limpo. O valor nulo
@@ -880,6 +1117,7 @@ function buildHourlyWeather(hours) {
           Math.min(100, Number(hour.rainChance) || 0)
         ),
         rainMM: Math.max(0, Number(hour.rainMM) || 0),
+        rainRate: Math.max(0, Number(hour.rainRate) || 0),
         symbol: String(hour.symbol ?? ""),
         cloudiness,
       };
@@ -1268,14 +1506,22 @@ function calculateScheduleSummary(events, rangeStart, rangeEnd) {
 }
 
 function prepareTimelineItems(items, referenceDate) {
-  const prepared = items.map((item) => ({ ...item }));
+  const prepared = items.map((item) => {
+    const copy = { ...item };
+    applyPendingDayCarryover(copy, referenceDate);
+    return copy;
+  });
   const events = prepared.filter(
     (item) => item.kind === "event" && !item.isAllDay
   );
 
   for (const event of events) {
+    // Um chart estendido representa um compromisso que já terminou;
+    // ele não deve ser classificado como "AGORA".
     event.isCurrentEvent =
-      event.start <= referenceDate && event.end > referenceDate;
+      !event.isPendingDayCarryover &&
+      event.start <= referenceDate &&
+      event.end > referenceDate;
     event.conflictCount = events.filter(
       (candidate) => candidate !== event && itemsOverlap(event, candidate)
     ).length;
@@ -1294,93 +1540,454 @@ function prepareTimelineItems(items, referenceDate) {
   return prepared;
 }
 
+function isPendingDayCarryoverCandidate(item, referenceDate) {
+  if (!SETTINGS.pendingDayCarryoverEnabled) return false;
+  if (
+    !item ||
+    (item.kind !== "event" && item.kind !== "reminder") ||
+    !(item.start instanceof Date) ||
+    !(item.end instanceof Date)
+  ) {
+    return false;
+  }
 
-function chooseItems(items, referenceDate, limit) {
+  const reference =
+    referenceDate instanceof Date ? referenceDate : now;
+  const todayStart = startOfDay(reference);
+  const tomorrowStart = addDays(todayStart, 1);
+  const cutoff = dateAtHour(
+    todayStart,
+    PENDING_DAY_CARRYOVER_CUTOFF_HOUR
+  );
+  const startMs = item.start.getTime();
+  const endMs = item.end.getTime();
+  const referenceMs = reference.getTime();
+
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    reference < cutoff ||
+    endMs <= todayStart.getTime() ||
+    startMs >= tomorrowStart.getTime()
+  ) {
+    return false;
+  }
+
+  if (item.kind === "event") {
+    // O EventKit não fornece conclusão para eventos. Um evento com horário
+    // já encerrado hoje é tratado como não cumprido para esta sinalização.
+    return (
+      !item.isAllDay &&
+      !isBirthdayItem(item) &&
+      endMs <= referenceMs
+    );
+  }
+
+  // Reminder.scheduled/incompleteDue* retorna somente lembretes pendentes.
+  // Lembretes sem horário vencem ao longo do dia; os com horário só entram
+  // depois que o horário devido já passou.
+  return (
+    item.isOverdue ||
+    item.sourceIsAllDay ||
+    startMs <= referenceMs
+  );
+}
+
+function pendingDayCarryoverEnd(referenceDate) {
+  return dateAtHour(
+    addDays(startOfDay(referenceDate), 1),
+    PENDING_DAY_CARRYOVER_END_HOUR
+  );
+}
+
+function applyPendingDayCarryover(item, referenceDate) {
+  if (!isPendingDayCarryoverCandidate(item, referenceDate)) {
+    return item;
+  }
+
+  const targetEnd = pendingDayCarryoverEnd(referenceDate);
+  if (
+    !(item.end instanceof Date) ||
+    item.end.getTime() < targetEnd.getTime()
+  ) {
+    item.end = targetEnd;
+  }
+  item.isPendingDayCarryover = true;
+  return item;
+}
+
+function isBirthdayItem(item) {
+  if (item?.kind !== "event") return false;
+  if (item.isBirthday === true) return true;
+
+  return isBirthdayText(
+    `${item.title ?? ""} ${item.calendarTitle ?? ""}`
+  );
+}
+
+function isBirthdayText(value) {
+  const searchableText = normalizeSearchText(value);
+  return (
+    searchableText.includes("anivers") ||
+    searchableText.includes("birthday") ||
+    searchableText.includes("nascimento") ||
+    /\bfaz\s+\d{1,3}\s+anos?\b/.test(searchableText) ||
+    /\bcomplet(?:a|ou|ando)\s+\d{1,3}\s+anos?\b/.test(searchableText)
+  );
+}
+
+function isBirthdayCalendarEvent(event) {
+  return isBirthdayText(
+    `${event?.title ?? ""} ${event?.calendar?.title ?? ""}`
+  );
+}
+
+function formatBirthdayTitleFromEvent(event) {
+  return formatBirthdayTitle(
+    event?.title,
+    event?.notes
+  );
+}
+
+function formatBirthdayTitle(rawTitle, rawNotes) {
+  const sourceTitle = cleanTitle(rawTitle, "Aniversário");
+  const sourceNotes = cleanOptionalText(rawNotes);
+  const age = extractBirthdayAge(
+    `${sourceTitle} ${sourceNotes ?? ""}`
+  );
+  const personName = extractBirthdayPersonName(sourceTitle);
+  const shortName = shortenBirthdayName(personName);
+
+  return age === null
+    ? `🎂 ${shortName}`
+    : `🎂 ${shortName} (${age})`;
+}
+
+function extractBirthdayAge(value) {
+  const text = String(value ?? "");
+  const patterns = [
+    /\(\s*(\d{1,3})\s*\)/i,
+    /\b(?:faz|completa|completou|completando|fara|fará|turns?|is turning)\s+(\d{1,3})\s*(?:anos?|years?)?\b/i,
+    /\b(\d{1,3})\s+(?:anos?|years?)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
+function extractBirthdayPersonName(value) {
+  let name = cleanTitle(value, "Aniversário");
+  name = name
+    .replace(/🎂/g, "")
+    .replace(/\(\s*\d{1,3}\s*\)/g, "")
+    .replace(
+      /\s+\b(?:faz|completa|completou|completando|fara|fará|turns?|is turning)\b[\s\S]*$/i,
+      ""
+    )
+    .replace(/\s+\b\d{1,3}\s+(?:anos?|years?)\b[\s\S]*$/i, "")
+    .replace(
+      /^(?:anivers[aá]rio|birthday)\s*(?:de|do|da|of)?\s*[:\-–—]?\s*/i,
+      ""
+    )
+    .replace(
+      /\s*(?:['’]s\s+)?(?:birthday|anivers[aá]rio)\b[\s\S]*$/i,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return name || "Aniversário";
+}
+
+function shortenBirthdayName(value) {
+  const words = String(value ?? "")
+    .replace(/[,:;]+/g, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .filter((word) => !/^(da|das|de|do|dos|e)$/i.test(word));
+
+  if (words.length === 0) return "Aniversário";
+
+  const firstName = titleCaseBirthdayWord(words[0]);
+  if (words.length === 1) return firstName;
+
+  // Usa o primeiro sobrenome para manter o padrão pedido, inclusive
+  // quando o nome completo possui mais de dois sobrenomes.
+  const surname = words[1].replace(/[^\p{L}]/gu, "");
+  if (!surname) return firstName;
+
+  return `${firstName} ${surname.charAt(0).toLocaleUpperCase("pt-BR")}.`;
+}
+
+function titleCaseBirthdayWord(value) {
+  const word = String(value ?? "").replace(/[^\p{L}-]/gu, "");
+  if (!word) return "";
+  const lower = word.toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+}
+
+
+function chooseItems(items, _referenceDate, limit) {
+  // A seleção considera a janela desenhada, não apenas o instante atual.
+  // Assim, eventos já encerrados continuam disponíveis ao navegar para
+  // outro dia ou para a parte já concluída do dia atual.
   const relevant = [...items].filter(
-    (item) => item.isAllDay || item.end >= referenceDate
+    (item) =>
+      item?.start instanceof Date &&
+      item?.end instanceof Date &&
+      item.end > windowStart &&
+      item.start < windowEnd
   );
 
   const byTime = (a, b) =>
     a.start.getTime() - b.start.getTime() ||
     a.end.getTime() - b.end.getTime();
 
+  // Um lembrete atrasado pertence visualmente ao dia selecionado, mesmo
+  // quando seu horário de origem está antes do início da janela.
+  const displayDayKey = (item) =>
+    ((item.kind === "reminder" && item.isOverdue) ||
+      item.isPendingDayCarryover) &&
+    item.start < windowStart
+      ? dateKey(windowStart)
+      : dateKey(item.start);
+
   // O agrupamento diário preserva a ordem visual de cada data. A ocupação
-  // das linhas, porém, permanece compartilhada para que eventos iniciados
-  // anteriormente reservem sua linha enquanto ainda estiverem ativos.
+  // das linhas é reiniciada a cada dia; somente um item que atravessa a
+  // meia-noite continua reservando sua linha enquanto estiver ativo.
   const byDay = new Map();
   for (const item of relevant) {
-    const key = dateKey(item.start);
+    const key = displayDayKey(item);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(item);
   }
 
+  const allDayIntervals = relevant
+    .filter(
+      (item) => item.kind === "event" && item.isAllDay
+    )
+    .map((item) => ({
+      start: item.start,
+      end: item.end,
+    }));
+
   const placed = [];
   const hidden = [];
-  const rows = Array.from({ length: limit }, () => []);
   const orderedDayGroups = [...byDay.entries()]
     .sort(([firstDay], [secondDay]) =>
       firstDay.localeCompare(secondDay)
     );
+  for (const [dayKey, dayItems] of orderedDayGroups) {
+    const isBottomItem = (item) =>
+      item.kind === "event" &&
+      (item.isAllDay || isBirthdayItem(item));
 
-  for (const [, dayItems] of orderedDayGroups) {
-    const isAllDayEvent = (item) =>
-      item.kind === "event" && item.isAllDay;
+    const bottomItems = [...dayItems]
+      .filter(isBottomItem)
+      .sort(byTime);
+    const dayStart =
+      dayKey === dateKey(windowStart)
+        ? startOfDay(windowStart)
+        : startOfDay(dayItems[0].start);
+    const dayEnd = addDays(dayStart, 1);
+    const dayInterval = {
+      start: dayStart,
+      end: dayEnd,
+    };
+
+    // Cada novo dia começa com todas as linhas livres. Só carregamos os
+    // itens anteriores que ainda atravessam a meia-noite.
+    const rows = Array.from({ length: limit }, () => []);
+    for (const previous of placed) {
+      const row = Number(previous.gridRow);
+      if (
+        row >= 0 &&
+        row < limit &&
+        previous.start < dayStart &&
+        previous.end > dayStart
+      ) {
+        rows[row].push(previous);
+      }
+    }
+
+    const rowCanAccept = (item, row) => {
+      if (row < 0 || row >= limit) return false;
+
+      const relevantExisting = rows[row].filter((existing) =>
+        displayDayKey(existing) === dayKey ||
+        itemsOverlap(item, existing)
+      );
+
+      // Eventos de dia inteiro e aniversários nunca compartilham linha.
+      // Se a linha estiver ocupada por um item de outro dia que já terminou,
+      // ela volta a ficar disponível para o dia atual.
+      if (isBottomItem(item)) {
+        return relevantExisting.length === 0;
+      }
+      if (relevantExisting.some(isBottomItem)) return false;
+
+      // Nenhum item com horário pode ocupar a última linha durante o
+      // intervalo de um evento de dia inteiro.
+      if (
+        row === limit - 1 &&
+        !item.isAllDay &&
+        allDayIntervals.some((interval) =>
+          itemsOverlap(item, interval)
+        )
+      ) {
+        return false;
+      }
+
+      return relevantExisting.every((existing) =>
+        itemsCanShareTimelineRow(item, existing)
+      );
+    };
+
+    const preferredRows = (preferredRow, rowLimit) => {
+      const ordered = [];
+      const append = (row) => {
+        if (
+          row >= 0 &&
+          row < rowLimit &&
+          !ordered.includes(row)
+        ) {
+          ordered.push(row);
+        }
+      };
+
+      append(preferredRow);
+      for (let row = preferredRow - 1; row >= 0; row--) {
+        append(row);
+      }
+      for (let row = preferredRow + 1; row < rowLimit; row++) {
+        append(row);
+      }
+      return ordered;
+    };
+
+    const rowOrderFor = (item, preferredRow, rowLimit) => {
+      // Primeiro reutiliza uma linha de evento compatível. Depois procura
+      // uma linha vazia na ordem de preferência, redistribuindo os lembretes
+      // para cima quando houver espaço.
+      const shareableRows = [];
+      for (let row = 0; row < rowLimit; row++) {
+        if (
+          rows[row].length > 0 &&
+          rowCanAccept(item, row)
+        ) {
+          shareableRows.push(row);
+        }
+      }
+
+      const normalRows = preferredRows(preferredRow, rowLimit);
+      return [
+        ...shareableRows,
+        ...normalRows.filter((row) => !shareableRows.includes(row)),
+      ];
+    };
 
     const placeItem = (item, rowOrder) => {
-      const availableRow = rowOrder.find((row) =>
-        rows[row].every((existing) => !itemsOverlap(item, existing))
+      const availableRow = [...new Set(rowOrder)].find((row) =>
+        rowCanAccept(item, row)
       );
 
       if (availableRow === undefined) {
         hidden.push(item);
-        return;
+        return null;
       }
 
       const positioned = { ...item, gridRow: availableRow };
       rows[availableRow].push(positioned);
       placed.push(positioned);
+      return availableRow;
     };
 
-    // Eventos e lembretes com horário aparecem primeiro, em ordem
-    // cronológica, ocupando as linhas de cima para baixo.
-    const regularItems = [...dayItems]
-      .filter((item) => !isAllDayEvent(item))
-      .sort(byTime);
-
-    regularItems.forEach((item, index) => {
-      const preferredRow = Math.min(index, limit - 1);
-      const upperRows = [];
-      for (let row = preferredRow - 1; row >= 0; row--) {
-        upperRows.push(row);
-      }
-      const lowerRows = [];
-      for (let row = preferredRow + 1; row < limit; row++) {
-        lowerRows.push(row);
-      }
-
-      placeItem(item, [preferredRow, ...upperRows, ...lowerRows]);
-    });
-
-    // Eventos de dia inteiro continuam sendo os últimos na ordem de
-    // exibição, mas ocupam as linhas disponíveis de baixo para cima:
-    // quinta, quarta, terceira, segunda e primeira.
-    const allDayEvents = [...dayItems]
-      .filter(isAllDayEvent)
-      .sort(byTime);
-    const bottomUpRows = Array.from(
+    // Itens especiais ocupam a base primeiro: o primeiro fica na última
+    // linha, o próximo sobe uma linha, e assim por diante. Isso reserva a
+    // área inferior antes de distribuir os itens com horário.
+    const bottomRowOrder = Array.from(
       { length: limit },
       (_, index) => limit - 1 - index
     );
+    const bottomRowsUsed = bottomItems
+      .map((item) => placeItem(item, bottomRowOrder))
+      .filter((row) => row !== null);
+    const timedRowLimit = bottomRowsUsed.length
+      ? Math.min(...bottomRowsUsed)
+      : limit;
 
-    allDayEvents.forEach((item) => {
-      placeItem(item, bottomUpRows);
+    // Eventos com horário sempre ocupam as linhas superiores, antes de
+    // qualquer lembrete do mesmo dia.
+    const timedEvents = [...dayItems]
+      .filter(
+        (item) =>
+          item.kind === "event" && !isBottomItem(item)
+      )
+      .sort(byTime);
+
+    timedEvents.forEach((item, index) => {
+      const preferredRow = Math.min(index, timedRowLimit - 1);
+      placeItem(
+        item,
+        rowOrderFor(item, preferredRow, timedRowLimit)
+      );
     });
+
+    const highestEventRow = placed
+      .filter(
+        (item) =>
+          item.kind === "event" &&
+          !item.isAllDay &&
+          !isBirthdayItem(item) &&
+          itemsOverlap(item, dayInterval)
+      )
+      .reduce(
+        (highest, item) => Math.max(highest, item.gridRow),
+        -1
+      );
+    const reminderFirstRow =
+      highestEventRow >= timedRowLimit
+        ? timedRowLimit
+        : Math.min(
+            Math.max(0, highestEventRow + 1),
+            timedRowLimit - 1
+          );
+
+    // Lembretes atrasados vêm primeiro. Os compatíveis com um evento em
+    // até seis horas podem subir para a linha do evento; os demais ficam
+    // abaixo do último evento.
+    const reminders = [...dayItems]
+      .filter((item) => item.kind === "reminder")
+      .sort(
+        (a, b) =>
+          Number(b.isOverdue) - Number(a.isOverdue) ||
+          byTime(a, b)
+      );
+    if (reminderFirstRow >= timedRowLimit) {
+      hidden.push(...reminders);
+    } else {
+      reminders.forEach((item, index) => {
+        const preferredRow = Math.min(
+          reminderFirstRow + index,
+          timedRowLimit - 1
+        );
+        placeItem(
+          item,
+          rowOrderFor(item, preferredRow, timedRowLimit)
+        );
+      });
+    }
+
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
   const overflowByDay = new Map();
   for (const item of hidden) {
-    const key = dateKey(item.start);
+    const key = displayDayKey(item);
     if (!overflowByDay.has(key)) overflowByDay.set(key, []);
     overflowByDay.get(key).push(item);
   }
@@ -1411,6 +2018,11 @@ function isExtendedDetailedMode() {
   return windowHours > 24 && !isCompactMode();
 }
 
+function usesEvenHourCadence() {
+  // Janelas de até 12 horas exibem todos os elementos de hora em hora.
+  return windowHours > 12;
+}
+
 function itemImportance(item) {
   if (item.isCurrentEvent) return 110;
   if (item.isNextEvent) return 100;
@@ -1433,6 +2045,45 @@ function itemsOverlap(first, second) {
   // Um item que começa exatamente quando o outro termina pode reutilizar
   // a mesma linha.
   return firstStart < secondEnd && secondStart < firstEnd;
+}
+
+function itemsCanShareTimelineRow(first, second) {
+  if (itemsOverlap(first, second)) return false;
+
+  // Eventos com horário são sempre apresentados antes dos lembretes e não
+  // compartilham a mesma linha entre si, mesmo quando há poucos minutos ou
+  // horas entre eles.
+  if (
+    first.kind === "event" &&
+    second.kind === "event" &&
+    !first.isAllDay &&
+    !second.isAllDay
+  ) {
+    return false;
+  }
+
+  // Lembretes continuam em linhas separadas entre si. A regra das seis
+  // horas vale para evento-lembrete.
+  if (
+    first.kind === "reminder" &&
+    second.kind === "reminder"
+  ) {
+    return false;
+  }
+
+  // Eventos de dia inteiro ficam na última linha e não devem bloquear um
+  // trecho que esteja fora do seu próprio intervalo.
+  if (first.isAllDay || second.isAllDay) return true;
+
+  const firstStart = first.start.getTime();
+  const secondStart = second.start.getTime();
+  const firstEnd = effectiveItemEnd(first);
+  const secondEnd = effectiveItemEnd(second);
+  const gap = firstEnd <= secondStart
+    ? secondStart - firstEnd
+    : firstStart - secondEnd;
+
+  return gap <= TIMELINE_ROW_SHARE_GAP_MS;
 }
 
 function effectiveItemEnd(item) {
@@ -1578,17 +2229,23 @@ function accessoryEventStatus(event) {
 }
 
 async function renderWidget(items, loadError) {
-  const ctx = new DrawContext();
-  ctx.size = new Size(CANVAS.width, CANVAS.height);
-  ctx.opaque = true;
-  ctx.respectScreenScale = false;
+  const contentCtx = new DrawContext();
+  contentCtx.size = new Size(CANVAS.width, CANVAS.height);
+  contentCtx.opaque = true;
+  contentCtx.respectScreenScale = false;
 
-  drawIOSDarkGradient(ctx);
-  drawTimelineBackground(ctx);
-  drawDatePanel(ctx, loadResult.holidayDates);
+  // O gradiente precisa ser a primeira camada. O restante do widget é
+  // desenhado depois, sem deslocar o composto inteiro.
+  drawIOSDarkGradient(contentCtx);
+  // Sábados, domingos e feriados atuais usam uma única geometria
+  // contínua entre o cartão e a respectiva faixa da timeline.
+  drawCurrentDaySpecialBackground(contentCtx);
+  // O fundo da timeline é composto dentro do próprio painel,
+  // antes de qualquer astro, linha ou chart.
+  drawDatePanel(contentCtx, loadResult.holidayDates);
 
   const timelineImage = await renderTimelinePanel(items, loadError);
-  ctx.drawImageInRect(
+  contentCtx.drawImageInRect(
     timelineImage,
     new Rect(
       CANVAS.plotLeft,
@@ -1598,7 +2255,559 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  return ctx.getImage();
+  // O painel da timeline usa o perfil comum de cantos. O mesmo perfil
+  // também será aplicado ao contorno e ao recorte dos astros.
+  const timelineRect = new Rect(
+    CANVAS.plotLeft,
+    CANVAS.timelineTop,
+    timelineWidth(),
+    timelineHeight()
+  );
+  restoreRoundedSideCorners(
+    contentCtx,
+    timelineRect,
+    TITLE_CARD_OUTER_CORNER_RADIUS,
+    "left",
+    0,
+    TIMELINE_CORNER_PROFILE.topLeftRounded,
+    TIMELINE_CORNER_PROFILE.bottomLeftRounded
+  );
+  restoreRoundedSideCorners(
+    contentCtx,
+    timelineRect,
+    TITLE_CARD_OUTER_CORNER_RADIUS,
+    "right",
+    0,
+    TIMELINE_CORNER_PROFILE.topRightRounded,
+    TIMELINE_CORNER_PROFILE.bottomRightRounded
+  );
+
+  // A curva da moldura do dia atual também funciona como limite
+  // visual dos astros e demais elementos do cartão selecionado.
+  // O contorno da timeline fica abaixo da moldura branca do dia atual.
+  drawTimelineOuterBorder(contentCtx);
+
+  const currentDayFrame = currentDayFrameMetrics();
+  restoreRoundedSideCorners(
+    contentCtx,
+    currentDayFrame.todayCard,
+    currentDayFrame.frameRadius,
+    currentDayFrameHorizontalDirection(
+      currentDayFrame.todayCard,
+      currentDayFrame.boundaryX
+    ),
+    currentDayFrame.lineWidth / 2
+  );
+
+  // A linha inferior é prolongamento da curva lateral e é desenhada
+  // no mesmo Path, em primeiro plano. O círculo da mudança de dia
+  // continua sendo composto no painel e permanece visualmente à frente.
+  drawCurrentDayFrameOverlay(contentCtx, items);
+
+  // A borda da Lua é redesenhada após o contorno externo da timeline.
+  // A borda superior da timeline não pode cobrir seu aro branco.
+  drawDayBoundaryMoonBordersOnForeground(contentCtx);
+
+  // O cartão final já possui sua própria geometria arredondada.
+
+  return contentCtx.getImage();
+}
+
+function shouldBlurFutureTimeline() {
+  if (!SETTINGS.futureTimelineBlurEnabled) return false;
+
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return false;
+
+  // Sem conseguir verificar o Calendário/Lembretes, mantém o futuro
+  // protegido até que a leitura volte a funcionar.
+  if (loadResult?.error) return true;
+
+  return hasBlockingTodayTimelineItems(loadResult?.items ?? []);
+}
+
+function hasBlockingTodayTimelineItems(items) {
+  const todayStart = startOfDay(windowStart);
+  const tomorrowStart = addDays(todayStart, 1);
+  const todayStartMs = todayStart.getTime();
+  const tomorrowStartMs = tomorrowStart.getTime();
+  const nowMs = now.getTime();
+
+  return (Array.isArray(items) ? items : []).some((item) => {
+    if (
+      !item ||
+      !(item.start instanceof Date) ||
+      !(item.end instanceof Date)
+    ) {
+      return false;
+    }
+
+    const startMs = item.start.getTime();
+    const endMs = item.end.getTime();
+    if (
+      !Number.isFinite(startMs) ||
+      !Number.isFinite(endMs)
+    ) {
+      return false;
+    }
+
+    // O item precisa ainda estar pendente/ativo e pertencer ao dia atual.
+    // Isso inclui compromissos que atravessam a meia-noite.
+    const isCarryover = isPendingDayCarryoverCandidate(item, now);
+
+    if (
+      endMs <= todayStartMs ||
+      startMs >= tomorrowStartMs ||
+      (endMs <= nowMs && !isCarryover)
+    ) {
+      return false;
+    }
+
+    if (item.kind === "event") {
+      // Eventos de dia inteiro e aniversários não bloqueiam o futuro.
+      return !item.isAllDay && !isBirthdayItem(item);
+    }
+
+    // Os itens retornados pelo EventKit são lembretes incompletos.
+    // Lembretes sem horário continuam sendo pendências válidas.
+    return item.kind === "reminder";
+  });
+}
+
+function futureTimelineBlurMetrics() {
+  const tomorrowStart = addDays(startOfDay(windowStart), 1);
+  const rawStartX = timeToX(tomorrowStart);
+  const panelWidth = Math.max(1, Math.round(timelineWidth()));
+  const startX = Math.max(
+    0,
+    Math.min(panelWidth, Math.round(rawStartX))
+  );
+
+  return {
+    startX,
+    width: Math.max(0, panelWidth - startX),
+    height: Math.max(1, Math.round(timelineHeight())),
+    absoluteX: CANVAS.plotLeft + startX,
+    absoluteY: Math.round(CANVAS.timelineTop),
+  };
+}
+
+function drawFutureTimelineBlurLayer(
+  ctx,
+  timelineImage,
+  localToTimeline = false
+) {
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return;
+
+  const blurRect = new Rect(
+    localToTimeline ? metrics.startX : metrics.absoluteX,
+    localToTimeline ? 0 : CANVAS.timelineTop,
+    metrics.width,
+    timelineHeight()
+  );
+
+  // Recorta somente o futuro, já com astros, curva, temperaturas,
+  // brilho solar e horários. Os charts são desenhados depois deste
+  // blur; o trecho de hoje não é repintado e preserva a transparência.
+  try {
+    const futureImage = cropTimelinePanelImage(
+      timelineImage,
+      metrics.startX,
+      metrics.width,
+      metrics.height
+    );
+    const softenedImage = softenTimelineImage(
+      futureImage,
+      metrics.width,
+      metrics.height
+    );
+    ctx.drawImageInRect(softenedImage, blurRect);
+  } catch (_) {
+    // A camada translúcida abaixo continua funcionando mesmo se o
+    // redimensionamento rasterizado não estiver disponível.
+  }
+
+  // Reduz o contraste restante e mantém o futuro parcialmente visível.
+  ctx.setFillColor(
+    new Color(
+      SETTINGS.futureTimelineBlurTintColor,
+      SETTINGS.futureTimelineBlurTintOpacity
+    )
+  );
+  ctx.fillRect(blurRect);
+}
+
+function cropTimelinePanelImage(image, x, width, height) {
+  const cropCtx = new DrawContext();
+  cropCtx.size = new Size(width, height);
+  cropCtx.opaque = true;
+  cropCtx.respectScreenScale = false;
+
+  // A parte transparente da timeline recebe o mesmo gradiente do canvas
+  // antes do recorte. Isso evita que pixels não preenchidos sejam
+  // convertidos em branco durante o redimensionamento.
+  const globalTop = Math.round(CANVAS.timelineTop);
+  for (let pixelY = 0; pixelY < height; pixelY++) {
+    cropCtx.setFillColor(
+      widgetGradientColorAtY(globalTop + pixelY)
+    );
+    cropCtx.fillRect(
+      new Rect(0, pixelY, width, 1)
+    );
+  }
+
+  // O canvas menor recorta naturalmente apenas a faixa posterior.
+  cropCtx.drawImageAtPoint(
+    image,
+    new Point(-Math.round(x), 0)
+  );
+  return cropCtx.getImage();
+}
+
+function cropCanvasImage(image, x, y, width, height) {
+  const cropCtx = new DrawContext();
+  cropCtx.size = new Size(width, height);
+  cropCtx.opaque = true;
+  cropCtx.respectScreenScale = false;
+  cropCtx.drawImageAtPoint(
+    image,
+    new Point(-Math.round(x), -Math.round(y))
+  );
+  return cropCtx.getImage();
+}
+
+function softenTimelineImage(image, width, height) {
+  const factor = Math.max(
+    0.12,
+    Math.min(
+      0.50,
+      Number(SETTINGS.futureTimelineBlurDownsampleFactor) || 0.24
+    )
+  );
+  const reducedWidth = Math.max(1, Math.round(width * factor));
+  const reducedHeight = Math.max(1, Math.round(height * factor));
+
+  const reducedCtx = new DrawContext();
+  reducedCtx.size = new Size(reducedWidth, reducedHeight);
+  reducedCtx.opaque = true;
+  reducedCtx.respectScreenScale = false;
+  reducedCtx.drawImageInRect(
+    image,
+    new Rect(0, 0, reducedWidth, reducedHeight)
+  );
+
+  const expandedCtx = new DrawContext();
+  expandedCtx.size = new Size(width, height);
+  expandedCtx.opaque = true;
+  expandedCtx.respectScreenScale = false;
+  expandedCtx.drawImageInRect(
+    reducedCtx.getImage(),
+    new Rect(0, 0, width, height)
+  );
+  return expandedCtx.getImage();
+}
+
+function drawCurrentDayBoundaryBadgeOnForeground(ctx) {
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return;
+
+  const boundaryDate = addDays(startOfDay(windowStart), 1);
+  const localX = timelineLegendCenterX(boundaryDate);
+  if (
+    localX < 0 ||
+    localX > timelineWidth()
+  ) {
+    return;
+  }
+
+  const centerX = CANVAS.plotLeft + localX;
+  const centerY = CANVAS.timelineTop + bottomLegendCenterY();
+  const style = dayBadgeStyle(
+    boundaryDate,
+    loadResult.holidayDates
+  );
+  const badge = dayLegendCircleRect(centerX, centerY);
+  const fontSize = scaleFontSize(20);
+  const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
+
+  ctx.setFillColor(style.background);
+  ctx.fillEllipse(badge);
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(style.text);
+  ctx.setTextAlignedCenter();
+  ctx.drawTextInRect(
+    shortWeekday(boundaryDate),
+    centeredDayLegendTextRect(
+      centerX,
+      centerY,
+      textWidth,
+      fontSize
+    )
+  );
+}
+
+function restoreRoundedSideCorners(
+  ctx,
+  rect,
+  radius,
+  side,
+  protectedStrokeOutset = 0,
+  roundTopCorner = true,
+  roundBottomCorner = true
+) {
+  const direction = side === "left" ? "left" : "right";
+  const boundedRadius = Math.max(
+    0,
+    Math.min(radius, rect.width / 2, rect.height / 2)
+  );
+  if (boundedRadius <= 0) return;
+
+  // A máscara acompanha a borda externa da curva. Assim, quando há
+  // uma linha sobre ela, o recorte começa depois do stroke e
+  // não come metade da espessura.
+  const maskRadius =
+    boundedRadius + Math.max(0, Number(protectedStrokeOutset) || 0);
+  const left = rect.x;
+  const right = rect.x + rect.width;
+  const top = rect.y;
+  const circleCenterX =
+    direction === "left"
+      ? left + boundedRadius
+      : right - boundedRadius;
+
+  // Restaura pixels inteiros: faixas em Y fracionado deixam emendas
+  // semitransparentes mesmo usando uma cor com opacidade 1.
+  for (
+    let pixelY = Math.floor(top);
+    pixelY < Math.ceil(top + rect.height);
+    pixelY++
+  ) {
+    const sampleY = Math.max(
+      0,
+      Math.min(rect.height, pixelY + 0.5 - top)
+    );
+    let outsideStart = direction === "right" ? right : left;
+    let outsideEnd = direction === "left" ? left : right;
+    const isTopCorner =
+      roundTopCorner && sampleY < boundedRadius;
+    const isBottomCorner =
+      roundBottomCorner &&
+      sampleY > rect.height - boundedRadius;
+
+    if (isTopCorner || isBottomCorner) {
+      const cornerCenterY = isTopCorner
+        ? boundedRadius
+        : rect.height - boundedRadius;
+      const verticalDistance = Math.abs(sampleY - cornerCenterY);
+
+      if (verticalDistance <= maskRadius) {
+        const horizontalDistance = Math.sqrt(
+          Math.max(
+            0,
+            maskRadius * maskRadius -
+              verticalDistance * verticalDistance
+          )
+        );
+
+        if (direction === "right") {
+          outsideStart = circleCenterX + horizontalDistance;
+        } else {
+          outsideEnd = circleCenterX - horizontalDistance;
+        }
+      }
+    }
+
+    if (
+      direction === "right" &&
+      outsideStart < right
+    ) {
+      restoreWidgetBackgroundSpan(
+        ctx,
+        outsideStart,
+        pixelY,
+        right - outsideStart
+      );
+    }
+
+    if (
+      direction === "left" &&
+      outsideEnd > left
+    ) {
+      restoreWidgetBackgroundSpan(
+        ctx,
+        left,
+        pixelY,
+        outsideEnd - left
+      );
+    }
+  }
+}
+
+function restoreRoundedRightCorners(ctx, rect, radius) {
+  restoreRoundedSideCorners(ctx, rect, radius, "right");
+}
+
+function drawTimelineOuterBorder(ctx) {
+  const rect = new Rect(
+    CANVAS.plotLeft,
+    CANVAS.timelineTop,
+    timelineWidth(),
+    timelineHeight()
+  );
+  const borderWidth = 2;
+  const outerRadius = Math.max(
+    0,
+    Math.min(
+      WIDGET_COMMON_CORNER_RADIUS,
+      rect.width / 2,
+      rect.height / 2
+    )
+  );
+  const inset = borderWidth / 2;
+  const centerRadius = Math.max(0, outerRadius - inset);
+  const left = rect.x + inset;
+  const top = rect.y + inset;
+  const right = rect.x + rect.width - inset;
+  const bottom = rect.y + rect.height - inset;
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+  let lastPoint = null;
+  const outline = {
+    move(p) { lastPoint = p; path.move(p); },
+    addLine(p) {
+      const a = lastPoint;
+      const steps = Math.max(1, Math.ceil(Math.hypot(p.x - a.x, p.y - a.y)));
+      for (let i = 1; i <= steps; i++) {
+        const q = new Point(a.x + (p.x-a.x)*i/steps, a.y + (p.y-a.y)*i/steps);
+        if (insideCurrentDayUnifiedShape((lastPoint.x+q.x)/2, (lastPoint.y+q.y)/2)) path.move(q);
+        else path.addLine(q);
+        lastPoint = q;
+      }
+    },
+    addCurve(p, a, b) {
+      const start = lastPoint;
+      for (let i = 1; i <= 64; i++) {
+        const t=i/64, u=1-t;
+        this.addLine(new Point(u*u*u*start.x+3*u*u*t*a.x+3*u*t*t*b.x+t*t*t*p.x,
+          u*u*u*start.y+3*u*u*t*a.y+3*u*t*t*b.y+t*t*t*p.y));
+      }
+    }
+  };
+
+  if (centerRadius <= 0) {
+    outline.move(new Point(left, top));
+    outline.addLine(new Point(right, top));
+    outline.addLine(new Point(right, bottom));
+    outline.addLine(new Point(left, bottom));
+    outline.addLine(new Point(left, top));
+  } else {
+    // O perfil externo tem três cantos perpendiculares e apenas
+    // o canto inferior direito arredondado.
+    outline.move(new Point(left, top));
+    outline.addLine(new Point(right, top));
+    outline.addLine(new Point(right, bottom - centerRadius));
+
+    outline.addCurve(
+      new Point(right - centerRadius, bottom),
+      new Point(
+        right,
+        bottom - centerRadius + centerRadius * curveFactor
+      ),
+      new Point(
+        right - centerRadius + centerRadius * curveFactor,
+        bottom
+      )
+    );
+
+    outline.addLine(new Point(left, bottom));
+    outline.addLine(new Point(left, top));
+  }
+
+  // É a mesma cor da borda fina dos quadros dos dias.
+  ctx.setStrokeColor(new Color("#303136", 0.82));
+  ctx.setLineWidth(borderWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
+function currentDayUnifiedShape(path = new Path()) {
+  const m = currentDayFrameMetrics();
+  const c = m.todayCard;
+  const r = m.frameRadius;
+  const k = 0.5522847498;
+  // O preenchimento reutiliza exatamente a ponte e as curvas do contorno.
+  buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
+    "right", m.boundaryX, r, path, 0, r);
+  path.addLine(new Point(m.boundaryX, m.bridgeY));
+  path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
+  path.addLine(new Point(c.x + r, m.bottomLineCenterY));
+  path.addCurve(new Point(c.x, m.bottomLineCenterY - r),
+    new Point(c.x + r - r * k, m.bottomLineCenterY),
+    new Point(c.x, m.bottomLineCenterY - r + r * k));
+  path.addLine(new Point(c.x, c.y + r));
+  path.addCurve(new Point(c.x + r, c.y),
+    new Point(c.x, c.y + r - r * k),
+    new Point(c.x + r - r * k, c.y));
+  return path;
+}
+
+function currentDayUnifiedPolygon() {
+  if (currentDayUnifiedPolygon.points) return currentDayUnifiedPolygon.points;
+  const points = [];
+  const recorder = {
+    move(p) { points.push(p); },
+    addLine(p) { points.push(p); },
+    addCurve(end, a, b) {
+      const start = points[points.length - 1];
+      for (let i = 1; i <= 48; i++) {
+        const t = i / 48, u = 1 - t;
+        points.push(new Point(
+          u*u*u*start.x + 3*u*u*t*a.x + 3*u*t*t*b.x + t*t*t*end.x,
+          u*u*u*start.y + 3*u*u*t*a.y + 3*u*t*t*b.y + t*t*t*end.y));
+      }
+    }
+  };
+  currentDayUnifiedShape(recorder);
+  currentDayUnifiedPolygon.points = points;
+  return points;
+}
+
+function insideCurrentDayUnifiedShape(x, y) {
+  const points = currentDayUnifiedPolygon();
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i], b = points[j];
+    if ((a.y > y) !== (b.y > y) &&
+        x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function drawCurrentDaySpecialBackground(ctx) {
+  const color = timelineBackgroundColorForDate(startOfDay(windowStart));
+  if (color === SETTINGS.timelineBackgroundColor) return;
+  ctx.setFillColor(new Color(color, 1));
+  ctx.addPath(currentDayUnifiedShape());
+  ctx.fillPath();
+}
+
+function restoreWidgetBackgroundSpan(ctx, x, y, width) {
+  const color = timelineBackgroundColorForDate(startOfDay(windowStart));
+  const special = color !== SETTINGS.timelineBackgroundColor;
+  // Os recortes restauram o fundo verdadeiro, nunca uma máscara escura
+  // sobre a união entre o título e a timeline.
+  // O arco da direita produz X fracionado. Pintar quadrados de 1 px
+  // a partir desse X suaviza TODAS as emendas e deixa a cor vazar.
+  // Cubra integralmente os pixels tocados pela máscara, nos dois lados.
+  if (width <= 0) return;
+  const pixelY = Math.floor(y);
+  const end = Math.ceil(x + width);
+  for (let start = Math.floor(x); start < end; start += 1) {
+    ctx.setFillColor(special && insideCurrentDayUnifiedShape(start + 0.5, pixelY + 0.5)
+      ? new Color(color, 1) : widgetGradientColorAtY(pixelY));
+    ctx.fillRect(new Rect(start, pixelY, 1, 1));
+  }
 }
 
 function timelineBackgroundColorForDate(
@@ -1609,7 +2818,10 @@ function timelineBackgroundColorForDate(
     return SETTINGS.holidayTimelineBackgroundColor;
   }
   if (date.getDay() === 6) {
-    return SETTINGS.saturdayTimelineBackgroundColor;
+    return (
+      SETTINGS.saturdayTimelineBackgroundColor ??
+      SETTINGS.nonTodayTimelineOverlayColor
+    );
   }
   if (date.getDay() === 0) {
     return SETTINGS.sundayTimelineBackgroundColor;
@@ -1617,10 +2829,13 @@ function timelineBackgroundColorForDate(
   return SETTINGS.timelineBackgroundColor;
 }
 
-function drawTimelineBackground(ctx) {
+function drawTimelineBackground(
+  ctx,
+  localToTimeline = false
+) {
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
-  const coloredHeight = thermalBandBottomY();
+  const todayKey = dateKey(startOfDay(windowStart));
 
   while (dayStart <= finalDay) {
     const dayEnd = addDays(dayStart, 1);
@@ -1632,22 +2847,42 @@ function drawTimelineBackground(ctx) {
     );
     const x0 = Math.max(0, timeToX(visibleStart));
     const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
-
+    const isToday = dateKey(dayStart) === todayKey;
     const backgroundColor = timelineBackgroundColorForDate(dayStart);
     const isSpecialDay =
       backgroundColor !== SETTINGS.timelineBackgroundColor;
 
-    // Dias comuns permanecem transparentes para revelar o gradiente original
-    // desenhado no fundo do widget. Mantemos apenas as tintas específicas
-    // de sábado, domingo e feriados.
-    if (x1 > x0 && isSpecialDay) {
-      ctx.setFillColor(new Color(backgroundColor, 1.0));
+    // Quando hoje é sábado, domingo ou feriado, sua cor já foi
+    // desenhada na geometria contínua do canvas principal. O painel
+    // permanece transparente nesse trecho para não criar uma segunda
+    // forma sobreposta.
+    const isUnifiedCurrentDay =
+      localToTimeline && isToday && isSpecialDay;
+    if (
+      x1 > x0 &&
+      !isUnifiedCurrentDay &&
+      (isSpecialDay || !isToday)
+    ) {
+      ctx.setFillColor(
+        new Color(
+          isSpecialDay
+            ? backgroundColor
+            : SETTINGS.nonTodayTimelineOverlayColor,
+          isSpecialDay
+            ? 1.0
+            : SETTINGS.nonTodayTimelineOverlayOpacity
+        )
+      );
       ctx.fillRect(
         new Rect(
-          CANVAS.plotLeft + x0,
-          CANVAS.timelineTop,
+          localToTimeline
+            ? x0
+            : CANVAS.plotLeft + x0,
+          localToTimeline
+            ? 0
+            : CANVAS.timelineTop,
           x1 - x0,
-          coloredHeight
+          timelineHeight()
         )
       );
     }
@@ -1655,7 +2890,7 @@ function drawTimelineBackground(ctx) {
   }
 }
 
-function drawIOSDarkGradient(ctx) {
+function widgetGradientColorAtY(y) {
   const locations =
     THEME_MODE === "black"
       ? [0.0, 0.2, 1.0]
@@ -1664,28 +2899,35 @@ function drawIOSDarkGradient(ctx) {
     THEME_MODE === "black"
       ? ["#1C1C1C", "#161616", "#000000"]
       : ["#383838", "#212121", "#181818"];
+  const position = Math.max(
+    0,
+    Math.min(1, y / Math.max(1, CANVAS.height - 1))
+  );
+  let segment = 0;
 
+  while (
+    segment < locations.length - 2 &&
+    position > locations[segment + 1]
+  ) {
+    segment++;
+  }
+
+  const start = locations[segment];
+  const end = locations[segment + 1];
+  const progress = Math.max(
+    0,
+    Math.min(1, (position - start) / Math.max(0.0001, end - start))
+  );
+
+  return new Color(
+    interpolateHexColor(colors[segment], colors[segment + 1], progress),
+    1.0
+  );
+}
+
+function drawIOSDarkGradient(ctx) {
   for (let y = 0; y < CANVAS.height; y++) {
-    const position = y / Math.max(1, CANVAS.height - 1);
-    let segment = 0;
-
-    while (
-      segment < locations.length - 2 &&
-      position > locations[segment + 1]
-    ) {
-      segment++;
-    }
-
-    const start = locations[segment];
-    const end = locations[segment + 1];
-    const progress = Math.max(
-      0,
-      Math.min(1, (position - start) / Math.max(0.0001, end - start))
-    );
-
-    ctx.setFillColor(
-      new Color(interpolateHexColor(colors[segment], colors[segment + 1], progress))
-    );
+    ctx.setFillColor(widgetGradientColorAtY(y));
     ctx.fillRect(new Rect(0, y, CANVAS.width, 1));
   }
 }
@@ -1715,54 +2957,1295 @@ function hexToRGB(hex) {
   };
 }
 
+function titleCardGap() {
+  // O vão horizontal usa a mesma distância vertical existente entre
+  // a borda inferior dos cartões comuns e a moldura superior da timeline.
+  const regularCardTop =
+    WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+  const regularCardBottom =
+    regularCardTop + TITLE_CARD_HEIGHT;
+  return Math.max(
+    0,
+    CANVAS.timelineTop - regularCardBottom
+  );
+}
+
+function titleDayCardRect(index) {
+  const cardCount = TITLE_CARD_COUNT;
+  const cardGap = titleCardGap();
+  const cardsLeft = CANVAS.marginX;
+  const cardsRight = CANVAS.width - CANVAS.marginX;
+  const cardWidth =
+    (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
+    cardCount;
+
+  // A linha superior do dia atual é um traço centrado na borda,
+  // então os demais quadros sobem metade da espessura para alinhar
+  // seus limites visuais superiores.
+  const titleCardTop =
+    index === 0
+      ? WIDGET_CONTENT_TOP_MARGIN
+      : WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+  // O cartão atual termina na mesma altura dos demais. Seu topo lógico
+  // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
+  // altura preserva o alinhamento externo superior sem encurtar o vão.
+  const titleCardHeight =
+    index === 0
+      ? Math.max(
+          1,
+          TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2
+        )
+      : TITLE_CARD_HEIGHT;
+
+  return new Rect(
+    cardsLeft + index * (cardWidth + cardGap),
+    titleCardTop,
+    cardWidth,
+    titleCardHeight
+  );
+}
+
 function drawDatePanel(ctx, holidayDates) {
-  const weekday = titleWeekday(now).toLocaleUpperCase("pt-BR");
-  const dayNumber = formatDate(now, "d");
-  const month = formatDate(now, "MMMM").toLocaleUpperCase("pt-BR");
-  const segments = [
-    {
-      text: weekday,
-      bold: true,
-      color: titleWeekdayColor(now, holidayDates),
-    },
-    { text: ", ", bold: false, color: Color.white() },
-    {
-      text: dayNumber,
-      bold: true,
-      color: titleDayColor(now, holidayDates),
-    },
-    { text: " DE ", bold: false, color: Color.white() },
-    { text: month, bold: true, color: Color.white() },
-  ];
-  const fullDate = segments.map((segment) => segment.text).join("");
-  const maximumFontSize = isCompactMode() ? 89 : 107;
-  const fontSize = Math.min(
-    maximumFontSize,
-    (CANVAS.width - CANVAS.marginX * 2) / (fullDate.length * 0.65) + 7
+  // A área do título agora é uma faixa compacta de previsão. O restante
+  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
+  const cardCount = TITLE_CARD_COUNT;
+  const firstDay = startOfDay(windowStart);
+
+  for (let index = 0; index < cardCount; index++) {
+    const date = addDays(firstDay, index);
+    drawTitleDayCard(
+      ctx,
+      date,
+      titleDayCardRect(index),
+      index === 0,
+      index === cardCount - 1
+    );
+  }
+}
+
+
+function currentDayFrameMetrics() {
+  const todayCard = titleDayCardRect(0);
+  const todayBoundary = startOfDay(windowStart);
+  const nextDayBoundary = addDays(todayBoundary, 1);
+  const boundaryX =
+    CANVAS.plotLeft + timeToX(nextDayBoundary);
+  const astroCenterY =
+    CANVAS.timelineTop + weatherIconCenterY();
+  const boundaryBottomY =
+    CANVAS.timelineTop +
+    bottomLegendCenterY() +
+    DAY_CHANGE_CIRCLE_DIAMETER / 2;
+  const cardBottomY = todayCard.y + todayCard.height;
+  const lineWidth = dayBoundaryLineWidth();
+  const bridgeY = dayBoundaryMoonBorderTopY();
+  const bottomLineCenterY = boundaryBottomY - lineWidth / 2;
+  const frameRadius = Math.min(
+    WIDGET_COMMON_CORNER_RADIUS,
+    Math.max(0, (bridgeY - todayCard.y) / 2),
+    Math.max(0, (bottomLineCenterY - todayCard.y) / 2)
   );
-  // Reduz o espaçamento horizontal total do título em 8 px,
-  // mantendo as mesmas fontes e o alinhamento central.
-  const titleWidthReduction = 8;
-  const characterWidth = Math.max(
-    1,
-    fontSize * 0.61 -
-      titleWidthReduction / Math.max(1, fullDate.length)
+  // O raio do caminho central é compensado pela metade da espessura.
+  // Assim, o raio externo visível da linha branca coincide com o raio
+  // externo dos quadros vizinhos.
+  const framePathRadius = Math.max(
+    0,
+    frameRadius - lineWidth / 2
   );
-  const totalWidth = fullDate.length * characterWidth;
-  const startX = (CANVAS.width - totalWidth) / 2;
+  // A moldura pertence ao dia do cartão atual. O X continua apontando
+  // para a próxima virada, mas a cor vem da virada do próprio dia.
+  const lineColor = hourGridLineColor(todayBoundary);
+
+  return {
+    todayCard,
+    boundaryX,
+    astroCenterY,
+    boundaryBottomY,
+    cardBottomY,
+    bridgeY,
+    bottomLineCenterY,
+    frameRadius,
+    framePathRadius,
+    lineWidth,
+    lineColor,
+  };
+}
+
+function currentDayLineRadius(lineWidth) {
+  // As linhas estruturais mantêm a referência do próprio traço,
+  // limitada à metade da espessura para manter um canto leve.
+  return Math.min(TITLE_CARD_STANDARD_CORNER_RADIUS, lineWidth / 2);
+}
+
+function fillCurrentDayRoundedRect(ctx, rect, color) {
+  const radius = currentDayLineRadius(Math.min(rect.width, rect.height));
+  fillTitleCardShape(
+    ctx,
+    rect,
+    {
+      topLeft: radius,
+      topRight: radius,
+      bottomRight: radius,
+      bottomLeft: radius,
+    },
+    color
+  );
+}
+
+function fillCurrentDayHorizontalLine(
+  ctx,
+  x1,
+  x2,
+  centerY,
+  lineWidth,
+  color
+) {
+  const radius = currentDayLineRadius(lineWidth);
+  const left = Math.min(x1, x2);
+  const right = Math.max(x1, x2);
+  const width = Math.max(lineWidth, right - left + radius * 2);
+
+  fillCurrentDayRoundedRect(
+    ctx,
+    new Rect(
+      left - radius,
+      centerY - lineWidth / 2,
+      width,
+      lineWidth
+    ),
+    color
+  );
+}
+
+function fillCurrentDayVerticalLine(
+  ctx,
+  x,
+  y1,
+  y2,
+  lineWidth,
+  color
+) {
+  const radius = currentDayLineRadius(lineWidth);
+  const top = Math.min(y1, y2);
+  const bottom = Math.max(y1, y2);
+  const height = Math.max(lineWidth, bottom - top + radius * 2);
+
+  fillCurrentDayRoundedRect(
+    ctx,
+    new Rect(
+      x - lineWidth / 2,
+      top - radius,
+      lineWidth,
+      height
+    ),
+    color
+  );
+}
+
+function drawCurrentDayBottomLineUnderlay(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    bottomLineCenterY,
+    framePathRadius,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  const direction =
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
+  const bottomBridge = currentDayBottomBridgeMetrics(
+    todayCard,
+    boundaryX,
+    lineWidth,
+    framePathRadius,
+    direction
+  );
+
+  // Curva inferior e linha horizontal usam um único Path e um único stroke.
+  // O ponto de união é tangente: a curva termina horizontalmente e o
+  // segmento continua até o centro da virada, sem emenda visual.
+  drawCurrentDayRoundedSideFrame(
+    ctx,
+    todayCard,
+    bottomLineCenterY,
+    lineWidth,
+    lineColor,
+    direction === "right" ? "left" : "right",
+    framePathRadius,
+    bottomBridge.pathRadius,
+    boundaryX
+  );
+}
+
+function currentDayFrameCornerRadius(card) {
+  // O raio é definido pela geometria externa compartilhada. A moldura
+  // inferior e a ponte superior já possuem limites verticais próprios;
+  // a altura lógica reduzida do cartão atual não deve reduzir seu raio.
+  return Math.min(
+    WIDGET_COMMON_CORNER_RADIUS,
+    card.width / 2
+  );
+}
+
+
+function currentDayBottomBridgeMetrics(
+  card,
+  boundaryX,
+  lineWidth,
+  radius,
+  horizontalDirection
+) {
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
+  const directionSign = direction === "right" ? 1 : -1;
+  const strokeInset = Math.max(
+    0,
+    Math.min(
+      Math.max(0, Number(lineWidth) || 0) / 2,
+      card.width / 2
+    )
+  );
+  const sideEdgeX =
+    direction === "right"
+      ? card.x + strokeInset
+      : card.x + card.width - strokeInset;
+  const signedDistance = boundaryX - sideEdgeX;
+  const distance = Math.abs(signedDistance);
+  const maximumRadius = Math.max(
+    0,
+    Math.min(Number(radius) || 0, card.width / 2)
+  );
+  const pathRadius = Math.min(maximumRadius, distance);
+  const curveDirectionSign =
+    signedDistance === 0
+      ? directionSign
+      : Math.sign(signedDistance);
+  const endpointX =
+    distance < maximumRadius
+      ? boundaryX
+      : sideEdgeX + curveDirectionSign * pathRadius;
+
+  return {
+    direction,
+    sideEdgeX,
+    signedDistance,
+    distance,
+    pathRadius,
+    endpointX,
+    isFlexible:
+      distance > 0 &&
+      distance < maximumRadius,
+  };
+}
+
+function drawCurrentDayRoundedSideFrame(
+  ctx,
+  card,
+  bottomY,
+  lineWidth,
+  color,
+  side,
+  radius,
+  bottomRadius = radius,
+  continuationX = null
+) {
+  const availableHeight = Math.max(
+    0,
+    (bottomY - card.y) / 2
+  );
+  const boundedTopRadius = Math.max(
+    0,
+    Math.min(
+      Number(radius) || 0,
+      card.width / 2,
+      availableHeight
+    )
+  );
+  const boundedBottomRadius = Math.max(
+    0,
+    Math.min(
+      Number(bottomRadius) || 0,
+      card.width / 2,
+      availableHeight
+    )
+  );
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+  const strokeInset = Math.max(
+    0,
+    Math.min(
+      Math.max(0, Number(lineWidth) || 0) / 2,
+      card.width / 2
+    )
+  );
+  const left = card.x + strokeInset;
+  const right = card.x + card.width - strokeInset;
+
+  if (side === "right") {
+    if (boundedTopRadius > 0) {
+      path.move(
+        new Point(right - boundedTopRadius, card.y)
+      );
+      path.addCurve(
+        new Point(
+          right,
+          card.y + boundedTopRadius
+        ),
+        new Point(
+          right - boundedTopRadius +
+            boundedTopRadius * curveFactor,
+          card.y
+        ),
+        new Point(
+          right,
+          card.y + boundedTopRadius -
+            boundedTopRadius * curveFactor
+        )
+      );
+    } else {
+      path.move(new Point(right, card.y));
+    }
+
+    if (boundedBottomRadius > 0) {
+      path.addLine(
+        new Point(
+          right,
+          bottomY - boundedBottomRadius
+        )
+      );
+      path.addCurve(
+        new Point(
+          right - boundedBottomRadius,
+          bottomY
+        ),
+        new Point(
+          right,
+          bottomY - boundedBottomRadius +
+            boundedBottomRadius * curveFactor
+        ),
+        new Point(
+          right - boundedBottomRadius +
+            boundedBottomRadius * curveFactor,
+          bottomY
+        )
+      );
+    } else {
+      path.addLine(new Point(right, bottomY));
+    }
+  } else {
+    if (boundedTopRadius > 0) {
+      path.move(
+        new Point(left + boundedTopRadius, card.y)
+      );
+      path.addCurve(
+        new Point(
+          left,
+          card.y + boundedTopRadius
+        ),
+        new Point(
+          left + boundedTopRadius -
+            boundedTopRadius * curveFactor,
+          card.y
+        ),
+        new Point(
+          left,
+          card.y + boundedTopRadius -
+            boundedTopRadius * curveFactor
+        )
+      );
+    } else {
+      path.move(new Point(left, card.y));
+    }
+
+    if (boundedBottomRadius > 0) {
+      path.addLine(
+        new Point(
+          left,
+          bottomY - boundedBottomRadius
+        )
+      );
+      path.addCurve(
+        new Point(
+          left + boundedBottomRadius,
+          bottomY
+        ),
+        new Point(
+          left,
+          bottomY - boundedBottomRadius +
+            boundedBottomRadius * curveFactor
+        ),
+        new Point(
+          left + boundedBottomRadius -
+            boundedBottomRadius * curveFactor,
+          bottomY
+        )
+      );
+    } else {
+      path.addLine(new Point(left, bottomY));
+    }
+  }
+
+  // A linha inferior é prolongamento direto do último ponto da curva.
+  // Não há uma segunda tampa nem uma segunda rasterização no encontro.
+  if (Number.isFinite(Number(continuationX))) {
+    path.addLine(new Point(Number(continuationX), bottomY));
+  }
+
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
+function currentDayBridgeMetrics(
+  card,
+  boundaryX,
+  bridgeY,
+  radius,
+  horizontalDirection,
+  pathInset = 0
+) {
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
+  const directionSign = direction === "right" ? 1 : -1;
+  const inset = Math.max(
+    0,
+    Math.min(Number(pathInset) || 0, card.width / 2)
+  );
+  const edgeX =
+    direction === "right"
+      ? card.x + card.width - inset
+      : card.x + inset;
+  const deltaX = boundaryX - edgeX;
+  const distance = Math.abs(deltaX);
+  // A ponte pode flexionar para fora ou para dentro do cartão.
+  // Isso é essencial quando faltam poucas horas para a meia-noite
+  // e a próxima virada ainda está dentro do primeiro cartão.
+  const curveDirectionSign =
+    deltaX === 0 ? directionSign : Math.sign(deltaX);
+  const bridgeRadius = Math.min(
+    Math.max(0, radius),
+    distance
+  );
+  const isFlexible =
+    distance > 0 &&
+    distance < Math.max(0, radius);
+  const endpointX =
+    isFlexible
+      ? boundaryX
+      : edgeX + curveDirectionSign * bridgeRadius;
+
+  return {
+    direction,
+    directionSign,
+    curveDirectionSign,
+    edgeX,
+    signedDistance: deltaX,
+    distance,
+    bridgeRadius,
+    isFlexible,
+    endpointX,
+    startY: bridgeY - bridgeRadius,
+  };
+}
+
+function appendCurrentDayBridgeCurve(
+  path,
+  bridge,
+  bridgeY,
+  radius
+) {
+  if (
+    bridge.distance <= 0 ||
+    bridge.bridgeRadius <= 0
+  ) {
+    return;
+  }
+
+  const curveFactor = 0.5522847498;
+  if (!bridge.isFlexible) {
+    const endpoint = new Point(
+      bridge.endpointX,
+      bridgeY
+    );
+    path.addCurve(
+      endpoint,
+      new Point(
+        bridge.edgeX,
+        bridgeY - bridge.bridgeRadius +
+          bridge.bridgeRadius * curveFactor
+      ),
+      new Point(
+        bridge.endpointX -
+          bridge.curveDirectionSign *
+            bridge.bridgeRadius * curveFactor,
+        bridgeY
+      )
+    );
+    return;
+  }
+
+  // Quando a distância fica menor que o raio máximo, a ponte
+  // deixa de forçar um quarto de círculo. O ângulo de saída
+  // diminui gradualmente até zero quando as linhas coincidem.
+  const progress =
+    bridge.distance /
+    Math.max(0.0001, radius);
+  const endAngle =
+    (1 - Math.min(1, progress)) * Math.PI / 2;
+  const controlLength =
+    bridge.bridgeRadius *
+    (0.35 + 0.2022847498 * Math.min(1, progress));
+  const tangentX =
+    bridge.curveDirectionSign * Math.cos(endAngle);
+  const tangentY = Math.sin(endAngle);
+
+  path.addCurve(
+    new Point(bridge.endpointX, bridgeY),
+    new Point(
+      bridge.edgeX,
+      bridge.startY + controlLength
+    ),
+    new Point(
+      bridge.endpointX - tangentX * controlLength,
+      bridgeY - tangentY * controlLength
+    )
+  );
+}
+
+function buildCurrentDayUpperPath(
+  ctx,
+  card,
+  bridgeY,
+  lineWidth,
+  color,
+  horizontalDirection,
+  boundaryX,
+  radius,
+  path = new Path(),
+  pathInset = 0,
+  outerRadius = radius
+) {
+  const direction =
+    horizontalDirection === "left" ? "left" : "right";
+  const curveFactor = 0.5522847498;
+  const inset = Math.max(
+    0,
+    Math.min(Number(pathInset) || 0, card.width / 2)
+  );
+  // No canto convexo, o limite visível tem raio caminho + meio traço.
+  // Na ponte côncava, esse limite tem raio caminho - meio traço.
+  // A classificação acompanha o sentido real da saída, inclusive espelhada.
+  const bridgeOuterRadius = Math.max(
+    0,
+    Number(outerRadius) || 0
+  );
+  const bridgeEdgeX = direction === "right"
+    ? card.x + card.width - inset
+    : card.x + inset;
+  const outwardSign = direction === "right" ? 1 : -1;
+  const bridgeIsConcave =
+    (boundaryX - bridgeEdgeX) * outwardSign >= 0;
+  const bridgePathRadius = Math.max(
+    0,
+    bridgeOuterRadius + (bridgeIsConcave ? inset : -inset)
+  );
+  const bridge = currentDayBridgeMetrics(
+    card,
+    boundaryX,
+    bridgeY,
+    bridgePathRadius,
+    direction,
+    inset
+  );
+  const left = card.x + inset;
+  const right = card.x + card.width - inset;
+
+  if (direction === "left") {
+    // Espelhamento completo do trecho superior: a ponte
+    // nasce no lado esquerdo e a lateral oposta fica contínua.
+    if (radius <= 0) {
+      path.move(new Point(right, card.y));
+      path.addLine(new Point(left, card.y));
+    } else {
+      path.move(new Point(right - radius, card.y));
+      path.addLine(new Point(left + radius, card.y));
+      path.addCurve(
+        new Point(left, card.y + radius),
+        new Point(
+          left + radius - radius * curveFactor,
+          card.y
+        ),
+        new Point(
+          left,
+          card.y + radius - radius * curveFactor
+        )
+      );
+    }
+    path.addLine(
+      new Point(left, bridge.startY)
+    );
+    appendCurrentDayBridgeCurve(
+      path,
+      bridge,
+      bridgeY,
+      bridgePathRadius
+    );
+  } else {
+    if (radius <= 0) {
+      path.move(new Point(left, card.y));
+      path.addLine(new Point(right, card.y));
+    } else {
+      path.move(new Point(left + radius, card.y));
+      path.addLine(new Point(right - radius, card.y));
+      path.addCurve(
+        new Point(right, card.y + radius),
+        new Point(
+          right - radius + radius * curveFactor,
+          card.y
+        ),
+        new Point(
+          right,
+          card.y + radius - radius * curveFactor
+        )
+      );
+    }
+    path.addLine(
+      new Point(right, bridge.startY)
+    );
+    appendCurrentDayBridgeCurve(
+      path,
+      bridge,
+      bridgeY,
+      bridgePathRadius
+    );
+  }
+
+  return { path, bridge };
+}
+
+function drawCurrentDayRoundedTopRightFrame(
+  ctx,
+  card,
+  bridgeY,
+  lineWidth,
+  color,
+  horizontalDirection,
+  boundaryX,
+  radius,
+  outerRadius,
+  continuationX = null
+) {
+  const result = buildCurrentDayUpperPath(
+    ctx,
+    card,
+    bridgeY,
+    lineWidth,
+    color,
+    horizontalDirection,
+    boundaryX,
+    radius,
+    new Path(),
+    lineWidth / 2,
+    outerRadius
+  );
+  // O trecho horizontal continua o último ponto da curva superior
+  // no mesmo Path, sem tampa ou rasterização independente.
+  if (Number.isFinite(Number(continuationX))) {
+    result.path.addLine(
+      new Point(Number(continuationX), bridgeY)
+    );
+  }
+
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(result.path);
+  ctx.strokePath();
+  return result.bridge;
+}
+
+function currentDayFrameHorizontalDirection(
+  card,
+  boundaryX
+) {
+  // A janela começa no instante atual, na borda esquerda da timeline.
+  // Portanto, o intervalo do dia atual é sempre o trecho à esquerda
+  // da próxima meia-noite. Mesmo quando a virada fica dentro do
+  // primeiro cartão, a moldura deve fechar esse lado, nunca o dia seguinte.
+  return "right";
+}
+
+function drawCurrentDayFrameOverlay(ctx, items = []) {
+  // A moldura completa precisa ficar na camada de primeiro plano.
+  drawCurrentDayBottomLineUnderlay(ctx);
+  drawCurrentDayFrame(ctx);
+  drawCurrentDayBoundaryVerticalOverlay(ctx, items);
+}
+
+function pendingDayCarryoverBorderOutset() {
+  const gap = Math.max(
+    0,
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderGap) || 0
+    )
+  );
+  const borderWidth = Math.max(
+    scaleVertical(1),
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderWidth) || 1
+    )
+  );
+  return gap + borderWidth / 2;
+}
+
+function chartsCrossingDayBoundaryVerticalSpans(items, boundaryDate) {
+  const spans = [];
+  const candidates = Array.isArray(items) ? items : [];
+  const boundaryMs =
+    boundaryDate instanceof Date ? boundaryDate.getTime() : NaN;
+  const boundaryX = Number.isFinite(boundaryMs)
+    ? timeToX(new Date(boundaryMs))
+    : NaN;
+
+  for (const item of candidates) {
+    if (
+      !item ||
+      item.isOverflow ||
+      (item.kind !== "event" && item.kind !== "reminder") ||
+      isBirthdayItem(item) ||
+      !(item.start instanceof Date) ||
+      !(item.end instanceof Date) ||
+      !Number.isFinite(boundaryMs) ||
+      !Number.isFinite(boundaryX) ||
+      item.start.getTime() >= boundaryMs ||
+      item.end.getTime() <= boundaryMs ||
+      !Number.isFinite(Number(item.gridRow))
+    ) {
+      continue;
+    }
+
+    const originalX = timeToX(item.start);
+    const x =
+      item.kind === "reminder"
+        ? Math.max(0, originalX)
+        : originalX;
+    const exactWidth = Math.max(
+      1,
+      timeToX(item.end) - x
+    );
+    const minimumWidth =
+      item.kind === "event"
+        ? isCompactMode()
+          ? SETTINGS.compactMinimumChartWidth
+          : SETTINGS.minimumChartWidth
+        : 1;
+    const width = Math.max(exactWidth, minimumWidth);
+    const segments = timelineBarSegments(
+      item,
+      x,
+      x + width
+    ).map((segment) => ({
+      ...segment,
+      x: segment.x - 1,
+    }));
+    const crossesVisually = segments.some(
+      (segment) =>
+        boundaryX > segment.x &&
+        boundaryX < segment.x + segment.width
+    );
+    if (!crossesVisually) continue;
+
+    const bar = timelineBarVerticalRect(item);
+    if (!bar) continue;
+
+    const outset = item.isPendingDayCarryover
+      ? pendingDayCarryoverBorderOutset()
+      : 0;
+    spans.push({
+      top: CANVAS.timelineTop + bar.top - outset,
+      bottom: CANVAS.timelineTop + bar.bottom + outset,
+    });
+  }
+
+  return spans
+    .sort((first, second) => first.top - second.top)
+    .reduce((merged, span) => {
+      const previous = merged[merged.length - 1];
+      if (previous && span.top <= previous.bottom) {
+        previous.bottom = Math.max(previous.bottom, span.bottom);
+      } else {
+        merged.push({ ...span });
+      }
+      return merged;
+    }, []);
+}
+
+function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
+  const {
+    boundaryX,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  // A divisão vertical começa depois da borda inferior do astro e
+  // termina no topo do círculo da legenda. O círculo continua sendo
+  // desenhado sem ser coberto pela linha.
+  const lineTop =
+    CANVAS.timelineTop +
+    weatherIconCenterY() +
+    dayBoundaryAstroOuterRadius();
+  const lineBottom =
+    CANVAS.timelineTop +
+    bottomLegendCenterY() -
+    DAY_CHANGE_CIRCLE_DIAMETER / 2;
+  const rasterWidth = Math.max(1, Math.round(lineWidth));
+  const rasterLeftX = Math.round(boundaryX - rasterWidth / 2);
+  const spans = chartsCrossingDayBoundaryVerticalSpans(
+    items,
+    addDays(startOfDay(windowStart), 1)
+  );
+
+  // Fragmenta apenas o traço estrutural. Qualquer chart que atravesse
+  // a virada permanece intacto e aparece acima da linha vertical.
+  const drawLineSpan = (startY, endY) => {
+    const clippedStart = Math.max(lineTop, startY);
+    const clippedEnd = Math.min(lineBottom, endY);
+    if (clippedEnd <= clippedStart) return;
+
+    ctx.setFillColor(lineColor);
+    ctx.fillRect(
+      new Rect(
+        rasterLeftX,
+        clippedStart,
+        rasterWidth,
+        clippedEnd - clippedStart
+      )
+    );
+  };
+
+  let cursorY = lineTop;
+  for (const span of spans) {
+    const spanTop = Math.max(lineTop, span.top);
+    const spanBottom = Math.min(lineBottom, span.bottom);
+    if (spanBottom <= lineTop || spanTop >= lineBottom) continue;
+
+    drawLineSpan(cursorY, spanTop);
+    cursorY = Math.max(cursorY, spanBottom);
+  }
+  drawLineSpan(cursorY, lineBottom);
+}
+
+function drawCurrentDayFrame(ctx) {
+  const {
+    todayCard,
+    boundaryX,
+    bridgeY,
+    framePathRadius,
+    frameRadius,
+    lineWidth,
+    lineColor,
+  } = currentDayFrameMetrics();
+
+  const horizontalDirection =
+    currentDayFrameHorizontalDirection(
+      todayCard,
+      boundaryX
+    );
+  // O arco superior e a linha horizontal até a virada do dia
+  // são uma única trajetória contínua.
+  drawCurrentDayRoundedTopRightFrame(
+    ctx,
+    todayCard,
+    bridgeY,
+    lineWidth,
+    lineColor,
+    horizontalDirection,
+    boundaryX,
+    framePathRadius,
+    frameRadius,
+    boundaryX
+  );
+}
+
+function drawTitleDayCard(
+  ctx,
+  date,
+  card,
+  isSelected,
+  isLast
+) {
+  const borderColor = new Color("#303136", 0.82);
+  const dayBackgroundColor = timelineBackgroundColorForDate(date);
+  const isSpecialDay =
+    dayBackgroundColor !== SETTINGS.timelineBackgroundColor;
+  // Dias úteis não atuais usam o cinza da timeline; sábado, domingo e
+  // feriado preservam respectivamente azul, vermelho e amarelo.
+  // Durante o blur, todos os quadros não atuais usam o mesmo
+  // cinza neutro, sem alterar a aparência quando o futuro está livre.
+  const cardColor = new Color(
+    shouldBlurFutureTimeline()
+      ? "#2D2D31"
+      : isSpecialDay
+        ? dayBackgroundColor
+        : SETTINGS.nonTodayTimelineOverlayColor,
+    1.0
+  );
+
+  // As duas pontas da extremidade direita usam deliberadamente o mesmo
+  // raio, tanto no topo quanto na base.
+  const rightCornerRadius = isLast
+    ? TITLE_CARD_OUTER_CORNER_RADIUS
+    : TITLE_CARD_STANDARD_CORNER_RADIUS;
+  const cornerRadii = {
+    topLeft: card.x <= CANVAS.marginX + 1
+      ? TITLE_CARD_OUTER_CORNER_RADIUS
+      : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    topRight: rightCornerRadius,
+    // O cartão de hoje usa exatamente os mesmos quatro raios
+    // geométricos dos demais cartões. O último quadro termina
+    // perpendicularmente no canto inferior direito.
+    bottomRight: isLast ? 0 : rightCornerRadius,
+    bottomLeft: TITLE_CARD_STANDARD_CORNER_RADIUS,
+  };
+
+  // O cartão de hoje já foi preenchido pela geometria contínua
+  // que também cobre sua faixa na timeline. Não desenhamos uma segunda
+  // forma aqui, evitando a separação entre duas geometrias.
+  if (!isSelected) {
+    // Os demais cartões conservam a borda fina escura.
+    fillTitleCardShape(ctx, card, cornerRadii, borderColor);
+    const inner = new Rect(
+      card.x + 2,
+      card.y + scaleVertical(2),
+      card.width - 4,
+      card.height - scaleVertical(4)
+    );
+    fillTitleCardShape(
+      ctx,
+      inner,
+      {
+        topLeft: Math.max(0, cornerRadii.topLeft - scaleVertical(2)),
+        topRight: Math.max(0, cornerRadii.topRight - scaleVertical(2)),
+        bottomRight: Math.max(0, cornerRadii.bottomRight - scaleVertical(2)),
+        bottomLeft: Math.max(0, cornerRadii.bottomLeft - scaleVertical(2)),
+      },
+      cardColor
+    );
+  }
+
+  // A data mantém a cor original; somente a palavra do dia recebe
+  // a cor correspondente a sábado, domingo ou feriado.
+  const weekdayColor = titleWeekdayColor(
+    date,
+    loadResult.holidayDates
+  );
+  const dateColor = isSelected
+    ? new Color("#FFFFFF", 0.96)
+    : new Color(SETTINGS.secondaryTextColor, 1.0);
+  const detailColor = isSelected
+    ? new Color("#FFFFFF", 0.96)
+    : new Color("#D1D1D6", 0.96);
+
+  const weekdayLabel = shortWeekday(date);
+  const dateLabel = titleDayMonthLabel(date);
+
+  // Como a fonte é monoespaçada, o espaço entre o dia e a data
+  // ocupa exatamente uma célula. Isso mantém, por exemplo, "QUI 10/09".
+  const titleFontSize = scaleFontSize(38);
+  const titleCharacterWidth = titleFontSize * 0.62;
+  const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
+  const dateWidth = dateLabel.length * titleCharacterWidth;
+  const titleGap = titleCharacterWidth;
+  const titleGroupWidth =
+    weekdayWidth + titleGap + dateWidth;
+
+  // O traço superior dos cartões seguintes fica 2 px acima do
+  // retângulo lógico do cartão atual. Os textos e o conteúdo da
+  // segunda linha usam a mesma referência visual para manter todos
+  // os dias, inclusive hoje, alinhados horizontalmente.
+  const sharedTextTop =
+    WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+
+  const titleRow = new Rect(
+    card.x + 8,
+    sharedTextTop + scaleVertical(5),
+    card.width - 16,
+    scaleVertical(42)
+  );
+  const detailRow = new Rect(
+    card.x + 8,
+    sharedTextTop + scaleVertical(54),
+    card.width - 16,
+    scaleVertical(42)
+  );
+
+  const titleStartX =
+    card.x + (card.width - titleGroupWidth) / 2;
+  const titleY =
+    titleRow.y + (titleRow.height - titleFontSize) / 2;
 
   ctx.setTextAlignedLeft();
-  let segmentX = startX;
-  for (const segment of segments) {
-    ctx.setFont(
-      segment.bold
-        ? Font.blackMonospacedSystemFont(fontSize)
-        : Font.regularMonospacedSystemFont(fontSize)
-    );
-    ctx.setTextColor(segment.color);
-    ctx.drawText(segment.text, new Point(segmentX, 20));
-    segmentX += segment.text.length * characterWidth;
+  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
+  ctx.setTextColor(weekdayColor);
+  ctx.drawText(
+    weekdayLabel,
+    new Point(titleStartX, titleY)
+  );
+
+  const dateStartX =
+    titleStartX + weekdayWidth + titleGap;
+  ctx.setTextColor(dateColor);
+  ctx.drawText(
+    dateLabel,
+    new Point(dateStartX, titleY)
+  );
+
+  const daily = titleDailyTemperatureForDay(date);
+  const minimum = Number.isFinite(Number(daily?.minimum))
+    ? String(Math.round(Number(daily.minimum))) + "º"
+    : "--º";
+  const maximum = Number.isFinite(Number(daily?.maximum))
+    ? String(Math.round(Number(daily.maximum))) + "º"
+    : "--º";
+  const counts = titleScheduleCountsForDay(date);
+  const countsText =
+    "E:" + String(counts.events) + "|L:" + String(counts.reminders);
+
+  // Temperatura, ícone e contadores formam um único grupo.
+  // Há exatamente 2 px entre a temperatura e o ícone, e 2 px
+  // entre o ícone e os contadores.
+  const detailFontSize = scaleFontSize(22);
+  const detailCharacterWidth = detailFontSize * 0.62;
+  const minimumWidth = minimum.length * detailCharacterWidth;
+  const slashWidth = detailCharacterWidth;
+  const maximumWidth = maximum.length * detailCharacterWidth;
+  const temperatureGroupWidth =
+    minimumWidth + slashWidth + maximumWidth;
+  const countsWidth =
+    countsText.length * detailCharacterWidth;
+  const iconSize = scaleVertical(30);
+  const iconGap = scaleVertical(2);
+
+  const groupWidth =
+    temperatureGroupWidth +
+    iconGap +
+    iconSize +
+    iconGap +
+    countsWidth;
+  const groupX =
+    card.x + (card.width - groupWidth) / 2;
+  const temperatureX = groupX;
+  const iconCenterX =
+    temperatureX +
+    temperatureGroupWidth +
+    iconGap +
+    iconSize / 2;
+  const countsX =
+    temperatureX +
+    temperatureGroupWidth +
+    iconGap +
+    iconSize +
+    iconGap;
+  const detailCenterY =
+    detailRow.y + detailRow.height / 2;
+  const detailY =
+    detailCenterY - detailFontSize / 2;
+
+  ctx.setTextAlignedLeft();
+  ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
+  ctx.setTextColor(
+    new Color(SETTINGS.minimumTemperatureColor, 1.0)
+  );
+  ctx.drawText(
+    minimum,
+    new Point(temperatureX, detailY)
+  );
+
+  ctx.setFont(Font.regularMonospacedSystemFont(detailFontSize));
+  ctx.setTextColor(new Color("#D1D1D6", 0.92));
+  ctx.drawText(
+    "/",
+    new Point(temperatureX + minimumWidth, detailY)
+  );
+
+  ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
+  ctx.setTextColor(
+    new Color(SETTINGS.maximumTemperatureColor, 1.0)
+  );
+  ctx.drawText(
+    maximum,
+    new Point(
+      temperatureX + minimumWidth + slashWidth,
+      detailY
+    )
+  );
+
+  // E:2|L:4 usa exatamente a mesma fonte e o mesmo tamanho
+  // das temperaturas.
+  ctx.setTextColor(detailColor);
+  ctx.drawText(
+    countsText,
+    new Point(countsX, detailY)
+  );
+
+  drawTitleWeatherIcon(
+    ctx,
+    titleForecastForDay(date),
+    iconCenterX,
+    detailCenterY,
+    iconSize
+  );
+}function titleDailyTemperatureForDay(date) {
+  const daily = titleDailyWeatherForDay(date);
+  if (
+    daily &&
+    Number.isFinite(Number(daily.minimum)) &&
+    Number.isFinite(Number(daily.maximum))
+  ) {
+    return daily;
   }
+
+  return dailyTemperatureExtremes(
+    hourlyWeather?.hours ?? []
+  )[dateKey(date)] ?? null;
+}
+
+function titleScheduleCountsForDay(date) {
+  const key = dateKey(startOfDay(date));
+  const counts = loadResult.scheduleCountsByDay?.[key];
+  return {
+    events: Number(counts?.events) || 0,
+    reminders: Number(counts?.reminders) || 0,
+  };
+}
+
+function fillTitleCardShape(ctx, rect, radii, color) {
+  const topLeft = Math.max(0, Math.min(radii.topLeft, rect.width / 2, rect.height / 2));
+  const topRight = Math.max(0, Math.min(radii.topRight, rect.width / 2, rect.height / 2));
+  const bottomRight = Math.max(0, Math.min(radii.bottomRight, rect.width / 2, rect.height / 2));
+  const bottomLeft = Math.max(0, Math.min(radii.bottomLeft, rect.width / 2, rect.height / 2));
+  const topBandHeight = Math.max(topLeft, topRight);
+  const bottomBandHeight = Math.max(bottomLeft, bottomRight);
+  const leftBandWidth = Math.max(topLeft, bottomLeft);
+  const rightBandWidth = Math.max(topRight, bottomRight);
+
+  ctx.setFillColor(color);
+  ctx.fillRect(
+    new Rect(
+      rect.x + topLeft,
+      rect.y,
+      Math.max(0, rect.width - topLeft - topRight),
+      topBandHeight
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      rect.x + bottomLeft,
+      rect.y + rect.height - bottomBandHeight,
+      Math.max(0, rect.width - bottomLeft - bottomRight),
+      bottomBandHeight
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      rect.x,
+      rect.y + topLeft,
+      leftBandWidth,
+      Math.max(0, rect.height - topLeft - bottomLeft)
+    )
+  );
+  ctx.fillRect(
+    new Rect(
+      rect.x + rect.width - rightBandWidth,
+      rect.y + topRight,
+      rightBandWidth,
+      Math.max(0, rect.height - topRight - bottomRight)
+    )
+  );
+  ctx.fillEllipse(
+    new Rect(rect.x, rect.y, topLeft * 2, topLeft * 2)
+  );
+  ctx.fillEllipse(
+    new Rect(
+      rect.x + rect.width - topRight * 2,
+      rect.y,
+      topRight * 2,
+      topRight * 2
+    )
+  );
+  ctx.fillEllipse(
+    new Rect(
+      rect.x + rect.width - bottomRight * 2,
+      rect.y + rect.height - bottomRight * 2,
+      bottomRight * 2,
+      bottomRight * 2
+    )
+  );
+  ctx.fillEllipse(
+    new Rect(
+      rect.x,
+      rect.y + rect.height - bottomLeft * 2,
+      bottomLeft * 2,
+      bottomLeft * 2
+    )
+  );
+}
+
+function titleDayMonthLabel(date) {
+  return `${String(date.getDate()).padStart(2, "0")}/${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}`;
+}
+
+function titleDailyWeatherForDay(date) {
+  return hourlyWeather?.daily?.[dateKey(date)] ?? null;
+}
+
+function titleForecastForDay(date) {
+  const dayStart = startOfDay(date).getTime();
+  const dayEnd = addDays(startOfDay(date), 1).getTime();
+  const candidates = (hourlyWeather?.hours ?? []).filter((hour) => {
+    const timestamp = Number(hour?.timestamp);
+    return timestamp >= dayStart && timestamp < dayEnd;
+  });
+  if (candidates.length === 0) return null;
+
+  const target = dateAtHour(date, 12).getTime();
+  return candidates.reduce((nearest, candidate) => {
+    if (!nearest) return candidate;
+    return Math.abs(Number(candidate.timestamp) - target) <
+      Math.abs(Number(nearest.timestamp) - target)
+      ? candidate
+      : nearest;
+  }, null);
+}
+
+function drawTitleWeatherIcon(
+  ctx,
+  forecast,
+  centerX,
+  centerY,
+  size
+) {
+  if (!forecast) {
+    drawWeatherSun(ctx, centerX, centerY, weatherSunRadius(size));
+    return;
+  }
+
+  // O cartão usa a condição representativa do meio do dia, sem alterar
+  // os ícones horários desenhados na timeline inferior.
+  drawWeatherSun(ctx, centerX, centerY, weatherSunRadius(size));
+  drawCelestialWeatherOverlay(
+    ctx,
+    forecast,
+    centerX,
+    centerY,
+    size
+  );
 }
 
 function drawTemperatureFooter(ctx, weather) {
@@ -2031,7 +4514,7 @@ function drawThermalHourGuides(
     const hour = tick.getHours();
     if (!includeDayBoundaries && hour === 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     // Mesmas espessuras e cores das linhas do grid superior.
     const width = hour === 0 ? 8 : hour === 12 ? 2 : 1;
     ctx.setFillColor(hourGridLineColor(tick));
@@ -2045,7 +4528,7 @@ function drawThermalDayBoundaryGuides(ctx, ticks, lineBottomY) {
   for (const tick of ticks) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(x - 4, 0, 8, lineBottomY)
@@ -2058,7 +4541,7 @@ function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
   for (const tick of ticks) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
     const frame = dayLegendBadgeRect(x, centerY);
 
@@ -2089,7 +4572,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
 
     if (
       !evidence.hasRain ||
-      amount <= 0 ||
+      amount < SETTINGS.rainEvidenceMinMM ||
       intervalEnd <= intervalStart
     ) {
       continue;
@@ -2112,6 +4595,10 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         rainByQuarter.set(timestamp, {
           amount,
           timestamp,
+          rainChance: Math.max(
+            0,
+            Math.min(100, Number(hour.rainChance) || 0)
+          ),
         });
       }
     }
@@ -2122,15 +4609,9 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
 
   if (!rainEntries.length) return;
 
-  const maximumRain = Math.max(
-    0,
-    ...rainEntries.map((entry) => entry.amount)
-  );
-  if (maximumRain <= 0) return;
-
   const maximumBarHeight = Math.max(
-    4,
-    graphBottom - graphTop - 2
+    scaleVertical(4),
+    graphBottom - graphTop - scaleVertical(2)
   );
 
   // Mantém as barras espessas; em janelas longas, adapta a largura
@@ -2148,13 +4629,29 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   );
 
   for (const entry of rainEntries) {
+    // A altura representa volume real, não a posição relativa dentro
+    // da janela. Assim, 0,10 mm continua pequeno mesmo se for o maior
+    // valor encontrado no período.
+    const referenceVolume = Math.max(
+      0.1,
+      Number(SETTINGS.rainBarReferenceMMPerHour) || 10
+    );
     const normalized = Math.max(
       0,
-      Math.min(1, entry.amount / maximumRain)
+      Math.min(1, entry.amount / referenceVolume)
     );
     const height = Math.max(
-      2,
+      scaleVertical(2),
       maximumBarHeight * normalized
+    );
+    // A probabilidade influencia a transparência, não a altura.
+    const probability = Math.max(
+      0,
+      Math.min(100, Number(entry.rainChance) || 0)
+    );
+    const opacity = Math.max(
+      0.42,
+      Math.min(1.0, 0.42 + (probability / 100) * 0.58)
     );
     const centerX = timeToX(new Date(entry.timestamp));
     if (
@@ -2164,37 +4661,50 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       continue;
     }
 
-    ctx.setFillColor(
-      new Color(
-        SETTINGS.rainLineColor,
-        1.0
-      )
-    );
-    ctx.fillRect(
+    drawOutlinedRainBar(
+      ctx,
       new Rect(
         centerX - barWidth / 2,
         graphBottom - height,
         barWidth,
         height
-      )
+      ),
+      new Color(SETTINGS.rainLineColor, opacity)
     );
   }
 }
 
-function rainMillimetersForHour(hour) {
-  const explicit = Number(hour.rainMM);
-  if (Number.isFinite(explicit) && explicit > 0) {
-    return explicit;
-  }
+function drawOutlinedRainBar(ctx, rect, fillColor) {
+  const width = Math.max(0, rect.width);
+  const height = Math.max(0, rect.height);
+  if (width <= 0 || height <= 0) return;
 
-  // Algumas respostas da Foreca fornecem apenas a probabilidade. Ela ainda
-  // merece uma barra discreta, mas nunca domina uma previsão com mm reais.
-  const probability = Math.max(
-    0,
-    Math.min(100, Number(hour.rainChance) || 0)
+  // A borda fica dentro da área original da barra para não alterar a
+  // distribuição dos quartos de hora nem encostar nas barras vizinhas.
+  const borderWidth = Math.min(
+    1,
+    Math.min(width, height) / 3
   );
-  return probability > 0
-    ? Math.max(0.05, probability / 100)
+  ctx.setFillColor(new Color("#000000", 1.0));
+  ctx.fillRect(new Rect(rect.x, rect.y, width, height));
+
+  ctx.setFillColor(fillColor);
+  ctx.fillRect(
+    new Rect(
+      rect.x + borderWidth,
+      rect.y + borderWidth,
+      Math.max(0.1, width - borderWidth * 2),
+      Math.max(0.1, height - borderWidth * 2)
+    )
+  );
+}
+
+function rainMillimetersForHour(hour) {
+  // Probabilidade não é volume. Sem um valor de precipitação em mm,
+  // não desenhamos uma barra de volume.
+  const explicit = Number(hour.rainMM);
+  return Number.isFinite(explicit) && explicit > 0
+    ? explicit
     : 0;
 }
 
@@ -2483,8 +4993,9 @@ function drawThermalArea(
   // que o preenchimento acompanhe a mesma suavidade da curva.
   const horizontalStep = 1;
   const verticalStep = 2;
-  const topAlpha = 0.80;
-  const bottomAlpha = 0.10;
+  const gradientOpacity = SETTINGS.thermalGradientOpacity;
+  const topAlpha = 0.80 * gradientOpacity;
+  const bottomAlpha = 0.10 * gradientOpacity;
 
   for (let index = 0; index < points.length - 1; index++) {
     const first = points[index];
@@ -2557,7 +5068,9 @@ function drawThermalCurve(
   }
   ctx.addPath(glowPath);
   ctx.setStrokeColor(new Color("#000000", 0.48));
-  ctx.setLineWidth(isCompactMode() ? 5 : 6);
+  ctx.setLineWidth(
+    scaleVertical(isCompactMode() ? 5 : 6)
+  );
   ctx.strokePath();
 
   // A linha superior permanece branca e independente da escala térmica.
@@ -2568,13 +5081,15 @@ function drawThermalCurve(
   }
   ctx.addPath(curvePath);
   ctx.setStrokeColor(new Color("#FFFFFF", 0.95));
-  ctx.setLineWidth(isCompactMode() ? 2 : 2.6);
+  ctx.setLineWidth(
+    scaleVertical(isCompactMode() ? 2 : 2.6)
+  );
   ctx.strokePath();
 }
 
 function thermalLabelTicks(ticks) {
-  if (windowHours >= 24) {
-    // A partir de 24 h, os textos aparecem somente nas horas pares.
+  if (usesEvenHourCadence()) {
+    // Acima de 12 h, os textos aparecem somente nas horas pares.
     return ticks.filter((tick) => tick.getHours() % 2 === 0);
   }
 
@@ -2662,10 +5177,11 @@ function drawRainProbabilityBars(
       ? opacityForTick(tick, forecast)
       : 0.22;
 
-    ctx.setFillColor(
+    drawOutlinedRainBar(
+      ctx,
+      new Rect(x, y, barWidth, height),
       new Color(SETTINGS.rainLineColor, opacity)
     );
-    ctx.fillRect(new Rect(x, y, barWidth, height));
   }
 }
 
@@ -2683,17 +5199,37 @@ function temperatureHeatColor(
 
 
 function weatherStripBottomY() {
-  return isCompactMode() ? 40 : 52;
+  // A faixa superior reduz na mesma proporção do conteúdo vertical.
+  return WEATHER_ASTRO_STRIP_HEIGHT_24H;
 }
 
 // A faixa superior pertence exclusivamente aos astros e ícones de clima.
 // Todos compartilham o mesmo centro horizontal e a mesma caixa visual.
 function weatherIconSize() {
-  return isCompactMode() ? 30 : 40;
+  return WEATHER_ICON_SIZE_24H;
 }
 
 function weatherIconCenterY() {
-  return Math.round(weatherStripBottomY() / 2);
+  // O centro absoluto dos astros permanece fixo. A borda inferior da
+  // faixa foi reduzida até coincidir com esse centro, sem subir os astros
+  // novamente.
+  return ASTRO_CENTER_TARGET_24H;
+}
+
+function dayBoundaryMoonBorderTopY() {
+  // Coordenada global do centro do stroke superior da Lua de mudança de dia.
+  return (
+    CANVAS.timelineTop +
+    weatherIconCenterY() -
+    weatherIconSize() / 2 -
+    dayBoundaryLineWidth() / 2
+  );
+}
+
+function dayBoundaryAstroOuterRadius() {
+  // A borda é desenhada para fora do disco e o stroke também se
+  // estende metade da própria espessura para cada lado.
+  return weatherIconSize() / 2 + dayBoundaryLineWidth();
 }
 
 function weatherIconIntersectsTimeline(centerX, halfWidth) {
@@ -2712,37 +5248,47 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // No modo compacto, o bloco térmico total fica com 40 px:
+  // No modo compacto, o bloco térmico mantém a proporção original:
   // 12 px para a curva + 28 px para a legenda de temperaturas.
-  return thermalBandBottomY() - (isCompactMode() ? 12 : 30);
+  return thermalBandBottomY() -
+    scaleVertical(isCompactMode() ? 12 : 30);
 }
 
 function thermalTemperatureLabelTopY() {
-  // A legenda numérica pertence ao módulo térmico. Esta reserva inclui
-  // as fontes maiores de máxima/mínima e impede que os charts a atravessem.
-  return thermalBandTopY() - (isCompactMode() ? 28 : 32);
+  // A legenda numérica continua separada dos charts e também é comprimida.
+  return thermalBandTopY() -
+    scaleVertical(isCompactMode() ? 28 : 32);
 }
 
 function thermalBandBottomY() {
+  // Reserva espaço para o círculo e mantém dois pixels reais de
+  // afastamento antes dele, evitando qualquer recorte.
   return (
     bottomLegendCenterY() -
-    legendFrameHeight() / 2 -
+    DAY_CHANGE_CIRCLE_DIAMETER / 2 -
     2
   );
 }
 
 function bottomLegendCenterY() {
-  return timelineHeight() - legendFrameHeight() / 2 - 2;
+  // A borda inferior do círculo fica exatamente 30 px acima do canvas.
+  // A coordenada retornada é local ao painel da timeline.
+  return (
+    CANVAS.height -
+    WIDGET_CONTENT_BOTTOM_MARGIN -
+    CANVAS.timelineTop -
+    DAY_CHANGE_CIRCLE_DIAMETER / 2
+  );
 }
 
 function timelineChartTop() {
-  return weatherStripBottomY() + 5;
+  return weatherStripBottomY() + scaleVertical(5);
 }
 
 function timelineChartBottom() {
-  // Mantém exatamente o início atual da agenda e reduz somente seu limite
-  // inferior, reservando uma margem real antes da legenda térmica.
-  return thermalTemperatureLabelTopY() - 5;
+  // O início da agenda e o espaço antes da legenda térmica acompanham
+  // a mesma escala vertical.
+  return thermalTemperatureLabelTopY() - scaleVertical(5);
 }
 
 function timelineRowHeight() {
@@ -2756,10 +5302,8 @@ function timelineRowHeight() {
 function compactTimelineScale() {
   if (!isCompactMode()) return 1;
 
-  // Desde o desenho compacto original, o bloco térmico caiu de 51 px
-  // para 40 px. Os 11 px liberados são distribuídos igualmente entre
-  // as cinco linhas: 2,2 px adicionais por linha.
-  const originalCompactThermalHeight = 51;
+  // A proporção do módulo compacto é preservada depois da compressão.
+  const originalCompactThermalHeight = scaleVertical(51);
   const currentCompactThermalHeight =
     thermalBandBottomY() - thermalTemperatureLabelTopY();
   const expansionPerRow = Math.max(
@@ -2775,25 +5319,25 @@ function compactTimelineScale() {
 }
 
 function compactTimelineFontSize(size) {
-  return size * compactTimelineScale();
+  return scaleFontSize(size) * compactTimelineScale();
 }
 
 function timelineBarHeight(item) {
   const compactScale = compactTimelineScale();
   const preferredHeight = item?.isOverflow
     ? isCompactMode()
-      ? 29 * compactScale
-      : 34
+      ? scaleVertical(29) * compactScale
+      : scaleVertical(34)
     : isCompactMode()
-      ? 30 * compactScale
+      ? scaleVertical(30) * compactScale
       : isExtendedDetailedMode()
-        ? 35
-        : 38;
+        ? scaleVertical(35)
+        : scaleVertical(38);
 
   // Ao comprimir as cinco linhas, preserva uma separação mínima entre charts.
   return Math.min(
     preferredHeight,
-    Math.max(22, timelineRowHeight() - 4)
+    Math.max(scaleVertical(22), timelineRowHeight() - scaleVertical(4))
   );
 }
 
@@ -2819,12 +5363,14 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
+  const bottomY = bottomLegendTextBottomY(centerY);
   // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
   // aumentamos levemente a fonte sem alterar o modo de 24 h.
-  const hourFontSize =
+  const hourFontSize = scaleFontSize(
     windowHours > 24 && isCompactMode()
-      ? 20
-      : 22;
+      ? 22
+      : 24
+  );
 
   ctx.setTextAlignedCenter();
   for (const tick of hourTicks()) {
@@ -2849,9 +5395,19 @@ function drawBottomHourLegend(ctx) {
           ? daylightHourColor(tick)
           : Color.white()
     );
-    ctx.drawTextInRect(
-      String(hour) + "h",
-      centeredLegendTextRect(timeToX(tick), centerY)
+    const centerX = timelineLegendCenterX(tick);
+    const label = String(hour) + "h";
+    const labelRect = bottomAlignedLegendTextRect(
+      centerX,
+      bottomY,
+      legendLabelWidth()
+    );
+    drawHourLegendLabelClipped(
+      ctx,
+      label,
+      labelRect,
+      centerX,
+      hourFontSize
     );
   }
 }
@@ -2872,8 +5428,8 @@ function weatherForecastNearest(hours, timestamp) {
 }
 
 function weatherConditionTicks(weather) {
-  // Em 24 horas há um ícone por hora; em janelas maiores, somente horas pares.
-  const stepHours = windowHours <= 24 ? 1 : 2;
+  // Acima de 12 horas, os ícones também acompanham somente horas pares.
+  const stepHours = usesEvenHourCadence() ? 2 : 1;
   const ticks = [];
   let tick = floorToHour(windowStart);
 
@@ -2999,6 +5555,13 @@ function weatherSunRadius(size) {
   return size * 0.28;
 }
 
+function weatherElementOpacity(opacity) {
+  return Math.max(
+    0,
+    Math.min(1, Number(opacity) * SETTINGS.weatherIconOpacity)
+  );
+}
+
 function drawWeatherPathSegment(
   ctx,
   x1,
@@ -3008,7 +5571,7 @@ function drawWeatherPathSegment(
   color,
   lineWidth
 ) {
-  ctx.setStrokeColor(new Color(color, 0.96));
+  ctx.setStrokeColor(new Color(color, weatherElementOpacity(0.96)));
   ctx.setLineWidth(lineWidth);
   const path = new Path();
   path.move(new Point(x1, y1));
@@ -3023,32 +5586,37 @@ function drawWeatherHalfSun(
   centerY,
   radius,
   fillColor,
-  backgroundColor,
   visibleFraction = 0.75
 ) {
-  drawSunBurst(
-    ctx,
-    centerX,
-    centerY,
-    radius,
-    fillColor,
-    "#FF8A00"
-  );
-
-  // Mostra 75% do disco e recorta apenas a faixa inferior restante.
+  // Recorta o disco em uma camada transparente, sem pintar o fundo por
+  // cima dele. Assim o fundo solar, a curva e o grid continuam visíveis
+  // entre as linhas dos ícones de nascer e pôr do sol.
   const clampedFraction = Math.max(
     0.5,
     Math.min(1, visibleFraction)
   );
-  const maskY =
-    centerY - radius + radius * 2 * clampedFraction;
-  ctx.setFillColor(new Color(backgroundColor, 1.0));
-  ctx.fillRect(
+  const padding = Math.ceil(radius * 2 + 4);
+  const clipBottom =
+    padding - radius + radius * 2 * clampedFraction;
+  const layer = new DrawContext();
+  layer.size = new Size(padding * 2, clipBottom);
+  layer.opaque = false;
+  layer.respectScreenScale = false;
+  drawSunBurst(
+    layer,
+    padding,
+    padding,
+    radius,
+    fillColor,
+    "#FF8A00"
+  );
+  ctx.drawImageInRect(
+    layer.getImage(),
     new Rect(
-      centerX - radius - 2,
-      maskY,
-      radius * 2 + 4,
-      radius * 2 + 4
+      centerX - padding,
+      centerY - padding,
+      padding * 2,
+      clipBottom
     )
   );
 }
@@ -3076,7 +5644,7 @@ function drawWeatherWaveLine(
     }
   }
 
-  ctx.setStrokeColor(new Color(color, 0.96));
+  ctx.setStrokeColor(new Color(color, weatherElementOpacity(0.96)));
   ctx.setLineWidth(lineWidth);
   ctx.addPath(path);
   ctx.strokePath();
@@ -3089,7 +5657,6 @@ function drawSunriseSunsetGlyph(
   size,
   kind
 ) {
-  const backgroundColor = "#07101A";
   const sunrise = kind === "sunrise";
   const sunColor = "#FFDE00";
   const horizonColor = sunrise ? "#64D2FF" : "#FF453A";
@@ -3122,7 +5689,6 @@ function drawSunriseSunsetGlyph(
     sunCenterY,
     radius,
     sunColor,
-    backgroundColor,
     0.90
   );
 
@@ -3214,7 +5780,7 @@ function drawWeatherLightning(ctx, centerX, centerY, size) {
       centerY + size * 0.18
     )
   );
-  ctx.setFillColor(new Color("#FFD60A", 0.98));
+  ctx.setFillColor(new Color("#FFD60A", weatherElementOpacity(0.98)));
   ctx.addPath(path);
   ctx.fillPath();
 }
@@ -3546,7 +6112,10 @@ function drawWeatherEclipseIcon(
         penumbraSize,
         penumbraSize
       ),
-      new Color("#6E1721", 0.22 + coverage * 0.24)
+      new Color(
+        "#6E1721",
+        weatherElementOpacity(0.22 + coverage * 0.24)
+      )
     );
     fillEllipseIntersection(
       ctx,
@@ -3557,14 +6126,17 @@ function drawWeatherEclipseIcon(
         umbraSize,
         umbraSize
       ),
-      new Color("#481018", 0.34 + coverage * 0.42)
+      new Color(
+        "#481018",
+        weatherElementOpacity(0.34 + coverage * 0.42)
+      )
     );
 
     strokeMoonEllipseOutside(
       ctx,
       rect,
-      new Color("#B8A7FF", 0.96),
-      4
+      new Color("#B8A7FF", weatherElementOpacity(0.96)),
+      dayBoundaryLineWidth()
     );
     return;
   }
@@ -3595,11 +6167,17 @@ function drawWeatherEclipseIcon(
     ctx,
     sunRect,
     moonRect,
-    new Color("#111116", 0.88 + coverage * 0.12)
+    new Color(
+      "#111116",
+      weatherElementOpacity(0.88 + coverage * 0.12)
+    )
   );
 
   ctx.setStrokeColor(
-    new Color("#FFD000", 0.72 + coverage * 0.26)
+    new Color(
+      "#FFD000",
+      weatherElementOpacity(0.72 + coverage * 0.26)
+    )
   );
   ctx.setLineWidth(Math.max(2, size * 0.07));
   ctx.strokeEllipse(sunRect);
@@ -3672,7 +6250,7 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
     if (isNight) {
       drawMoonPhase(
         ctx,
-        moonPhaseForDate(entry.tick),
+        predominantMoonPhaseForNight(entry.tick),
         centerX - iconSize / 2,
         centerY - iconSize / 2,
         iconSize,
@@ -3694,6 +6272,16 @@ function drawHourlyWeatherIcons(ctx, weather, stripBottom) {
       centerY,
       iconSize
     );
+    // A borda da Lua de mudança de dia fica acima da sobreposição climática.
+    if (isNight && eclipse?.type !== "solar") {
+      drawDayBoundaryMoonBorder(
+        ctx,
+        centerX,
+        centerY,
+        iconSize,
+        entry.tick
+      );
+    }
   }
 }
 
@@ -3953,10 +6541,12 @@ function eclipseForDate(date) {
 
 function drawWeatherConditionStrip(ctx, weather) {
   const bottom = weatherStripBottomY();
+  const lineStart =
+    weatherIconCenterY() + dayBoundaryAstroOuterRadius();
   // Fundo transparente: o gradiente original do widget permanece visível
   // atrás das luas, dos sóis, das legendas e do grid.
-  // A linha de mudança do dia nasce no centro da lua e passa por trás dela.
-  drawDayBoundaryOriginsBehindMoon(ctx, bottom);
+  // A linha fica atrás do astro até ultrapassar sua borda externa.
+  drawDayBoundaryOriginsBehindMoon(ctx, lineStart);
 
   // O sol central fixo foi removido. Cada horário recebe seu próprio ícone.
   drawHourlyWeatherIcons(ctx, weather, bottom);
@@ -3974,17 +6564,20 @@ function drawWeatherConditionStrip(ctx, weather) {
       const width = x1 - x0;
 
       for (const [fraction, y, radius] of [
-        [0.10, 10, 2.2],
-        [0.24, 28, 1.6],
-        [0.72, 12, 1.8],
-        [0.88, 30, 2.2],
+        [0.10, scaleVertical(10), scaleVertical(2.2)],
+        [0.24, scaleVertical(28), scaleVertical(1.6)],
+        [0.72, scaleVertical(12), scaleVertical(1.8)],
+        [0.88, scaleVertical(30), scaleVertical(2.2)],
       ]) {
         drawFivePointStar(
           ctx,
           x0 + width * fraction,
           y,
           radius,
-          new Color(SETTINGS.nightStarColor, 0.66)
+          new Color(
+           SETTINGS.nightStarColor,
+           weatherElementOpacity(0.66)
+         )
         );
       }
 
@@ -3996,6 +6589,10 @@ function drawWeatherConditionStrip(ctx, weather) {
       const moonX = moonCenterX - moonSize / 2;
       const moonY = moonCenterY - moonSize / 2;
       const nightEclipse = eclipseForDate(moonDate);
+      const moonForecast = weatherForecastNearest(
+        weather?.hours ?? [],
+        moonDate.getTime()
+      );
 
       // A Lua sobre a barra de 00:00 também precisa refletir o eclipse.
       // Sem este teste, o desenho normal feito aqui cobria o eclipse horário.
@@ -4011,9 +6608,323 @@ function drawWeatherConditionStrip(ctx, weather) {
       } else {
         drawMoonPhase(
           ctx,
-          moonPhaseForDate(moonDate),
+          predominantMoonPhaseForNight(moonDate),
           moonX,
           moonY,
+          moonSize,
+          moonDate
+        );
+      }
+
+      // A Lua da mudança de dia usa a mesma condição meteorológica do
+      // horário central: nuvem, chuva, tempestade, neve, neblina ou vento.
+      // O overlay é desenhado por último para não ser coberto pela Lua.
+      drawCelestialWeatherOverlay(
+        ctx,
+        moonForecast,
+        moonCenterX,
+        moonCenterY,
+        moonSize
+      );
+      // Mantém a borda acima da nuvem, chuva e demais elementos adjacentes.
+      drawDayBoundaryMoonBorder(
+        ctx,
+        moonCenterX,
+        moonCenterY,
+        moonSize,
+        moonDate
+      );
+    }
+
+    nightDay = addDays(nightDay, 1);
+  }
+}
+
+function drawDayBoundaryMoonsOnTop(ctx, weather) {
+  const moonSize = weatherIconSize();
+  const moonCenterY = weatherIconCenterY();
+  let nightDay = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+
+  while (nightDay <= finalDay) {
+    const start = dateAtHour(nightDay, SETTINGS.nightStartHour);
+    const end = dateAtHour(addDays(nightDay, 1), SETTINGS.nightEndHour);
+
+    if (intervalIsVisible(start, end)) {
+      const centerTime = (start.getTime() + end.getTime()) / 2;
+      const moonDate = new Date(centerTime);
+      const moonCenterX = timeToX(moonDate);
+
+      if (
+        moonDate.getHours() === 0 &&
+        weatherIconIntersectsTimeline(moonCenterX, moonSize)
+      ) {
+        const nightEclipse = eclipseForDate(moonDate);
+        const moonForecast = weatherForecastNearest(
+          weather?.hours ?? [],
+          moonDate.getTime()
+        );
+
+        if (nightEclipse?.type === "lunar") {
+          drawWeatherEclipseIcon(
+            ctx,
+            moonCenterX,
+            moonCenterY,
+            moonSize,
+            nightEclipse,
+            moonDate
+          );
+        } else {
+          drawMoonPhase(
+            ctx,
+            predominantMoonPhaseForNight(moonDate),
+            moonCenterX - moonSize / 2,
+            moonCenterY - moonSize / 2,
+            moonSize,
+            moonDate
+          );
+        }
+
+        drawCelestialWeatherOverlay(
+          ctx,
+          moonForecast,
+          moonCenterX,
+          moonCenterY,
+          moonSize
+        );
+
+        // Última operação: a borda não pode ser coberta por nenhum
+        // elemento desenhado anteriormente.
+        drawDayBoundaryMoonBorder(
+          ctx,
+          moonCenterX,
+          moonCenterY,
+          moonSize,
+          moonDate
+        );
+      }
+    }
+
+    nightDay = addDays(nightDay, 1);
+  }
+}
+
+
+function roundedRectContainsPoint(rect, radius, x, y) {
+  const left = rect.x;
+  const right = rect.x + rect.width;
+  const top = rect.y;
+  const bottom = rect.y + rect.height;
+  if (
+    x < left ||
+    x > right ||
+    y < top ||
+    y > bottom
+  ) {
+    return false;
+  }
+
+  const boundedRadius = Math.max(
+    0,
+    Math.min(
+      Number(radius) || 0,
+      rect.width / 2,
+      rect.height / 2
+    )
+  );
+  if (boundedRadius <= 0) return true;
+
+  if (
+    x >= left + boundedRadius &&
+    x <= right - boundedRadius
+  ) {
+    return true;
+  }
+  if (
+    y >= top + boundedRadius &&
+    y <= bottom - boundedRadius
+  ) {
+    return true;
+  }
+
+  const cornerCenterX =
+    x < left + boundedRadius
+      ? left + boundedRadius
+      : right - boundedRadius;
+  const cornerCenterY =
+    y < top + boundedRadius
+      ? top + boundedRadius
+      : bottom - boundedRadius;
+  return (
+    Math.hypot(
+      x - cornerCenterX,
+      y - cornerCenterY
+    ) <= boundedRadius
+  );
+}
+
+function timelineMoonPointIsVisible(x, y) {
+  const rect = new Rect(
+    CANVAS.plotLeft,
+    CANVAS.timelineTop,
+    timelineWidth(),
+    timelineHeight()
+  );
+  // O aro tem 4 px. Recuar 2 px o centro do traço faz sua borda
+  // externa coincidir exatamente com o limite visível da timeline.
+  const strokeInset = dayBoundaryLineWidth() / 2;
+  const clippedRect = new Rect(
+    rect.x + strokeInset,
+    rect.y + strokeInset,
+    Math.max(1, rect.width - strokeInset * 2),
+    Math.max(1, rect.height - strokeInset * 2)
+  );
+  const clippedRadius = Math.max(
+    0,
+    Math.min(
+      WIDGET_COMMON_CORNER_RADIUS,
+      rect.width / 2,
+      rect.height / 2
+    ) - strokeInset
+  );
+
+  // O aro pode atravessar ligeiramente as bordas horizontais,
+  // como já acontecia visualmente sobre a linha superior. O limite
+  // lateral, porém, nunca pode escapar do retângulo arredondado.
+  if (
+    y < clippedRect.y ||
+    y > clippedRect.y + clippedRect.height
+  ) {
+    return (
+      x >= clippedRect.x &&
+      x <= clippedRect.x + clippedRect.width
+    );
+  }
+
+  if (
+    x < clippedRect.x ||
+    x > clippedRect.x + clippedRect.width
+  ) {
+    return false;
+  }
+
+  // O recorte do aro segue o mesmo perfil do painel: os dois
+  // cantos esquerdos e o canto superior direito são perpendiculares.
+  // Apenas o canto inferior direito continua usando o raio circular.
+  const leftCornerEndX =
+    clippedRect.x + clippedRadius;
+  const rightCornerStartX =
+    clippedRect.x + clippedRect.width - clippedRadius;
+  const topCornerEndY =
+    clippedRect.y + clippedRadius;
+  const bottomCornerStartY =
+    clippedRect.y + clippedRect.height - clippedRadius;
+
+  const inTopLeftSquare =
+    x <= leftCornerEndX &&
+    y <= topCornerEndY;
+  const inBottomLeftSquare =
+    x <= leftCornerEndX &&
+    y >= bottomCornerStartY;
+  const inTopRightSquare =
+    x >= rightCornerStartX &&
+    y <= topCornerEndY;
+
+  if (
+    inTopLeftSquare ||
+    inBottomLeftSquare ||
+    inTopRightSquare
+  ) {
+    return true;
+  }
+
+  return roundedRectContainsPoint(
+    clippedRect,
+    clippedRadius,
+    x,
+    y
+  );
+}
+
+function drawClippedDayBoundaryMoonBorder(
+  ctx,
+  centerX,
+  centerY,
+  size,
+  borderDate
+) {
+  const isDayBoundary =
+    borderDate instanceof Date &&
+    borderDate.getHours() === 0 &&
+    borderDate.getMinutes() === 0;
+  if (!isDayBoundary) return;
+
+  const lineWidth = dayBoundaryLineWidth();
+  const ringRadius = size / 2 + lineWidth / 2;
+  const sampleCount = 720;
+  const path = new Path();
+  let previousVisible = false;
+  let hasVisibleSegment = false;
+
+  for (let index = 0; index <= sampleCount; index++) {
+    const angle =
+      -Math.PI / 2 +
+      (index * Math.PI * 2) / sampleCount;
+    const point = new Point(
+      centerX + Math.cos(angle) * ringRadius,
+      centerY + Math.sin(angle) * ringRadius
+    );
+    const visible = timelineMoonPointIsVisible(
+      point.x,
+      point.y
+    );
+
+    if (visible) {
+      if (previousVisible) path.addLine(point);
+      else path.move(point);
+      hasVisibleSegment = true;
+    }
+    previousVisible = visible;
+  }
+
+  if (!hasVisibleSegment) return;
+
+  ctx.setStrokeColor(
+    dayBoundaryLineColor(
+      borderDate,
+      loadResult.holidayDates
+    )
+  );
+  ctx.setLineWidth(lineWidth);
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
+function drawDayBoundaryMoonBordersOnForeground(ctx) {
+  const moonSize = weatherIconSize();
+  const moonCenterY = weatherIconCenterY();
+  let nightDay = addDays(startOfDay(windowStart), -1);
+  const finalDay = addDays(startOfDay(windowEnd), 1);
+
+  while (nightDay <= finalDay) {
+    const start = dateAtHour(nightDay, SETTINGS.nightStartHour);
+    const end = dateAtHour(addDays(nightDay, 1), SETTINGS.nightEndHour);
+
+    if (intervalIsVisible(start, end)) {
+      const centerTime = (start.getTime() + end.getTime()) / 2;
+      const moonDate = new Date(centerTime);
+      const moonCenterX = timeToX(moonDate);
+
+      if (
+        moonDate.getHours() === 0 &&
+        weatherIconIntersectsTimeline(moonCenterX, moonSize)
+      ) {
+        // O aro é recolocado depois da composição, mas agora
+        // segue a mesma geometria arredondada da timeline.
+        drawClippedDayBoundaryMoonBorder(
+          ctx,
+          CANVAS.plotLeft + moonCenterX,
+          CANVAS.timelineTop + moonCenterY,
           moonSize,
           moonDate
         );
@@ -4026,17 +6937,18 @@ function drawWeatherConditionStrip(ctx, weather) {
 
 function drawDayBoundaryOriginsBehindMoon(ctx, stripBottom) {
   const moonCenterY = weatherIconCenterY();
+  const lineWidth = dayBoundaryLineWidth();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
-        x - 4,
+        x - lineWidth / 2,
         moonCenterY,
-        8,
+        lineWidth,
         Math.max(1, stripBottom - moonCenterY)
       )
     );
@@ -4092,11 +7004,11 @@ function drawSunBurst(
   }
   path.addLine(points[0]);
 
-  ctx.setFillColor(new Color(rayColor, 1.0));
+  ctx.setFillColor(new Color(rayColor, weatherElementOpacity(1.0)));
   ctx.addPath(path);
   ctx.fillPath();
 
-  ctx.setFillColor(new Color(coreColor, 1.0));
+  ctx.setFillColor(new Color(coreColor, weatherElementOpacity(1.0)));
   ctx.fillEllipse(
     new Rect(
       centerX - radius,
@@ -4125,7 +7037,10 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
   const y = centerY - height / 2;
 
   ctx.setFillColor(
-    new Color(rainy ? "#D7DCE3" : "#EEF1F5", rainy ? 0.88 : 0.78)
+    new Color(
+      rainy ? "#D7DCE3" : "#EEF1F5",
+      weatherElementOpacity(rainy ? 0.88 : 0.78)
+    )
   );
   ctx.fillEllipse(
     new Rect(x, y + 11 * scale, 38 * scale, 20 * scale)
@@ -4140,7 +7055,10 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
     new Rect(x + 8 * scale, y + 17 * scale, 63 * scale, 15 * scale)
   );
 
-  ctx.setFillColor(new Color("#7B8490", rainy ? 0.52 : 0.34));
+  ctx.setFillColor(new Color(
+      "#7B8490",
+      weatherElementOpacity(rainy ? 0.52 : 0.34)
+    ));
   ctx.fillRect(
     new Rect(x + 10 * scale, y + 27 * scale, 59 * scale, 3 * scale)
   );
@@ -4296,14 +7214,15 @@ function drawHourlyRainColumn(
     )
   );
 
-  ctx.setFillColor(new Color(SETTINGS.rainLineColor, opacity));
-  ctx.fillRect(
+  drawOutlinedRainBar(
+    ctx,
     new Rect(
       centerX - width / 2,
       topY,
       width,
       height
-    )
+    ),
+    new Color(SETTINGS.rainLineColor, opacity)
   );
 
   ctx.setFillColor(
@@ -4380,10 +7299,13 @@ function drawCompactThermalBand(ctx, weather) {
   );
 
   // Barras opacas sobre a curva e antes dos textos de temperatura.
+  // A chuva ocupa a faixa livre até quase a base dos astros.
+  // Os charts são desenhados depois e continuam visualmente por cima.
+  const rainBarTop = weatherStripBottomY();
   drawThermalRainBars(
     ctx,
     sourceHours,
-    graphTop,
+    rainBarTop,
     graphBottom
   );
   drawVisibleDailyExtremes(
@@ -4407,8 +7329,12 @@ function drawVisibleDailyExtremes(
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
   const visibleEnd = windowEnd.getTime();
-  const normalFontSize = isCompactMode() ? 16 : 19;
-  const extremeFontSize = isCompactMode() ? 21 : 25;
+  const normalFontSize = scaleFontSize(
+    isCompactMode() ? 18 : 21
+  );
+  const extremeFontSize = scaleFontSize(
+    isCompactMode() ? 23 : 27
+  );
   const extremeEntries = [];
 
   for (const extreme of Object.values(daily)) {
@@ -4488,7 +7414,7 @@ function drawVisibleDailyExtremes(
       x - 34,
       y,
       68,
-      fontSize + 8
+      fontSize + scaleVertical(8)
     );
     ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
@@ -4538,8 +7464,8 @@ function drawVisibleDailyExtremes(
       graphBottom
     );
     const labelY = Math.max(
-      thermalTemperatureLabelTopY() + 4,
-      y - 24
+      thermalTemperatureLabelTopY() + scaleVertical(4),
+      y - (normalFontSize + scaleVertical(5))
     );
     const hour = evenTick.getHours();
     const isNight = isSecondaryNightLegendHour(hour);
@@ -4570,8 +7496,8 @@ function drawVisibleDailyExtremes(
       graphBottom
     );
     const labelY = Math.max(
-      thermalTemperatureLabelTopY() + 2,
-      y - 31
+      thermalTemperatureLabelTopY() + scaleVertical(2),
+      y - (extremeFontSize + scaleVertical(6))
     );
     drawTemperatureText(
       String(Math.round(entry.temperature)) + "º",
@@ -4591,6 +7517,9 @@ async function renderTimelinePanel(items, loadError) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
+  // Primeira camada do painel: o background dos dias.
+  drawTimelineBackground(ctx, true);
+
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
@@ -4600,12 +7529,30 @@ async function renderTimelinePanel(items, loadError) {
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
-  // Os nomes completos dos dias ficam no grid, atrás da curva térmica,
-  // da chuva e dos charts; o recorte acompanha cada coluna de 24 horas.
-  await drawDiagonalWeekdayLabels(ctx);
-  // A chuva é desenhada somente dentro da faixa térmica inferior.
-  // Assim nenhuma barra atravessa os charts dos eventos e lembretes.
+  // A chuva parte da base térmica e pode subir até quase a faixa dos astros.
+  // Ela é desenhada antes dos charts, eventos e lembretes, que permanecem
+  // visualmente por cima das barras.
   drawCompactThermalBand(ctx, hourlyWeather);
+
+  // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
+  // eventos e lembretes permanecem como a camada visual superior da agenda.
+  drawBottomHourLegend(ctx);
+  // A moldura inferior contínua é composta depois, no canvas principal,
+  // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
+  drawTimelineDayBoundariesOnTop(ctx);
+  drawWeekdayBadgesOnTop(ctx);
+  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
+
+  // Desfoca o contexto visual somente a partir da próxima meia-noite.
+  // Astros, temperaturas, curva, brilho solar e horas ficam abaixo;
+  // os charts (inclusive prolongamentos de hoje) ficam acima.
+  if (shouldBlurFutureTimeline()) {
+    drawFutureTimelineBlurLayer(
+      ctx,
+      ctx.getImage(),
+      true
+    );
+  }
 
   if (loadError) {
     drawPermissionState(ctx);
@@ -4615,6 +7562,10 @@ async function renderTimelinePanel(items, loadError) {
     const chartHeight = Math.max(1, chartBottom - chartTop);
     const rowHeight = chartHeight / SETTINGS.maxItems;
 
+    // As ligações são desenhadas antes dos charts, que as encobrem.
+    drawEventStartLineAnchors(ctx, items);
+
+    // Última camada da agenda: charts, eventos e lembretes.
     for (let row = 0; row < SETTINGS.maxItems; row++) {
       const y = chartTop + row * rowHeight;
       const rowItems = items
@@ -4629,15 +7580,7 @@ async function renderTimelinePanel(items, loadError) {
         drawTimelineItem(ctx, item, y, rowHeight)
       );
     }
-
-    // A ligação entra no próprio chart até seu centro.
-    drawEventStartLineAnchors(ctx, items);
   }
-
-  drawBottomHourLegend(ctx);
-  // As divisões de dia e seus badges prevalecem sobre todas as camadas.
-  drawTimelineDayBoundariesOnTop(ctx);
-  drawWeekdayBadgesOnTop(ctx);
   return ctx.getImage();
 }
 
@@ -4759,16 +7702,22 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    const blue = parseInt(value.slice(4, 6), 16);",
     "    return 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';",
     "  };",
-    "  const minFontSize = " + (isCompactMode() ? 26 : 30) + ";",
+    "  const minFontSize = " +
+      scaleFontSize(isCompactMode() ? 26 : 30) +
+      ";",
     "  const maxFontSize = " +
-      (isCompactMode()
-        ? 92
-        : isExtendedDetailedMode()
-          ? 108
-          : 132) +
+      scaleFontSize(
+        isCompactMode()
+          ? 92
+          : isExtendedDetailedMode()
+            ? 108
+            : 132
+      ) +
       ";",
     "  const fontFamily = 'Arial Narrow, HelveticaNeue-CondensedBlack, Impact, Arial Black, sans-serif';",
-    "  const verticalScale = 1.05;",
+    "  const verticalScale = " +
+      (1.05 * VERTICAL_LAYOUT_SCALE) +
+      ";",
     "  const minimumHorizontalScale = 0.62;",
     "  const maximumHorizontalScale = 1.45;",
     "  const chooseTypography = function(entry) {",
@@ -4893,12 +7842,16 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
   );
 }
 function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
-  const maxFontSize = isCompactMode()
-    ? 72
-    : isExtendedDetailedMode()
-      ? 84
-      : 96;
-  const minFontSize = isCompactMode() ? 26 : 30;
+  const maxFontSize = scaleFontSize(
+    isCompactMode()
+      ? 72
+      : isExtendedDetailedMode()
+        ? 84
+        : 96
+  );
+  const minFontSize = scaleFontSize(
+    isCompactMode() ? 26 : 30
+  );
 
   ctx.setTextAlignedCenter();
   for (const entry of entries) {
@@ -4976,323 +7929,62 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
 
 
 function drawTimelineDayBoundariesOnTop(ctx) {
-  const lineTop = weatherStripBottomY();
+  // Começa somente depois da borda externa do astro.
+  const lineTop =
+    weatherIconCenterY() + dayBoundaryAstroOuterRadius();
   const lineBottom = bottomLegendCenterY();
+  const lineWidth = dayBoundaryLineWidth();
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
+    const rasterWidth = Math.max(1, Math.round(lineWidth));
+    // O início inteiro impede que o antialiasing reduza visualmente
+    // a divisão de meia-noite em uma coluna mais fina.
+    const rasterLeftX = Math.round(x - rasterWidth / 2);
     ctx.setFillColor(hourGridLineColor(tick));
     ctx.fillRect(
       new Rect(
-        x - 4,
+        rasterLeftX,
         lineTop,
-        8,
+        rasterWidth,
         Math.max(1, lineBottom - lineTop)
       )
     );
   }
 }
 
-
 function drawWeekdayBadgesOnTop(ctx) {
-  const weekdayFontSize = dayBadgeWeekdayFontSize();
-  const detailFontSize = dayBadgeDetailFontSize();
+  // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
+  const fontSize = scaleFontSize(20);
   const centerY = bottomLegendCenterY();
-  const dailyExtremes = dailyTemperatureExtremes(
-    hourlyWeather?.hours ?? []
-  );
+  const textWidth =
+    DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
-    const x = timeToX(tick);
+    const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const layout = dayBadgeLayout(x, centerY);
-
-    // Este é o único retângulo do dia. A linha superior e a inferior
-    // compartilham exatamente o mesmo eixo horizontal.
+    const badge = dayLegendCircleRect(x, centerY);
     ctx.setFillColor(style.background);
-    ctx.fillRect(layout.frame);
-
-    ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackRoundedSystemFont(weekdayFontSize));
+    ctx.fillEllipse(badge);
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
     ctx.setTextColor(style.text);
+    ctx.setTextAlignedCenter();
     ctx.drawTextInRect(
       shortWeekday(tick),
-      layout.firstLine
-    );
-
-    const summary = dayBadgeSummary(
-      tick,
-      dailyExtremes
-    );
-    drawDayBadgeDetail(
-      ctx,
-      layout,
-      summary,
-      style.text,
-      detailFontSize
+      centeredDayLegendTextRect(
+        x,
+        centerY,
+        textWidth,
+        fontSize
+      )
     );
   }
 }
 
-function dayBadgeSummary(date, dailyExtremes) {
-  const key = dateKey(date);
-  const extreme = dailyExtremes[key];
-  const minimum = Number(extreme?.minimum);
-  const maximum = Number(extreme?.maximum);
-  const minimumText = Number.isFinite(minimum)
-    ? String(Math.round(minimum)) + "º"
-    : "--º";
-  const maximumText = Number.isFinite(maximum)
-    ? String(Math.round(maximum)) + "º"
-    : "--º";
-  const counts = dayBadgeCountsForDate(date);
-
-  return {
-    temperatureText: minimumText + "/" + maximumText,
-    weatherGlyph: weatherBadgeGlyphForDate(date),
-    countsText:
-      "E:" + String(counts.events) + " | L:" + String(counts.reminders),
-  };
-}
-
-function dayBadgeCountsForDate(date) {
-  const dayStart = startOfDay(date);
-  const dayEnd = addDays(dayStart, 1);
-  let events = 0;
-  let reminders = 0;
-
-  for (const item of loadResult.items ?? []) {
-    if (
-      item.isOverflow ||
-      (item.kind !== "event" && item.kind !== "reminder")
-    ) {
-      continue;
-    }
-
-    const start = item.start instanceof Date
-      ? item.start
-      : new Date(item.start);
-    const end = item.end instanceof Date
-      ? item.end
-      : new Date(item.end);
-
-    if (
-      !Number.isFinite(start.getTime()) ||
-      !Number.isFinite(end.getTime()) ||
-      end <= dayStart ||
-      start >= dayEnd
-    ) {
-      continue;
-    }
-
-    if (item.kind === "event") events++;
-    else reminders++;
-  }
-
-  return { events, reminders };
-}
-
-function weatherBadgeGlyphForDate(date) {
-  const key = dateKey(date);
-  const forecasts = (hourlyWeather?.hours ?? []).filter(
-    (forecast) => {
-      const timestamp = Number(forecast.timestamp);
-      return (
-        Number.isFinite(timestamp) &&
-        dateKey(new Date(timestamp)) === key
-      );
-    }
-  );
-
-  if (forecasts.length === 0) return "☀️";
-
-  return forecasts
-    .map(weatherBadgeCandidate)
-    .sort((first, second) => second.score - first.score)[0]
-    .glyph;
-}
-
-function weatherBadgeCandidate(forecast) {
-  const symbol = String(forecast?.symbol ?? "").toLowerCase();
-  const group = weatherSymbolGroup(forecast);
-  const state = weatherOverlayState(forecast);
-  const forecastDate = Number.isFinite(Number(forecast?.timestamp))
-    ? new Date(Number(forecast.timestamp))
-    : now;
-
-  if (
-    group === 6 ||
-    state.storm ||
-    symbol.includes("thunder") ||
-    symbol.includes("storm")
-  ) {
-    return { score: 100, glyph: "⛈️" };
-  }
-
-  if (
-    group === 7 ||
-    group === 8 ||
-    state.snow ||
-    symbol.includes("snow") ||
-    symbol.includes("sleet")
-  ) {
-    return { score: 90, glyph: "🌨️" };
-  }
-
-  if (
-    group === 4 ||
-    group === 5 ||
-    state.rain ||
-    symbol.includes("rain") ||
-    symbol.includes("shower")
-  ) {
-    return { score: 80, glyph: "🌧️" };
-  }
-
-  if (
-    group === 9 ||
-    state.fog ||
-    symbol.includes("fog") ||
-    symbol.includes("mist")
-  ) {
-    return { score: 70, glyph: "🌫️" };
-  }
-
-  if (
-    group === 10 ||
-    state.wind ||
-    symbol.includes("wind")
-  ) {
-    return { score: 60, glyph: "💨" };
-  }
-
-  if (
-    group === 3 ||
-    state.denseCloud ||
-    symbol.includes("overcast") ||
-    symbol.includes("cloud")
-  ) {
-    return { score: 50, glyph: "☁️" };
-  }
-
-  if (group === 2 || symbol.includes("partly")) {
-    return { score: 40, glyph: "⛅" };
-  }
-
-  return {
-    score: 20,
-    glyph: isNightWeatherHour(forecastDate) ? "🌙" : "☀️",
-  };
-}
-
-function dayBadgeLayout(centerX, centerY) {
-  const frame = dayLegendBadgeRect(centerX, centerY);
-  const horizontalPadding = isCompactMode() ? 3 : 4;
-  const verticalPadding = isCompactMode() ? 2 : 3;
-  const lineGap = 1;
-  const availableHeight =
-    frame.height - verticalPadding * 2 - lineGap;
-  const lineHeight = Math.max(1, Math.floor(availableHeight / 2));
-  const firstLine = new Rect(
-    frame.x + horizontalPadding,
-    frame.y + verticalPadding,
-    frame.width - horizontalPadding * 2,
-    lineHeight
-  );
-  const secondLine = new Rect(
-    frame.x + horizontalPadding,
-    firstLine.y + lineHeight + lineGap,
-    frame.width - horizontalPadding * 2,
-    lineHeight
-  );
-
-  return { frame, firstLine, secondLine };
-}
-
-function dayBadgeWeekdayFontSize() {
-  if (isCompactMode()) return 16;
-  if (isExtendedDetailedMode()) return 18;
-  return 20;
-}
-
-function dayBadgeDetailFontSize() {
-  if (isCompactMode()) return 9;
-  if (isExtendedDetailedMode()) return 10;
-  return 11;
-}
-
-function drawDayBadgeDetail(
-  ctx,
-  layout,
-  summary,
-  textColor,
-  fontSize
-) {
-  const centerX = layout.frame.x + layout.frame.width / 2;
-  const iconWidth = isCompactMode() ? 18 : 22;
-  const sideGap = isCompactMode() ? 2 : 3;
-  const horizontalPadding = isCompactMode() ? 3 : 4;
-  const iconRect = new Rect(
-    centerX - iconWidth / 2,
-    layout.secondLine.y,
-    iconWidth,
-    layout.secondLine.height
-  );
-  const leftRect = new Rect(
-    layout.secondLine.x + horizontalPadding,
-    layout.secondLine.y,
-    Math.max(
-      1,
-      iconRect.x -
-        sideGap -
-        (layout.secondLine.x + horizontalPadding)
-    ),
-    layout.secondLine.height
-  );
-  const rightRect = new Rect(
-    iconRect.x + iconWidth + sideGap,
-    layout.secondLine.y,
-    Math.max(
-      1,
-      layout.secondLine.x +
-        layout.secondLine.width -
-        horizontalPadding -
-        (iconRect.x + iconWidth + sideGap)
-    ),
-    layout.secondLine.height
-  );
-
-  const sideWidth = Math.min(leftRect.width, rightRect.width);
-  const longestSideTextWidth = Math.max(
-    estimatedTextWidth(summary.temperatureText, fontSize),
-    estimatedTextWidth(summary.countsText, fontSize)
-  );
-  const minimumSideFontSize = isCompactMode() ? 7 : 8;
-  const sideFontSize = Math.max(
-    minimumSideFontSize,
-    Math.min(
-      fontSize,
-      fontSize * sideWidth / Math.max(1, longestSideTextWidth)
-    )
-  );
-
-  ctx.setTextAlignedCenter();
-  ctx.setFont(Font.blackMonospacedSystemFont(sideFontSize));
-  ctx.setTextColor(textColor);
-  ctx.drawTextInRect(summary.temperatureText, leftRect);
-
-  // O centro do ícone é o centro geométrico da segunda linha, nunca o
-  // centro restante depois que os textos laterais são desenhados.
-  ctx.setFont(Font.regularSystemFont(sideFontSize + 1));
-  ctx.drawTextInRect(summary.weatherGlyph, iconRect);
-
-  ctx.setFont(Font.blackMonospacedSystemFont(sideFontSize));
-  ctx.drawTextInRect(summary.countsText, rightRect);
-}
 
 function drawFixedDaylightGlow(ctx, weather) {
   const lineY = solarLineY();
@@ -5310,7 +8002,11 @@ function drawFixedDaylightGlow(ctx, weather) {
     for (const slice of slices) {
       // Uma faixa de um pixel por vez, sem sobreposição, mantém o
       // gradiente contínuo e elimina as bordas horizontais.
-      for (let y = lineY + 1; y < glowEndY; y += 1) {
+      for (
+        let y = lineY + scaleVertical(1);
+        y < glowEndY;
+        y += scaleVertical(1)
+      ) {
         const verticalProgress =
           (y - lineY) / Math.max(1, glowEndY - lineY);
         const verticalStrength = Math.pow(
@@ -5343,7 +8039,12 @@ function drawFixedDaylightGlow(ctx, weather) {
         )
       );
       ctx.fillRect(
-        new Rect(slice.x - 1, lineY, slice.width + 3, 10)
+        new Rect(
+          slice.x - 1,
+          lineY,
+          slice.width + 3,
+          scaleVertical(10)
+        )
       );
 
       // O gradiente contínuo fornece a intensidade abaixo da linha, sem
@@ -5354,9 +8055,9 @@ function drawFixedDaylightGlow(ctx, weather) {
     for (const endpointX of [interval.x0, interval.x1]) {
       const visibility = 1;
       for (const [radius, opacity] of [
-        [12, 0.10],
-        [8, 0.18],
-        [5, 0.28],
+        [scaleVertical(12), 0.10],
+        [scaleVertical(8), 0.18],
+        [scaleVertical(5), 0.28],
       ]) {
         ctx.setFillColor(
           new Color(
@@ -6239,9 +8940,7 @@ function drawNightSegment(
   const nightCenterDate = new Date(
     (nightStart.getTime() + nightEnd.getTime()) / 2
   );
-  const moon = moonPhaseForDate(
-    new Date((nightStart.getTime() + nightEnd.getTime()) / 2)
-  );
+  const moon = predominantMoonPhaseForNight(nightCenterDate);
 
   const maximumMoonSize = mergedNight ? 128 : 96;
   const proportionalSize = mergedNight
@@ -6275,7 +8974,10 @@ function drawNightSegment(
       x0 + sceneWidth * relativeX,
       CANVAS.localPlotTop + 12 + (sceneHeight - 70) * relativeY,
       radius * starScale,
-      new Color(SETTINGS.nightStarColor, 0.72)
+      new Color(
+        SETTINGS.nightStarColor,
+        weatherElementOpacity(0.72)
+      )
     );
   }
 
@@ -6392,7 +9094,10 @@ function fillMoonLitSurface(
   const terminatorFactor = 1 - 2 * normalizedIllumination;
 
   ctx.setFillColor(
-    new Color(SETTINGS.nightMoonColor, 0.98)
+    new Color(
+      SETTINGS.nightMoonColor,
+      weatherElementOpacity(0.98)
+    )
   );
 
   for (
@@ -6444,7 +9149,7 @@ function strokeMoonEllipseOutside(
   color,
   lineWidth
 ) {
-  // O retângulo recebido contém os 40 px do desenho da Lua.
+  // O retângulo recebido contém os 44 px do desenho da Lua.
   // A borda é deslocada para fora, preservando integralmente
   // o tamanho visual do disco lunar.
   const outset = lineWidth / 2;
@@ -6482,13 +9187,16 @@ function drawMoonPhase(
         borderDate,
         loadResult.holidayDates
       ),
-      4
+      dayBoundaryLineWidth()
     );
   };
 
   // A base escura permanece visível em todas as fases, inclusive na Lua nova.
   ctx.setFillColor(
-    new Color(SETTINGS.nightMoonShadowColor, 0.98)
+    new Color(
+      SETTINGS.nightMoonShadowColor,
+      weatherElementOpacity(0.98)
+    )
   );
   ctx.fillEllipse(moonRect);
 
@@ -6512,6 +9220,35 @@ function drawMoonPhase(
   drawOuterBorder();
 }
 
+function drawDayBoundaryMoonBorder(
+  ctx,
+  centerX,
+  centerY,
+  size,
+  borderDate
+) {
+  const isDayBoundary =
+    borderDate instanceof Date &&
+    borderDate.getHours() === 0 &&
+    borderDate.getMinutes() === 0;
+  if (!isDayBoundary) return;
+
+  strokeMoonEllipseOutside(
+    ctx,
+    new Rect(
+      centerX - size / 2,
+      centerY - size / 2,
+      size,
+      size
+    ),
+    dayBoundaryLineColor(
+      borderDate,
+      loadResult.holidayDates
+    ),
+    dayBoundaryLineWidth()
+  );
+}
+
 function drawMoonCraters(ctx, x, y, size, opacity) {
   const craters = [
     [0.21, 0.25, 0.11],
@@ -6529,7 +9266,10 @@ function drawMoonCraters(ctx, x, y, size, opacity) {
   ];
 
   ctx.setFillColor(
-    new Color(SETTINGS.nightMoonCraterColor, opacity)
+    new Color(
+      SETTINGS.nightMoonCraterColor,
+      weatherElementOpacity(opacity)
+    )
   );
   for (const [relativeX, relativeY, diameter] of craters) {
     ctx.fillEllipse(
@@ -6546,7 +9286,7 @@ function drawMoonCraters(ctx, x, y, size, opacity) {
   ctx.setFillColor(
     new Color(
       SETTINGS.nightMoonCraterHighlightColor,
-      opacity * 0.28
+      weatherElementOpacity(opacity * 0.28)
     )
   );
   for (const [relativeX, relativeY, diameter] of craters.slice(1, 9)) {
@@ -6565,7 +9305,10 @@ function drawMoonCloud(ctx, x, y, scale) {
   const width = 74 * scale;
   const height = 35 * scale;
 
-  ctx.setFillColor(new Color(SETTINGS.nightCloudColor, 0.94));
+  ctx.setFillColor(new Color(
+    SETTINGS.nightCloudColor,
+    weatherElementOpacity(0.94)
+  ));
   ctx.fillEllipse(new Rect(x, y + 11 * scale, 43 * scale, 23 * scale));
   ctx.fillEllipse(
     new Rect(x + 14 * scale, y, 31 * scale, 31 * scale)
@@ -6578,7 +9321,10 @@ function drawMoonCloud(ctx, x, y, scale) {
   );
 
   // Sombra interna clara para dar volume sem escurecer a nuvem.
-  ctx.setFillColor(new Color(SETTINGS.nightCloudShadeColor, 0.72));
+  ctx.setFillColor(new Color(
+    SETTINGS.nightCloudShadeColor,
+    weatherElementOpacity(0.72)
+  ));
   ctx.fillEllipse(
     new Rect(
       x + width * 0.23,
@@ -6672,6 +9418,19 @@ function moonPhaseForDate(date) {
     name: "LUA MINGUANTE",
     illumination: 0.25,
   };
+}
+
+function predominantMoonPhaseForNight(date) {
+  const dayStart = startOfDay(date);
+  const nightCenter =
+    date.getHours() < SETTINGS.nightEndHour
+      ? dateAtHour(dayStart, 0)
+      : dateAtHour(addDays(dayStart, 1), 0);
+
+  // A fase é escolhida uma única vez no centro da noite. Assim, todos os
+  // horários noturnos usam o mesmo desenho, enquanto um eclipse continua
+  // tendo prioridade no horário exato em que acontece.
+  return moonPhaseForDate(nightCenter);
 }
 
 function solarTimeForDate(date, isSunrise) {
@@ -6782,6 +9541,7 @@ function prioritizedEvents(items) {
     .filter(
       (item) =>
         item.kind === "event" &&
+        !isBirthdayItem(item) &&
         !item.isAllDay &&
         item.end > windowStart &&
         item.start < windowEnd
@@ -6805,7 +9565,7 @@ function eventAtTime(date, items) {
 
 function hourTicks() {
   const ticks = [];
-  const showEveryHour = windowHours <= 24;
+  const showEveryHour = !usesEvenHourCadence();
   let tick = floorToHour(windowStart);
 
   if (!showEveryHour && tick.getHours() % 2 !== 0) {
@@ -6865,6 +9625,13 @@ function compactEventHourMarkers() {
   return markers;
 }
 
+function dayBoundaryLineWidth() {
+  // A linha estrutural usa quatro pixels reais em todas as primitivas.
+  // O valor inteiro evita diferenças de rasterização entre fillRect,
+  // strokePath e strokeEllipse depois da compressão vertical do layout.
+  return 4;
+}
+
 function hourGridLineColor(tick) {
   return tick.getHours() === 0
     ? dayBoundaryLineColor(tick, loadResult.holidayDates)
@@ -6890,10 +9657,9 @@ function daylightHourColor(tick) {
 }
 
 function isSecondaryNightLegendHour(hour) {
-  // No modo de 24 horas, toda a faixa noturna — 18:00 a 06:00,
-  // incluindo os dois limites — usa o mesmo cinza dos horários pares
-  // das janelas longas.
-  if (windowHours <= 24) {
+  // Em janelas de até 12 horas, toda a faixa noturna — 18:00 a 06:00,
+  // incluindo os dois limites — usa o mesmo cinza.
+  if (!usesEvenHourCadence()) {
     return (
       hour >= SETTINGS.nightStartHour ||
       hour <= SETTINGS.nightEndHour
@@ -6915,24 +9681,22 @@ function legendLabelWidth() {
 }
 
 function legendFrameHeight() {
-  // Cada retângulo externo agora contém duas linhas centralizadas.
-  if (isCompactMode()) return 50;
-  if (isExtendedDetailedMode()) return 52;
-  return 56;
+  if (isCompactMode()) return scaleVertical(34);
+  if (isExtendedDetailedMode()) return scaleVertical(32);
+  return scaleVertical(38);
 }
 
 function legendTextHeight() {
-  if (isCompactMode()) return 29;
-  if (isExtendedDetailedMode()) return 28;
-  return 31;
+  if (isCompactMode()) return scaleVertical(29);
+  if (isExtendedDetailedMode()) return scaleVertical(28);
+  return scaleVertical(31);
 }
 
 function topLegendCenterY() {
-  // Preserva o eixo vertical anterior enquanto a moldura cresce igualmente
-  // para cima e para baixo.
-  if (isCompactMode()) return 18;
-  if (isExtendedDetailedMode()) return 17;
-  return 20;
+  // Preserva o eixo vertical anterior, agora proporcional ao painel.
+  if (isCompactMode()) return scaleVertical(18);
+  if (isExtendedDetailedMode()) return scaleVertical(17);
+  return scaleVertical(20);
 }
 
 function centeredLegendTextRect(centerX, centerY) {
@@ -6946,25 +9710,24 @@ function centeredLegendTextRect(centerX, centerY) {
   );
 }
 
-// Os badges de mudança de dia são mais largos que os rótulos numéricos.
-// Isso garante as três letras completas inclusive na janela de 36 horas.
-function dayLegendLabelWidth() {
-  // A largura comporta as três partes da segunda linha:
-  // mínima/máxima, ícone central e E:x | L:y.
-  if (isCompactMode()) return 126;
-  if (isExtendedDetailedMode()) return 144;
-  return 156;
+function bottomLegendTextBottomY(centerY) {
+  return centerY + legendTextHeight() / 2;
 }
 
-function centeredDayLegendTextRect(centerX, centerY) {
-  const width = dayLegendLabelWidth();
+function bottomAlignedLegendTextRect(centerX, bottomY, width) {
   const height = legendTextHeight();
   return new Rect(
     centerX - width / 2,
-    centerY - height / 2,
+    bottomY - height,
     width,
     height
   );
+}
+
+// Os badges de mudança de dia são mais largos que os rótulos numéricos.
+// Isso garante as três letras completas inclusive na janela de 36 horas.
+function dayLegendLabelWidth() {
+  return 64;
 }
 
 function legendBadgeRect(centerX, centerY) {
@@ -6987,6 +9750,158 @@ function dayLegendBadgeRect(centerX, centerY) {
     width,
     height
   );
+}
+
+function dayLegendCircleRect(centerX, centerY) {
+  const diameter = DAY_CHANGE_CIRCLE_DIAMETER;
+  return new Rect(
+    centerX - diameter / 2,
+    centerY - diameter / 2,
+    diameter,
+    diameter
+  );
+}
+
+function centeredDayLegendTextRect(centerX, centerY, width, fontSize) {
+  // A caixa usa a mesma referência do círculo, mas compensa metade
+  // da descida visual causada pela redução da altura da caixa.
+  const height = fontSize;
+  const verticalCorrection =
+    (legendTextHeight() - height) / 4;
+  return new Rect(
+    centerX - width / 2,
+    centerY - height / 2 - verticalCorrection,
+    width,
+    height
+  );
+}
+
+function hourLegendCornerRadius() {
+  const referenceCard = titleDayCardRect(0);
+  return Math.min(
+    TITLE_CARD_OUTER_CORNER_RADIUS,
+    referenceCard.width / 2,
+    referenceCard.height / 2
+  );
+}
+
+function hourLegendFrameBottomY() {
+  // Usa o mesmo limite externo da linha inferior arredondada da moldura.
+  return (
+    bottomLegendCenterY() +
+    DAY_CHANGE_CIRCLE_DIAMETER / 2
+  );
+}
+
+function roundedFrameInsetAtY(y, topY, bottomY, radius) {
+  let inset = 0;
+  const topCenterY = topY + radius;
+  const bottomCenterY = bottomY - radius;
+
+  if (y < topCenterY) {
+    const distance = Math.max(
+      0,
+      Math.min(radius, topCenterY - y)
+    );
+    inset = Math.max(
+      inset,
+      radius -
+        Math.sqrt(
+          Math.max(0, radius * radius - distance * distance)
+        )
+    );
+  }
+
+  if (y > bottomCenterY) {
+    const distance = Math.max(
+      0,
+      Math.min(radius, y - bottomCenterY)
+    );
+    inset = Math.max(
+      inset,
+      radius -
+        Math.sqrt(
+          Math.max(0, radius * radius - distance * distance)
+        )
+    );
+  }
+
+  return inset;
+}
+
+function hourLegendVisibleBounds(rect) {
+  const topY = 0;
+  const bottomY = hourLegendFrameBottomY();
+  const radius = Math.min(
+    hourLegendCornerRadius(),
+    timelineWidth() / 2,
+    (bottomY - topY) / 2
+  );
+  const sampleYs = [
+    rect.y,
+    rect.y + rect.height / 2,
+    rect.y + rect.height,
+  ];
+  const inset = Math.max(
+    ...sampleYs.map((sampleY) =>
+      roundedFrameInsetAtY(
+        sampleY,
+        topY,
+        bottomY,
+        radius
+      )
+    )
+  );
+
+  return {
+    left: inset,
+    right: timelineWidth() - inset,
+  };
+}
+
+function drawHourLegendLabelClipped(
+  ctx,
+  label,
+  rect,
+  centerX,
+  fontSize
+) {
+  const bounds = hourLegendVisibleBounds(rect);
+  const characters = Array.from(label);
+  const characterWidth = Math.max(1, fontSize * 0.62);
+  const totalWidth = characters.length * characterWidth;
+  const labelLeft = centerX - totalWidth / 2;
+
+  if (
+    labelLeft >= bounds.left &&
+    labelLeft + totalWidth <= bounds.right
+  ) {
+    ctx.drawTextInRect(label, rect);
+    return;
+  }
+
+  // Nas bordas, cada caractere conserva sua posição original e só é
+  // desenhado quando cabe integralmente antes da curva.
+  for (let index = 0; index < characters.length; index++) {
+    const characterLeft = labelLeft + index * characterWidth;
+    const characterRight = characterLeft + characterWidth;
+    if (
+      characterLeft < bounds.left ||
+      characterRight > bounds.right
+    ) {
+      continue;
+    }
+
+    ctx.drawTextInRect(
+      characters[index],
+      new Rect(
+        characterLeft,
+        rect.y,
+        characterWidth,
+        rect.height
+      )
+    );
+  }
 }
 
 function hourLabelMetrics(ticks) {
@@ -7072,7 +9987,7 @@ function eventStartsAtDayChange(event) {
 
 function drawEventStartLines(ctx, items) {
   const events = prioritizedEvents(items);
-  const lineWidth = 4;
+  const lineWidth = scaleVertical(4);
   const curveBottom = thermalBandBottomY();
 
   // A linha principal permanece atrás dos charts e chega até a
@@ -7104,10 +10019,10 @@ function drawEventStartLines(ctx, items) {
 
 function drawEventStartLineAnchors(ctx, items) {
   const events = prioritizedEvents(items);
-  const lineWidth = 4;
+  const lineWidth = scaleVertical(4);
 
-  // Este trecho é desenhado sobre o próprio chart para que a ligação
-  // visual alcance o centro do chart sem alterar sua hora de início.
+  // Este trecho alcança o centro do chart, mas fica atrás dele.
+  // A coordenada da hora de início permanece inalterada.
   for (const event of [...events].reverse()) {
     // Eventos iniciados às 00:00 já coincidem com a divisão do dia.
     if (eventStartsAtDayChange(event)) continue;
@@ -7141,13 +10056,17 @@ function drawHourAxis(ctx, items) {
   const gridBottom = thermalBandBottomY();
 
   for (const tick of ticks) {
-    const x = timeToX(tick);
     const hour = tick.getHours();
-    const isMidnight = hour === 0;
+
+    // A divisão de meia-noite é desenhada uma única vez pela camada
+    // estrutural, que também continua a linha até o aro da Lua e o círculo.
+    if (hour === 0) continue;
+
+    const x = timelineLegendCenterX(tick);
     const isNoon = hour === 12;
 
     ctx.setStrokeColor(hourGridLineColor(tick));
-    ctx.setLineWidth(isMidnight ? 8 : isNoon ? 2 : 1);
+    ctx.setLineWidth(isNoon ? 2 : 1);
     ctx.strokeRect(
       new Rect(
         x,
@@ -7179,6 +10098,12 @@ function timelineBarSegments(item, startX, endX) {
     !(end instanceof Date) ||
     end <= start
   ) {
+    return [{ x: startX, width }];
+  }
+
+  // Um chart de carryover é uma única geometria contínua: ele atravessa
+  // a meia-noite sem criar dois retângulos nem um recuo junto à linha.
+  if (item?.isPendingDayCarryover) {
     return [{ x: startX, width }];
   }
 
@@ -7241,7 +10166,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     const markerX = Math.max(
       0,
       Math.min(timelineWidth() - markerWidth, timeToX(item.start))
-    );
+    ) - 1;
 
     drawTimelineBar(
       ctx,
@@ -7253,14 +10178,26 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ctx.setTextAlignedCenter();
     ctx.setFont(
       Font.blackRoundedSystemFont(
-        isCompactMode() ? compactTimelineFontSize(20) : 23
+        isCompactMode() ? compactTimelineFontSize(21) : scaleFontSize(25)
       )
     );
     ctx.setTextColor(Color.white());
     ctx.drawTextInRect(
       item.title,
-      new Rect(markerX, barY + 3, markerWidth, barHeight - 3)
+      new Rect(
+        markerX,
+        barY + scaleVertical(3),
+        markerWidth,
+        barHeight - scaleVertical(3)
+      )
     );
+    return;
+  }
+
+  // Aniversários ocupam a linha reservada, mas são exibidos somente como
+  // texto. Eles não recebem chart nem barra de ligação.
+  if (isBirthdayItem(item)) {
+    drawBirthdayLabel(ctx, item, y, rowHeight);
     return;
   }
 
@@ -7281,7 +10218,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     item,
     x,
     x + width
-  );
+  ).map((segment) => ({ ...segment, x: segment.x - 1 }));
 
   for (const segment of barSegments) {
     drawTimelineBar(
@@ -7314,16 +10251,14 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode()
-    ? compactTimelineFontSize(19)
-    : windowHours > 24
-      ? 23
-      : 26;
+    ? compactTimelineFontSize(21)
+    : scaleFontSize(windowHours > 24 ? 25 : 28);
   const statusFontSize = isCompactMode()
-    ? compactTimelineFontSize(12)
-    : 15;
+    ? compactTimelineFontSize(13)
+    : scaleFontSize(16);
   const metadataFontSize = isCompactMode()
-    ? compactTimelineFontSize(11)
-    : 15;
+    ? compactTimelineFontSize(12)
+    : scaleFontSize(16);
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
@@ -7351,8 +10286,32 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   if (!visibleTitle && statusWidth === 0) return;
 
   const titleTextY =
-    barY + Math.max(0, (barHeight - titleFontSize) / 2 - 2);
-  const textPoint = new Point(visibleLeft + 7, titleTextY);
+    barY +
+    Math.max(
+      0,
+      (barHeight - titleFontSize) / 2 - scaleVertical(4)
+    );
+  const reminderMarkerDiameter =
+    item.kind === "reminder"
+      ? isCompactMode()
+        ? Math.max(9, compactTimelineScale() * scaleVertical(10))
+        : scaleVertical(12)
+      : 0;
+  const reminderMarkerGap = item.kind === "reminder" ? 5 : 0;
+  const textPoint = new Point(
+    visibleLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
+    titleTextY
+  );
+  if (item.kind === "reminder") {
+    // O círculo fica no mesmo eixo horizontal do centro do chart.
+    drawReminderMarker(
+      ctx,
+      visibleLeft + 8 + reminderMarkerDiameter / 2,
+      centerY,
+      reminderMarkerDiameter,
+      color
+    );
+  }
 
   if (visibleTitle) {
     ctx.setTextAlignedLeft();
@@ -7379,9 +10338,9 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       statusText,
       new Rect(
         visibleRight - statusWidth,
-        barY + 6,
+        barY + scaleVertical(6),
         statusWidth,
-        barHeight - 6
+        barHeight - scaleVertical(6)
       )
     );
   }
@@ -7394,12 +10353,105 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       metadataText,
       new Rect(
         visibleRight - statusWidth - metadataWidth,
-        barY + 6,
+        barY + scaleVertical(6),
         metadataWidth,
-        barHeight - 6
+        barHeight - scaleVertical(6)
       )
     );
   }
+}
+
+function drawBirthdayLabel(ctx, item, y, rowHeight) {
+  const startX = timeToX(
+    new Date(Math.max(windowStart.getTime(), item.start.getTime()))
+  );
+  const endX = timeToX(
+    new Date(Math.min(windowEnd.getTime(), item.end.getTime()))
+  );
+  const visibleLeft = Math.max(0, startX);
+  const visibleRight = Math.min(timelineWidth(), endX);
+  if (visibleRight <= visibleLeft) return;
+
+  const fontSize = isCompactMode()
+    ? compactTimelineFontSize(21)
+    : scaleFontSize(windowHours > 24 ? 25 : 28);
+  // O dia determina a visibilidade, mas não limita a largura do nome.
+  // Como os títulos dos charts, o texto começa na parte visível do item.
+  const labelX = visibleLeft + 7;
+  const maximumWidth = Math.max(1, timelineWidth() - labelX - 4);
+  const label = truncateTitle(item.title, maximumWidth, fontSize);
+  if (!label) return;
+
+  const labelWidth = maximumWidth;
+  const labelHeight = Math.max(
+    scaleVertical(18),
+    Math.min(
+      rowHeight - scaleVertical(4),
+      fontSize + scaleVertical(8)
+    )
+  );
+  const labelY = y + (rowHeight - labelHeight) / 2;
+  const labelRect = new Rect(
+    labelX,
+    labelY,
+    labelWidth,
+    labelHeight
+  );
+
+  // Fundo transparente: somente a palavra recebe um contorno preto fino.
+  ctx.setTextAlignedLeft();
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(new Color("#000000", 1.0));
+  for (const [offsetX, offsetY] of [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0],             [1, 0],
+    [-1, 1],  [0, 1],  [1, 1],
+  ]) {
+    ctx.drawTextInRect(
+      label,
+      new Rect(
+        labelRect.x + offsetX,
+        labelRect.y + offsetY,
+        labelRect.width,
+        labelRect.height
+      )
+    );
+  }
+
+  ctx.setTextColor(new Color("#FF69B4", 1.0));
+  ctx.drawTextInRect(label, labelRect);
+}
+
+function drawReminderMarker(ctx, centerX, centerY, diameter, color) {
+  const outerDiameter = diameter + 2;
+  ctx.setFillColor(new Color("#000000", 0.95));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - outerDiameter / 2,
+      centerY - outerDiameter / 2,
+      outerDiameter,
+      outerDiameter
+    )
+  );
+  ctx.setFillColor(color);
+  ctx.fillEllipse(
+    new Rect(
+      centerX - diameter / 2,
+      centerY - diameter / 2,
+      diameter,
+      diameter
+    )
+  );
+  const innerDiameter = Math.max(2, diameter - 5);
+  ctx.setFillColor(new Color("#000000", 0.88));
+  ctx.fillEllipse(
+    new Rect(
+      centerX - innerDiameter / 2,
+      centerY - innerDiameter / 2,
+      innerDiameter,
+      innerDiameter
+    )
+  );
 }
 
 function drawTimelineBar(ctx, rect, color, item) {
@@ -7412,10 +10464,15 @@ function drawTimelineBar(ctx, rect, color, item) {
   }
 
   // Contorno preto comum a todos os charts.
-  const cornerRadius = isCompactMode() ? 6 : 7;
+  const cornerRadius = isCompactMode()
+    ? scaleVertical(6)
+    : scaleVertical(7);
   const outlineWidth = Math.min(
-    2,
-    Math.max(0.75, Math.min(rect.width, rect.height) / 4)
+    scaleVertical(2),
+    Math.max(
+      scaleVertical(0.75),
+      Math.min(rect.width, rect.height) / 4
+    )
   );
   const outlinedRect = new Rect(
     rect.x + outlineWidth,
@@ -7431,6 +10488,23 @@ function drawTimelineBar(ctx, rect, color, item) {
     new Color("#000000", 1.0)
   );
 
+  if (item.isPendingDayCarryover) {
+    // O chart permanece normal por dentro; o destaque abraça sua
+    // geometria pelo lado externo, com afastamento visual definido.
+    fillRoundedRect(
+      ctx,
+      outlinedRect,
+      Math.max(1, cornerRadius - outlineWidth),
+      color
+    );
+    drawPendingDayCarryoverBorder(
+      ctx,
+      rect,
+      cornerRadius
+    );
+    return;
+  }
+
   if (!accent || rect.width < 8 || rect.height < 8) {
     fillRoundedRect(
       ctx,
@@ -7441,7 +10515,9 @@ function drawTimelineBar(ctx, rect, color, item) {
     return;
   }
 
-  const accentBorderWidth = item.isCurrentEvent ? 4 : 3;
+  const accentBorderWidth = item.isCurrentEvent
+    ? scaleVertical(4)
+    : scaleVertical(3);
   fillRoundedRect(
     ctx,
     outlinedRect,
@@ -7644,22 +10720,24 @@ function dateKey(date) {
 }
 
 function dayBadgeStyle(date, holidayDates) {
+  // O círculo permanece branco em qualquer data. Somente a legenda
+  // interna recebe a cor temática do sábado, domingo ou feriado.
   if (holidayDates.has(dateKey(date))) {
     return {
-      background: new Color("#FFCC00"),
-      text: Color.black(),
+      background: Color.white(),
+      text: new Color("#FFCC00", 1.0),
     };
   }
   if (date.getDay() === 6) {
     return {
-      background: new Color("#0A84FF"),
-      text: Color.white(),
+      background: Color.white(),
+      text: new Color("#0A84FF", 1.0),
     };
   }
   if (date.getDay() === 0) {
     return {
-      background: new Color("#FF453A"),
-      text: Color.white(),
+      background: Color.white(),
+      text: new Color("#FF453A", 1.0),
     };
   }
   return {
@@ -7668,10 +10746,9 @@ function dayBadgeStyle(date, holidayDates) {
   };
 }
 
-function dayBoundaryLineColor(date, holidayDates) {
-  if (holidayDates.has(dateKey(date))) return new Color("#FFCC00", 1.0);
-  if (date.getDay() === 6) return new Color("#0A84FF", 1.0);
-  if (date.getDay() === 0) return new Color("#FF453A", 1.0);
+function dayBoundaryLineColor(_, __) {
+  // A linha vertical e o aro da Lua de mudança de dia são estruturais:
+  // ambos permanecem brancos, independentemente do dia representado.
   return Color.white();
 }
 
@@ -7782,6 +10859,12 @@ function timeToX(date) {
   return (elapsed / duration) * timelineWidth();
 }
 
+function timelineLegendCenterX(date) {
+  // A legenda numérica e o dia da semana usam exatamente o centro da
+  // mesma barra vertical de mudança de dia/horário.
+  return timeToX(date);
+}
+
 function timelineWidth() {
   return CANVAS.plotRight - CANVAS.plotLeft;
 }
@@ -7801,6 +10884,144 @@ function safeCalendarColor(calendar, fallback) {
   } catch (_) {
     return fallback;
   }
+}
+
+function drawPendingDayCarryoverBorder(ctx, rect, chartRadius) {
+  const gap = Math.max(
+    0,
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderGap) || 0
+    )
+  );
+  const borderWidth = Math.max(
+    scaleVertical(1),
+    scaleVertical(
+      Number(SETTINGS.pendingDayCarryoverBorderWidth) || 1
+    )
+  );
+  const outset = gap + borderWidth / 2;
+  const borderRect = new Rect(
+    rect.x - outset,
+    rect.y - outset,
+    rect.width + outset * 2,
+    rect.height + outset * 2
+  );
+
+  if (borderRect.width <= 1 || borderRect.height <= 1) return;
+
+  drawRoundedRectOutline(
+    ctx,
+    borderRect,
+    Math.max(1, chartRadius + outset),
+    new Color(
+      SETTINGS.pendingDayCarryoverBorderColor,
+      1.0
+    ),
+    borderWidth
+  );
+}
+
+function drawRoundedRectOutline(
+  ctx,
+  rect,
+  radius,
+  color,
+  lineWidth
+) {
+  const width = Math.max(0, Number(rect.width) || 0);
+  const height = Math.max(0, Number(rect.height) || 0);
+  const strokeWidth = Math.max(
+    0.5,
+    Number(lineWidth) || 1
+  );
+  if (width <= 0 || height <= 0) return;
+
+  const left = rect.x;
+  const top = rect.y;
+  const right = rect.x + width;
+  const bottom = rect.y + height;
+  const boundedRadius = Math.max(
+    0,
+    Math.min(
+      Number(radius) || 0,
+      width / 2,
+      height / 2
+    )
+  );
+  const curveFactor = 0.5522847498;
+  const path = new Path();
+
+  if (boundedRadius <= 0) {
+    path.move(new Point(left, top));
+    path.addLine(new Point(right, top));
+    path.addLine(new Point(right, bottom));
+    path.addLine(new Point(left, bottom));
+    path.closeSubpath();
+  } else {
+    path.move(new Point(left + boundedRadius, top));
+    path.addLine(new Point(right - boundedRadius, top));
+    path.addCurve(
+      new Point(right, top + boundedRadius),
+      new Point(
+        right - boundedRadius +
+          boundedRadius * curveFactor,
+        top
+      ),
+      new Point(
+        right,
+        top + boundedRadius -
+          boundedRadius * curveFactor
+      )
+    );
+    path.addLine(new Point(right, bottom - boundedRadius));
+    path.addCurve(
+      new Point(right - boundedRadius, bottom),
+      new Point(
+        right,
+        bottom - boundedRadius +
+          boundedRadius * curveFactor
+      ),
+      new Point(
+        right - boundedRadius +
+          boundedRadius * curveFactor,
+        bottom
+      )
+    );
+    path.addLine(new Point(left + boundedRadius, bottom));
+    path.addCurve(
+      new Point(left, bottom - boundedRadius),
+      new Point(
+        left + boundedRadius -
+          boundedRadius * curveFactor,
+        bottom
+      ),
+      new Point(
+        left,
+        bottom - boundedRadius +
+          boundedRadius * curveFactor
+      )
+    );
+    path.addLine(new Point(left, top + boundedRadius));
+    path.addCurve(
+      new Point(left + boundedRadius, top),
+      new Point(
+        left,
+        top + boundedRadius -
+          boundedRadius * curveFactor
+      ),
+      new Point(
+        left + boundedRadius -
+          boundedRadius * curveFactor,
+        top
+      )
+    );
+    path.closeSubpath();
+  }
+
+  ctx.addPath(path);
+  ctx.setStrokeColor(color);
+  ctx.setLineWidth(strokeWidth);
+  ctx.strokePath();
 }
 
 function fillRoundedRect(ctx, rect, radius, color) {
