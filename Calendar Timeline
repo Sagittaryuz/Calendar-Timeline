@@ -56,9 +56,6 @@ const SETTINGS = {
   futureTimelineBlurDownsampleFactor: 0.24,
   futureTimelineBlurTintColor: "#111216",
   futureTimelineBlurTintOpacity: 0.36,
-  // Opacidade da imagem suavizada sobre o conteúdo original; o PNG
-  // intermediário permanece transparente fora dos próprios pixels.
-  futureTimelineBlurImageOpacity: 0.46,
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
   saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
@@ -2395,7 +2392,7 @@ function futureTimelineBlurMetrics() {
   };
 }
 
-async function drawFutureTimelineBlurLayer(
+function drawFutureTimelineBlurLayer(
   ctx,
   timelineImage,
   localToTimeline = false
@@ -2420,27 +2417,15 @@ async function drawFutureTimelineBlurLayer(
       metrics.width,
       metrics.height
     );
-    const imageOpacity = Math.max(
-      0.16,
-      Math.min(
-        0.72,
-        Number(SETTINGS.futureTimelineBlurImageOpacity) || 0.46
-      )
-    );
-    // A imagem retornada tem um canvas transparente e só recebe o bitmap
-    // suavizado com alpha. O conteúdo original continua sendo a base visível.
-    const translucentBlur = await rasterizeTranslucentTimelineBlur(
+    const softenedImage = softenTimelineImage(
       futureImage,
       metrics.width,
-      metrics.height,
-      imageOpacity
+      metrics.height
     );
-    if (translucentBlur) {
-      ctx.drawImageInRect(translucentBlur, blurRect);
-    }
+    ctx.drawImageInRect(softenedImage, blurRect);
   } catch (_) {
-    // Sem rasterização, não desenhamos um bitmap opaco como fallback.
-    // O véu abaixo ainda preserva o conteúdo original sob transparência.
+    // A camada translúcida abaixo continua funcionando mesmo se o
+    // redimensionamento rasterizado não estiver disponível.
   }
 
   // Reduz o contraste restante e mantém o futuro parcialmente visível.
@@ -2492,32 +2477,7 @@ function cropCanvasImage(image, x, y, width, height) {
   return cropCtx.getImage();
 }
 
-async function rasterizeTranslucentTimelineBlur(
-  image,
-  width,
-  height,
-  opacity
-) {
-  if (
-    typeof WebView === "undefined" ||
-    typeof Data === "undefined" ||
-    typeof Image === "undefined" ||
-    typeof Data.fromPNG !== "function"
-  ) {
-    return null;
-  }
-
-  const pngData = Data.fromPNG(image);
-  if (
-    !pngData ||
-    typeof pngData.toBase64String !== "function"
-  ) {
-    return null;
-  }
-
-  const encoded = pngData.toBase64String();
-  if (!encoded) return null;
-
+function softenTimelineImage(image, width, height) {
   const factor = Math.max(
     0.12,
     Math.min(
@@ -2525,88 +2485,27 @@ async function rasterizeTranslucentTimelineBlur(
       Number(SETTINGS.futureTimelineBlurDownsampleFactor) || 0.24
     )
   );
-  const canvasWidth = Math.max(1, Math.ceil(width));
-  const canvasHeight = Math.max(1, Math.ceil(height));
-  const reducedWidth = Math.max(
-    1,
-    Math.round(canvasWidth * factor)
+  const reducedWidth = Math.max(1, Math.round(width * factor));
+  const reducedHeight = Math.max(1, Math.round(height * factor));
+
+  const reducedCtx = new DrawContext();
+  reducedCtx.size = new Size(reducedWidth, reducedHeight);
+  reducedCtx.opaque = true;
+  reducedCtx.respectScreenScale = false;
+  reducedCtx.drawImageInRect(
+    image,
+    new Rect(0, 0, reducedWidth, reducedHeight)
   );
-  const reducedHeight = Math.max(
-    1,
-    Math.round(canvasHeight * factor)
+
+  const expandedCtx = new DrawContext();
+  expandedCtx.size = new Size(width, height);
+  expandedCtx.opaque = true;
+  expandedCtx.respectScreenScale = false;
+  expandedCtx.drawImageInRect(
+    reducedCtx.getImage(),
+    new Rect(0, 0, width, height)
   );
-
-  const html =
-    "<!doctype html><html><head><meta name='viewport' " +
-    "content='width=device-width,initial-scale=1'>" +
-    "<style>html,body{margin:0;padding:0;background:transparent;" +
-    "overflow:hidden}</style></head><body>" +
-    "<canvas id='timeline-blur-overlay'></canvas>" +
-    "</body></html>";
-
-  const webView = new WebView();
-  await webView.loadHTML(html);
-
-  const imageURL = "data:image/png;base64," + encoded;
-  const javascript = [
-    "(function() {",
-    "  const canvas = document.getElementById('timeline-blur-overlay');",
-    "  const context = canvas.getContext('2d');",
-    "  const canvasWidth = " + canvasWidth + ";",
-    "  const canvasHeight = " + canvasHeight + ";",
-    "  const reducedWidth = " + reducedWidth + ";",
-    "  const reducedHeight = " + reducedHeight + ";",
-    "  canvas.width = canvasWidth;",
-    "  canvas.height = canvasHeight;",
-    "  context.clearRect(0, 0, canvasWidth, canvasHeight);",
-    "  const source = new Image();",
-    "  source.onload = function() {",
-    "    const reducedCanvas = document.createElement('canvas');",
-    "    reducedCanvas.width = reducedWidth;",
-    "    reducedCanvas.height = reducedHeight;",
-    "    const reducedContext = reducedCanvas.getContext('2d');",
-    "    reducedContext.imageSmoothingEnabled = true;",
-    "    reducedContext.imageSmoothingQuality = 'high';",
-    "    reducedContext.drawImage(",
-    "      source,",
-    "      0,",
-    "      0,",
-    "      reducedWidth,",
-    "      reducedHeight",
-    "    );",
-    "    context.imageSmoothingEnabled = true;",
-    "    context.imageSmoothingQuality = 'high';",
-    "    context.globalAlpha = " + Number(opacity) + ";",
-    "    context.drawImage(",
-    "      reducedCanvas,",
-    "      0,",
-    "      0,",
-    "      reducedWidth,",
-    "      reducedHeight,",
-    "      0,",
-    "      0,",
-    "      canvasWidth,",
-    "      canvasHeight",
-    "    );",
-    "    completion(canvas.toDataURL('image/png'));",
-    "  };",
-    "  source.onerror = function() { completion(null); };",
-    "  source.src = " + JSON.stringify(imageURL) + ";",
-    "})()",
-  ].join("\n");
-
-  const dataURL = await webView.evaluateJavaScript(
-    javascript,
-    true
-  );
-  if (typeof dataURL !== "string") return null;
-
-  const separator = dataURL.indexOf(",");
-  if (separator < 0) return null;
-
-  return Image.fromData(
-    Data.fromBase64String(dataURL.slice(separator + 1))
-  );
+  return expandedCtx.getImage();
 }
 
 function drawCurrentDayBoundaryBadgeOnForeground(ctx) {
@@ -7627,6 +7526,16 @@ async function renderTimelinePanel(items, loadError) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
 
+  // O blur é composto sobre a imagem-base, antes dos elementos que
+  // precisam permanecer legíveis no dia seguinte.
+  if (shouldBlurFutureTimeline()) {
+    drawFutureTimelineBlurLayer(
+      ctx,
+      ctx.getImage(),
+      true
+    );
+  }
+
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
@@ -7644,17 +7553,6 @@ async function renderTimelinePanel(items, loadError) {
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
-
-  // Todo o contexto meteorológico e de orientação já foi composto.
-  // O blur cobre esses elementos somente no futuro; os charts são
-  // desenhados depois e continuam acima dele.
-  if (shouldBlurFutureTimeline()) {
-    await drawFutureTimelineBlurLayer(
-      ctx,
-      ctx.getImage(),
-      true
-    );
-  }
 
   if (loadError) {
     drawPermissionState(ctx);
