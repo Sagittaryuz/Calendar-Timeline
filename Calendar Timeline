@@ -166,6 +166,15 @@ const TITLE_CARD_STANDARD_CORNER_RADIUS =
   WIDGET_COMMON_CORNER_RADIUS;
 const TITLE_CARD_OUTER_CORNER_RADIUS =
   WIDGET_COMMON_CORNER_RADIUS;
+// Geometria única do painel da timeline e do recorte dos astros.
+// A esquerda e o topo direito são perpendiculares; somente o
+// canto inferior direito conserva o raio comum.
+const TIMELINE_CORNER_PROFILE = {
+  topLeftRounded: false,
+  bottomLeftRounded: false,
+  topRightRounded: false,
+  bottomRightRounded: true,
+};
 const DAY_CHANGE_CIRCLE_DIAMETER = scaleVertical(52);
 // Dimensão única dos astros, reduzida junto com a faixa superior.
 const WEATHER_ICON_SIZE_24H = scaleVertical(44);
@@ -2131,11 +2140,8 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O painel da timeline é composto em um retângulo, mas as quatro
-  // extremidades precisam acompanhar o mesmo raio visual dos cartões.
-  // Recompomos somente as áreas externas dos cantos com o gradiente,
-  // truncando a legenda e as linhas superior/inferior sem deixar cortes
-  // quadrados nas bordas.
+  // O painel da timeline usa o perfil comum de cantos. O mesmo perfil
+  // também será aplicado ao contorno e ao recorte dos astros.
   const timelineRect = new Rect(
     CANVAS.plotLeft,
     CANVAS.timelineTop,
@@ -2146,7 +2152,10 @@ async function renderWidget(items, loadError) {
     contentCtx,
     timelineRect,
     TITLE_CARD_OUTER_CORNER_RADIUS,
-    "left"
+    "left",
+    0,
+    TIMELINE_CORNER_PROFILE.topLeftRounded,
+    TIMELINE_CORNER_PROFILE.bottomLeftRounded
   );
   restoreRoundedSideCorners(
     contentCtx,
@@ -2154,7 +2163,8 @@ async function renderWidget(items, loadError) {
     TITLE_CARD_OUTER_CORNER_RADIUS,
     "right",
     0,
-    false
+    TIMELINE_CORNER_PROFILE.topRightRounded,
+    TIMELINE_CORNER_PROFILE.bottomRightRounded
   );
 
   // A curva da moldura do dia atual também funciona como limite
@@ -2194,7 +2204,8 @@ function restoreRoundedSideCorners(
   radius,
   side,
   protectedStrokeOutset = 0,
-  roundTopCorner = true
+  roundTopCorner = true,
+  roundBottomCorner = true
 ) {
   const direction = side === "left" ? "left" : "right";
   const boundedRadius = Math.max(
@@ -2232,6 +2243,7 @@ function restoreRoundedSideCorners(
     const isTopCorner =
       roundTopCorner && sampleY < boundedRadius;
     const isBottomCorner =
+      roundBottomCorner &&
       sampleY > rect.height - boundedRadius;
 
     if (isTopCorner || isBottomCorner) {
@@ -2341,9 +2353,9 @@ function drawTimelineOuterBorder(ctx) {
     outline.addLine(new Point(left, bottom));
     outline.addLine(new Point(left, top));
   } else {
-    outline.move(new Point(left + centerRadius, top));
-
-    // O canto superior direito da timeline é perpendicular.
+    // O perfil externo tem três cantos perpendiculares e apenas
+    // o canto inferior direito arredondado.
+    outline.move(new Point(left, top));
     outline.addLine(new Point(right, top));
     outline.addLine(new Point(right, bottom - centerRadius));
 
@@ -2358,30 +2370,9 @@ function drawTimelineOuterBorder(ctx) {
         bottom
       )
     );
-    outline.addLine(new Point(left + centerRadius, bottom));
-    outline.addCurve(
-      new Point(left, bottom - centerRadius),
-      new Point(
-        left + centerRadius - centerRadius * curveFactor,
-        bottom
-      ),
-      new Point(
-        left,
-        bottom - centerRadius + centerRadius * curveFactor
-      )
-    );
-    outline.addLine(new Point(left, top + centerRadius));
-    outline.addCurve(
-      new Point(left + centerRadius, top),
-      new Point(
-        left,
-        top + centerRadius - centerRadius * curveFactor
-      ),
-      new Point(
-        left + centerRadius - centerRadius * curveFactor,
-        top
-      )
-    );
+
+    outline.addLine(new Point(left, bottom));
+    outline.addLine(new Point(left, top));
   }
 
   // É a mesma cor da borda fina dos quadros dos dias.
@@ -6343,15 +6334,32 @@ function timelineMoonPointIsVisible(x, y) {
     return false;
   }
 
-  // O canto superior direito da timeline é quadrado; a Lua pode
-  // ocupar essa região até o limite reto do painel.
-  const topRightStartX =
+  // O recorte do aro segue o mesmo perfil do painel: os dois
+  // cantos esquerdos e o canto superior direito são perpendiculares.
+  // Apenas o canto inferior direito continua usando o raio circular.
+  const leftCornerEndX =
+    clippedRect.x + clippedRadius;
+  const rightCornerStartX =
     clippedRect.x + clippedRect.width - clippedRadius;
-  const topRightEndY =
+  const topCornerEndY =
     clippedRect.y + clippedRadius;
+  const bottomCornerStartY =
+    clippedRect.y + clippedRect.height - clippedRadius;
+
+  const inTopLeftSquare =
+    x <= leftCornerEndX &&
+    y <= topCornerEndY;
+  const inBottomLeftSquare =
+    x <= leftCornerEndX &&
+    y >= bottomCornerStartY;
+  const inTopRightSquare =
+    x >= rightCornerStartX &&
+    y <= topCornerEndY;
+
   if (
-    x >= topRightStartX &&
-    y <= topRightEndY
+    inTopLeftSquare ||
+    inBottomLeftSquare ||
+    inTopRightSquare
   ) {
     return true;
   }
