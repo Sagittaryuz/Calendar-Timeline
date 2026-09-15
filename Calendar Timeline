@@ -7405,16 +7405,6 @@ async function renderTimelinePanel(items, loadError) {
     drawFixedDaylightGlow(ctx, hourlyWeather);
   }
 
-  // O blur é composto sobre a imagem-base, antes dos elementos que
-  // precisam permanecer legíveis no dia seguinte.
-  if (shouldBlurFutureTimeline()) {
-    drawFutureTimelineBlurLayer(
-      ctx,
-      ctx.getImage(),
-      true
-    );
-  }
-
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
@@ -7432,6 +7422,17 @@ async function renderTimelinePanel(items, loadError) {
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
+
+  // Todo o contexto meteorológico e de orientação já foi composto.
+  // O blur cobre esses elementos somente no futuro; os charts são
+  // desenhados depois e continuam acima dele.
+  if (shouldBlurFutureTimeline()) {
+    drawFutureTimelineBlurLayer(
+      ctx,
+      ctx.getImage(),
+      true
+    );
+  }
 
   if (loadError) {
     drawPermissionState(ctx);
