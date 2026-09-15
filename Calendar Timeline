@@ -7542,8 +7542,6 @@ async function renderTimelinePanel(items, loadError) {
   // A moldura inferior contínua é composta depois, no canvas principal,
   // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
   drawTimelineDayBoundariesOnTop(baseCtx);
-  drawWeekdayBadgesOnTop(baseCtx);
-  drawDayBoundaryMoonsOnTop(baseCtx, hourlyWeather);
 
   const baseImage = baseCtx.getImage();
   const ctx = new DrawContext();
@@ -7570,6 +7568,13 @@ async function renderTimelinePanel(items, loadError) {
     );
     ctx.drawImageAtPoint(blurCtx.getImage(), new Point(0, 0));
   }
+
+  // Estes dois elementos são exceções estruturais: o astro da mudança
+  // de dia e o círculo inferior com o nome do dia permanecem nítidos
+  // e acima do blur. Todos os demais elementos meteorológicos e horários
+  // continuam pertencendo à base desfocada do futuro.
+  drawWeekdayBadgesOnTop(ctx);
+  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
 
   if (loadError) {
     drawPermissionState(ctx);
