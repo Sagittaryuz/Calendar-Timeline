@@ -3702,29 +3702,69 @@ function pendingDayCarryoverBorderOutset() {
   return gap + borderWidth / 2;
 }
 
-function pendingCarryoverChartVerticalSpans(items, boundaryDate) {
+function chartsCrossingDayBoundaryVerticalSpans(items, boundaryDate) {
   const spans = [];
   const candidates = Array.isArray(items) ? items : [];
   const boundaryMs =
     boundaryDate instanceof Date ? boundaryDate.getTime() : NaN;
-  const outset = pendingDayCarryoverBorderOutset();
+  const boundaryX = Number.isFinite(boundaryMs)
+    ? timeToX(new Date(boundaryMs))
+    : NaN;
 
   for (const item of candidates) {
     if (
-      !item?.isPendingDayCarryover ||
+      !item ||
       item.isOverflow ||
+      (item.kind !== "event" && item.kind !== "reminder") ||
+      isBirthdayItem(item) ||
       !(item.start instanceof Date) ||
       !(item.end instanceof Date) ||
       !Number.isFinite(boundaryMs) ||
+      !Number.isFinite(boundaryX) ||
       item.start.getTime() >= boundaryMs ||
-      item.end.getTime() <= boundaryMs
+      item.end.getTime() <= boundaryMs ||
+      !Number.isFinite(Number(item.gridRow))
     ) {
       continue;
     }
 
+    const originalX = timeToX(item.start);
+    const x =
+      item.kind === "reminder"
+        ? Math.max(0, originalX)
+        : originalX;
+    const exactWidth = Math.max(
+      1,
+      timeToX(item.end) - x
+    );
+    const minimumWidth =
+      item.kind === "event"
+        ? isCompactMode()
+          ? SETTINGS.compactMinimumChartWidth
+          : SETTINGS.minimumChartWidth
+        : 1;
+    const width = Math.max(exactWidth, minimumWidth);
+    const segments = timelineBarSegments(
+      item,
+      x,
+      x + width
+    ).map((segment) => ({
+      ...segment,
+      x: segment.x - 1,
+    }));
+    const crossesVisually = segments.some(
+      (segment) =>
+        boundaryX > segment.x &&
+        boundaryX < segment.x + segment.width
+    );
+    if (!crossesVisually) continue;
+
     const bar = timelineBarVerticalRect(item);
     if (!bar) continue;
 
+    const outset = item.isPendingDayCarryover
+      ? pendingDayCarryoverBorderOutset()
+      : 0;
     spans.push({
       top: CANVAS.timelineTop + bar.top - outset,
       bottom: CANVAS.timelineTop + bar.bottom + outset,
@@ -3764,13 +3804,13 @@ function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
     DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const rasterWidth = Math.max(1, Math.round(lineWidth));
   const rasterLeftX = Math.round(boundaryX - rasterWidth / 2);
-  const spans = pendingCarryoverChartVerticalSpans(
+  const spans = chartsCrossingDayBoundaryVerticalSpans(
     items,
     addDays(startOfDay(windowStart), 1)
   );
 
-  // Fragmenta apenas o traço estrutural. O chart e sua borda externa
-  // permanecem intactos e aparecem acima da linha vertical.
+  // Fragmenta apenas o traço estrutural. Qualquer chart que atravesse
+  // a virada permanece intacto e aparece acima da linha vertical.
   const drawLineSpan = (startY, endY) => {
     const clippedStart = Math.max(lineTop, startY);
     const clippedEnd = Math.min(lineBottom, endY);
