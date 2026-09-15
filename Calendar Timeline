@@ -7520,12 +7520,6 @@ async function renderTimelinePanel(items, loadError) {
   // Primeira camada do painel: o background dos dias.
   drawTimelineBackground(ctx, true);
 
-  // O fundo e a linha solar pertencem à camada atmosférica de base.
-  // Portanto, quando o futuro está bloqueado, ambos ficam abaixo do blur.
-  if (SETTINGS.showSolarGlow) {
-    drawFixedDaylightGlow(ctx, hourlyWeather);
-  }
-
   // O blur é composto sobre a imagem-base, antes dos elementos que
   // precisam permanecer legíveis no dia seguinte.
   if (shouldBlurFutureTimeline()) {
@@ -7540,6 +7534,11 @@ async function renderTimelinePanel(items, loadError) {
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(ctx, hourlyWeather);
   drawHourAxis(ctx, items);
+  // O brilho solar prevalece sobre o fundo e sobre o grid, permanecendo
+  // atrás da curva térmica e dos charts de agenda.
+  if (SETTINGS.showSolarGlow) {
+    drawFixedDaylightGlow(ctx, hourlyWeather);
+  }
   // A chuva parte da base térmica e pode subir até quase a faixa dos astros.
   // Ela é desenhada antes dos charts, eventos e lembretes, que permanecem
   // visualmente por cima das barras.
