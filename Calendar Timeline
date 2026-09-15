@@ -2151,7 +2151,7 @@ async function renderWidget(items, loadError) {
   // astros e fundo posterior recebem o mesmo tratamento sem criar
   // retângulos fora dos cantos da timeline.
   if (shouldBlurFutureTimeline()) {
-    drawFutureTimelineBlurLayer(contentCtx);
+    drawFutureTimelineBlurLayer(contentCtx, timelineImage);
     // O círculo da próxima mudança de dia é estrutural e permanece nítido.
     drawCurrentDayBoundaryBadgeOnForeground(contentCtx);
   }
@@ -2291,7 +2291,7 @@ function futureTimelineBlurMetrics() {
   };
 }
 
-function drawFutureTimelineBlurLayer(ctx) {
+function drawFutureTimelineBlurLayer(ctx, timelineImage) {
   const metrics = futureTimelineBlurMetrics();
   if (metrics.width <= 0) return;
 
@@ -2302,15 +2302,13 @@ function drawFutureTimelineBlurLayer(ctx) {
     timelineHeight()
   );
 
-  // O snapshot vem do canvas principal, já com o gradiente e o fundo
-  // contínuo incorporados. Isso impede que a imagem desfocada preserve
-  // transparências que deixariam o texto original nítido por baixo.
+  // O recorte é feito da imagem da própria timeline, e não do canvas
+  // completo. Assim, o blur nunca substitui o background do cabeçalho
+  // nem o trecho de hoje.
   try {
-    const composedImage = ctx.getImage();
-    const futureImage = cropCanvasImage(
-      composedImage,
-      metrics.absoluteX,
-      metrics.absoluteY,
+    const futureImage = cropTimelinePanelImage(
+      timelineImage,
+      metrics.startX,
       metrics.width,
       metrics.height
     );
@@ -2333,6 +2331,33 @@ function drawFutureTimelineBlurLayer(ctx) {
     )
   );
   ctx.fillRect(blurRect);
+}
+
+function cropTimelinePanelImage(image, x, width, height) {
+  const cropCtx = new DrawContext();
+  cropCtx.size = new Size(width, height);
+  cropCtx.opaque = true;
+  cropCtx.respectScreenScale = false;
+
+  // A parte transparente da timeline recebe o mesmo gradiente do canvas
+  // antes do recorte. Isso evita que pixels não preenchidos sejam
+  // convertidos em branco durante o redimensionamento.
+  const globalTop = Math.round(CANVAS.timelineTop);
+  for (let pixelY = 0; pixelY < height; pixelY++) {
+    cropCtx.setFillColor(
+      widgetGradientColorAtY(globalTop + pixelY)
+    );
+    cropCtx.fillRect(
+      new Rect(0, pixelY, width, 1)
+    );
+  }
+
+  // O canvas menor recorta naturalmente apenas a faixa posterior.
+  cropCtx.drawImageAtPoint(
+    image,
+    new Point(-Math.round(x), 0)
+  );
+  return cropCtx.getImage();
 }
 
 function cropCanvasImage(image, x, y, width, height) {
