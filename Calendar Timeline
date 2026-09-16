@@ -7520,6 +7520,15 @@ async function renderTimelinePanel(items, loadError) {
   // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
   drawTimelineDayBoundariesOnTop(baseCtx);
 
+  // Os eventos, charts e lembretes que começam amanhã fazem parte da
+  // imagem-base e serão suavizados junto com o restante do futuro.
+  if (!loadError) {
+    drawTimelineItemLayer(
+      baseCtx,
+      timelineItemsStartingTomorrow(items)
+    );
+  }
+
   const baseImage = baseCtx.getImage();
   const ctx = new DrawContext();
   ctx.size = new Size(timelineWidth(), timelineHeight());
@@ -7531,8 +7540,9 @@ async function renderTimelinePanel(items, loadError) {
   ctx.drawImageAtPoint(baseImage, new Point(0, 0));
 
   // Desfoca o contexto visual somente a partir da próxima meia-noite.
-  // Astros, temperaturas, curva, brilho solar e horas ficam abaixo;
-  // os charts (inclusive prolongamentos de hoje) ficam acima.
+  // Astros, temperaturas, curva, brilho solar, horas e itens iniciados
+  // amanhã ficam abaixo; os charts iniciados hoje, inclusive prolongamentos,
+  // ficam acima.
   if (shouldBlurFutureTimeline()) {
     const blurCtx = new DrawContext();
     blurCtx.size = new Size(timelineWidth(), timelineHeight());
@@ -7556,31 +7566,57 @@ async function renderTimelinePanel(items, loadError) {
   if (loadError) {
     drawPermissionState(ctx);
   } else {
-    const chartTop = timelineChartTop();
-    const chartBottom = timelineChartBottom();
-    const chartHeight = Math.max(1, chartBottom - chartTop);
-    const rowHeight = chartHeight / SETTINGS.maxItems;
-
-    // As ligações são desenhadas antes dos charts, que as encobrem.
-    drawEventStartLineAnchors(ctx, items);
-
-    // Última camada da agenda: charts, eventos e lembretes.
-    for (let row = 0; row < SETTINGS.maxItems; row++) {
-      const y = chartTop + row * rowHeight;
-      const rowItems = items
-        .filter((candidate) => candidate.gridRow === row)
-        .sort(
-          (a, b) =>
-            Number(a.isOverflow) - Number(b.isOverflow) ||
-            a.start.getTime() - b.start.getTime()
-        );
-
-      rowItems.forEach((item) =>
-        drawTimelineItem(ctx, item, y, rowHeight)
-      );
-    }
+    // Somente itens iniciados hoje, inclusive os que continuam depois da
+    // meia-noite, permanecem acima do blur.
+    drawTimelineItemLayer(
+      ctx,
+      timelineItemsStartingToday(items)
+    );
   }
   return ctx.getImage();
+}
+
+function timelineItemsStartingToday(items) {
+  const tomorrowStart = addDays(startOfDay(windowStart), 1).getTime();
+  return (Array.isArray(items) ? items : []).filter(
+    (item) =>
+      item?.start instanceof Date &&
+      item.start.getTime() < tomorrowStart
+  );
+}
+
+function timelineItemsStartingTomorrow(items) {
+  const tomorrowStart = addDays(startOfDay(windowStart), 1).getTime();
+  return (Array.isArray(items) ? items : []).filter(
+    (item) =>
+      item?.start instanceof Date &&
+      item.start.getTime() >= tomorrowStart
+  );
+}
+
+function drawTimelineItemLayer(ctx, items) {
+  const chartTop = timelineChartTop();
+  const chartBottom = timelineChartBottom();
+  const chartHeight = Math.max(1, chartBottom - chartTop);
+  const rowHeight = chartHeight / SETTINGS.maxItems;
+
+  // As ligações são desenhadas antes dos charts, que as encobrem.
+  drawEventStartLineAnchors(ctx, items);
+
+  for (let row = 0; row < SETTINGS.maxItems; row++) {
+    const y = chartTop + row * rowHeight;
+    const rowItems = items
+      .filter((candidate) => candidate.gridRow === row)
+      .sort(
+        (a, b) =>
+          Number(a.isOverflow) - Number(b.isOverflow) ||
+          a.start.getTime() - b.start.getTime()
+      );
+
+    rowItems.forEach((item) =>
+      drawTimelineItem(ctx, item, y, rowHeight)
+    );
+  }
 }
 
 
