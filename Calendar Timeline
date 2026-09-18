@@ -147,6 +147,7 @@ const PENDING_DAY_CARRYOVER_END_HOUR = 6;
 const WEATHER_HOUR_MS = 60 * 60 * 1000;
 const WEATHER_EDGE_TOLERANCE_MS = 90 * 60 * 1000;
 const WEATHER_MAX_INTERPOLATION_GAP_MS = 2 * WEATHER_HOUR_MS;
+const WEATHER_SAMPLE_ORDER_CACHE = new WeakMap();
 
 // O canvas continua completo para preservar o background. O conteúdo é
 // comprimido somente no eixo vertical para respeitar 30 px em cada margem,
@@ -5400,8 +5401,15 @@ function dailyTemperatureExtremeLabels(dailyExtremes, labelTicks) {
   return labels;
 }
 
-function temperatureAtTimestamp(sourceHours, timestamp) {
-  const orderedHours = (Array.isArray(sourceHours) ? sourceHours : [])
+function orderedWeatherSamples(sourceHours) {
+  if (!Array.isArray(sourceHours)) return [];
+
+  const cached = WEATHER_SAMPLE_ORDER_CACHE.get(sourceHours);
+  if (cached && cached.sourceLength === sourceHours.length) {
+    return cached.samples;
+  }
+
+  const samples = sourceHours
     .map((hour) => ({
       timestamp: finiteWeatherNumber(hour?.timestamp),
       temperature: finiteWeatherNumber(hour?.temperature),
@@ -5412,6 +5420,16 @@ function temperatureAtTimestamp(sourceHours, timestamp) {
         hour.temperature !== null
     )
     .sort((first, second) => first.timestamp - second.timestamp);
+
+  WEATHER_SAMPLE_ORDER_CACHE.set(sourceHours, {
+    sourceLength: sourceHours.length,
+    samples,
+  });
+  return samples;
+}
+
+function temperatureAtTimestamp(sourceHours, timestamp) {
+  const orderedHours = orderedWeatherSamples(sourceHours);
   const targetTimestamp = finiteWeatherNumber(timestamp);
   if (orderedHours.length === 0 || targetTimestamp === null) return null;
 
