@@ -33,7 +33,59 @@ vm.runInContext(source.slice(holidaysStart, holidaysEnd), context);
   const dates = await context.loadAutomaticHolidays({});
   assert(dates.has('2026-01-01'));
   assert(dates.has('2027-01-01'));
-  console.log('OK: feriados cobrem o fim dos quatro cartões, inclusive a virada do ano.');
+
+  let requestMode = 'partial';
+  const storedCache = JSON.stringify({
+    updatedAt: 0,
+    expiresAt: 0,
+    dates: ['2026-06-01'],
+  });
+  const regionalFileManager = {
+    documentsDirectory: () => '/documents',
+    joinPath: (...parts) => parts.join('/'),
+    fileExists: () => true,
+    readString: () => storedCache,
+    writeString: () => {},
+  };
+  const regionalContext = {
+    Date,
+    SETTINGS: { holidayCacheDays: 30 },
+    FileManager: { local: () => regionalFileManager },
+    Request: class {
+      constructor(url) {
+        this.url = url;
+      }
+
+      async loadJSON() {
+        if (requestMode === 'all-fail' || this.url.includes('/estadual/')) {
+          throw new Error('fonte indisponível');
+        }
+        return [{ codigo_ibge: 5211909, data: '2026-06-02' }];
+      }
+    },
+    holidayDateKey: value => value,
+  };
+  vm.createContext(regionalContext);
+  const regionalStart = source.indexOf('async function loadRegionalHolidayDates(');
+  const regionalEnd = source.indexOf('function brazilianNationalHolidayDates(', regionalStart);
+  assert(regionalStart >= 0 && regionalEnd > regionalStart, 'Localizar cache regional.');
+  vm.runInContext(source.slice(regionalStart, regionalEnd), regionalContext);
+
+  const partial = await regionalContext.loadRegionalHolidayDates(2026, {
+    uf: 'GO',
+    ibgeCode: 5211909,
+  });
+  assert(partial.has('2026-06-01'));
+  assert(partial.has('2026-06-02'));
+
+  requestMode = 'all-fail';
+  const offline = await regionalContext.loadRegionalHolidayDates(2026, {
+    uf: 'GO',
+    ibgeCode: 5211909,
+  });
+  assert.deepEqual([...offline], ['2026-06-01']);
+
+  console.log('OK: virada do ano e cache regional preservado em sucesso parcial/offline.');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
