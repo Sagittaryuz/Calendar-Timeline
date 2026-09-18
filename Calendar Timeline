@@ -4,6 +4,7 @@
 //
 // AGENDA TIMELINE 4x2
 // Calendário + Lembretes do iPhone em uma timeline diária.
+// Dados complementares de clima: Open-Meteo (CC BY 4.0).
 
 const THEME_MODE = "black"; // "black" | "dark"
 
@@ -11,9 +12,8 @@ const SETTINGS = {
   locale: "pt_BR",
   maxItems: 5,
   defaultWindowHours: 24,
-  maximumWindowHours: 168, // Até 7 dias.
+  maximumWindowHours: 96, // Limite absoluto de quatro dias.
   refreshSeconds: 60,
-  compactModeFromHours: 36,
   minimumChartWidth: 34,
   compactMinimumChartWidth: 18,
   currentEventColor: "#FFFFFF",
@@ -33,6 +33,11 @@ const SETTINGS = {
   weatherCacheMinutes: 30,
   forecaBaseURL: "https://fnw-us.foreca.com",
   forecaTokenHours: 24,
+  openMeteoBaseURL: "https://api.open-meteo.com/v1/forecast",
+  // Cinco dias cobrem os quatro cartões completos, mesmo quando a janela
+  // começa no meio do dia. A API suporta até 16 dias, mas o widget não pede
+  // dados além do necessário.
+  openMeteoForecastDays: 5,
   // Margem visual para não transformar uma probabilidade isolada em chuva.
   rainEvidenceMinMM: 0.10,
   // Régua fixa da altura das barras: 10 mm/h alcança o teto visual.
@@ -802,17 +807,64 @@ function firstFiniteWeatherNumber(...values) {
   return null;
 }
 
+function weatherDataRequiredEnd() {
+  const titleCardsEnd = addDays(
+    startOfDay(windowStart),
+    TITLE_CARD_COUNT
+  );
+  return new Date(
+    Math.max(windowEnd.getTime(), titleCardsEnd.getTime())
+  );
+}
+
+function weatherCacheCoversRequiredWindow(hours) {
+  const requiredEnd = weatherDataRequiredEnd().getTime();
+  const timestamps = (Array.isArray(hours) ? hours : [])
+    .map((hour) => Number(hour?.timestamp))
+    .filter((timestamp) => Number.isFinite(timestamp));
+  if (timestamps.length === 0) return false;
+
+  return (
+    Math.max(...timestamps) >=
+    requiredEnd - 60 * 60 * 1000
+  );
+}
+
+function loadStoredForecaCredentials() {
+  const usernameKey = "Calendar-Timeline-Foreca-Username-v1";
+  const passwordKey = "Calendar-Timeline-Foreca-Password-v1";
+
+  try {
+    if (Keychain.contains(usernameKey) && Keychain.contains(passwordKey)) {
+      const user = Keychain.get(usernameKey);
+      const password = Keychain.get(passwordKey);
+      if (user && password) return { user, password };
+    }
+  } catch (_) {}
+
+  return null;
+}
+
 async function loadHourlyWeather(location) {
   const fm = FileManager.local();
-  const cachePath = fm.joinPath(
-    fm.documentsDirectory(),
-    "Calendar-Timeline-foreca-weather-v2.json"
-  );
+  const cachePaths = [
+    fm.joinPath(
+      fm.documentsDirectory(),
+      "Calendar-Timeline-weather-v3.json"
+    ),
+    // Migração silenciosa do cache antigo da Foreca.
+    fm.joinPath(
+      fm.documentsDirectory(),
+      "Calendar-Timeline-foreca-weather-v2.json"
+    ),
+  ];
   let cached = null;
 
-  if (fm.fileExists(cachePath)) {
+  for (const candidatePath of cachePaths) {
+    if (!fm.fileExists(candidatePath)) continue;
     try {
-      cached = JSON.parse(fm.readString(cachePath));
+      cached = JSON.parse(fm.readString(candidatePath));
+      break;
     } catch (_) {
       cached = null;
     }
@@ -823,150 +875,299 @@ async function loadHourlyWeather(location) {
     cached &&
     Math.abs(Number(cached.latitude) - location.latitude) < 0.2 &&
     Math.abs(Number(cached.longitude) - location.longitude) < 0.2;
+  const cacheFresh =
+    sameLocation &&
+    Date.now() - Number(cached.updatedAt || 0) < cacheAge;
 
   if (
-    sameLocation &&
+    cacheFresh &&
     Array.isArray(cached.hours) &&
-    Date.now() - Number(cached.updatedAt || 0) < cacheAge
+    weatherCacheCoversRequiredWindow(cached.hours)
   ) {
-    return buildHourlyWeather(cached.hours);
+    return buildHourlyWeather(cached.hours, cached.daily);
   }
 
-  try {
-    const credentials = await loadForecaCredentials();
-    if (!credentials) {
-      return Array.isArray(cached?.hours)
-        ? buildHourlyWeather(cached.hours)
-        : emptyHourlyWeather();
-    }
-    const token = await loadForecaToken(credentials);
-    const timezone =
-      Intl.DateTimeFormat().resolvedOptions().timeZone ||
-      "America/Sao_Paulo";
-    const locationPath = encodeURIComponent(
-      `${location.longitude},${location.latitude}`
-    );
-    const query = [
-      "periods=168",
-      "tempunit=C",
-      `tz=${encodeURIComponent(timezone)}`,
-      "dataset=standard",
-      "history=1",
-      "rounding=0",
-    ].join("&");
-    const request = new Request(
-      `${SETTINGS.forecaBaseURL}/api/v1/forecast/hourly/${locationPath}?${query}`
-    );
-    request.timeoutInterval = 12;
-    request.headers = {
-      Authorization: `Bearer ${token}`,
-    };
-    const response = await request.loadJSON();
-    const hours = [];
+  const storedCredentials = loadStoredForecaCredentials();
+  const [openMeteo, foreca] = await Promise.all([
+    loadOpenMeteoWeather(location).catch(() => null),
+    storedCredentials
+      ? loadForecaForecast(location, storedCredentials).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
-    for (const forecast of response?.forecast ?? []) {
-      const timestamp = new Date(String(forecast.time)).getTime();
-      const temperature = Number(forecast.temperature);
-      if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
-        continue;
-      }
-      const rainChanceValue = firstFiniteWeatherNumber(
-        forecast.precipProb,
-        forecast.precipitationProbability,
-        forecast.precipProbability,
-        forecast.pp
-      );
-      const rainChance = Math.max(
-        0,
-        Math.min(100, rainChanceValue ?? 0)
-      );
+  const mergedHours = mergeHourlyWeatherHours(
+    sameLocation && Array.isArray(cached?.hours)
+      ? cached.hours
+      : [],
+    openMeteo?.hours ?? [],
+    foreca?.hours ?? []
+  );
+  const mergedDaily = mergeDailyWeatherData(
+    sameLocation ? cached?.daily : null,
+    openMeteo?.daily,
+    foreca?.daily
+  );
 
-      // Somente campos de quantidade/acumulado entram no volume horário.
-      // precipRate é uma taxa e fica separado; misturá-lo com mm acumulados
-      // faria uma taxa parecer um volume de chuva.
-      const explicitRain = firstFiniteWeatherNumber(
-        forecast.precip,
-        forecast.precipitation,
-        forecast.precipAmount,
-        forecast.precipAccum,
-        forecast.precipitationAmount,
-        forecast.precipitationSum,
-        forecast.rain,
-        forecast.rainAmount,
-        forecast.pr
-      );
-      const rainRate = firstFiniteWeatherNumber(
-        forecast.precipRate
-      );
-      const rawCloudiness = firstFiniteWeatherNumber(
-        forecast.cloudiness,
-        forecast.cloudCover,
-        forecast.c
-      );
-      hours.push({
-        timestamp,
-        // Na Foreca, precipProb representa a hora que termina no timestamp.
-        rainStartTimestamp: timestamp - 60 * 60 * 1000,
-        temperature,
-        rainChance,
-        rainMM: Math.max(
-          0,
-          Number.isFinite(explicitRain) ? explicitRain : 0
-        ),
-        rainRate: Math.max(
-          0,
-          Number.isFinite(rainRate) ? rainRate : 0
-        ),
-        symbol: String(forecast.symbol ?? ""),
-        // Ausência de cloudiness não significa céu limpo. O valor nulo
-        // preserva essa diferença para a camada visual das nuvens.
-        cloudiness: Number.isFinite(rawCloudiness)
-          ? Math.max(0, Math.min(100, rawCloudiness))
-          : null,
-      });
-    }
-
-    const mergedHours = mergeHourlyWeatherHours(
-      sameLocation && Array.isArray(cached?.hours)
-        ? cached.hours
-        : [],
-      hours
-    );
-    const stored = {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      updatedAt: Date.now(),
-      hours: mergedHours,
-    };
-    try {
-      fm.writeString(cachePath, JSON.stringify(stored));
-    } catch (_) {}
-    return buildHourlyWeather(mergedHours);
-  } catch (error) {
-    if (!config.runsInWidget) {
-      await showForecaConnectionError(error);
-    }
-    return Array.isArray(cached?.hours)
-      ? buildHourlyWeather(cached.hours)
+  if (mergedHours.length === 0) {
+    return sameLocation && Array.isArray(cached?.hours)
+      ? buildHourlyWeather(cached.hours, cached.daily)
       : emptyHourlyWeather();
   }
+
+  const stored = {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    updatedAt: Date.now(),
+    hours: mergedHours,
+    daily: mergedDaily,
+  };
+  try {
+    fm.writeString(
+      fm.joinPath(
+        fm.documentsDirectory(),
+        "Calendar-Timeline-weather-v3.json"
+      ),
+      JSON.stringify(stored)
+    );
+  } catch (_) {}
+
+  return buildHourlyWeather(mergedHours, mergedDaily);
 }
 
-function mergeHourlyWeatherHours(cachedHours, freshHours) {
+async function loadForecaForecast(location, credentials) {
+  const token = await loadForecaToken(credentials);
+  const timezone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "America/Sao_Paulo";
+  const locationPath = encodeURIComponent(
+    `${location.longitude},${location.latitude}`
+  );
+  const query = [
+    "periods=168",
+    "tempunit=C",
+    `tz=${encodeURIComponent(timezone)}`,
+    "dataset=standard",
+    "history=1",
+    "rounding=0",
+  ].join("&");
+  const request = new Request(
+    `${SETTINGS.forecaBaseURL}/api/v1/forecast/hourly/${locationPath}?${query}`
+  );
+  request.timeoutInterval = 12;
+  request.headers = {
+    Authorization: `Bearer ${token}`,
+  };
+  const response = await request.loadJSON();
+  const hours = [];
+
+  for (const forecast of response?.forecast ?? []) {
+    const timestamp = new Date(String(forecast.time)).getTime();
+    const temperature = Number(forecast.temperature);
+    if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
+      continue;
+    }
+    const rainChanceValue = firstFiniteWeatherNumber(
+      forecast.precipProb,
+      forecast.precipitationProbability,
+      forecast.precipProbability,
+      forecast.pp
+    );
+    const rainChance = Math.max(
+      0,
+      Math.min(100, rainChanceValue ?? 0)
+    );
+    const explicitRain = firstFiniteWeatherNumber(
+      forecast.precip,
+      forecast.precipitation,
+      forecast.precipAmount,
+      forecast.precipAccum,
+      forecast.precipitationAmount,
+      forecast.precipitationSum,
+      forecast.rain,
+      forecast.rainAmount,
+      forecast.pr
+    );
+    const rainRate = firstFiniteWeatherNumber(
+      forecast.precipRate
+    );
+    const rawCloudiness = firstFiniteWeatherNumber(
+      forecast.cloudiness,
+      forecast.cloudCover,
+      forecast.c
+    );
+    hours.push({
+      timestamp,
+      // Na Foreca, precipProb representa a hora que termina no timestamp.
+      rainStartTimestamp: timestamp - 60 * 60 * 1000,
+      temperature,
+      rainChance,
+      rainMM: Math.max(
+        0,
+        Number.isFinite(explicitRain) ? explicitRain : 0
+      ),
+      rainRate: Math.max(
+        0,
+        Number.isFinite(rainRate) ? rainRate : 0
+      ),
+      symbol: String(forecast.symbol ?? ""),
+      cloudiness: Number.isFinite(rawCloudiness)
+        ? Math.max(0, Math.min(100, rawCloudiness))
+        : null,
+    });
+  }
+
+  return { hours, daily: {} };
+}
+
+async function loadOpenMeteoWeather(location) {
+  const timezone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "America/Sao_Paulo";
+  const forecastDays = Math.max(
+    1,
+    Math.min(
+      16,
+      Number(SETTINGS.openMeteoForecastDays) || 5
+    )
+  );
+  const query = [
+    `latitude=${encodeURIComponent(location.latitude)}`,
+    `longitude=${encodeURIComponent(location.longitude)}`,
+    "hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,weather_code,is_day",
+    "daily=temperature_2m_min,temperature_2m_max",
+    `forecast_days=${forecastDays}`,
+    "temperature_unit=celsius",
+    "precipitation_unit=mm",
+    `timezone=${encodeURIComponent(timezone)}`,
+  ].join("&");
+  const request = new Request(
+    `${SETTINGS.openMeteoBaseURL}?${query}`
+  );
+  request.timeoutInterval = 12;
+  const response = await request.loadJSON();
+  const hourly = response?.hourly ?? {};
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+  const hours = [];
+
+  for (let index = 0; index < times.length; index++) {
+    const timestamp = parseWeatherTimestamp(times[index]);
+    const temperature = Number(hourly.temperature_2m?.[index]);
+    if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
+      continue;
+    }
+
+    const rainChance = Math.max(
+      0,
+      Math.min(
+        100,
+        Number(hourly.precipitation_probability?.[index]) || 0
+      )
+    );
+    const rainMM = Math.max(
+      0,
+      Number(hourly.precipitation?.[index]) || 0
+    );
+    const cloudinessValue = Number(hourly.cloud_cover?.[index]);
+    const weatherCode = Number(hourly.weather_code?.[index]);
+    const isDay = Number(hourly.is_day?.[index]) !== 0;
+
+    hours.push({
+      timestamp,
+      rainStartTimestamp: timestamp - 60 * 60 * 1000,
+      temperature,
+      rainChance,
+      rainMM,
+      rainRate: 0,
+      symbol: openMeteoWeatherSymbol(weatherCode, isDay),
+      cloudiness: Number.isFinite(cloudinessValue)
+        ? Math.max(0, Math.min(100, cloudinessValue))
+        : null,
+    });
+  }
+
+  const daily = {};
+  const dailyTimes = Array.isArray(response?.daily?.time)
+    ? response.daily.time
+    : [];
+  for (let index = 0; index < dailyTimes.length; index++) {
+    const key = String(dailyTimes[index]).slice(0, 10);
+    const minimum = Number(
+      response.daily.temperature_2m_min?.[index]
+    );
+    const maximum = Number(
+      response.daily.temperature_2m_max?.[index]
+    );
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(key) ||
+      !Number.isFinite(minimum) ||
+      !Number.isFinite(maximum)
+    ) {
+      continue;
+    }
+    daily[key] = { minimum, maximum };
+  }
+
+  return { hours, daily };
+}
+
+function parseWeatherTimestamp(value) {
+  if (typeof value === "number" || /^\d+(\.\d+)?$/.test(String(value))) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return NaN;
+    return numeric < 1e12 ? numeric * 1000 : numeric;
+  }
+  return new Date(String(value)).getTime();
+}
+
+function openMeteoWeatherSymbol(code, isDay) {
+  const prefix = isDay ? "d" : "n";
+  let group = 1;
+  if ([1, 2].includes(code)) group = 2;
+  else if (code === 3) group = 3;
+  else if ([45, 48].includes(code)) group = 9;
+  else if ([51, 53, 55, 56, 57].includes(code)) group = 4;
+  else if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) group = 5;
+  else if ([71, 73, 75, 77, 85, 86].includes(code)) group = 7;
+  else if ([95, 96, 99].includes(code)) group = 6;
+  return `${prefix}${group}`;
+}
+
+function mergeDailyWeatherData(...dailySets) {
+  const merged = {};
+  for (const daily of dailySets) {
+    for (const [key, values] of Object.entries(daily ?? {})) {
+      const minimum = Number(values?.minimum);
+      const maximum = Number(values?.maximum);
+      if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) {
+        continue;
+      }
+      merged[key] = { minimum, maximum };
+    }
+  }
+  return merged;
+}
+
+function mergeHourlyWeatherHours(...hourSets) {
   const byTimestamp = new Map();
 
-  // O resultado novo prevalece quando a mesma hora já existe no cache.
-  for (const hour of [...cachedHours, ...freshHours]) {
-    const timestamp = Number(hour?.timestamp);
-    if (Number.isFinite(timestamp)) {
-      byTimestamp.set(timestamp, hour);
+  // A ordem de prioridade é: cache antigo, Open-Meteo e, por último,
+  // Foreca quando houver credenciais armazenadas.
+  for (const hours of hourSets) {
+    for (const hour of hours ?? []) {
+      const timestamp = Number(hour?.timestamp);
+      if (Number.isFinite(timestamp)) {
+        byTimestamp.set(timestamp, hour);
+      }
     }
   }
 
   // Mantém o dia anterior para preservar extremos que ainda possam aparecer
-  // na janela móvel e limita o cache aos sete dias suportados pelo widget.
+  // na janela móvel e limita o cache ao período necessário para os quatro
+  // cartões e para a janela máxima de 96 horas.
   const retentionStart = addDays(startOfDay(windowStart), -1).getTime();
-  const retentionEnd = addDays(startOfDay(windowEnd), 2).getTime();
+  const retentionEnd = new Date(
+    weatherDataRequiredEnd().getTime() + 2 * 24 * 60 * 60 * 1000
+  ).getTime();
 
   return [...byTimestamp.values()]
     .filter((hour) => {
@@ -1084,7 +1285,7 @@ async function loadForecaToken(credentials) {
   return accessToken;
 }
 
-function buildHourlyWeather(hours) {
+function buildHourlyWeather(hours, dailyOverrides = {}) {
   const normalized = hours
     .map((hour) => {
       const cloudinessSource = hour?.cloudiness;
@@ -1133,6 +1334,18 @@ function buildHourlyWeather(hours) {
         daily[key].maximum,
         hour.temperature
       );
+    }
+  }
+
+  // Usa os extremos diários do provedor complementar somente quando não
+  // existe uma série horária correspondente. Assim, a série horária da
+  // Foreca continua prevalecendo quando estiver completa.
+  for (const [key, values] of Object.entries(dailyOverrides ?? {})) {
+    if (daily[key]) continue;
+    const minimum = Number(values?.minimum);
+    const maximum = Number(values?.maximum);
+    if (Number.isFinite(minimum) && Number.isFinite(maximum)) {
+      daily[key] = { minimum, maximum };
     }
   }
 
@@ -1988,16 +2201,20 @@ function chooseItems(items, _referenceDate, limit) {
 }
 
 function isCompactMode() {
-  return windowHours > SETTINGS.compactModeFromHours;
+  // A geometria é única: toda janela usa o mesmo módulo visual de 24 horas.
+  return false;
 }
 
 function isExtendedDetailedMode() {
-  return windowHours > 24 && !isCompactMode();
+  return false;
+}
+
+function weatherDisplayIntervalHours() {
+  return windowHours <= 24 ? 2 : 12;
 }
 
 function usesEvenHourCadence() {
-  // Janelas de até 12 horas exibem todos os elementos de hora em hora.
-  return windowHours > 12;
+  return weatherDisplayIntervalHours() === 2;
 }
 
 function itemImportance(item) {
@@ -4697,7 +4914,7 @@ function buildThermalSamples(sourceHours) {
   const timestamps = [start];
 
   // A curva recebe um ponto a cada hora, mesmo quando a legenda textual
-  // mostra apenas as horas pares.
+  // usa uma cadência mais espaçada.
   for (
     let timestamp = firstHour;
     timestamp <= lastHour;
@@ -5066,12 +5283,8 @@ function drawThermalCurve(
 }
 
 function thermalLabelTicks(ticks) {
-  if (usesEvenHourCadence()) {
-    // Acima de 12 h, os textos aparecem somente nas horas pares.
-    return ticks.filter((tick) => tick.getHours() % 2 === 0);
-  }
-
-  // Em janelas menores, mantém a leitura hora a hora.
+  // hourTicks() já entrega a régua na cadência correta: 2 horas até 24 h
+  // e 12 horas nas janelas maiores, sem mudar a geometria do widget.
   return ticks;
 }
 
@@ -5342,13 +5555,8 @@ function timelineBarVerticalRect(item) {
 function drawBottomHourLegend(ctx) {
   const centerY = bottomLegendCenterY();
   const bottomY = bottomLegendTextBottomY(centerY);
-  // Nas janelas acima de 24 h os rótulos aparecem mais espaçados;
-  // aumentamos levemente a fonte sem alterar o modo de 24 h.
-  const hourFontSize = scaleFontSize(
-    windowHours > 24 && isCompactMode()
-      ? 22
-      : 24
-  );
+  // A fonte permanece exatamente a mesma do widget de 24 horas.
+  const hourFontSize = scaleFontSize(24);
 
   ctx.setTextAlignedCenter();
   for (const tick of hourTicks()) {
@@ -5406,14 +5614,9 @@ function weatherForecastNearest(hours, timestamp) {
 }
 
 function weatherConditionTicks(weather) {
-  // Acima de 12 horas, os ícones também acompanham somente horas pares.
-  const stepHours = usesEvenHourCadence() ? 2 : 1;
+  const stepHours = weatherDisplayIntervalHours();
   const ticks = [];
-  let tick = floorToHour(windowStart);
-
-  if (stepHours === 2 && tick.getHours() % 2 !== 0) {
-    tick.setHours(tick.getHours() + 1);
-  }
+  let tick = firstTickAtDisplayInterval(windowStart, stepHours);
 
   const iconDisplayEnd = new Date(
     windowEnd.getTime() + stepHours * 60 * 60 * 1000
@@ -5444,6 +5647,14 @@ function weatherConditionTicks(weather) {
   }
 
   return ticks;
+}
+
+function firstTickAtDisplayInterval(sourceDate, intervalHours) {
+  const tick = floorToHour(sourceDate);
+  while (tick.getHours() % intervalHours !== 0) {
+    tick.setHours(tick.getHours() + 1);
+  }
+  return tick;
 }
 
 function weatherSymbolGroup(forecast) {
@@ -7138,8 +7349,7 @@ function drawWeatherRainCurtains(ctx, weather) {
       isCompactMode() ? 7 : 10,
       maximumColumnHeight * easedStrength
     );
-    const hourWidthLimit =
-      hourWidth * (windowHours > 24 ? 0.82 : 0.38);
+    const hourWidthLimit = hourWidth * 0.38;
     const columnWidth = Math.max(
       2.5,
       Math.min(
@@ -7356,11 +7566,11 @@ function drawVisibleDailyExtremes(
   }
 
   const evenTicks = [];
-  let tick = floorToHour(windowStart);
-  if (tick.getHours() % 2 !== 0) {
-    tick.setHours(tick.getHours() + 1);
-  }
-  const tickStepHours = isCompactMode() ? 6 : 2;
+  const tickStepHours = weatherDisplayIntervalHours();
+  let tick = firstTickAtDisplayInterval(
+    windowStart,
+    tickStepHours
+  );
   while (tick <= windowEnd) {
     if (
       tick.getHours() % tickStepHours === 0 &&
@@ -7370,7 +7580,7 @@ function drawVisibleDailyExtremes(
       evenTicks.push(new Date(tick));
     }
     tick = new Date(
-      tick.getTime() + 2 * 60 * 60 * 1000
+      tick.getTime() + tickStepHours * 60 * 60 * 1000
     );
   }
 
@@ -9601,32 +9811,15 @@ function eventAtTime(date, items) {
 
 function hourTicks() {
   const ticks = [];
-  const showEveryHour = !usesEvenHourCadence();
-  let tick = floorToHour(windowStart);
-
-  if (!showEveryHour && tick.getHours() % 2 !== 0) {
-    tick.setHours(tick.getHours() + 1);
-  }
-
+  const stepHours = weatherDisplayIntervalHours();
+  let tick = firstTickAtDisplayInterval(windowStart, stepHours);
   const finalTick = ceilToHour(windowEnd);
-  const compactEventHours = compactEventHourMarkers();
 
   while (tick <= finalTick) {
-    const hour = tick.getHours();
-    const isEvenHour = hour % 2 === 0;
-    const isCompactAnchor = [0, 6, 12, 18].includes(hour);
-    const isEventHour =
-      isEvenHour && compactEventHours.has(tick.getTime());
-
-    if (
-      showEveryHour ||
-      (isEvenHour &&
-        (!isCompactMode() || isCompactAnchor || isEventHour))
-    ) {
-      ticks.push(new Date(tick));
-    }
-
-    tick = new Date(tick.getTime() + 60 * 60 * 1000);
+    ticks.push(new Date(tick));
+    tick = new Date(
+      tick.getTime() + stepHours * 60 * 60 * 1000
+    );
   }
 
   return ticks;
@@ -9693,8 +9886,8 @@ function daylightHourColor(tick) {
 }
 
 function isSecondaryNightLegendHour(hour) {
-  // Em janelas de até 12 horas, toda a faixa noturna — 18:00 a 06:00,
-  // incluindo os dois limites — usa o mesmo cinza.
+  // Nas janelas acima de 24 horas, os rótulos noturnos visíveis recebem
+  // o mesmo cinza para manter a leitura em uma régua de 12 em 12 horas.
   if (!usesEvenHourCadence()) {
     return (
       hour >= SETTINGS.nightStartHour ||
@@ -9710,7 +9903,7 @@ function secondaryNightLegendColor() {
 }
 
 function legendLabelWidth() {
-  // No modo de 36–168 horas, a moldura precisa comportar "DOM" inteiro.
+  // A moldura mantém a mesma dimensão em todas as janelas.
   if (isCompactMode()) return 58;
   if (isExtendedDetailedMode()) return 50;
   return 58;
@@ -10288,7 +10481,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode()
     ? compactTimelineFontSize(21)
-    : scaleFontSize(windowHours > 24 ? 25 : 28);
+    : scaleFontSize(28);
   const statusFontSize = isCompactMode()
     ? compactTimelineFontSize(13)
     : scaleFontSize(16);
@@ -10410,7 +10603,7 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
 
   const fontSize = isCompactMode()
     ? compactTimelineFontSize(21)
-    : scaleFontSize(windowHours > 24 ? 25 : 28);
+    : scaleFontSize(28);
   // O dia determina a visibilidade, mas não limita a largura do nome.
   // Como os títulos dos charts, o texto começa na parte visível do item.
   const labelX = visibleLeft + 7;
@@ -10704,14 +10897,10 @@ function parseWindowHours(parameter) {
   if (!/^\d+$/.test(raw)) return SETTINGS.defaultWindowHours;
 
   const value = Number(raw);
-  if (
-    !Number.isInteger(value) ||
-    value < 1 ||
-    value > SETTINGS.maximumWindowHours
-  ) {
+  if (!Number.isInteger(value) || value < 1) {
     return SETTINGS.defaultWindowHours;
   }
-  return value;
+  return Math.min(value, SETTINGS.maximumWindowHours);
 }
 
 function calendarURL(date) {
