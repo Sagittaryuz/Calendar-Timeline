@@ -71,6 +71,9 @@ const SETTINGS = {
   maximumTemperatureColor: "#FF6961",
   fallbackEventColor: "#0A84FF",
   fallbackReminderColor: "#FF9F0A",
+  birthdayChartColor: "#000000",
+  birthdayTextColor: "#FF69B4",
+  birthdayLabelGap: 30,
   overflowColor: "#636366",
   nightMoonColor: "#D7DDE4",
   nightMoonShadowColor: "#343A43",
@@ -1920,6 +1923,58 @@ function titleCaseBirthdayWord(value) {
   return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
 }
 
+function isBirthdayGroup(item) {
+  return item?.isBirthdayGroup === true;
+}
+
+function groupBirthdayItems(items) {
+  const grouped = new Map();
+  const output = [];
+
+  for (const item of items ?? []) {
+    if (!isBirthdayItem(item) || isBirthdayGroup(item)) {
+      output.push(item);
+      continue;
+    }
+
+    const dayStart = startOfDay(item.start);
+    const key = dateKey(dayStart);
+    let group = grouped.get(key);
+    if (!group) {
+      group = {
+        kind: "event",
+        title: "Aniversários",
+        calendarTitle: "Aniversários",
+        start: dayStart,
+        end: addDays(dayStart, 1),
+        isAllDay: true,
+        isBirthday: true,
+        isBirthdayGroup: true,
+        birthdayItems: [],
+        identifier: `birthday-group-${key}`,
+        // O chart de aniversários permanece neutro; a identificação é feita
+        // pela tipografia rosa, como nos aniversários individuais.
+        color: SETTINGS.birthdayChartColor,
+      };
+      grouped.set(key, group);
+      output.push(group);
+    }
+
+    group.birthdayItems.push(item);
+  }
+
+  for (const group of grouped.values()) {
+    group.birthdayItems.sort((first, second) =>
+      String(first.title ?? "").localeCompare(
+        String(second.title ?? ""),
+        "pt-BR"
+      )
+    );
+  }
+
+  return output;
+}
+
 
 function chooseItems(items, _referenceDate, limit) {
   // A seleção considera a janela desenhada, não apenas o instante atual.
@@ -1932,6 +1987,7 @@ function chooseItems(items, _referenceDate, limit) {
       item.end > windowStart &&
       item.start < windowEnd
   );
+  const groupedRelevant = groupBirthdayItems(relevant);
 
   const byTime = (a, b) =>
     a.start.getTime() - b.start.getTime() ||
@@ -1950,15 +2006,18 @@ function chooseItems(items, _referenceDate, limit) {
   // das linhas é reiniciada a cada dia; somente um item que atravessa a
   // meia-noite continua reservando sua linha enquanto estiver ativo.
   const byDay = new Map();
-  for (const item of relevant) {
+  for (const item of groupedRelevant) {
     const key = displayDayKey(item);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(item);
   }
 
-  const allDayIntervals = relevant
+  const allDayIntervals = groupedRelevant
     .filter(
-      (item) => item.kind === "event" && item.isAllDay
+      (item) =>
+        item.kind === "event" &&
+        item.isAllDay &&
+        !isBirthdayGroup(item)
     )
     .map((item) => ({
       start: item.start,
@@ -1972,9 +2031,17 @@ function chooseItems(items, _referenceDate, limit) {
       firstDay.localeCompare(secondDay)
     );
   for (const [dayKey, dayItems] of orderedDayGroups) {
+    const birthdayGroup =
+      dayItems.find((item) => isBirthdayGroup(item)) ?? null;
+    // Reserva a última linha inteira para o grupo de aniversários. Assim,
+    // todos os eventos e lembretes ocupam suas linhas antes dele.
+    const agendaRowLimit = birthdayGroup && limit > 1
+      ? limit - 1
+      : limit;
     const isBottomItem = (item) =>
       item.kind === "event" &&
-      (item.isAllDay || isBirthdayItem(item));
+      item.isAllDay &&
+      !isBirthdayGroup(item);
 
     const bottomItems = [...dayItems]
       .filter(isBottomItem)
@@ -2100,22 +2167,24 @@ function chooseItems(items, _referenceDate, limit) {
     // linha, o próximo sobe uma linha, e assim por diante. Isso reserva a
     // área inferior antes de distribuir os itens com horário.
     const bottomRowOrder = Array.from(
-      { length: limit },
-      (_, index) => limit - 1 - index
+      { length: agendaRowLimit },
+      (_, index) => agendaRowLimit - 1 - index
     );
     const bottomRowsUsed = bottomItems
       .map((item) => placeItem(item, bottomRowOrder))
       .filter((row) => row !== null);
     const timedRowLimit = bottomRowsUsed.length
       ? Math.min(...bottomRowsUsed)
-      : limit;
+      : agendaRowLimit;
 
     // Eventos com horário sempre ocupam as linhas superiores, antes de
     // qualquer lembrete do mesmo dia.
     const timedEvents = [...dayItems]
       .filter(
         (item) =>
-          item.kind === "event" && !isBottomItem(item)
+          item.kind === "event" &&
+          !isBottomItem(item) &&
+          !isBirthdayGroup(item)
       )
       .sort(byTime);
 
@@ -2172,6 +2241,18 @@ function chooseItems(items, _referenceDate, limit) {
       });
     }
 
+    if (birthdayGroup) {
+      // A linha foi reservada antes da distribuição. A inclusão é direta
+      // para que aniversários nunca sejam transformados em overflow.
+      const birthdayRow = Math.max(0, limit - 1);
+      const positionedBirthdayGroup = {
+        ...birthdayGroup,
+        gridRow: birthdayRow,
+      };
+      rows[birthdayRow].push(positionedBirthdayGroup);
+      placed.push(positionedBirthdayGroup);
+    }
+
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
@@ -2183,14 +2264,25 @@ function chooseItems(items, _referenceDate, limit) {
   }
 
   const overflowMarkers = [];
+  const birthdayDayKeys = new Set(
+    orderedDayGroups
+      .filter(([, dayItems]) =>
+        dayItems.some((item) => isBirthdayGroup(item))
+      )
+      .map(([dayKey]) => dayKey)
+  );
   for (const hiddenItems of overflowByDay.values()) {
+    const hiddenDayKey = displayDayKey(hiddenItems[0]);
     for (const group of groupOverflowItems(hiddenItems)) {
       overflowMarkers.push({
         kind: "overflow",
         title: "+" + group.count,
         start: group.start,
         end: group.end,
-        gridRow: limit - 1,
+        // Nunca ocupa a linha exclusiva dos aniversários.
+        gridRow: birthdayDayKeys.has(hiddenDayKey)
+          ? Math.max(0, limit - 2)
+          : limit - 1,
         isOverflow: true,
         color: SETTINGS.overflowColor,
       });
@@ -10428,8 +10520,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     return;
   }
 
-  // Aniversários ocupam a linha reservada, mas são exibidos somente como
-  // texto. Eles não recebem chart nem barra de ligação.
+  // O grupo de aniversários ocupa uma única linha e é desenhado depois dos
+  // eventos e lembretes. Todos os nomes permanecem no mesmo chart.
+  if (isBirthdayGroup(item)) {
+    drawBirthdayGroupLabel(ctx, item, y, rowHeight);
+    return;
+  }
+
   if (isBirthdayItem(item)) {
     drawBirthdayLabel(ctx, item, y, rowHeight);
     return;
@@ -10596,6 +10693,20 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 }
 
 function drawBirthdayLabel(ctx, item, y, rowHeight) {
+  drawBirthdayGroupLabel(
+    ctx,
+    {
+      ...item,
+      isBirthdayGroup: true,
+      birthdayItems: [item],
+      color: SETTINGS.birthdayChartColor,
+    },
+    y,
+    rowHeight
+  );
+}
+
+function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   const startX = timeToX(
     new Date(Math.max(windowStart.getTime(), item.start.getTime()))
   );
@@ -10606,54 +10717,81 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
   const visibleRight = Math.min(timelineWidth(), endX);
   if (visibleRight <= visibleLeft) return;
 
+  const centerY = y + rowHeight / 2;
+  const barHeight = timelineBarHeight(item);
+  const barY = centerY - barHeight / 2;
+  const chartRect = new Rect(
+    visibleLeft,
+    barY,
+    Math.max(1, visibleRight - visibleLeft),
+    barHeight
+  );
+
+  // Um único chart neutro abriga todos os aniversariantes do mesmo dia.
+  // Os nomes podem ultrapassar sua largura, como os títulos dos charts
+  // normais, sem serem truncados ou descartados.
+  drawTimelineBar(
+    ctx,
+    chartRect,
+    new Color(item.color ?? SETTINGS.birthdayChartColor),
+    item
+  );
+
   const fontSize = isCompactMode()
     ? compactTimelineFontSize(21)
     : scaleFontSize(28);
-  // O dia determina a visibilidade, mas não limita a largura do nome.
-  // Como os títulos dos charts, o texto começa na parte visível do item.
-  const labelX = visibleLeft + 7;
-  const maximumWidth = Math.max(1, timelineWidth() - labelX - 4);
-  const label = truncateTitle(item.title, maximumWidth, fontSize);
-  if (!label) return;
+  const textY =
+    barY +
+    Math.max(
+      0,
+      (barHeight - fontSize) / 2 - scaleVertical(4)
+    );
+  const labels = (
+    Array.isArray(item.birthdayItems)
+      ? item.birthdayItems
+      : [item]
+  )
+    .map((birthday) => cleanTitle(birthday?.title, "🎂 Aniversário"))
+    .filter(Boolean);
+  if (labels.length === 0) return;
 
-  const labelWidth = maximumWidth;
-  const labelHeight = Math.max(
-    scaleVertical(18),
-    Math.min(
-      rowHeight - scaleVertical(4),
-      fontSize + scaleVertical(8)
-    )
+  const labelGap = scaleVertical(
+    Math.max(0, Number(SETTINGS.birthdayLabelGap) || 0)
   );
-  const labelY = y + (rowHeight - labelHeight) / 2;
-  const labelRect = new Rect(
-    labelX,
-    labelY,
-    labelWidth,
-    labelHeight
-  );
-
-  // Fundo transparente: somente a palavra recebe um contorno preto fino.
+  let cursorX = visibleLeft + 7;
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-  ctx.setTextColor(new Color("#000000", 1.0));
-  for (const [offsetX, offsetY] of [
-    [-1, -1], [0, -1], [1, -1],
-    [-1, 0],             [1, 0],
-    [-1, 1],  [0, 1],  [1, 1],
-  ]) {
-    ctx.drawTextInRect(
-      label,
-      new Rect(
-        labelRect.x + offsetX,
-        labelRect.y + offsetY,
-        labelRect.width,
-        labelRect.height
-      )
-    );
-  }
 
-  ctx.setTextColor(new Color("#FF69B4", 1.0));
-  ctx.drawTextInRect(label, labelRect);
+  for (const label of labels) {
+    // O contorno evita que a palavra desapareça sobre a faixa escura,
+    // mantendo a mesma leitura forte dos títulos dos charts normais.
+    ctx.setTextColor(new Color("#000000", 1.0));
+    for (const [offsetX, offsetY] of [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0],             [1, 0],
+      [-1, 1],  [0, 1],  [1, 1],
+    ]) {
+      ctx.drawText(
+        label,
+        new Point(cursorX + offsetX, textY + offsetY)
+      );
+    }
+
+    ctx.setTextColor(new Color(SETTINGS.birthdayTextColor, 1.0));
+    ctx.drawText(label, new Point(cursorX, textY));
+    cursorX += birthdayLabelWidth(label, fontSize) + labelGap;
+  }
+}
+
+function birthdayLabelWidth(label, fontSize) {
+  return Array.from(String(label ?? "")).reduce(
+    (total, character) => {
+      if (character === "🎂") return total + fontSize * 0.95;
+      if (/\s/.test(character)) return total + fontSize * 0.33;
+      return total + Math.max(1, estimatedTextWidth(character, fontSize));
+    },
+    0
+  );
 }
 
 function drawReminderMarker(ctx, centerX, centerY, diameter, color) {
