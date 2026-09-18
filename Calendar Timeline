@@ -4450,6 +4450,16 @@ function fillTitleCardShape(ctx, rect, radii, color) {
       Math.max(0, rect.height - topRight - bottomRight)
     )
   );
+  // Preenche o núcleo interno. As faixas laterais e superior/inferior
+  // definem a silhueta, mas sozinhas deixam o centro transparente.
+  ctx.fillRect(
+    new Rect(
+      rect.x + leftBandWidth,
+      rect.y + topBandHeight,
+      Math.max(0, rect.width - leftBandWidth - rightBandWidth),
+      Math.max(0, rect.height - topBandHeight - bottomBandHeight)
+    )
+  );
   ctx.fillEllipse(
     new Rect(rect.x, rect.y, topLeft * 2, topLeft * 2)
   );
@@ -10715,34 +10725,13 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   if (visibleRight <= visibleLeft) return;
 
   const centerY = y + rowHeight / 2;
-  const barHeight = timelineBarHeight(item);
-  const barY = centerY - barHeight / 2;
-  const chartRect = new Rect(
-    visibleLeft,
-    barY,
-    Math.max(1, visibleRight - visibleLeft),
-    barHeight
-  );
-
-  // Um único chart neutro abriga todos os aniversariantes do mesmo dia.
-  // Os nomes podem ultrapassar sua largura, como os títulos dos charts
-  // normais, sem serem truncados ou descartados.
-  drawTimelineBar(
-    ctx,
-    chartRect,
-    new Color(item.color ?? SETTINGS.birthdayChartColor),
-    item
-  );
 
   const fontSize = isCompactMode()
     ? compactTimelineFontSize(21)
     : scaleFontSize(28);
-  const textY =
-    barY +
-    Math.max(
-      0,
-      (barHeight - fontSize) / 2 - scaleVertical(4)
-    );
+  // Aniversários não possuem chart nem faixa opaca. O texto ocupa a linha
+  // reservada sobre o fundo original da timeline.
+  const textY = centerY - fontSize / 2 - scaleVertical(4);
   const labels = (
     Array.isArray(item.birthdayItems)
       ? item.birthdayItems
