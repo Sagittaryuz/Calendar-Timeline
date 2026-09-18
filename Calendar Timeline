@@ -315,6 +315,7 @@ Script.complete();
 
 async function loadWindow() {
   try {
+    const todayStart = startOfDay(now);
     // No primeiro uso dentro do app, estas consultas exibem os pedidos
     // nativos de acesso ao Calendário e aos Lembretes.
     // Lembretes sem horário podem chegar do EventKit como 00:00 UTC. Em
@@ -342,22 +343,42 @@ async function loadWindow() {
     // A consulta também recua um dia para capturar eventos que começaram
     // ontem e continuam ocupando o dia atual.
     const eventQueryStart = addDays(titleScheduleStart, -1);
+    const queryResults = await Promise.allSettled([
+      CalendarEvent.between(eventQueryStart, scheduleQueryEnd),
+      Reminder.incompleteDueBetween(reminderQueryStart, reminderQueryEnd),
+      CalendarEvent.today(),
+      Reminder.incompleteDueToday(),
+      SETTINGS.showOverdueReminders
+        ? Reminder.scheduled()
+        : Promise.resolve([]),
+    ]);
+    const queryArray = (result) =>
+      result?.status === "fulfilled" && Array.isArray(result.value)
+        ? result.value
+        : [];
     const [
-      events,
-      reminders,
-      todayEventsRaw,
-      todayRemindersRaw,
-      scheduledReminders,
-    ] =
-      await Promise.all([
-        CalendarEvent.between(eventQueryStart, scheduleQueryEnd),
-        Reminder.incompleteDueBetween(reminderQueryStart, reminderQueryEnd),
-        CalendarEvent.today(),
-        Reminder.incompleteDueToday(),
-        SETTINGS.showOverdueReminders
-          ? Reminder.scheduled()
-          : Promise.resolve([]),
-      ]);
+      eventsResult,
+      remindersResult,
+      todayEventsResult,
+      todayRemindersResult,
+      scheduledRemindersResult,
+    ] = queryResults;
+    const events = queryArray(eventsResult);
+    const reminders = queryArray(remindersResult);
+    const todayEventsRaw = queryArray(todayEventsResult);
+    const todayRemindersRaw = queryArray(todayRemindersResult);
+    const scheduledReminders = queryArray(scheduledRemindersResult);
+    const calendarReadFailed =
+      eventsResult?.status === "rejected" &&
+      todayEventsResult?.status === "rejected";
+    const reminderReadFailed =
+      remindersResult?.status === "rejected" &&
+      todayRemindersResult?.status === "rejected" &&
+      (!SETTINGS.showOverdueReminders ||
+        scheduledRemindersResult?.status === "rejected");
+    const sourceErrors = queryResults
+      .filter((result) => result?.status === "rejected")
+      .map((result) => String(result.reason));
 
     const excluded = new Set(
       SETTINGS.excludedCalendars.map((name) => name.toLocaleLowerCase())
@@ -416,7 +437,7 @@ async function loadWindow() {
       reminderOccurrenceView(reminder)
     );
     const todayOccurrenceViews = todayRemindersRaw.map((reminder) =>
-      reminderOccurrenceView(reminder, startOfToday())
+      reminderOccurrenceView(reminder, todayStart)
     );
 
     const reminderOccurrenceKey = (reminder) => {
@@ -451,7 +472,7 @@ async function loadWindow() {
     const displayReminders = [...displayReminderMap.values()];
     const todayReminders = displayReminders.filter((reminder) => {
       const dayStart = normalizedReminderDayStart(reminder);
-      return dayStart && dateKey(dayStart) === dateKey(now);
+      return dayStart && dateKey(dayStart) === dateKey(todayStart);
     });
 
     // CalendarEvent.between() pode não devolver um evento cujo início ficou
@@ -638,7 +659,7 @@ async function loadWindow() {
         return dayEnd > windowStart && dayStart < windowEnd;
       })
       .flatMap((reminder) => {
-        const due = reminder.dueDate ?? startOfToday();
+        const due = reminder.dueDate ?? todayStart;
         const hasTime = Boolean(reminder.dueDateIncludesTime);
         const reminderDayStart = normalizedReminderDayStart(reminder);
         const reminderDayEnd = addDays(reminderDayStart, 1);
@@ -690,7 +711,7 @@ async function loadWindow() {
       .filter((reminder) => {
         const due = reminder.dueDate;
         const dueDayStart = normalizedReminderDayStart(reminder);
-        if (!due || !dueDayStart || dueDayStart >= startOfToday()) return false;
+        if (!due || !dueDayStart || dueDayStart >= todayStart) return false;
         if (!includeCalendar(reminder.calendar)) return false;
         const identifier = reminder.identifier ?? `${reminder.title}-${due}`;
         return !reminderIdentifiers.has(identifier);
@@ -701,8 +722,8 @@ async function loadWindow() {
         calendarTitle: reminder.calendar?.title ?? "Lembretes",
         // No dia seguinte, um lembrete ainda pendente reaparece como
         // atrasado desde 00:00 até 00:00 do dia seguinte.
-        start: startOfToday(),
-        end: addDays(startOfToday(), 1),
+        start: todayStart,
+        end: addDays(todayStart, 1),
         isAllDay: false,
         identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
         priority: Number(reminder.priority) || 0,
@@ -721,8 +742,8 @@ async function loadWindow() {
 
     const todayScheduleSummary = calculateScheduleSummary(
       todayEvents,
-      startOfToday(),
-      addDays(startOfToday(), 1)
+      todayStart,
+      addDays(todayStart, 1)
     );
 
     return {
@@ -733,7 +754,11 @@ async function loadWindow() {
       todayBusyMinutes: todayScheduleSummary.busyMinutes,
       todayFreeMinutes: todayScheduleSummary.freeMinutes,
       holidayDates,
-      error: null,
+      error:
+        calendarReadFailed && reminderReadFailed
+          ? sourceErrors.join("\n")
+          : null,
+      partialErrors: sourceErrors,
     };
   } catch (error) {
     return {
@@ -745,6 +770,7 @@ async function loadWindow() {
       todayFreeMinutes: 24 * 60,
       holidayDates: new Set(),
       error: String(error),
+      partialErrors: [],
     };
   }
 }
@@ -1606,10 +1632,21 @@ async function loadAutomaticHolidays(location) {
   const dates = new Set();
   if (!SETTINGS.automaticHolidays) return dates;
 
-  const years = new Set([
-    windowStart.getFullYear(),
-    windowEnd.getFullYear(),
-  ]);
+  const titleCardsEnd = addDays(
+    startOfDay(windowStart),
+    TITLE_CARD_COUNT
+  );
+  const coveredEnd = new Date(
+    Math.max(windowEnd.getTime(), titleCardsEnd.getTime()) - 1
+  );
+  const years = new Set();
+  for (
+    let year = windowStart.getFullYear();
+    year <= coveredEnd.getFullYear();
+    year++
+  ) {
+    years.add(year);
+  }
   const region = await resolveBrazilianRegion(location);
 
   for (const year of years) {
@@ -1713,11 +1750,13 @@ async function loadRegionalHolidayDates(year, region) {
   );
   const maximumAge = SETTINGS.holidayCacheDays * 86400000;
 
+  let cachedDates = new Set();
   try {
     if (fm.fileExists(cachePath)) {
       const cached = JSON.parse(fm.readString(cachePath));
+      cachedDates = new Set(cached.dates ?? []);
       if (Date.now() < (cached.expiresAt ?? cached.updatedAt + maximumAge)) {
-        return new Set(cached.dates ?? []);
+        return cachedDates;
       }
     }
   } catch (_) {}
@@ -1756,6 +1795,9 @@ async function loadRegionalHolidayDates(year, region) {
       // ainda não tiver publicado o ano ou estiver temporariamente indisponível.
     }
   }
+
+  // Uma falha de rede não deve apagar feriados válidos já armazenados.
+  if (successfulSources === 0) return cachedDates;
 
   try {
     const complete = successfulSources === sources.length;
