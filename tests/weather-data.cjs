@@ -14,6 +14,7 @@ const context = {
   WEATHER_HOUR_MS: 60 * 60 * 1000,
   WEATHER_EDGE_TOLERANCE_MS: 90 * 60 * 1000,
   WEATHER_MAX_INTERPOLATION_GAP_MS: 2 * 60 * 60 * 1000,
+  WEATHER_SAMPLE_ORDER_CACHE: new WeakMap(),
   SETTINGS: { openMeteoForecastDays: 5 },
   TITLE_CARD_COUNT: 4,
   windowStart: new Date(2026, 8, 18, 10, 37),
@@ -42,7 +43,7 @@ const buildEnd = source.indexOf('async function loadNightTextures(', buildStart)
 assert(buildStart >= 0 && buildEnd > buildStart, 'Localizar normalização horária.');
 vm.runInContext(source.slice(buildStart, buildEnd), context);
 
-const temperatureStart = source.indexOf('function temperatureAtTimestamp(');
+const temperatureStart = source.indexOf('function orderedWeatherSamples(');
 const temperatureEnd = source.indexOf('function thermalTemperatureY(', temperatureStart);
 assert(temperatureStart >= 0 && temperatureEnd > temperatureStart, 'Localizar interpolação de clima.');
 vm.runInContext(source.slice(temperatureStart, temperatureEnd), context);
