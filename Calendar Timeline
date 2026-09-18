@@ -2033,11 +2033,6 @@ function chooseItems(items, _referenceDate, limit) {
   for (const [dayKey, dayItems] of orderedDayGroups) {
     const birthdayGroup =
       dayItems.find((item) => isBirthdayGroup(item)) ?? null;
-    // Reserva a última linha inteira para o grupo de aniversários. Assim,
-    // todos os eventos e lembretes ocupam suas linhas antes dele.
-    const agendaRowLimit = birthdayGroup && limit > 1
-      ? limit - 1
-      : limit;
     const isBottomItem = (item) =>
       item.kind === "event" &&
       item.isAllDay &&
@@ -2165,17 +2160,19 @@ function chooseItems(items, _referenceDate, limit) {
 
     // Itens especiais ocupam a base primeiro: o primeiro fica na última
     // linha, o próximo sobe uma linha, e assim por diante. Isso reserva a
-    // área inferior antes de distribuir os itens com horário.
+    // área inferior antes de distribuir os itens com horário. Aniversários
+    // não participam dessa reserva: eles só entram depois dos prioritários
+    // quando existir uma linha livre.
     const bottomRowOrder = Array.from(
-      { length: agendaRowLimit },
-      (_, index) => agendaRowLimit - 1 - index
+      { length: limit },
+      (_, index) => limit - 1 - index
     );
     const bottomRowsUsed = bottomItems
       .map((item) => placeItem(item, bottomRowOrder))
       .filter((row) => row !== null);
     const timedRowLimit = bottomRowsUsed.length
       ? Math.min(...bottomRowsUsed)
-      : agendaRowLimit;
+      : limit;
 
     // Eventos com horário sempre ocupam as linhas superiores, antes de
     // qualquer lembrete do mesmo dia.
@@ -2242,15 +2239,20 @@ function chooseItems(items, _referenceDate, limit) {
     }
 
     if (birthdayGroup) {
-      // A linha foi reservada antes da distribuição. A inclusão é direta
-      // para que aniversários nunca sejam transformados em overflow.
-      const birthdayRow = Math.max(0, limit - 1);
-      const positionedBirthdayGroup = {
-        ...birthdayGroup,
-        gridRow: birthdayRow,
-      };
-      rows[birthdayRow].push(positionedBirthdayGroup);
-      placed.push(positionedBirthdayGroup);
+      // O aniversário só pode entrar depois de eventos e lembretes, sem
+      // compartilhar sua linha. Se não houver espaço, ele fica fora da
+      // seleção visual para preservar a prioridade e a geometria fixa.
+      const birthdayRow = [...Array(limit).keys()]
+        .reverse()
+        .find((row) => rows[row].length === 0);
+      if (birthdayRow !== undefined) {
+        const positionedBirthdayGroup = {
+          ...birthdayGroup,
+          gridRow: birthdayRow,
+        };
+        rows[birthdayRow].push(positionedBirthdayGroup);
+        placed.push(positionedBirthdayGroup);
+      }
     }
 
   }
@@ -2264,28 +2266,34 @@ function chooseItems(items, _referenceDate, limit) {
   }
 
   const overflowMarkers = [];
-  const birthdayDayKeys = new Set(
-    orderedDayGroups
-      .filter(([, dayItems]) =>
-        dayItems.some((item) => isBirthdayGroup(item))
-      )
-      .map(([dayKey]) => dayKey)
-  );
   for (const hiddenItems of overflowByDay.values()) {
     const hiddenDayKey = displayDayKey(hiddenItems[0]);
     for (const group of groupOverflowItems(hiddenItems)) {
-      overflowMarkers.push({
+      const marker = {
         kind: "overflow",
         title: "+" + group.count,
         start: group.start,
         end: group.end,
-        // Nunca ocupa a linha exclusiva dos aniversários.
-        gridRow: birthdayDayKeys.has(hiddenDayKey)
-          ? Math.max(0, limit - 2)
-          : limit - 1,
         isOverflow: true,
         color: SETTINGS.overflowColor,
-      });
+      };
+      const occupied = [
+        ...placed,
+        ...overflowMarkers,
+      ].filter((item) =>
+        displayDayKey(item) === hiddenDayKey
+      );
+      const markerRow = [...Array(limit).keys()]
+        .reverse()
+        .find((row) =>
+          occupied
+            .filter((item) => item.gridRow === row)
+            .every((item) => !itemsOverlap(marker, item))
+        );
+      // Não desenha um indicador sobre outro chart quando todas as linhas
+      // estão ocupadas; a área disponível continua sendo a restrição real.
+      if (markerRow === undefined) continue;
+      overflowMarkers.push({ ...marker, gridRow: markerRow });
     }
   }
 
