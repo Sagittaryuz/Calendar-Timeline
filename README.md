@@ -61,6 +61,7 @@ node tests/title-card-corners.cjs
 node tests/title-card-fill-and-birthday.cjs
 node tests/agenda-priority.cjs
 node tests/weather-data.cjs
+node tests/window-hours.cjs
 node tests/window-and-holidays.cjs
 node tests/hour-legend-clip.cjs
 node --input-type=module --check < 'Calendar Timeline'
