@@ -1778,7 +1778,10 @@ async function loadRegionalHolidayDates(year, region) {
     });
   }
 
-  const dates = new Set();
+  // Mantém datas antigas enquanto fontes individuais são atualizadas. Isso
+  // evita apagar um feriado estadual quando apenas a consulta municipal
+  // respondeu nesta tentativa.
+  const dates = new Set(cachedDates);
   let successfulSources = 0;
   for (const source of sources) {
     try {
