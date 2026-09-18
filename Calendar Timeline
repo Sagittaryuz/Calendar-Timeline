@@ -5569,18 +5569,17 @@ function drawBottomHourLegend(ctx) {
     const isSecondaryNightHour =
       isSecondaryNightLegendHour(hour);
 
-    ctx.setFont(
-      isSecondaryNightHour
-        ? Font.regularMonospacedSystemFont(hourFontSize)
-        : Font.blackMonospacedSystemFont(hourFontSize)
-    );
-    ctx.setTextColor(
-      isSecondaryNightHour
-        ? secondaryNightLegendColor()
-        : isDaylightHour
-          ? daylightHourColor(tick)
-          : Color.white()
-    );
+    const labelFont = isSecondaryNightHour
+      ? Font.regularMonospacedSystemFont(hourFontSize)
+      : Font.blackMonospacedSystemFont(hourFontSize);
+    const labelColor = isSecondaryNightHour
+      ? secondaryNightLegendColor()
+      : isDaylightHour
+        ? daylightHourColor(tick)
+        : Color.white();
+
+    ctx.setFont(labelFont);
+    ctx.setTextColor(labelColor);
     const centerX = timelineLegendCenterX(tick);
     const label = String(hour) + "h";
     const labelRect = bottomAlignedLegendTextRect(
@@ -5592,8 +5591,8 @@ function drawBottomHourLegend(ctx) {
       ctx,
       label,
       labelRect,
-      centerX,
-      hourFontSize
+      labelFont,
+      labelColor
     );
   }
 }
@@ -10092,45 +10091,51 @@ function drawHourLegendLabelClipped(
   ctx,
   label,
   rect,
-  centerX,
-  fontSize
+  font,
+  textColor
 ) {
   const bounds = hourLegendVisibleBounds(rect);
-  const characters = Array.from(label);
-  const characterWidth = Math.max(1, fontSize * 0.62);
-  const totalWidth = characters.length * characterWidth;
-  const labelLeft = centerX - totalWidth / 2;
+  const visibleLeft = Math.max(rect.x, bounds.left);
+  const visibleRight = Math.min(
+    rect.x + rect.width,
+    bounds.right
+  );
+  if (visibleRight <= visibleLeft) return;
 
-  if (
-    labelLeft >= bounds.left &&
-    labelLeft + totalWidth <= bounds.right
-  ) {
-    ctx.drawTextInRect(label, rect);
-    return;
-  }
+  // Renderiza a legenda inteira em uma camada transparente e a recorta
+  // somente nas bordas visíveis. Assim o caractere mantém sua posição e
+  // pode aparecer parcialmente, em vez de desaparecer por completo.
+  const sourceWidth = Math.max(1, Math.ceil(rect.width));
+  const sourceHeight = Math.max(1, Math.ceil(rect.height));
+  const textLayer = new DrawContext();
+  textLayer.size = new Size(sourceWidth, sourceHeight);
+  textLayer.opaque = false;
+  textLayer.respectScreenScale = false;
+  textLayer.setTextAlignedCenter();
+  textLayer.setFont(font);
+  textLayer.setTextColor(textColor);
+  textLayer.drawTextInRect(
+    label,
+    new Rect(0, 0, sourceWidth, sourceHeight)
+  );
 
-  // Nas bordas, cada caractere conserva sua posição original e só é
-  // desenhado quando cabe integralmente antes da curva.
-  for (let index = 0; index < characters.length; index++) {
-    const characterLeft = labelLeft + index * characterWidth;
-    const characterRight = characterLeft + characterWidth;
-    if (
-      characterLeft < bounds.left ||
-      characterRight > bounds.right
-    ) {
-      continue;
-    }
+  const clippedWidth = Math.max(
+    1,
+    Math.ceil(visibleRight - visibleLeft)
+  );
+  const clippedLayer = new DrawContext();
+  clippedLayer.size = new Size(clippedWidth, sourceHeight);
+  clippedLayer.opaque = false;
+  clippedLayer.respectScreenScale = false;
+  clippedLayer.drawImageAtPoint(
+    textLayer.getImage(),
+    new Point(rect.x - visibleLeft, 0)
+  );
 
-    ctx.drawTextInRect(
-      characters[index],
-      new Rect(
-        characterLeft,
-        rect.y,
-        characterWidth,
-        rect.height
-      )
-    );
-  }
+  ctx.drawImageAtPoint(
+    clippedLayer.getImage(),
+    new Point(visibleLeft, rect.y)
+  );
 }
 
 function hourLabelMetrics(ticks) {
