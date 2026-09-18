@@ -3003,6 +3003,21 @@ function cropCanvasImage(image, x, y, width, height) {
   return cropCtx.getImage();
 }
 
+function cropTransparentCanvasImage(image, x, y, width, height) {
+  const cropCtx = new DrawContext();
+  cropCtx.size = new Size(
+    Math.max(1, Math.ceil(width)),
+    Math.max(1, Math.ceil(height))
+  );
+  cropCtx.opaque = false;
+  cropCtx.respectScreenScale = false;
+  cropCtx.drawImageAtPoint(
+    image,
+    new Point(-Math.round(x), -Math.round(y))
+  );
+  return cropCtx.getImage();
+}
+
 function softenTimelineImage(image, width, height) {
   const factor = Math.max(
     0.12,
@@ -10440,13 +10455,6 @@ function roundedFrameInsetAtY(y, topY, bottomY, radius) {
 }
 
 function hourLegendVisibleBounds(rect) {
-  const topY = 0;
-  const bottomY = hourLegendFrameBottomY();
-  const radius = Math.min(
-    hourLegendCornerRadius(),
-    timelineWidth() / 2,
-    (bottomY - topY) / 2
-  );
   const sampleYs = [
     rect.y,
     rect.y + rect.height / 2,
@@ -10454,12 +10462,7 @@ function hourLegendVisibleBounds(rect) {
   ];
   const inset = Math.max(
     ...sampleYs.map((sampleY) =>
-      roundedFrameInsetAtY(
-        sampleY,
-        topY,
-        bottomY,
-        radius
-      )
+      hourLegendVisibleBoundsAtY(sampleY).inset
     )
   );
 
@@ -10469,6 +10472,40 @@ function hourLegendVisibleBounds(rect) {
   };
 }
 
+function hourLegendVisibleBoundsAtY(y) {
+  const topY = 0;
+  const bottomY = hourLegendFrameBottomY();
+  const radius = Math.min(
+    hourLegendCornerRadius(),
+    timelineWidth() / 2,
+    (bottomY - topY) / 2
+  );
+  const inset = roundedFrameInsetAtY(
+    y,
+    topY,
+    bottomY,
+    radius
+  );
+  return {
+    left: inset,
+    right: timelineWidth() - inset,
+    inset,
+  };
+}
+
+function hourLegendRectIsFullyVisible(rect) {
+  const sampleYs = [
+    rect.y + 0.5,
+    rect.y + rect.height / 2,
+    rect.y + rect.height - 0.5,
+  ];
+  return sampleYs.every((sampleY) => {
+    const bounds = hourLegendVisibleBoundsAtY(sampleY);
+    return bounds.left <= rect.x &&
+      bounds.right >= rect.x + rect.width;
+  });
+}
+
 function drawHourLegendLabelClipped(
   ctx,
   label,
@@ -10476,17 +10513,18 @@ function drawHourLegendLabelClipped(
   font,
   textColor
 ) {
-  const bounds = hourLegendVisibleBounds(rect);
-  const visibleLeft = Math.max(rect.x, bounds.left);
-  const visibleRight = Math.min(
-    rect.x + rect.width,
-    bounds.right
-  );
-  if (visibleRight <= visibleLeft) return;
+  if (hourLegendRectIsFullyVisible(rect)) {
+    ctx.setTextAlignedCenter();
+    ctx.setFont(font);
+    ctx.setTextColor(textColor);
+    ctx.drawTextInRect(label, rect);
+    return;
+  }
 
   // Renderiza a legenda inteira em uma camada transparente e a recorta
-  // somente nas bordas visíveis. Assim o caractere mantém sua posição e
-  // pode aparecer parcialmente, em vez de desaparecer por completo.
+  // em faixas que seguem a curva na altura correspondente. Assim o
+  // caractere mantém sua posição e pode aparecer parcialmente, em vez de
+  // desaparecer por completo ou receber uma máscara retangular.
   const sourceWidth = Math.max(1, Math.ceil(rect.width));
   const sourceHeight = Math.max(1, Math.ceil(rect.height));
   const textLayer = new DrawContext();
@@ -10501,23 +10539,50 @@ function drawHourLegendLabelClipped(
     new Rect(0, 0, sourceWidth, sourceHeight)
   );
 
-  const clippedWidth = Math.max(
-    1,
-    Math.ceil(visibleRight - visibleLeft)
-  );
-  const clippedLayer = new DrawContext();
-  clippedLayer.size = new Size(clippedWidth, sourceHeight);
-  clippedLayer.opaque = false;
-  clippedLayer.respectScreenScale = false;
-  clippedLayer.drawImageAtPoint(
-    textLayer.getImage(),
-    new Point(rect.x - visibleLeft, 0)
-  );
+  const bands = [];
+  const firstPixelY = Math.floor(rect.y);
+  const lastPixelY = Math.ceil(rect.y + rect.height);
+  for (let pixelY = firstPixelY; pixelY < lastPixelY; pixelY++) {
+    const bounds = hourLegendVisibleBoundsAtY(pixelY + 0.5);
+    const visibleLeft = Math.max(rect.x, bounds.left);
+    const visibleRight = Math.min(
+      rect.x + rect.width,
+      bounds.right
+    );
+    if (visibleRight <= visibleLeft) continue;
 
-  ctx.drawImageAtPoint(
-    clippedLayer.getImage(),
-    new Point(visibleLeft, rect.y)
-  );
+    const band = {
+      y: pixelY,
+      left: visibleLeft,
+      right: visibleRight,
+    };
+    const previous = bands[bands.length - 1];
+    if (
+      previous &&
+      previous.y + previous.height === pixelY &&
+      Math.abs(previous.left - band.left) < 0.01 &&
+      Math.abs(previous.right - band.right) < 0.01
+    ) {
+      previous.height++;
+    } else {
+      bands.push({ ...band, height: 1 });
+    }
+  }
+
+  const textImage = textLayer.getImage();
+  for (const band of bands) {
+    const image = cropTransparentCanvasImage(
+      textImage,
+      band.left - rect.x,
+      band.y - rect.y,
+      band.right - band.left,
+      band.height
+    );
+    ctx.drawImageAtPoint(
+      image,
+      new Point(band.left, band.y)
+    );
+  }
 }
 
 function hourLabelMetrics(ticks) {
