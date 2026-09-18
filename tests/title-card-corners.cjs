@@ -19,6 +19,10 @@ const context = {
   TITLE_CARD_OUTER_CORNER_RADIUS: 48,
   TITLE_CARD_STANDARD_CORNER_RADIUS: 48,
   scaleVertical: x => x,
+  startOfDay: date => new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+  addDays: (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days),
+  dateKey: date => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
+  windowStart: new Date(2026, 8, 18),
   timelineBackgroundColorForDate: () => '#000000',
   shouldBlurFutureTimeline: () => true,
   fillTitleCardShape: (_, rect, radii) => shapes.push({rect, radii}),
@@ -29,21 +33,33 @@ vm.createContext(context);
 vm.runInContext(source.slice(start, end), context);
 for (const selected of [false, true]) {
   for (const last of [false, true]) {
-    shapes = [];
-    try {
-      context.drawTitleDayCard({}, new Date(2026, 8, 18), new Rect(290, 30, 240, 96), selected, last);
-      assert.fail('Esperado alcançar a fase de textos.');
-    } catch (error) { assert.equal(error, stop); }
-    if (selected) {
-      assert.equal(shapes.length, 0, 'Hoje mantém sua forma contínua, sem repintura.');
-    } else {
-      assert.equal(shapes.length, 2, 'Contorno e preenchimento interno.');
-      for (const {radii} of shapes) {
-        assert.equal(radii.bottomLeft, 0);
-        assert.equal(radii.bottomRight, 0);
-        assert(radii.topLeft > 0 && radii.topRight > 0);
+    const offsets = selected ? [0] : [1, 2];
+    for (const offset of offsets) {
+      const cardDate = new Date(2026, 8, 18 + offset);
+      shapes = [];
+      try {
+        context.drawTitleDayCard({}, cardDate, new Rect(290, 30, 240, 96), selected, last);
+        assert.fail('Esperado alcançar a fase de textos.');
+      } catch (error) { assert.equal(error, stop); }
+      if (selected) {
+        assert.equal(shapes.length, 0, 'Hoje mantém sua forma contínua, sem repintura.');
+      } else {
+        assert.equal(shapes.length, 2, 'Contorno e preenchimento interno.');
+        shapes.forEach(({radii}, shapeIndex) => {
+          assert.equal(
+            radii.bottomLeft,
+            offset === 1
+              ? shapeIndex === 0 ? 48 : 46
+              : 0,
+            offset === 1
+              ? 'Amanhã preserva o canto inferior esquerdo arredondado.'
+              : 'Os demais quadros futuros mantêm a base perpendicular.'
+          );
+          assert.equal(radii.bottomRight, 0);
+          assert(radii.topLeft > 0 && radii.topRight > 0);
+        });
       }
     }
   }
 }
-console.log('OK: bases perpendiculares; topo preservado; hoje não repintado.');
+console.log('OK: canto de amanhã preservado; demais bases perpendiculares; hoje não repintado.');
