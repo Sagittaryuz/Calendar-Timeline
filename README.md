@@ -64,6 +64,8 @@ node tests/weather-data.cjs
 node tests/window-hours.cjs
 node tests/window-and-holidays.cjs
 node tests/hour-legend-clip.cjs
+node tests/event-arrival-guide.cjs
+node tests/event-arrival-guide.cjs
 node --input-type=module --check < 'Calendar Timeline'
 git diff --check
 ```
