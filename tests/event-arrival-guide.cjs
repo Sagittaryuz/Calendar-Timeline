@@ -50,13 +50,23 @@ function event(title, startDate, endDate, gridRow, extra = {}) {
 
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 30), now),
-  '0,5h',
-  'Meia hora deve usar vírgula decimal.'
+  '30 m',
+  'Meia hora deve ser exibida em minutos inteiros.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 19), now),
-  '1h',
+  '1 h',
   'Hora inteira não deve receber zero decimal.'
+);
+assert.equal(
+  context.formatEventArrivalHours(at(20, 18, 5), now),
+  '10 m',
+  'Minutos devem ser arredondados em blocos de dez.'
+);
+assert.equal(
+  context.formatEventArrivalHours(at(20, 19, 30), now),
+  '1,5 h',
+  'Horas e meia devem usar vírgula e unidade separada.'
 );
 
 const next = event('Próximo', at(20, 18, 30), at(20, 19, 30), 2);
@@ -64,7 +74,7 @@ const later = event('Depois', at(20, 20), at(20, 21), 3);
 const selected = context.todayEventArrivalGuide([later, next]);
 assert.equal(selected.event, next, 'A guia deve escolher o próximo evento.');
 assert.equal(selected.row, 2, 'A guia deve acompanhar a linha do evento.');
-assert.equal(selected.label, '0,5h');
+assert.equal(selected.label, '30 m');
 assert.equal(selected.end, next.start);
 
 const endedEvent = event('Encerrado', at(20, 16), at(20, 17), 0);
@@ -78,7 +88,7 @@ const birthday = event(
 const fallback = context.todayEventArrivalGuide([endedEvent, birthday]);
 assert.equal(fallback.event, null, 'Sem evento futuro, deve usar fallback.');
 assert.equal(fallback.row, 1, 'Fallback deve ocupar a primeira linha livre.');
-assert.equal(fallback.label, '', 'Fallback não deve inventar contagem.');
+assert.equal(fallback.label, '6 h', 'Fallback deve mostrar o tempo restante do dia.');
 assert.equal(
   fallback.end.getTime(),
   at(21, 0).getTime(),
@@ -90,6 +100,7 @@ const tomorrowOnly = context.todayEventArrivalGuide([
 ]);
 assert.equal(tomorrowOnly.row, 0, 'Evento de amanhã não ocupa a linha de hoje.');
 assert.equal(tomorrowOnly.end.getTime(), at(21, 0).getTime());
+assert.equal(tomorrowOnly.label, '6 h');
 
 const occupied = Array.from(
   { length: 5 },
