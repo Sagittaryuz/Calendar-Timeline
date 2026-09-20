@@ -144,6 +144,7 @@ const THERMAL_COLOR_STOPS = [
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
 const PENDING_DAY_CARRYOVER_END_HOUR = 6;
+const ALL_DAY_EVENT_DISPLAY_START_HOUR = 6;
 const WEATHER_HOUR_MS = 60 * 60 * 1000;
 const WEATHER_EDGE_TOLERANCE_MS = 90 * 60 * 1000;
 const WEATHER_MAX_INTERPOLATION_GAP_MS = 2 * WEATHER_HOUR_MS;
@@ -4283,7 +4284,7 @@ function chartsCrossingDayBoundaryVerticalSpans(items, boundaryDate) {
       continue;
     }
 
-    const originalX = timeToX(item.start);
+    const originalX = timeToX(timelineItemDisplayStart(item));
     const x =
       item.kind === "reminder"
         ? Math.max(0, originalX)
@@ -11067,6 +11068,23 @@ function timelineBarSegments(item, startX, endX) {
     : [{ x: startX, width }];
 }
 
+function timelineItemDisplayStart(item) {
+  if (
+    item?.kind !== "event" ||
+    !item.isAllDay ||
+    !(item.start instanceof Date)
+  ) {
+    return item?.start;
+  }
+
+  // O início bruto continua à meia-noite para seleção, contagem e colisão.
+  // Somente a representação visual do evento de dia inteiro começa às 06:00.
+  return dateAtHour(
+    startOfDay(item.start),
+    ALL_DAY_EVENT_DISPLAY_START_HOUR
+  );
+}
+
 function drawTimelineItem(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
   const color = new Color(item.color);
@@ -11077,7 +11095,10 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     const markerWidth = 62;
     const markerX = Math.max(
       0,
-      Math.min(timelineWidth() - markerWidth, timeToX(item.start))
+      Math.min(
+        timelineWidth() - markerWidth,
+        timeToX(timelineItemDisplayStart(item))
+      )
     ) - 1;
 
     drawTimelineBar(
@@ -11118,7 +11139,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     return;
   }
 
-  const originalX = timeToX(item.start);
+  const originalX = timeToX(timelineItemDisplayStart(item));
   const x =
     item.kind === "reminder"
       ? Math.max(0, originalX)
