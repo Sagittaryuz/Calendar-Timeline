@@ -20,6 +20,7 @@ function makeContext() {
       overflowColor: '#636366',
     },
     TIMELINE_ROW_SHARE_GAP_MS: 6 * 60 * 60 * 1000,
+    ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
     windowStart: new Date(2026, 8, 18, 0),
     windowEnd: new Date(2026, 8, 19, 0),
     normalizeSearchText: value => String(value).toLocaleLowerCase('pt-BR'),
@@ -69,6 +70,17 @@ function select(items) {
   );
 }
 
+function selectAcrossMidnight(items) {
+  const context = makeContext();
+  context.windowStart = new Date(2026, 8, 18, 16);
+  context.windowEnd = new Date(2026, 8, 20, 0);
+  return context.chooseItems(
+    items,
+    new Date(2026, 8, 18, 16),
+    5
+  );
+}
+
 const fiveEvents = Array.from(
   { length: 5 },
   (_, index) => timedEvent(index + 1, index * 2)
@@ -101,6 +113,32 @@ assert.equal(
   agendaWithSpace.find(item => item.isBirthdayGroup).gridRow,
   4,
   'Aniversário deve ficar na linha inferior quando ela estiver livre.'
+);
+
+const currentAllDayReminder = {
+  kind: 'reminder',
+  title: 'Lembrete de hoje',
+  start: at(0),
+  end: at(6, 1),
+  isAllDay: false,
+  sourceIsAllDay: true,
+};
+const tomorrowAllDayReminder = {
+  kind: 'reminder',
+  title: 'Lembrete de amanhã',
+  start: at(0, 1),
+  end: at(0, 2),
+  isAllDay: false,
+  sourceIsAllDay: true,
+};
+const midnightReflow = selectAcrossMidnight([
+  currentAllDayReminder,
+  tomorrowAllDayReminder,
+]);
+assert.equal(
+  midnightReflow.find(item => item.title === 'Lembrete de amanhã').gridRow,
+  0,
+  'Lembrete de amanhã deve reutilizar a linha liberada às 06:00.'
 );
 
 const saturated = select([
