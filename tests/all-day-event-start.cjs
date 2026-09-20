@@ -1,4 +1,4 @@
-// Verifica o início visual dos eventos de dia inteiro sem acessar o EventKit.
+// Verifica o início visual dos lembretes de dia inteiro sem acessar o EventKit.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -14,7 +14,7 @@ assert(start >= 0 && end > start, 'Localizar o início visual do evento.');
 
 const context = {
   Date,
-  ALL_DAY_EVENT_DISPLAY_START_HOUR: 6,
+  ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
   startOfDay: date =>
     new Date(Date.UTC(
       date.getUTCFullYear(),
@@ -38,16 +38,29 @@ const allDayEvent = {
   isAllDay: true,
   start: midnight,
 };
-const displayStart = context.timelineItemDisplayStart(allDayEvent);
+const eventDisplayStart = context.timelineItemDisplayStart(allDayEvent);
 assert.equal(
-  displayStart.toISOString(),
-  '2026-09-20T06:00:00.000Z',
-  'Evento de dia inteiro deve começar visualmente às 06:00.'
+  eventDisplayStart.toISOString(),
+  '2026-09-20T00:00:00.000Z',
+  'Evento de dia inteiro deve continuar começando à meia-noite.'
 );
 assert.equal(
   allDayEvent.start.toISOString(),
   '2026-09-20T00:00:00.000Z',
   'O início bruto não deve ser alterado.'
+);
+
+const allDayReminder = {
+  kind: 'reminder',
+  sourceIsAllDay: true,
+  start: midnight,
+};
+const reminderDisplayStart =
+  context.timelineItemDisplayStart(allDayReminder);
+assert.equal(
+  reminderDisplayStart.toISOString(),
+  '2026-09-20T06:00:00.000Z',
+  'Lembrete de dia inteiro deve começar visualmente às 06:00.'
 );
 
 const timedStart = new Date('2026-09-20T08:30:00Z');
@@ -62,4 +75,4 @@ assert.equal(
   'Evento com horário deve manter o início original.'
 );
 
-console.log('OK: eventos de dia inteiro começam visualmente às 06:00 sem alterar seus dados.');
+console.log('OK: eventos de dia inteiro começam à meia-noite; lembretes sem horário começam às 06:00.');
