@@ -2579,9 +2579,28 @@ function itemImportance(item) {
   return 20;
 }
 
+function timelineItemCollisionStart(item) {
+  if (
+    item?.kind === "reminder" &&
+    item.sourceIsAllDay === true &&
+    item.start instanceof Date
+  ) {
+    const displayStart = new Date(item.start);
+    displayStart.setHours(
+      ALL_DAY_REMINDER_DISPLAY_START_HOUR,
+      0,
+      0,
+      0
+    );
+    return displayStart;
+  }
+
+  return item.start;
+}
+
 function itemsOverlap(first, second) {
-  const firstStart = first.start.getTime();
-  const secondStart = second.start.getTime();
+  const firstStart = timelineItemCollisionStart(first).getTime();
+  const secondStart = timelineItemCollisionStart(second).getTime();
   const firstEnd = effectiveItemEnd(first);
   const secondEnd = effectiveItemEnd(second);
 
@@ -11083,22 +11102,9 @@ function timelineBarSegments(item, startX, endX) {
 }
 
 function timelineItemDisplayStart(item) {
-  const isAllDayReminder =
-    item?.kind === "reminder" &&
-    item.sourceIsAllDay === true;
-  if (
-    !isAllDayReminder ||
-    !(item.start instanceof Date)
-  ) {
-    return item?.start;
-  }
-
-  // O início bruto continua à meia-noite para seleção, contagem e colisão.
-  // Somente a representação visual do lembrete sem horário começa às 06:00.
-  return dateAtHour(
-    startOfDay(item.start),
-    ALL_DAY_REMINDER_DISPLAY_START_HOUR
-  );
+  // A mesma referência é usada no desenho e na colisão das linhas.
+  // O início bruto continua intacto para dados, contagem e prioridade.
+  return timelineItemCollisionStart(item);
 }
 
 function drawTimelineItem(ctx, item, y, rowHeight) {
