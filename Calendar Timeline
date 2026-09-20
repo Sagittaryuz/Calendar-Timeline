@@ -144,7 +144,7 @@ const THERMAL_COLOR_STOPS = [
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
 const PENDING_DAY_CARRYOVER_END_HOUR = 6;
-const ALL_DAY_EVENT_DISPLAY_START_HOUR = 6;
+const ALL_DAY_REMINDER_DISPLAY_START_HOUR = 6;
 const WEATHER_HOUR_MS = 60 * 60 * 1000;
 const WEATHER_EDGE_TOLERANCE_MS = 90 * 60 * 1000;
 const WEATHER_MAX_INTERPOLATION_GAP_MS = 2 * WEATHER_HOUR_MS;
@@ -733,10 +733,12 @@ async function loadWindow() {
         title: cleanTitle(reminder.title, "Lembrete"),
         calendarTitle: reminder.calendar?.title ?? "Lembretes",
         // No dia seguinte, um lembrete ainda pendente reaparece como
-        // atrasado desde 00:00 até 00:00 do dia seguinte.
+        // atrasado no intervalo do dia; a representação de dia inteiro
+        // começa visualmente às 06:00.
         start: todayStart,
         end: addDays(todayStart, 1),
         isAllDay: false,
+        sourceIsAllDay: !Boolean(reminder.dueDateIncludesTime),
         identifier: reminder.identifier ?? `${reminder.title}-${reminder.dueDate}`,
         priority: Number(reminder.priority) || 0,
         isOverdue: true,
@@ -11069,19 +11071,21 @@ function timelineBarSegments(item, startX, endX) {
 }
 
 function timelineItemDisplayStart(item) {
+  const isAllDayReminder =
+    item?.kind === "reminder" &&
+    item.sourceIsAllDay === true;
   if (
-    item?.kind !== "event" ||
-    !item.isAllDay ||
+    !isAllDayReminder ||
     !(item.start instanceof Date)
   ) {
     return item?.start;
   }
 
   // O início bruto continua à meia-noite para seleção, contagem e colisão.
-  // Somente a representação visual do evento de dia inteiro começa às 06:00.
+  // Somente a representação visual do lembrete sem horário começa às 06:00.
   return dateAtHour(
     startOfDay(item.start),
-    ALL_DAY_EVENT_DISPLAY_START_HOUR
+    ALL_DAY_REMINDER_DISPLAY_START_HOUR
   );
 }
 
