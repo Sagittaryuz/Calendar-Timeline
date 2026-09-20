@@ -153,12 +153,12 @@ const WEATHER_SAMPLE_ORDER_CACHE = new WeakMap();
 // Guia de chegada do próximo evento: fica restrita à camada nítida de hoje.
 // A régua usa a mesma unidade do canvas lógico para não alterar o layout.
 const EVENT_ARRIVAL_GUIDE_COLOR = "#FF9F0A";
-const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 1;
+const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 2;
 const EVENT_ARRIVAL_GUIDE_DASH_WIDTH = 8;
 const EVENT_ARRIVAL_GUIDE_GAP_WIDTH = 7;
-const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 6;
+const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 5;
 const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 6;
-const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 18;
+const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 
 // O canvas continua completo para preservar o background. O conteúdo é
 // comprimido somente no eixo vertical para respeitar 30 px em cada margem,
@@ -10716,15 +10716,27 @@ function formatEventArrivalHours(eventStart, referenceDate = now) {
     return "";
   }
 
-  const halfHours = Math.max(
-    1,
+  const totalMinutes = Math.max(
+    0,
     Math.ceil(
       Math.max(0, eventStart.getTime() - referenceDate.getTime()) /
-        (30 * 60 * 1000)
+        60000
     )
   );
+
+  if (totalMinutes < 60) {
+    const roundedMinutes = Math.max(
+      10,
+      Math.ceil(totalMinutes / 10) * 10
+    );
+    if (roundedMinutes < 60) {
+      return `${roundedMinutes} m`;
+    }
+  }
+
+  const halfHours = Math.max(2, Math.ceil(totalMinutes / 30));
   const wholeHours = Math.floor(halfHours / 2);
-  return wholeHours + (halfHours % 2 ? ",5" : "") + "h";
+  return wholeHours + (halfHours % 2 ? ",5" : "") + " h";
 }
 
 function todayEventArrivalGuide(items) {
@@ -10784,7 +10796,7 @@ function todayEventArrivalGuide(items) {
     event: null,
     row: firstEmptyRow,
     end: tomorrowStart,
-    label: "",
+    label: formatEventArrivalHours(tomorrowStart),
   };
 }
 
