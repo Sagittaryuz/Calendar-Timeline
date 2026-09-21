@@ -108,6 +108,22 @@ assert.deepEqual(
   'As guias de amanhã devem manter o sufixo h.'
 );
 
+const tomorrowAllDay = event(
+  'Feriado futuro',
+  at(21, 0),
+  at(22, 0),
+  1,
+  { isAllDay: true }
+);
+const tomorrowAllDayGuides =
+  context.tomorrowEventArrivalGuides([tomorrowAllDay]);
+assert.equal(
+  tomorrowAllDayGuides.length,
+  1,
+  'Evento futuro de dia inteiro também deve receber uma guia.'
+);
+assert.equal(tomorrowAllDayGuides[0].label, '6 h');
+
 const endedEvent = event('Encerrado', at(20, 16), at(20, 17), 0);
 const birthday = event(
   '🎂 Ana',
