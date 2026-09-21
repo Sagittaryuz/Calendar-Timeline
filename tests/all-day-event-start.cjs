@@ -63,6 +63,20 @@ assert.equal(
   'Lembrete de dia inteiro deve começar visualmente às 06:00.'
 );
 
+const overdueAllDayReminder = {
+  kind: 'reminder',
+  sourceIsAllDay: true,
+  isOverdue: true,
+  start: midnight,
+};
+const overdueReminderDisplayStart =
+  context.timelineItemDisplayStart(overdueAllDayReminder);
+assert.equal(
+  `${overdueReminderDisplayStart.getFullYear()}-${overdueReminderDisplayStart.getMonth()}-${overdueReminderDisplayStart.getDate()}-${overdueReminderDisplayStart.getHours()}`,
+  '2026-8-20-6',
+  'Lembrete atrasado de dia inteiro deve começar visualmente às 06:00.'
+);
+
 const timedStart = new Date(2026, 8, 20, 8, 30);
 const timedEvent = {
   kind: 'event',
