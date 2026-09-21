@@ -150,14 +150,15 @@ const WEATHER_EDGE_TOLERANCE_MS = 90 * 60 * 1000;
 const WEATHER_MAX_INTERPOLATION_GAP_MS = 2 * WEATHER_HOUR_MS;
 const WEATHER_SAMPLE_ORDER_CACHE = new WeakMap();
 
-// Guia de chegada do próximo evento: fica restrita à camada nítida de hoje.
-// A régua usa a mesma unidade do canvas lógico para não alterar o layout.
+// Guias de chegada dos eventos de hoje e de amanhã. A régua usa a mesma
+// unidade do canvas lógico para não alterar o layout.
 const EVENT_ARRIVAL_GUIDE_COLOR = "#FF9F0A";
 const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 2;
 const EVENT_ARRIVAL_GUIDE_DASH_WIDTH = 8;
 const EVENT_ARRIVAL_GUIDE_GAP_WIDTH = 7;
 const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 5;
 const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 6;
+const EVENT_ARRIVAL_GUIDE_LABEL_PADDING = 8;
 const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 
 // O canvas continua completo para preservar o background. O conteúdo é
@@ -8188,7 +8189,8 @@ async function renderTimelinePanel(items, loadError) {
     drawTimelineItemLayer(
       baseCtx,
       timelineItemsStartingTomorrow(items),
-      false
+      "tomorrow",
+      items
     );
   }
 
@@ -8234,7 +8236,8 @@ async function renderTimelinePanel(items, loadError) {
     drawTimelineItemLayer(
       ctx,
       timelineItemsStartingToday(items),
-      true
+      "today",
+      items
     );
   }
   return ctx.getImage();
@@ -8258,14 +8261,19 @@ function timelineItemsStartingTomorrow(items) {
   );
 }
 
-function drawTimelineItemLayer(ctx, items, includeTodayArrivalGuide = false) {
+function drawTimelineItemLayer(
+  ctx,
+  items,
+  arrivalGuideDay = null,
+  guideItems = items
+) {
   const chartTop = timelineChartTop();
   const chartBottom = timelineChartBottom();
   const chartHeight = Math.max(1, chartBottom - chartTop);
   const rowHeight = chartHeight / SETTINGS.maxItems;
 
-  if (includeTodayArrivalGuide) {
-    drawTodayEventArrivalGuide(ctx, items);
+  if (arrivalGuideDay) {
+    drawEventArrivalGuides(ctx, guideItems, arrivalGuideDay);
   }
 
   // As ligações são desenhadas antes dos charts, que as encobrem.
@@ -10760,11 +10768,28 @@ function formatEventArrivalHours(eventStart, referenceDate = now) {
   return wholeHours + (halfHours % 2 ? ",5" : "") + " h";
 }
 
-function todayEventArrivalGuide(items) {
-  const todayStart = startOfDay(windowStart);
-  const tomorrowStart = addDays(todayStart, 1);
-  const source = Array.isArray(items) ? items : [];
+function eventArrivalGuidesForDay(
+  items,
+  dayStart,
+  dayEnd,
+  referenceDate = now
+) {
+  if (
+    !(dayStart instanceof Date) ||
+    !(dayEnd instanceof Date) ||
+    !Number.isFinite(dayStart.getTime()) ||
+    !Number.isFinite(dayEnd.getTime()) ||
+    dayEnd <= dayStart
+  ) {
+    return [];
+  }
 
+  const source = Array.isArray(items) ? items : [];
+  const reference =
+    referenceDate instanceof Date &&
+    Number.isFinite(referenceDate.getTime())
+      ? referenceDate
+      : now;
   const futureEvents = source
     .filter(
       (item) =>
@@ -10773,8 +10798,9 @@ function todayEventArrivalGuide(items) {
         !item.isAllDay &&
         item.start instanceof Date &&
         item.end instanceof Date &&
-        item.start.getTime() > now.getTime() &&
-        item.start.getTime() < tomorrowStart.getTime() &&
+        item.start.getTime() > reference.getTime() &&
+        item.start.getTime() >= dayStart.getTime() &&
+        item.start.getTime() < dayEnd.getTime() &&
         item.end.getTime() > item.start.getTime() &&
         Number.isFinite(Number(item.gridRow))
     )
@@ -10784,24 +10810,25 @@ function todayEventArrivalGuide(items) {
         a.end.getTime() - b.end.getTime()
     );
 
-  const nextEvent = futureEvents[0];
-  if (nextEvent) {
-    return {
-      event: nextEvent,
-      row: Number(nextEvent.gridRow),
-      end: nextEvent.start,
-      label: formatEventArrivalHours(nextEvent.start),
-    };
+  if (futureEvents.length > 0) {
+    return futureEvents.map((event) => ({
+      event,
+      row: Number(event.gridRow),
+      end: event.start,
+      label: formatEventArrivalHours(event.start, reference),
+    }));
   }
 
+  // Quando não existe outro evento futuro naquele dia, mantém a régua
+  // original até o fim do dia na primeira linha realmente livre.
   const occupiedRows = new Set(
     source
       .filter(
         (item) =>
           item?.start instanceof Date &&
           item?.end instanceof Date &&
-          item.start.getTime() < tomorrowStart.getTime() &&
-          item.end.getTime() > todayStart.getTime() &&
+          item.start.getTime() < dayEnd.getTime() &&
+          item.end.getTime() > dayStart.getTime() &&
           Number.isFinite(Number(item.gridRow))
       )
       .map((item) => Number(item.gridRow))
@@ -10811,14 +10838,42 @@ function todayEventArrivalGuide(items) {
     (_, row) => row
   ).find((row) => !occupiedRows.has(row));
 
-  if (firstEmptyRow === undefined) return null;
+  if (firstEmptyRow === undefined) return [];
 
-  return {
-    event: null,
-    row: firstEmptyRow,
-    end: tomorrowStart,
-    label: formatEventArrivalHours(tomorrowStart),
-  };
+  return [
+    {
+      event: null,
+      row: firstEmptyRow,
+      end: dayEnd,
+      label: formatEventArrivalHours(dayEnd, reference),
+    },
+  ];
+}
+
+function todayEventArrivalGuides(items, referenceDate = now) {
+  const todayStart = startOfDay(windowStart);
+  return eventArrivalGuidesForDay(
+    items,
+    todayStart,
+    addDays(todayStart, 1),
+    referenceDate
+  );
+}
+
+function tomorrowEventArrivalGuides(items, referenceDate = now) {
+  const tomorrowStart = addDays(startOfDay(windowStart), 1);
+  return eventArrivalGuidesForDay(
+    items,
+    tomorrowStart,
+    addDays(tomorrowStart, 1),
+    referenceDate
+  );
+}
+
+// Compatibilidade com o teste e com chamadas antigas: o desenho agora usa
+// todas as guias, mas o primeiro item continua disponível para diagnósticos.
+function todayEventArrivalGuide(items) {
+  return todayEventArrivalGuides(items)[0] ?? null;
 }
 
 function timelineEventGuideTargetX(event) {
@@ -10882,55 +10937,77 @@ function drawEventArrivalGuideDashes(ctx, startX, endX, centerY) {
   }
 }
 
-function drawTodayEventArrivalGuide(ctx, items) {
-  const guide = todayEventArrivalGuide(items);
-  if (!guide) return;
+function drawEventArrivalGuideLabel(ctx, label, startX, centerY) {
+  if (!label) return startX;
 
+  const fontSize = scaleFontSize(
+    EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
+  );
+  // A margem extra impede que o "h" final seja cortado pelo retângulo
+  // estimado quando o DrawContext usa a métrica real da fonte do iOS.
+  const labelWidth = Math.ceil(
+    estimatedTextWidth(label, fontSize) +
+      scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING)
+  );
+  const labelHeight = Math.max(
+    fontSize + scaleVertical(4),
+    scaleVertical(20)
+  );
+  const labelRect = new Rect(
+    startX,
+    centerY - labelHeight / 2,
+    labelWidth,
+    labelHeight
+  );
+
+  ctx.setTextAlignedLeft();
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(new Color(EVENT_ARRIVAL_GUIDE_COLOR, 1.0));
+  ctx.drawTextInRect(label, labelRect);
+  return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+}
+
+function drawEventArrivalGuides(ctx, items, day) {
+  const isTomorrow = day === "tomorrow";
+  const guides = isTomorrow
+    ? tomorrowEventArrivalGuides(items)
+    : todayEventArrivalGuides(items);
+  if (guides.length === 0) return;
+
+  const dayStart = isTomorrow
+    ? addDays(startOfDay(windowStart), 1)
+    : startOfDay(windowStart);
+  const dayOriginX = isTomorrow
+    ? Math.max(0, timeToX(dayStart))
+    : 0;
   const rowHeight = timelineRowHeight();
-  const centerY =
-    timelineChartTop() + (guide.row + 0.5) * rowHeight;
-  const targetX = guide.event
-    ? timelineEventGuideTargetX(guide.event)
-    : timeToX(guide.end);
-  const visibleTargetX = Math.max(
-    0,
-    Math.min(timelineWidth(), targetX)
-  );
 
-  const label = guide.label;
-  let lineStartX = EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
-  if (label) {
-    const fontSize = scaleFontSize(
-      EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
+  for (const guide of guides) {
+    const centerY =
+      timelineChartTop() + (guide.row + 0.5) * rowHeight;
+    const targetX = guide.event
+      ? timelineEventGuideTargetX(guide.event)
+      : timeToX(guide.end);
+    const visibleTargetX = Math.max(
+      0,
+      Math.min(timelineWidth(), targetX)
     );
-    const labelWidth = estimatedTextWidth(label, fontSize);
-    const labelHeight = Math.max(
-      fontSize + scaleVertical(4),
-      scaleVertical(20)
-    );
-    const labelRect = new Rect(
-      EVENT_ARRIVAL_GUIDE_LEFT_MARGIN,
-      centerY - labelHeight / 2,
-      labelWidth + 2,
-      labelHeight
+    const labelStartX =
+      dayOriginX + EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
+    const lineStartX = drawEventArrivalGuideLabel(
+      ctx,
+      guide.label,
+      labelStartX,
+      centerY
     );
 
-    ctx.setTextAlignedLeft();
-    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-    ctx.setTextColor(new Color(EVENT_ARRIVAL_GUIDE_COLOR, 1.0));
-    ctx.drawTextInRect(label, labelRect);
-    lineStartX =
-      EVENT_ARRIVAL_GUIDE_LEFT_MARGIN +
-      labelWidth +
-      EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+    drawEventArrivalGuideDashes(
+      ctx,
+      lineStartX,
+      visibleTargetX,
+      centerY
+    );
   }
-
-  drawEventArrivalGuideDashes(
-    ctx,
-    lineStartX,
-    visibleTargetX,
-    centerY
-  );
 }
 
 function drawEventStartLines(ctx, items) {

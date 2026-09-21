@@ -77,6 +77,37 @@ assert.equal(selected.row, 2, 'A guia deve acompanhar a linha do evento.');
 assert.equal(selected.label, '30 m');
 assert.equal(selected.end, next.start);
 
+const todayGuides = context.todayEventArrivalGuides([next, later]);
+assert.equal(
+  todayGuides.length,
+  2,
+  'Cada evento futuro de hoje deve receber sua própria guia.'
+);
+assert.deepEqual(
+  todayGuides.map(guide => guide.event.title),
+  ['Próximo', 'Depois']
+);
+assert.deepEqual(
+  todayGuides.map(guide => guide.label),
+  ['30 m', '2 h'],
+  'Cada guia deve mostrar a unidade correspondente.'
+);
+
+const tomorrowGuides = context.tomorrowEventArrivalGuides([
+  event('Amanhã cedo', at(21, 10), at(21, 11), 3),
+  event('Amanhã tarde', at(21, 13), at(21, 14), 4),
+]);
+assert.equal(
+  tomorrowGuides.length,
+  2,
+  'Eventos de amanhã também devem receber guias individuais.'
+);
+assert.deepEqual(
+  tomorrowGuides.map(guide => guide.label),
+  ['16 h', '19 h'],
+  'As guias de amanhã devem manter o sufixo h.'
+);
+
 const endedEvent = event('Encerrado', at(20, 16), at(20, 17), 0);
 const birthday = event(
   '🎂 Ana',
