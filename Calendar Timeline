@@ -10974,12 +10974,10 @@ function drawEventArrivalGuides(ctx, items, day) {
     : todayEventArrivalGuides(items);
   if (guides.length === 0) return;
 
-  const dayStart = isTomorrow
-    ? addDays(startOfDay(windowStart), 1)
-    : startOfDay(windowStart);
-  const dayOriginX = isTomorrow
-    ? Math.max(0, timeToX(dayStart))
-    : 0;
+  // A contagem é feita desde o instante atual. Por isso, todas as guias
+  // começam na mesma margem esquerda, inclusive as de amanhã. Quando a
+  // guia pertence ao futuro, essa camada é suavizada junto com o blur.
+  const dayOriginX = 0;
   const rowHeight = timelineRowHeight();
 
   for (const guide of guides) {
