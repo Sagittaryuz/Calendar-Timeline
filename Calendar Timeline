@@ -10936,17 +10936,50 @@ function drawEventArrivalGuideDashes(ctx, startX, endX, centerY) {
   }
 }
 
-function drawEventArrivalGuideLabel(ctx, label, startX, centerY) {
-  if (!label) return startX;
-
+function eventArrivalGuideLabelWidth(label) {
+  if (!label) return 0;
   const fontSize = scaleFontSize(
     EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
   // A margem extra impede que o "h" final seja cortado pelo retângulo
   // estimado quando o DrawContext usa a métrica real da fonte do iOS.
-  const labelWidth = Math.ceil(
+  return Math.ceil(
     estimatedTextWidth(label, fontSize) +
       scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING)
+  );
+}
+
+function eventArrivalGuideLayout(day, dayBoundaryX, labelWidth) {
+  if (day === "tomorrow") {
+    return {
+      labelX:
+        dayBoundaryX -
+        EVENT_ARRIVAL_GUIDE_LEFT_MARGIN -
+        labelWidth,
+      lineStartX: dayBoundaryX,
+    };
+  }
+
+  return {
+    labelX: EVENT_ARRIVAL_GUIDE_LEFT_MARGIN,
+    lineStartX:
+      EVENT_ARRIVAL_GUIDE_LEFT_MARGIN +
+      labelWidth +
+      EVENT_ARRIVAL_GUIDE_LABEL_GAP,
+  };
+}
+
+function drawEventArrivalGuideLabel(
+  ctx,
+  label,
+  startX,
+  centerY,
+  labelWidth = eventArrivalGuideLabelWidth(label)
+) {
+  if (!label) return startX;
+
+  const fontSize = scaleFontSize(
+    EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
   const labelHeight = Math.max(
     fontSize + scaleVertical(4),
@@ -10973,10 +11006,10 @@ function drawEventArrivalGuides(ctx, items, day) {
     : todayEventArrivalGuides(items);
   if (guides.length === 0) return;
 
-  // A contagem é feita desde o instante atual. Por isso, todas as guias
-  // começam na mesma margem esquerda, inclusive as de amanhã. Quando a
-  // guia pertence ao futuro, essa camada é suavizada junto com o blur.
-  const dayOriginX = 0;
+  const tomorrowStart = addDays(startOfDay(windowStart), 1);
+  const dayBoundaryX = isTomorrow
+    ? timeToX(tomorrowStart)
+    : 0;
   const rowHeight = timelineRowHeight();
 
   for (const guide of guides) {
@@ -10989,18 +11022,23 @@ function drawEventArrivalGuides(ctx, items, day) {
       0,
       Math.min(timelineWidth(), targetX)
     );
-    const labelStartX =
-      dayOriginX + EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
+    const labelWidth = eventArrivalGuideLabelWidth(guide.label);
+    const layout = eventArrivalGuideLayout(
+      day,
+      dayBoundaryX,
+      labelWidth
+    );
     const lineStartX = drawEventArrivalGuideLabel(
       ctx,
       guide.label,
-      labelStartX,
-      centerY
+      layout.labelX,
+      centerY,
+      labelWidth
     );
 
     drawEventArrivalGuideDashes(
       ctx,
-      lineStartX,
+      isTomorrow ? layout.lineStartX : lineStartX,
       visibleTargetX,
       centerY
     );

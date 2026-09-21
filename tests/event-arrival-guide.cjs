@@ -18,6 +18,8 @@ const context = {
   now,
   windowStart: now,
   SETTINGS: { maxItems: 5 },
+  EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 5,
+  EVENT_ARRIVAL_GUIDE_LABEL_GAP: 6,
   startOfDay: date =>
     new Date(Date.UTC(
       date.getUTCFullYear(),
@@ -91,6 +93,21 @@ assert.deepEqual(
   todayGuides.map(guide => guide.label),
   ['30 m', '2 h'],
   'Cada guia deve mostrar a unidade correspondente.'
+);
+const tomorrowLayout =
+  context.eventArrivalGuideLayout('tomorrow', 500, 40);
+assert.equal(tomorrowLayout.labelX, 455);
+assert.equal(
+  tomorrowLayout.lineStartX,
+  500,
+  'A guia de amanhã deve começar na mudança de dia e deixar o rótulo à esquerda.'
+);
+const todayLayout = context.eventArrivalGuideLayout('today', 0, 40);
+assert.equal(todayLayout.labelX, 5);
+assert.equal(
+  todayLayout.lineStartX,
+  51,
+  'A guia de hoje deve manter a margem da borda esquerda.'
 );
 
 const tomorrowGuides = context.tomorrowEventArrivalGuides([
