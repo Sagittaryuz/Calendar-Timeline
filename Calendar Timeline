@@ -10753,6 +10753,8 @@ function formatEventArrivalHours(eventStart, referenceDate = now) {
     )
   );
 
+  if (totalMinutes === 0) return "0 m";
+
   if (totalMinutes < 60) {
     const roundedMinutes = Math.max(
       10,
@@ -10790,6 +10792,7 @@ function eventArrivalGuidesForDay(
     Number.isFinite(referenceDate.getTime())
       ? referenceDate
       : now;
+  const countdownReference = dayStart > reference ? dayStart : reference;
   const futureEvents = source
     .filter(
       (item) =>
@@ -10814,7 +10817,7 @@ function eventArrivalGuidesForDay(
       event,
       row: Number(event.gridRow),
       end: event.start,
-      label: formatEventArrivalHours(event.start, reference),
+      label: formatEventArrivalHours(event.start, countdownReference),
     }));
   }
 
@@ -10844,7 +10847,7 @@ function eventArrivalGuidesForDay(
       event: null,
       row: firstEmptyRow,
       end: dayEnd,
-      label: formatEventArrivalHours(dayEnd, reference),
+      label: formatEventArrivalHours(dayEnd, countdownReference),
     },
   ];
 }
@@ -10953,9 +10956,7 @@ function eventArrivalGuideLayout(day, dayBoundaryX, labelWidth) {
   if (day === "tomorrow") {
     return {
       labelX:
-        dayBoundaryX -
-        EVENT_ARRIVAL_GUIDE_LEFT_MARGIN -
-        labelWidth,
+        dayBoundaryX + EVENT_ARRIVAL_GUIDE_LEFT_MARGIN,
       lineStartX: dayBoundaryX,
     };
   }
@@ -11038,7 +11039,7 @@ function drawEventArrivalGuides(ctx, items, day) {
 
     drawEventArrivalGuideDashes(
       ctx,
-      isTomorrow ? layout.lineStartX : lineStartX,
+      lineStartX,
       visibleTargetX,
       centerY
     );

@@ -96,7 +96,7 @@ assert.deepEqual(
 );
 const tomorrowLayout =
   context.eventArrivalGuideLayout('tomorrow', 500, 40);
-assert.equal(tomorrowLayout.labelX, 455);
+assert.equal(tomorrowLayout.labelX, 505);
 assert.equal(
   tomorrowLayout.lineStartX,
   500,
@@ -121,7 +121,7 @@ assert.equal(
 );
 assert.deepEqual(
   tomorrowGuides.map(guide => guide.label),
-  ['16 h', '19 h'],
+  ['10 h', '13 h'],
   'As guias de amanhã devem manter o sufixo h.'
 );
 
@@ -139,7 +139,7 @@ assert.equal(
   1,
   'Evento futuro de dia inteiro também deve receber uma guia.'
 );
-assert.equal(tomorrowAllDayGuides[0].label, '6 h');
+assert.equal(tomorrowAllDayGuides[0].label, '0 m');
 
 const endedEvent = event('Encerrado', at(20, 16), at(20, 17), 0);
 const birthday = event(
@@ -177,3 +177,12 @@ assert.equal(
 );
 
 console.log('OK: guia de chegada escolhe o próximo evento e usa a primeira linha livre no fim do dia.');
+
+// A referência de amanhã é sua meia-noite, independentemente da hora atual.
+assert.equal(context.tomorrowEventArrivalGuides([])[0].label, '24 h');
+const lateNow = at(20, 23, 45);
+assert.equal(context.tomorrowEventArrivalGuides([
+  event('Amanhã', at(21, 10), at(21, 11), 0)
+], lateNow)[0].label, '10 h');
+assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '0 m');
+assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 255);
