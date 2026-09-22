@@ -2872,10 +2872,70 @@ async function renderWidget(items, loadError) {
   // A borda da Lua é redesenhada após o contorno externo da timeline.
   // A borda superior da timeline não pode cobrir seu aro branco.
   drawDayBoundaryMoonBordersOnForeground(contentCtx);
+  // Última camada: a cápsula prevalece inclusive sobre os charts.
+  await drawDayEndCapsules(contentCtx);
 
   // O cartão final já possui sua própria geometria arredondada.
 
   return contentCtx.getImage();
+}
+
+function dayEndCapsuleEntries() {
+  const entries = [];
+  for (let end = addDays(startOfDay(windowStart), 1); end <= windowEnd; end = addDays(end, 1)) {
+    const start = addDays(end, -1);
+    const reference = now > start ? now : start;
+    if (reference < end) entries.push({
+      x: CANVAS.plotLeft + timeToX(end),
+      label: formatEventArrivalHours(end, reference),
+      color: dayBoundaryLineColor(end, loadResult.holidayDates).hex,
+    });
+  }
+  return entries;
+}
+
+async function drawDayEndCapsules(ctx) {
+  const entries = dayEndCapsuleEntries();
+  if (!entries.length) return;
+  const height = DAY_CHANGE_CIRCLE_DIAMETER;
+  const width = scaleVertical(24);
+  const centerY = CANVAS.timelineTop + (weatherIconCenterY() + bottomLegendCenterY()) / 2;
+  // Canvas gira cápsula e texto juntos. Uma única rasterização para todos os dias.
+  try {
+    const web = new WebView();
+    await web.loadHTML('<html><body></body></html>');
+    const js = `(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = ${CANVAS.width}; canvas.height = ${CANVAS.height};
+      const g = canvas.getContext('2d');
+      for (const entry of ${JSON.stringify(entries)}) {
+        g.save(); g.translate(entry.x, ${centerY}); g.rotate(-Math.PI / 2);
+        const w = ${height}, h = ${width}, r = h / 2;
+        g.beginPath();
+        g.moveTo(-w/2+r, -h/2); g.lineTo(w/2-r, -h/2);
+        g.arc(w/2-r, 0, r, -Math.PI/2, Math.PI/2);
+        g.lineTo(-w/2+r, h/2);
+        g.arc(-w/2+r, 0, r, Math.PI/2, Math.PI*1.5);
+        g.closePath(); g.fillStyle = '#' + entry.color.replace('#',''); g.fill();
+        let fontSize = ${scaleFontSize(19)};
+        g.font = '900 ' + fontSize + 'px -apple-system, sans-serif';
+        while (g.measureText(entry.label).width > w - 8 && fontSize > 8) {
+          fontSize--; g.font = '900 ' + fontSize + 'px -apple-system, sans-serif';
+        }
+        const metrics = g.measureText(entry.label);
+        g.fillStyle = '#000000'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+        g.fillText(entry.label, 0, (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
+        g.restore();
+      }
+      return canvas.toDataURL('image/png').split(',')[1];
+    })()`;
+    const png = await web.evaluateJavaScript(js, false);
+    if (typeof png === 'string' && png.length) {
+      ctx.drawImageAtPoint(Image.fromData(Data.fromBase64String(png)), new Point(0, 0));
+    }
+  } catch (error) {
+    console.warn('Contagem de fim de dia indisponível: ' + error);
+  }
 }
 
 function shouldBlurFutureTimeline() {
@@ -5156,6 +5216,30 @@ function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
   }
 }
 
+function drawRainTopMarker(ctx, x, top, height, width, storm, color) {
+  const path = new Path();
+  if (storm) {
+    path.move(new Point(x, top));
+    path.addLine(new Point(x - width / 2, top + height * 0.58));
+    path.addLine(new Point(x, top + height * 0.58));
+    path.addLine(new Point(x - width * 0.18, top + height));
+    path.addLine(new Point(x + width / 2, top + height * 0.4));
+    path.addLine(new Point(x + width * 0.12, top + height * 0.4));
+  } else {
+    path.move(new Point(x, top));
+    path.addCurve(new Point(x, top + height),
+      new Point(x - width, top + height * 0.7),
+      new Point(x - width / 2, top + height));
+    path.addCurve(new Point(x, top),
+      new Point(x + width / 2, top + height),
+      new Point(x + width, top + height * 0.7));
+  }
+  path.closeSubpath();
+  ctx.setFillColor(color);
+  ctx.addPath(path);
+  ctx.fillPath();
+}
+
 function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   const quarterHourMilliseconds = 15 * 60 * 1000;
   const visibleStart = windowStart.getTime() - quarterHourMilliseconds;
@@ -5201,6 +5285,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         rainByQuarter.set(timestamp, {
           amount,
           timestamp,
+          storm: weatherSymbolGroup(hour) === 6 || /thunder|storm/i.test(String(hour.symbol ?? "")),
           rainChance: Math.max(
             0,
             Math.min(100, Number(hour.rainChance) || 0)
@@ -5277,6 +5362,14 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       ),
       new Color(SETTINGS.rainLineColor, opacity)
     );
+    // Grade temporal fixa: uma posição com símbolo e a seguinte vazia.
+    // Usa o mesmo volume e a mesma cor da barra, sem alterar sua escala.
+    if (Math.floor(entry.timestamp / quarterHourMilliseconds) % 2 === 0) {
+      drawRainTopMarker(ctx, centerX, solarLineY() + scaleVertical(12),
+        scaleVertical(5 + 15 * normalized),
+        Math.min(barWidth, quarterWidth * 0.75),
+        entry.storm, new Color(SETTINGS.rainLineColor, opacity));
+    }
   }
 }
 
@@ -8219,6 +8312,7 @@ async function renderTimelinePanel(items, loadError) {
       true
     );
     ctx.drawImageAtPoint(blurCtx.getImage(), new Point(0, 0));
+    await drawDiagonalWeekdayLabels(ctx);
   }
 
   // Estes dois elementos são exceções estruturais: o astro da mudança
@@ -8297,7 +8391,7 @@ function drawTimelineItemLayer(
 
 
 function diagonalWeekdayLabelColor(_) {
-  return "#FFFFFF";
+  return SETTINGS.futureTimelineBlurTintColor;
 }
 
 function diagonalWeekdayLabelEntries() {
@@ -8356,7 +8450,11 @@ function diagonalWeekdayLabelEntries() {
 }
 
 async function drawDiagonalWeekdayLabels(ctx) {
-  const entries = diagonalWeekdayLabelEntries();
+  if (!shouldBlurFutureTimeline()) return;
+  const boundaryX = Math.max(0, timeToX(addDays(startOfDay(windowStart), 1)));
+  const entries = diagonalWeekdayLabelEntries()
+    .filter(entry => entry.x1 > boundaryX)
+    .map(entry => ({ ...entry, x0: Math.max(entry.x0, boundaryX) }));
   if (entries.length === 0) return;
 
   try {
@@ -8533,7 +8631,7 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    context.lineWidth = typography.strokeWidth;",
     "    context.strokeStyle = rgba('#FFFFFF', 0.30);",
     "    context.strokeText(entry.label, 0, 0);",
-    "    context.fillStyle = rgba('#FFFFFF', 0.30);",
+    "    context.fillStyle = rgba(entry.color, 1);",
     "    context.fillText(entry.label, 0, 0);",
     "    context.restore();",
     "  }",
@@ -8632,7 +8730,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         );
       }
 
-      ctx.setTextColor(new Color("#FFFFFF", 0.30));
+      ctx.setTextColor(new Color(entry.color, 1));
       ctx.drawTextInRect(characters[index], glyphRect);
     }
   }
