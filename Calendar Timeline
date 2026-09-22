@@ -180,6 +180,10 @@ const WIDGET_CONTOUR = Object.freeze({
   textClearance: 8,
 });
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
+// Expansão vertical do grid completo, em pixels do canvas lógico.
+// O topo acompanha a borda inferior da Lua; a base alcança o topo do círculo.
+const TIMELINE_GRID_TOP_EXTENSION = 6;
+const TIMELINE_GRID_BOTTOM_EXTENSION = 4;
 const HOUR_LEGEND_HEIGHT_REDUCTION = 2;
 const DAY_CARD_TEXT_VERTICAL_OFFSET = -4;
 // O marcador superior das gotas já estava 5 px acima da posição original.
@@ -5878,12 +5882,12 @@ function thermalTemperatureLabelTopY() {
 }
 
 function thermalBandBottomY() {
-  // Reserva espaço para o círculo e mantém dois pixels reais de
-  // afastamento antes dele, evitando qualquer recorte.
+  // A expansão inferior fecha a folga e alinha o grid ao topo do círculo.
   return (
     bottomLegendCenterY() -
     DAY_CHANGE_CIRCLE_DIAMETER / 2 -
-    2
+    2 +
+    TIMELINE_GRID_BOTTOM_EXTENSION
   );
 }
 
@@ -5904,7 +5908,11 @@ function dayChangeLegendCenterY() {
 }
 
 function timelineChartTop() {
-  return weatherStripBottomY() + scaleVertical(5);
+  return (
+    weatherStripBottomY() +
+    scaleVertical(5) -
+    TIMELINE_GRID_TOP_EXTENSION
+  );
 }
 
 function timelineChartBottom() {
