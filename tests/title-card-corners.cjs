@@ -9,12 +9,23 @@ const end = source.indexOf('function titleDailyTemperatureForDay(', start);
 assert(start >= 0 && end > start, 'Localizar função real, sem copiar sua implementação.');
 const stop = new Error('Fim da geometria; textos não são objeto deste teste.');
 let shapes = [];
+let blurEnabled = true;
 class Rect {
   constructor(x, y, width, height) { Object.assign(this, {x, y, width, height}); }
 }
+class Color {
+  constructor(hex, opacity) { Object.assign(this, {hex, opacity}); }
+}
+const holidayDates = new Set(['2026-9-22']);
 const context = {
-  Color: class {}, Rect,
-  SETTINGS: { timelineBackgroundColor: '#000000', nonTodayTimelineOverlayColor: '#5A5A5F' },
+  Color, Rect,
+  SETTINGS: {
+    timelineBackgroundColor: '#000000',
+    nonTodayTimelineOverlayColor: '#3B3C3E',
+    saturdayTimelineBackgroundColor: '#0D3F68',
+    sundayTimelineBackgroundColor: '#521720',
+    holidayTimelineBackgroundColor: '#3A2A00',
+  },
   CANVAS: { marginX: 30 },
   TITLE_CARD_OUTER_CORNER_RADIUS: 48,
   TITLE_CARD_STANDARD_CORNER_RADIUS: 48,
@@ -23,13 +34,16 @@ const context = {
   addDays: (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days),
   dateKey: date => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
   windowStart: new Date(2026, 8, 18),
-  timelineBackgroundColorForDate: () => '#000000',
-  shouldBlurFutureTimeline: () => true,
-  fillTitleCardShape: (_, rect, radii) => shapes.push({rect, radii}),
-  loadResult: {holidayDates: new Set()},
+  shouldBlurFutureTimeline: () => blurEnabled,
+  fillTitleCardShape: (_, rect, radii, color) => shapes.push({rect, radii, color}),
+  loadResult: {holidayDates},
   titleWeekdayColor: () => { throw stop; },
 };
 vm.createContext(context);
+const backgroundStart = source.indexOf('function timelineBackgroundColorForDate(');
+const backgroundEnd = source.indexOf('function drawTimelineBackground(', backgroundStart);
+assert(backgroundStart >= 0 && backgroundEnd > backgroundStart, 'Localizar as cores de fundo por dia.');
+vm.runInContext(source.slice(backgroundStart, backgroundEnd), context);
 vm.runInContext(source.slice(start, end), context);
 for (const selected of [false, true]) {
   for (const last of [false, true]) {
@@ -58,4 +72,27 @@ for (const selected of [false, true]) {
     }
   }
 }
-console.log('OK: amanhã igual aos demais quadros futuros; bases perpendiculares; hoje não repintado.');
+
+function cardFillColor(day, blur) {
+  blurEnabled = blur;
+  shapes = [];
+  try {
+    context.drawTitleDayCard(
+      {},
+      new Date(2026, 8, day),
+      new Rect(290, 30, 240, 96),
+      false,
+      false
+    );
+    assert.fail('Esperado alcançar a fase de textos.');
+  } catch (error) { assert.equal(error, stop); }
+  return shapes[1].color.hex;
+}
+
+assert.equal(cardFillColor(21, false), '#3B3C3E', 'Dia útil sem blur usa o cinza pedido.');
+assert.equal(cardFillColor(21, true), '#2D2D31', 'Dia útil mantém o tom próprio durante o blur.');
+assert.equal(cardFillColor(19, false), '#0D3F68', 'Sábado mantém a cor especial.');
+assert.equal(cardFillColor(20, false), '#521720', 'Domingo mantém a cor especial.');
+assert.equal(cardFillColor(22, false), '#3A2A00', 'Feriado mantém a cor especial.');
+assert.match(source, /nonTodayTimelineOverlayColor:\s*"#3B3C3E"/);
+console.log('OK: cores de dias úteis e especiais; amanhã igual aos quadros futuros; bases perpendiculares.');
