@@ -25,6 +25,7 @@ class Point {
 class Color {}
 
 const context = {
+  CANVAS: {width: 1092, height: 510},
   SETTINGS: { birthdayLabelGap: 30 },
   Rect,
   Point,

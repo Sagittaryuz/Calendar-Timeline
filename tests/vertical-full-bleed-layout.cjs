@@ -20,7 +20,7 @@ assert.match(
 assert.match(source, /footerBottom:\s*WIDGET_CANVAS_HEIGHT/);
 assert.match(
   source,
-  /CANVAS\.height\s*-\s*WIDGET_CONTENT_BOTTOM_MARGIN\s*-\s*CANVAS\.timelineTop\s*-\s*DAY_CHANGE_CIRCLE_DIAMETER\s*\/\s*2/
+  /CANVAS\.height\s*-\s*WIDGET_CONTENT_BOTTOM_MARGIN\s*-\s*WIDGET_CONTOUR\.strokeInset\s*-\s*CANVAS\.timelineTop\s*-\s*DAY_CHANGE_CIRCLE_DIAMETER\s*\/\s*2/
 );
 
 console.log(

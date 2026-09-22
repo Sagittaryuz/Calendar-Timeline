@@ -170,6 +170,15 @@ const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
 const WIDGET_CONTENT_TOP_MARGIN = 0;
 const WIDGET_CONTENT_BOTTOM_MARGIN = 0;
+// Perfil medido na captura de 22/09/2026: aproximação, não raio nativo
+// universal. Coordenadas do canvas lógico; sem WebView ou rede adicional.
+const WIDGET_CONTOUR = Object.freeze({
+  extentX: 102,
+  extentY: 101,
+  exponent: 2.45,
+  strokeInset: 4,
+  textClearance: 8,
+});
 const VERTICAL_LAYOUT_SCALE =
   (WIDGET_CANVAS_HEIGHT -
     WIDGET_CONTENT_TOP_MARGIN -
@@ -191,9 +200,73 @@ function mapLegacyContentY(value) {
   );
 }
 
+function widgetContourInsetAtY(y, inset = 0) {
+  const rx = WIDGET_CONTOUR.extentX - inset;
+  const ry = WIDGET_CONTOUR.extentY - inset;
+  if (y < inset || y > CANVAS.height - inset) return CANVAS.width / 2;
+  const distance = Math.min(y - inset, CANVAS.height - inset - y);
+  if (distance >= ry) return inset;
+  const n = WIDGET_CONTOUR.exponent;
+  const t = Math.max(0, Math.min(1, 1 - distance / ry));
+  return inset + rx * (1 - Math.pow(Math.max(0, 1 - t ** n), 1 / n));
+}
+
+// Duas curvas locais de superelipse, com retas entre elas. Não deformar
+// uma superelipse sobre o retângulo inteiro: isso arredondaria as laterais.
+function widgetLeftContourPoints(inset = WIDGET_CONTOUR.strokeInset) {
+  const points = [];
+  const rx = WIDGET_CONTOUR.extentX - inset;
+  const ry = WIDGET_CONTOUR.extentY - inset;
+  const power = 2 / WIDGET_CONTOUR.exponent;
+  for (let i = 0; i <= 64; i++) {
+    const angle = i / 64 * Math.PI / 2;
+    points.push(new Point(
+      inset + rx * (1 - Math.sin(angle) ** power),
+      inset + ry * (1 - Math.cos(angle) ** power)
+    ));
+  }
+  for (let i = 0; i <= 64; i++) {
+    const angle = i / 64 * Math.PI / 2;
+    points.push(new Point(
+      inset + rx * (1 - Math.cos(angle) ** power),
+      CANVAS.height - inset - ry + ry * Math.sin(angle) ** power
+    ));
+  }
+  return points;
+}
+
+function titleSafeTextY(width, height, preferredY) {
+  // Mesma altura nos quatro cartões. Mede o pior caso nas extremidades.
+  const card = titleDayCardRect(0);
+  const left = (card.width - width) / 2;
+  let y = preferredY;
+  while (y + height <= card.y + card.height) {
+    const required = Math.max(widgetContourInsetAtY(y),
+      widgetContourInsetAtY(y + height)) + WIDGET_CONTOUR.textClearance;
+    if (left >= required) return y;
+    y += 0.5;
+  }
+  return preferredY;
+}
+
+function titleHeaderFontSize() {
+  const card = titleDayCardRect(0);
+  // Nove caracteres em "TER 22/09". Mesma fonte para os quatro títulos;
+  // reduzir só quando as duas linhas não cabem na área curva disponível.
+  let size = scaleFontSize(38);
+  while (size > scaleFontSize(30)) {
+    const y = titleSafeTextY(9 * size * 0.62 + 4, size * 1.15, 6);
+    const detailBottom = y + size * 1.15 + 5 +
+      scaleFontSize(22) / 2 + scaleVertical(30) / 2;
+    if (detailBottom <= card.y + card.height - 3) break;
+    size--;
+  }
+  return size;
+}
+
 const TITLE_CARD_COUNT = 4;
 // Raio estrutural comum: 52 unidades da geometria-base,
-// equivalentes a 48,35 px depois da compressão vertical do widget.
+// escaladas junto ao conteúdo; o contorno externo usa WIDGET_CONTOUR.
 // Ele é a referência externa única dos cartões, da timeline e da
 // moldura branca do dia atual.
 const WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS = 52;
@@ -2825,32 +2898,8 @@ async function renderWidget(items, loadError) {
     )
   );
 
-  // O painel da timeline usa o perfil comum de cantos. O mesmo perfil
-  // também será aplicado ao contorno e ao recorte dos astros.
-  const timelineRect = new Rect(
-    CANVAS.plotLeft,
-    CANVAS.timelineTop,
-    timelineWidth(),
-    timelineHeight()
-  );
-  restoreRoundedSideCorners(
-    contentCtx,
-    timelineRect,
-    TITLE_CARD_OUTER_CORNER_RADIUS,
-    "left",
-    0,
-    TIMELINE_CORNER_PROFILE.topLeftRounded,
-    TIMELINE_CORNER_PROFILE.bottomLeftRounded
-  );
-  restoreRoundedSideCorners(
-    contentCtx,
-    timelineRect,
-    TITLE_CARD_OUTER_CORNER_RADIUS,
-    "right",
-    0,
-    TIMELINE_CORNER_PROFILE.topRightRounded,
-    TIMELINE_CORNER_PROFILE.bottomRightRounded
-  );
+  // O iOS faz o recorte final. Evitar máscaras circulares locais que
+  // recortavam conteúdo antes do contorno contínuo calibrado.
 
   // A curva da moldura do dia atual também funciona como limite
   // visual dos astros e demais elementos do cartão selecionado.
@@ -3293,84 +3342,33 @@ function restoreRoundedRightCorners(ctx, rect, radius) {
 }
 
 function drawTimelineOuterBorder(ctx) {
-  const rect = new Rect(
-    CANVAS.plotLeft,
-    CANVAS.timelineTop,
-    timelineWidth(),
-    timelineHeight()
-  );
-  const borderWidth = 2;
-  const outerRadius = Math.max(
-    0,
-    Math.min(
-      WIDGET_COMMON_CORNER_RADIUS,
-      rect.width / 2,
-      rect.height / 2
-    )
-  );
-  const inset = borderWidth / 2;
-  const centerRadius = Math.max(0, outerRadius - inset);
-  const left = rect.x + inset;
-  const top = rect.y + inset;
-  const right = rect.x + rect.width - inset;
-  const bottom = rect.y + rect.height - inset;
-  const curveFactor = 0.5522847498;
+  const inset = WIDGET_CONTOUR.strokeInset;
+  const left = widgetLeftContourPoints(inset);
+  const rightBottom = left.filter(p => p.y >= CANVAS.height / 2)
+    .map(p => new Point(CANVAS.width - p.x, p.y));
+  const vertices = [
+    new Point(inset, CANVAS.timelineTop),
+    new Point(CANVAS.width - inset, CANVAS.timelineTop),
+    ...rightBottom,
+    ...left.slice().reverse().filter(p => p.y >= CANVAS.timelineTop),
+    new Point(inset, CANVAS.timelineTop),
+  ];
   const path = new Path();
-  let lastPoint = null;
-  const outline = {
-    move(p) { lastPoint = p; path.move(p); },
-    addLine(p) {
-      const a = lastPoint;
-      const steps = Math.max(1, Math.ceil(Math.hypot(p.x - a.x, p.y - a.y)));
-      for (let i = 1; i <= steps; i++) {
-        const q = new Point(a.x + (p.x-a.x)*i/steps, a.y + (p.y-a.y)*i/steps);
-        if (insideCurrentDayUnifiedShape((lastPoint.x+q.x)/2, (lastPoint.y+q.y)/2)) path.move(q);
-        else path.addLine(q);
-        lastPoint = q;
-      }
-    },
-    addCurve(p, a, b) {
-      const start = lastPoint;
-      for (let i = 1; i <= 64; i++) {
-        const t=i/64, u=1-t;
-        this.addLine(new Point(u*u*u*start.x+3*u*u*t*a.x+3*u*t*t*b.x+t*t*t*p.x,
-          u*u*u*start.y+3*u*u*t*a.y+3*u*t*t*b.y+t*t*t*p.y));
-      }
+  path.move(vertices[0]);
+  let last = vertices[0];
+  for (const end of vertices.slice(1)) {
+    const start = last;
+    const steps = Math.max(1, Math.ceil(Math.hypot(end.x-start.x, end.y-start.y)));
+    for (let i = 1; i <= steps; i++) {
+      const p = new Point(start.x+(end.x-start.x)*i/steps,
+        start.y+(end.y-start.y)*i/steps);
+      if (insideCurrentDayUnifiedShape((last.x+p.x)/2, (last.y+p.y)/2)) path.move(p);
+      else path.addLine(p);
+      last = p;
     }
-  };
-
-  if (centerRadius <= 0) {
-    outline.move(new Point(left, top));
-    outline.addLine(new Point(right, top));
-    outline.addLine(new Point(right, bottom));
-    outline.addLine(new Point(left, bottom));
-    outline.addLine(new Point(left, top));
-  } else {
-    // O perfil externo tem três cantos perpendiculares e apenas
-    // o canto inferior direito arredondado.
-    outline.move(new Point(left, top));
-    outline.addLine(new Point(right, top));
-    outline.addLine(new Point(right, bottom - centerRadius));
-
-    outline.addCurve(
-      new Point(right - centerRadius, bottom),
-      new Point(
-        right,
-        bottom - centerRadius + centerRadius * curveFactor
-      ),
-      new Point(
-        right - centerRadius + centerRadius * curveFactor,
-        bottom
-      )
-    );
-
-    outline.addLine(new Point(left, bottom));
-    outline.addLine(new Point(left, top));
   }
-
-  // É a mesma cor da borda fina dos quadros dos dias.
   ctx.setStrokeColor(new Color("#303136", 0.82));
-  ctx.setLineWidth(borderWidth);
+  ctx.setLineWidth(2);
   ctx.addPath(path);
   ctx.strokePath();
 }
@@ -3379,20 +3377,12 @@ function currentDayUnifiedShape(path = new Path()) {
   const m = currentDayFrameMetrics();
   const c = m.todayCard;
   const r = m.frameRadius;
-  const k = 0.5522847498;
-  // O preenchimento reutiliza exatamente a ponte e as curvas do contorno.
   buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
     "right", m.boundaryX, r, path, 0, r);
   path.addLine(new Point(m.boundaryX, m.bridgeY));
   path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
-  path.addLine(new Point(c.x + r, m.bottomLineCenterY));
-  path.addCurve(new Point(c.x, m.bottomLineCenterY - r),
-    new Point(c.x + r - r * k, m.bottomLineCenterY),
-    new Point(c.x, m.bottomLineCenterY - r + r * k));
-  path.addLine(new Point(c.x, c.y + r));
-  path.addCurve(new Point(c.x + r, c.y),
-    new Point(c.x, c.y + r - r * k),
-    new Point(c.x + r - r * k, c.y));
+  const points = widgetLeftContourPoints();
+  for (const p of points.slice().reverse()) path.addLine(p);
   return path;
 }
 
@@ -3605,7 +3595,7 @@ function titleCardGap() {
   // O vão horizontal usa a mesma distância vertical existente entre
   // a borda inferior dos cartões comuns e a moldura superior da timeline.
   const regularCardTop =
-    WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+    WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   const regularCardBottom =
     regularCardTop + TITLE_CARD_HEIGHT;
   const verticalGap = Math.max(
@@ -3631,8 +3621,8 @@ function titleDayCardRect(index) {
   // seus limites visuais superiores.
   const titleCardTop =
     index === 0
-      ? WIDGET_CONTENT_TOP_MARGIN
-      : WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+      ? WIDGET_CONTOUR.strokeInset
+      : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   // O cartão atual termina na mesma altura dos demais. Seu topo lógico
   // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
   // altura preserva o alinhamento externo superior sem encurtar o vão.
@@ -3686,7 +3676,7 @@ function currentDayFrameMetrics() {
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
   const bridgeY = dayBoundaryMoonBorderTopY();
-  const bottomLineCenterY = boundaryBottomY - lineWidth / 2;
+  const bottomLineCenterY = CANVAS.height - WIDGET_CONTOUR.strokeInset;
   const frameRadius = Math.min(
     WIDGET_COMMON_CORNER_RADIUS,
     Math.max(0, (bridgeY - todayCard.y) / 2),
@@ -3900,6 +3890,24 @@ function drawCurrentDayRoundedSideFrame(
   bottomRadius = radius,
   continuationX = null
 ) {
+  if (side === "left" && card.x === CANVAS.plotLeft) {
+    const points = widgetLeftContourPoints();
+    const path = new Path();
+    path.move(points[0]);
+    for (const point of points.slice(1)) {
+      if (point.y > CANVAS.height / 2 && Number.isFinite(continuationX) &&
+          point.x > continuationX) break;
+      path.addLine(point);
+    }
+    if (Number.isFinite(continuationX) && continuationX >= WIDGET_CONTOUR.extentX) {
+      path.addLine(new Point(continuationX, CANVAS.height - WIDGET_CONTOUR.strokeInset));
+    }
+    ctx.setStrokeColor(color);
+    ctx.setLineWidth(lineWidth);
+    ctx.addPath(path);
+    ctx.strokePath();
+    return;
+  }
   const availableHeight = Math.max(
     0,
     (bottomY - card.y) / 2
@@ -4247,7 +4255,10 @@ function buildCurrentDayUpperPath(
       path.move(new Point(left, card.y));
       path.addLine(new Point(right, card.y));
     } else {
-      path.move(new Point(left + radius, card.y));
+      path.move(new Point(
+        card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX : left + radius,
+        card.y
+      ));
       path.addLine(new Point(right - radius, card.y));
       path.addCurve(
         new Point(right, card.y + radius),
@@ -4608,7 +4619,7 @@ function drawTitleDayCard(
 
   // Como a fonte é monoespaçada, o espaço entre o dia e a data
   // ocupa exatamente uma célula. Isso mantém, por exemplo, "QUI 10/09".
-  const titleFontSize = scaleFontSize(38);
+  const titleFontSize = titleHeaderFontSize();
   const titleCharacterWidth = titleFontSize * 0.62;
   const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
   const dateWidth = dateLabel.length * titleCharacterWidth;
@@ -4621,7 +4632,7 @@ function drawTitleDayCard(
   // segunda linha usam a mesma referência visual para manter todos
   // os dias, inclusive hoje, alinhados horizontalmente.
   const sharedTextTop =
-    WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
+    WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
 
   const titleRow = new Rect(
     card.x + 8,
@@ -4639,7 +4650,8 @@ function drawTitleDayCard(
   const titleStartX =
     card.x + (card.width - titleGroupWidth) / 2;
   const titleY =
-    titleRow.y + (titleRow.height - titleFontSize) / 2;
+    titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
+      titleRow.y + (titleRow.height - titleFontSize) / 2);
 
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
@@ -4703,8 +4715,10 @@ function drawTitleDayCard(
     iconGap +
     iconSize +
     iconGap;
-  const detailCenterY =
-    detailRow.y + detailRow.height / 2;
+  const detailCenterY = Math.max(
+    detailRow.y + detailRow.height / 2,
+    titleY + titleFontSize * 1.15 + 5 + detailFontSize / 2
+  );
   const detailY =
     detailCenterY - detailFontSize / 2;
 
@@ -4777,6 +4791,30 @@ function titleScheduleCountsForDay(date) {
 }
 
 function fillTitleCardShape(ctx, rect, radii, color) {
+  // Apenas o canto que toca a borda externa usa o perfil calibrado.
+  // Os cantos internos, inclusive a base esquerda de amanhã, permanecem.
+  if (rect.x + rect.width >= CANVAS.width - 4 && rect.y <= 6) {
+    const inset = Math.max(0, CANVAS.width - rect.x - rect.width);
+    const curve = widgetLeftContourPoints(inset)
+      .filter(p => p.y <= WIDGET_CONTOUR.extentY)
+      .map(p => new Point(CANVAS.width - p.x, Math.max(rect.y, p.y)));
+    const path = new Path();
+    const r = Math.min(radii.topLeft, rect.height / 2);
+    const k = 0.5522847498;
+    path.move(new Point(rect.x + r, rect.y));
+    for (const p of curve) path.addLine(p);
+    path.addLine(new Point(rect.x + rect.width, rect.y + rect.height));
+    path.addLine(new Point(rect.x, rect.y + rect.height));
+    path.addLine(new Point(rect.x, rect.y + r));
+    path.addCurve(new Point(rect.x + r, rect.y),
+      new Point(rect.x, rect.y + r - r*k),
+      new Point(rect.x + r - r*k, rect.y));
+    path.closeSubpath();
+    ctx.setFillColor(color);
+    ctx.addPath(path);
+    ctx.fillPath();
+    return;
+  }
   const topLeft = Math.max(0, Math.min(radii.topLeft, rect.width / 2, rect.height / 2));
   const topRight = Math.max(0, Math.min(radii.topRight, rect.width / 2, rect.height / 2));
   const bottomRight = Math.max(0, Math.min(radii.bottomRight, rect.width / 2, rect.height / 2));
@@ -6022,11 +6060,12 @@ function thermalBandBottomY() {
 }
 
 function bottomLegendCenterY() {
-  // A borda inferior do círculo coincide com a extremidade inferior do
-  // canvas. A coordenada retornada é local ao painel da timeline.
+  // Folga de 4 unidades lógicas para antialiasing e recorte do sistema.
+  // A coordenada retornada é local ao painel da timeline.
   return (
     CANVAS.height -
     WIDGET_CONTENT_BOTTOM_MARGIN -
+    WIDGET_CONTOUR.strokeInset -
     CANVAS.timelineTop -
     DAY_CHANGE_CIRCLE_DIAMETER / 2
   );
@@ -7512,86 +7551,9 @@ function roundedRectContainsPoint(rect, radius, x, y) {
 }
 
 function timelineMoonPointIsVisible(x, y) {
-  const rect = new Rect(
-    CANVAS.plotLeft,
-    CANVAS.timelineTop,
-    timelineWidth(),
-    timelineHeight()
-  );
-  // O aro tem 4 px. Recuar 2 px o centro do traço faz sua borda
-  // externa coincidir exatamente com o limite visível da timeline.
-  const strokeInset = dayBoundaryLineWidth() / 2;
-  const clippedRect = new Rect(
-    rect.x + strokeInset,
-    rect.y + strokeInset,
-    Math.max(1, rect.width - strokeInset * 2),
-    Math.max(1, rect.height - strokeInset * 2)
-  );
-  const clippedRadius = Math.max(
-    0,
-    Math.min(
-      WIDGET_COMMON_CORNER_RADIUS,
-      rect.width / 2,
-      rect.height / 2
-    ) - strokeInset
-  );
-
-  // O aro pode atravessar ligeiramente as bordas horizontais,
-  // como já acontecia visualmente sobre a linha superior. O limite
-  // lateral, porém, nunca pode escapar do retângulo arredondado.
-  if (
-    y < clippedRect.y ||
-    y > clippedRect.y + clippedRect.height
-  ) {
-    return (
-      x >= clippedRect.x &&
-      x <= clippedRect.x + clippedRect.width
-    );
-  }
-
-  if (
-    x < clippedRect.x ||
-    x > clippedRect.x + clippedRect.width
-  ) {
-    return false;
-  }
-
-  // O recorte do aro segue o mesmo perfil do painel: os dois
-  // cantos esquerdos e o canto superior direito são perpendiculares.
-  // Apenas o canto inferior direito continua usando o raio circular.
-  const leftCornerEndX =
-    clippedRect.x + clippedRadius;
-  const rightCornerStartX =
-    clippedRect.x + clippedRect.width - clippedRadius;
-  const topCornerEndY =
-    clippedRect.y + clippedRadius;
-  const bottomCornerStartY =
-    clippedRect.y + clippedRect.height - clippedRadius;
-
-  const inTopLeftSquare =
-    x <= leftCornerEndX &&
-    y <= topCornerEndY;
-  const inBottomLeftSquare =
-    x <= leftCornerEndX &&
-    y >= bottomCornerStartY;
-  const inTopRightSquare =
-    x >= rightCornerStartX &&
-    y <= topCornerEndY;
-
-  if (
-    inTopLeftSquare ||
-    inBottomLeftSquare ||
-    inTopRightSquare
-  ) {
-    return true;
-  }
-
-  return roundedRectContainsPoint(
-    clippedRect,
-    clippedRadius,
-    x,
-    y
-  );
+  const inset = widgetContourInsetAtY(y, WIDGET_CONTOUR.strokeInset);
+  return y >= 0 && y <= CANVAS.height &&
+    x >= inset && x <= CANVAS.width - inset;
 }
 
 function drawClippedDayBoundaryMoonBorder(
@@ -10654,24 +10616,10 @@ function hourLegendVisibleBounds(rect) {
 }
 
 function hourLegendVisibleBoundsAtY(y) {
-  const topY = 0;
-  const bottomY = hourLegendFrameBottomY();
-  const radius = Math.min(
-    hourLegendCornerRadius(),
-    timelineWidth() / 2,
-    (bottomY - topY) / 2
+  const inset = widgetContourInsetAtY(
+    CANVAS.timelineTop + y, WIDGET_CONTOUR.strokeInset
   );
-  const inset = roundedFrameInsetAtY(
-    y,
-    topY,
-    bottomY,
-    radius
-  );
-  return {
-    left: inset,
-    right: timelineWidth() - inset,
-    inset,
-  };
+  return { left: inset, right: timelineWidth() - inset, inset };
 }
 
 function hourLegendRectIsFullyVisible(rect) {

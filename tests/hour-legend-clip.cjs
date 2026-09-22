@@ -13,6 +13,7 @@ const end = source.indexOf('function hourLabelMetrics(', start);
 assert(start >= 0 && end > start, 'Localizar geometria da legenda.');
 
 const context = {
+  CANVAS: {width: 1000, height: 510, timelineTop: 0},
   TITLE_CARD_OUTER_CORNER_RADIUS: 48,
   DAY_CHANGE_CIRCLE_DIAMETER: 52,
   titleDayCardRect: () => ({ width: 240, height: 96 }),
@@ -20,6 +21,10 @@ const context = {
   bottomLegendCenterY: () => 438,
 };
 vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('const WIDGET_CONTOUR ='),
+  source.indexOf('const VERTICAL_LAYOUT_SCALE =')), context);
+vm.runInContext(source.slice(source.indexOf('function widgetContourInsetAtY('),
+  source.indexOf('function widgetLeftContourPoints(')), context);
 vm.runInContext(source.slice(start, end), context);
 
 const upper = context.hourLegendVisibleBoundsAtY(450);
