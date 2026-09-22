@@ -179,6 +179,9 @@ const WIDGET_CONTOUR = Object.freeze({
   strokeInset: 4,
   textClearance: 8,
 });
+const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 1;
+const HOUR_LEGEND_HEIGHT_REDUCTION = 1;
+const DAY_CARD_TEXT_VERTICAL_OFFSET = -4;
 const VERTICAL_LAYOUT_SCALE =
   (WIDGET_CANVAS_HEIGHT -
     WIDGET_CONTENT_TOP_MARGIN -
@@ -3215,7 +3218,7 @@ function drawCurrentDayBoundaryBadgeOnForeground(ctx) {
   }
 
   const centerX = CANVAS.plotLeft + localX;
-  const centerY = CANVAS.timelineTop + bottomLegendCenterY();
+  const centerY = CANVAS.timelineTop + dayChangeLegendCenterY();
   const style = dayBadgeStyle(
     boundaryDate,
     loadResult.holidayDates
@@ -4458,7 +4461,7 @@ function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
     dayBoundaryAstroOuterRadius();
   const lineBottom =
     CANVAS.timelineTop +
-    bottomLegendCenterY() -
+    dayChangeLegendCenterY() -
     DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const rasterWidth = Math.max(1, Math.round(lineWidth));
   const rasterLeftX = Math.round(boundaryX - rasterWidth / 2);
@@ -4651,7 +4654,9 @@ function drawTitleDayCard(
     card.x + (card.width - titleGroupWidth) / 2;
   const titleY =
     titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
-      titleRow.y + (titleRow.height - titleFontSize) / 2);
+      titleRow.y +
+      (titleRow.height - titleFontSize) / 2 +
+      DAY_CARD_TEXT_VERTICAL_OFFSET);
 
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
@@ -4716,7 +4721,8 @@ function drawTitleDayCard(
     iconSize +
     iconGap;
   const detailCenterY = Math.max(
-    detailRow.y + detailRow.height / 2,
+    detailRow.y + detailRow.height / 2 +
+      DAY_CARD_TEXT_VERTICAL_OFFSET,
     titleY + titleFontSize * 1.15 + 5 + detailFontSize / 2
   );
   const detailY =
@@ -6071,6 +6077,10 @@ function bottomLegendCenterY() {
   );
 }
 
+function dayChangeLegendCenterY() {
+  return bottomLegendCenterY() + DAY_CHANGE_CIRCLE_VERTICAL_OFFSET;
+}
+
 function timelineChartTop() {
   return weatherStripBottomY() + scaleVertical(5);
 }
@@ -6152,7 +6162,7 @@ function timelineBarVerticalRect(item) {
 }
 
 function drawBottomHourLegend(ctx) {
-  const centerY = bottomLegendCenterY();
+  const centerY = dayChangeLegendCenterY();
   const bottomY = bottomLegendTextBottomY(centerY);
   // A fonte permanece exatamente a mesma do widget de 24 horas.
   const hourFontSize = scaleFontSize(24);
@@ -6184,7 +6194,11 @@ function drawBottomHourLegend(ctx) {
     const labelRect = bottomAlignedLegendTextRect(
       centerX,
       bottomY,
-      legendLabelWidth()
+      legendLabelWidth(),
+      Math.max(
+        1,
+        legendTextHeight() - HOUR_LEGEND_HEIGHT_REDUCTION
+      )
     );
     drawHourLegendLabelClipped(
       ctx,
@@ -8717,7 +8731,7 @@ function drawTimelineDayBoundariesOnTop(ctx) {
   // Começa somente depois da borda externa do astro.
   const lineTop =
     weatherIconCenterY() + dayBoundaryAstroOuterRadius();
-  const lineBottom = bottomLegendCenterY();
+  const lineBottom = dayChangeLegendCenterY();
   const lineWidth = dayBoundaryLineWidth();
 
   for (const tick of hourTicks()) {
@@ -8743,7 +8757,7 @@ function drawTimelineDayBoundariesOnTop(ctx) {
 function drawWeekdayBadgesOnTop(ctx) {
   // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
   const fontSize = scaleFontSize(20);
-  const centerY = bottomLegendCenterY();
+  const centerY = dayChangeLegendCenterY();
   const textWidth =
     DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
 
@@ -10482,8 +10496,12 @@ function bottomLegendTextBottomY(centerY) {
   return centerY + legendTextHeight() / 2;
 }
 
-function bottomAlignedLegendTextRect(centerX, bottomY, width) {
-  const height = legendTextHeight();
+function bottomAlignedLegendTextRect(
+  centerX,
+  bottomY,
+  width,
+  height = legendTextHeight()
+) {
   return new Rect(
     centerX - width / 2,
     bottomY - height,
