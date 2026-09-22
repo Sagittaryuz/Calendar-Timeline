@@ -31,6 +31,10 @@ assert(source.includes('const labelScale = Math.min(1'));
 const diagonal = source.slice(source.indexOf('async function drawDiagonalWeekdayLabels('), source.indexOf('async function rasterizeDiagonalWeekdayLabels('));
 assert(diagonal.includes('if (!shouldBlurFutureTimeline()) return;'));
 assert(diagonal.includes('Math.max(entry.x0, boundaryX)'));
+assert.match(source, /rainLineColor:\s*"#17BAEC"/);
+context.SETTINGS = { futureTimelineBlurTintColor: '#111216' };
+vm.runInContext(source.slice(source.indexOf('function diagonalWeekdayLabelColor('), source.indexOf('function diagonalWeekdayLabelEntries(')), context);
+assert.equal(context.diagonalWeekdayLabelColor(new Date()), '#FFFFFF');
 const calls = [];
 context.Point = class { constructor(x,y) {this.x=x;this.y=y;} };
 context.Path = class {
