@@ -48,12 +48,8 @@ for (const selected of [false, true]) {
         shapes.forEach(({radii}, shapeIndex) => {
           assert.equal(
             radii.bottomLeft,
-            offset === 1
-              ? shapeIndex === 0 ? 48 : 46
-              : 0,
-            offset === 1
-              ? 'Amanhã preserva o canto inferior esquerdo arredondado.'
-              : 'Os demais quadros futuros mantêm a base perpendicular.'
+            0,
+            'Todos os quadros futuros mantêm a base perpendicular.'
           );
           assert.equal(radii.bottomRight, 0);
           assert(radii.topLeft > 0 && radii.topRight > 0);
@@ -62,4 +58,4 @@ for (const selected of [false, true]) {
     }
   }
 }
-console.log('OK: canto de amanhã preservado; demais bases perpendiculares; hoje não repintado.');
+console.log('OK: amanhã igual aos demais quadros futuros; bases perpendiculares; hoje não repintado.');

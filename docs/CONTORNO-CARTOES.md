@@ -2,9 +2,9 @@
 
 Os cantos arredondados dos cartões agora usam o expoente 2,45 do contorno
 externo, com extensões de referência 102 × 101 no canvas lógico.
-Quando dois cantos compartilham uma lateral curta (como amanhã), suas
-extensões são reduzidas juntas para evitar cruzamento. Cantos retos seguem
-retos. O canto externo do último cartão mantém o caminho já calibrado.
+Quando dois cantos compartilham uma lateral curta, suas extensões são
+reduzidas juntas para evitar cruzamento. Cantos retos seguem retos. O canto
+externo do último cartão mantém o caminho já calibrado.
 
 O canto superior direito de hoje reflete o superior esquerdo pelo centro
 do cartão. A ponte para a linha móvel usa o mesmo perfil, limitada ao

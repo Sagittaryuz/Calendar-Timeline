@@ -4447,15 +4447,12 @@ function drawTitleDayCard(
     1.0
   );
 
-  // Preserva os raios superiores. O quadro de amanhã mantém o raio no
-  // canto inferior esquerdo; os demais cartões futuros têm a base reta.
+  // Preserva os raios superiores. Todos os cartões futuros têm os dois
+  // cantos inferiores perpendiculares; somente as regras externas definem
+  // os cantos superiores e o canto externo do último quadro.
   const rightCornerRadius = isLast
     ? TITLE_CARD_OUTER_CORNER_RADIUS
     : TITLE_CARD_STANDARD_CORNER_RADIUS;
-  const isTomorrowCard =
-    !isSelected &&
-    dateKey(date) ===
-      dateKey(addDays(startOfDay(windowStart), 1));
   const cornerRadii = {
     topLeft: card.x <= CANVAS.marginX + 1
       ? TITLE_CARD_OUTER_CORNER_RADIUS
@@ -4463,10 +4460,7 @@ function drawTitleDayCard(
     topRight: rightCornerRadius,
     // Hoje mantém sua geometria contínua própria, desenhada separadamente.
     bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,
-    bottomLeft:
-      isSelected || isTomorrowCard
-        ? TITLE_CARD_STANDARD_CORNER_RADIUS
-        : 0,
+    bottomLeft: isSelected ? TITLE_CARD_STANDARD_CORNER_RADIUS : 0,
   };
 
   // O cartão de hoje já foi preenchido pela geometria contínua
