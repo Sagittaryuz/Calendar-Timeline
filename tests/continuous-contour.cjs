@@ -99,3 +99,24 @@ assert(icons.every(icon=>icon.y+icon.size/2<last.y+last.height));
 assert.equal(new Set(texts.filter(t=>t.t==='TER').map(t=>t.p.y)).size,1,'Titles aligned');
 console.log('Calibration: header font '+font+'; title y '+titleY+'; circle edge '+lowerCircleEdge);
 console.log('OK: contorno medido, máscara, traços internos, títulos, rodapé e viradas próximas da borda.');
+
+for (const name of ['currentDayBridgeMetrics','appendCurrentDayBridgeCurve',
+  'buildCurrentDayUpperPath']) load(name);
+const card=c.titleDayCardRect(0);
+for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
+  const {path,bridge}=c.buildCurrentDayUpperPath(null,card,120,4,{},'right',boundary,52,new Path(),2,54);
+  assert(path.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+  for(let i=1;i<path.points.length;i++) {
+    assert(path.points[i].y>=path.points[i-1].y-1e-6,'Sem retorno vertical na ponte');
+  }
+  assert(Math.abs(path.points.at(-1).x-bridge.endpointX)<1e-6);
+  assert(Math.abs(path.points.at(-1).y-120)<1e-6);
+  const externalTop=c.widgetLeftContourPoints().slice(0,65);
+  // O arco direito é exatamente o reflexo do esquerdo no centro do cartão.
+  for(let i=1;i<=64;i++) {
+    assert(Math.abs(path.points[i+1].x-(card.width-externalTop[i].x))<1e-5);
+    assert(Math.abs(path.points[i+1].y-externalTop[i].y)<1e-5);
+  }
+}
+assert(source.includes('solarLineY() + scaleVertical(12) - 5,'), 'Gotas sobem 5 unidades');
+console.log('OK: espelhamento de hoje, ponte sem cruzamento e gotas -5.');

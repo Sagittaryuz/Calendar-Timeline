@@ -203,6 +203,21 @@ function mapLegacyContentY(value) {
   );
 }
 
+
+// Arco local do mesmo perfil do contorno externo; ângulos em radianos.
+// Serve tanto ao preenchimento quanto ao traço, inclusive por espelhamento.
+function appendContourArc(path, cx, cy, rx, ry, start, end) {
+  const power = 2 / WIDGET_CONTOUR.exponent;
+  for (let i = 1; i <= 64; i++) {
+    const angle = start + (end - start) * i / 64;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    path.addLine(new Point(
+      cx + rx * Math.sign(cos) * Math.abs(cos) ** power,
+      cy + ry * Math.sign(sin) * Math.abs(sin) ** power
+    ));
+  }
+}
+
 function widgetContourInsetAtY(y, inset = 0) {
   const rx = WIDGET_CONTOUR.extentX - inset;
   const ry = WIDGET_CONTOUR.extentY - inset;
@@ -4111,181 +4126,53 @@ function currentDayBridgeMetrics(
   };
 }
 
-function appendCurrentDayBridgeCurve(
-  path,
-  bridge,
-  bridgeY,
-  radius
-) {
-  if (
-    bridge.distance <= 0 ||
-    bridge.bridgeRadius <= 0
-  ) {
-    return;
+function appendCurrentDayBridgeCurve(path, bridge, bridgeY, radius) {
+  if (bridge.bridgeRadius <= 0 || bridge.distance <= 0) return;
+  const r = bridge.bridgeRadius;
+  // A mesma superelipse, refletida conforme a direção da virada.
+  const cx = bridge.edgeX + bridge.curveDirectionSign * r;
+  const cy = bridgeY - r;
+  if (bridge.curveDirectionSign > 0) {
+    appendContourArc(path, cx, cy, r, r, Math.PI, Math.PI/2);
+  } else {
+    appendContourArc(path, cx, cy, r, r, 0, Math.PI/2);
   }
-
-  const curveFactor = 0.5522847498;
-  if (!bridge.isFlexible) {
-    const endpoint = new Point(
-      bridge.endpointX,
-      bridgeY
-    );
-    path.addCurve(
-      endpoint,
-      new Point(
-        bridge.edgeX,
-        bridgeY - bridge.bridgeRadius +
-          bridge.bridgeRadius * curveFactor
-      ),
-      new Point(
-        bridge.endpointX -
-          bridge.curveDirectionSign *
-            bridge.bridgeRadius * curveFactor,
-        bridgeY
-      )
-    );
-    return;
-  }
-
-  // Quando a distância fica menor que o raio máximo, a ponte
-  // deixa de forçar um quarto de círculo. O ângulo de saída
-  // diminui gradualmente até zero quando as linhas coincidem.
-  const progress =
-    bridge.distance /
-    Math.max(0.0001, radius);
-  const endAngle =
-    (1 - Math.min(1, progress)) * Math.PI / 2;
-  const controlLength =
-    bridge.bridgeRadius *
-    (0.35 + 0.2022847498 * Math.min(1, progress));
-  const tangentX =
-    bridge.curveDirectionSign * Math.cos(endAngle);
-  const tangentY = Math.sin(endAngle);
-
-  path.addCurve(
-    new Point(bridge.endpointX, bridgeY),
-    new Point(
-      bridge.edgeX,
-      bridge.startY + controlLength
-    ),
-    new Point(
-      bridge.endpointX - tangentX * controlLength,
-      bridgeY - tangentY * controlLength
-    )
-  );
 }
 
 function buildCurrentDayUpperPath(
-  ctx,
-  card,
-  bridgeY,
-  lineWidth,
-  color,
-  horizontalDirection,
-  boundaryX,
-  radius,
-  path = new Path(),
-  pathInset = 0,
-  outerRadius = radius
+  ctx, card, bridgeY, lineWidth, color, horizontalDirection,
+  boundaryX, radius, path = new Path(), pathInset = 0, outerRadius = radius
 ) {
-  const direction =
-    horizontalDirection === "left" ? "left" : "right";
-  const curveFactor = 0.5522847498;
-  const inset = Math.max(
-    0,
-    Math.min(Number(pathInset) || 0, card.width / 2)
-  );
-  // No canto convexo, o limite visível tem raio caminho + meio traço.
-  // Na ponte côncava, esse limite tem raio caminho - meio traço.
-  // A classificação acompanha o sentido real da saída, inclusive espelhada.
-  const bridgeOuterRadius = Math.max(
-    0,
-    Number(outerRadius) || 0
-  );
-  const bridgeEdgeX = direction === "right"
-    ? card.x + card.width - inset
-    : card.x + inset;
+  const direction = horizontalDirection === "left" ? "left" : "right";
+  const inset = card.x === CANVAS.plotLeft
+    ? WIDGET_CONTOUR.strokeInset
+    : Math.max(0, Math.min(Number(pathInset) || 0, card.width / 2));
+  const left = card.x + inset, right = card.x + card.width - inset;
+  // Espelha o canto externo de hoje pelo centro do cartão.
+  const rx = Math.min(WIDGET_CONTOUR.extentX - WIDGET_CONTOUR.strokeInset,
+    (right - left) / 2);
+  const ry = Math.min(WIDGET_CONTOUR.extentY - WIDGET_CONTOUR.strokeInset,
+    Math.max(0, bridgeY - card.y));
+  const bridgeEdgeX = direction === "right" ? right : left;
   const outwardSign = direction === "right" ? 1 : -1;
-  const bridgeIsConcave =
-    (boundaryX - bridgeEdgeX) * outwardSign >= 0;
-  const bridgePathRadius = Math.max(
-    0,
-    bridgeOuterRadius + (bridgeIsConcave ? inset : -inset)
-  );
-  const bridge = currentDayBridgeMetrics(
-    card,
-    boundaryX,
-    bridgeY,
-    bridgePathRadius,
-    direction,
-    inset
-  );
-  const left = card.x + inset;
-  const right = card.x + card.width - inset;
-
-  if (direction === "left") {
-    // Espelhamento completo do trecho superior: a ponte
-    // nasce no lado esquerdo e a lateral oposta fica contínua.
-    if (radius <= 0) {
-      path.move(new Point(right, card.y));
-      path.addLine(new Point(left, card.y));
-    } else {
-      path.move(new Point(right - radius, card.y));
-      path.addLine(new Point(left + radius, card.y));
-      path.addCurve(
-        new Point(left, card.y + radius),
-        new Point(
-          left + radius - radius * curveFactor,
-          card.y
-        ),
-        new Point(
-          left,
-          card.y + radius - radius * curveFactor
-        )
-      );
-    }
-    path.addLine(
-      new Point(left, bridge.startY)
-    );
-    appendCurrentDayBridgeCurve(
-      path,
-      bridge,
-      bridgeY,
-      bridgePathRadius
-    );
+  const concave = (boundaryX - bridgeEdgeX) * outwardSign >= 0;
+  const bridgeRadius = Math.min(
+    Math.max(0, outerRadius + (concave ? inset : -inset)),
+    Math.max(0, bridgeY - card.y - ry));
+  const bridge = currentDayBridgeMetrics(card, boundaryX, bridgeY,
+    bridgeRadius, direction, inset);
+  if (direction === "right") {
+    path.move(new Point(card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX : left + rx, card.y));
+    path.addLine(new Point(right - rx, card.y));
+    appendContourArc(path, right - rx, card.y + ry, rx, ry, -Math.PI/2, 0);
+    path.addLine(new Point(right, bridge.startY));
   } else {
-    if (radius <= 0) {
-      path.move(new Point(left, card.y));
-      path.addLine(new Point(right, card.y));
-    } else {
-      path.move(new Point(
-        card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX : left + radius,
-        card.y
-      ));
-      path.addLine(new Point(right - radius, card.y));
-      path.addCurve(
-        new Point(right, card.y + radius),
-        new Point(
-          right - radius + radius * curveFactor,
-          card.y
-        ),
-        new Point(
-          right,
-          card.y + radius - radius * curveFactor
-        )
-      );
-    }
-    path.addLine(
-      new Point(right, bridge.startY)
-    );
-    appendCurrentDayBridgeCurve(
-      path,
-      bridge,
-      bridgeY,
-      bridgePathRadius
-    );
+    path.move(new Point(right - rx, card.y));
+    path.addLine(new Point(left + rx, card.y));
+    appendContourArc(path, left + rx, card.y + ry, rx, ry, -Math.PI/2, -Math.PI);
+    path.addLine(new Point(left, bridge.startY));
   }
-
+  appendCurrentDayBridgeCurve(path, bridge, bridgeY, bridgeRadius);
   return { path, bridge };
 }
 
@@ -4797,109 +4684,42 @@ function titleScheduleCountsForDay(date) {
 }
 
 function fillTitleCardShape(ctx, rect, radii, color) {
-  // Apenas o canto que toca a borda externa usa o perfil calibrado.
-  // Os cantos internos, inclusive a base esquerda de amanhã, permanecem.
-  if (rect.x + rect.width >= CANVAS.width - 4 && rect.y <= 6) {
-    const inset = Math.max(0, CANVAS.width - rect.x - rect.width);
-    const curve = widgetLeftContourPoints(inset)
-      .filter(p => p.y <= WIDGET_CONTOUR.extentY)
-      .map(p => new Point(CANVAS.width - p.x, Math.max(rect.y, p.y)));
-    const path = new Path();
-    const r = Math.min(radii.topLeft, rect.height / 2);
-    const k = 0.5522847498;
-    path.move(new Point(rect.x + r, rect.y));
-    for (const p of curve) path.addLine(p);
-    path.addLine(new Point(rect.x + rect.width, rect.y + rect.height));
-    path.addLine(new Point(rect.x, rect.y + rect.height));
-    path.addLine(new Point(rect.x, rect.y + r));
-    path.addCurve(new Point(rect.x + r, rect.y),
-      new Point(rect.x, rect.y + r - r*k),
-      new Point(rect.x + r - r*k, rect.y));
-    path.closeSubpath();
-    ctx.setFillColor(color);
-    ctx.addPath(path);
-    ctx.fillPath();
-    return;
+  const right = rect.x + rect.width, bottom = rect.y + rect.height;
+  const outerRight = right >= CANVAS.width - 4 && rect.y <= 6;
+  const inset = outerRight ? Math.max(0, CANVAS.width - right) : 0;
+  const rx = WIDGET_CONTOUR.extentX - inset;
+  const ry = WIDGET_CONTOUR.extentY - inset;
+  const corners = ["topLeft", "topRight", "bottomRight", "bottomLeft"]
+    .map(key => radii[key] > 0 ? {x: rx, y: ry} : {x: 0, y: 0});
+  // Ajuste conjunto por lateral: cantos retos continuam retos.
+  const factor = Math.min(1,
+    rect.width / Math.max(1, corners[0].x + corners[1].x),
+    rect.width / Math.max(1, corners[2].x + corners[3].x),
+    rect.height / Math.max(1, corners[0].y + corners[3].y),
+    rect.height / Math.max(1, corners[1].y + corners[2].y));
+  for (const c of corners) { c.x *= factor; c.y *= factor; }
+  const [tl, tr, br, bl] = corners;
+  const path = new Path();
+  path.move(new Point(rect.x + tl.x, rect.y));
+  path.addLine(new Point(right - tr.x, rect.y));
+  if (outerRight) {
+    // Preserva exatamente o canto externo que já foi calibrado no aparelho.
+    for (const p of widgetLeftContourPoints(inset).filter(p => p.y <= WIDGET_CONTOUR.extentY)) {
+      path.addLine(new Point(CANVAS.width - p.x, Math.max(rect.y, p.y)));
+    }
+  } else {
+    appendContourArc(path, right - tr.x, rect.y + tr.y, tr.x, tr.y, -Math.PI/2, 0);
   }
-  const topLeft = Math.max(0, Math.min(radii.topLeft, rect.width / 2, rect.height / 2));
-  const topRight = Math.max(0, Math.min(radii.topRight, rect.width / 2, rect.height / 2));
-  const bottomRight = Math.max(0, Math.min(radii.bottomRight, rect.width / 2, rect.height / 2));
-  const bottomLeft = Math.max(0, Math.min(radii.bottomLeft, rect.width / 2, rect.height / 2));
-  const topBandHeight = Math.max(topLeft, topRight);
-  const bottomBandHeight = Math.max(bottomLeft, bottomRight);
-  const leftBandWidth = Math.max(topLeft, bottomLeft);
-  const rightBandWidth = Math.max(topRight, bottomRight);
-
+  path.addLine(new Point(right, bottom - br.y));
+  appendContourArc(path, right - br.x, bottom - br.y, br.x, br.y, 0, Math.PI/2);
+  path.addLine(new Point(rect.x + bl.x, bottom));
+  appendContourArc(path, rect.x + bl.x, bottom - bl.y, bl.x, bl.y, Math.PI/2, Math.PI);
+  path.addLine(new Point(rect.x, rect.y + tl.y));
+  appendContourArc(path, rect.x + tl.x, rect.y + tl.y, tl.x, tl.y, Math.PI, Math.PI*1.5);
+  path.closeSubpath();
   ctx.setFillColor(color);
-  ctx.fillRect(
-    new Rect(
-      rect.x + topLeft,
-      rect.y,
-      Math.max(0, rect.width - topLeft - topRight),
-      topBandHeight
-    )
-  );
-  ctx.fillRect(
-    new Rect(
-      rect.x + bottomLeft,
-      rect.y + rect.height - bottomBandHeight,
-      Math.max(0, rect.width - bottomLeft - bottomRight),
-      bottomBandHeight
-    )
-  );
-  ctx.fillRect(
-    new Rect(
-      rect.x,
-      rect.y + topLeft,
-      leftBandWidth,
-      Math.max(0, rect.height - topLeft - bottomLeft)
-    )
-  );
-  ctx.fillRect(
-    new Rect(
-      rect.x + rect.width - rightBandWidth,
-      rect.y + topRight,
-      rightBandWidth,
-      Math.max(0, rect.height - topRight - bottomRight)
-    )
-  );
-  // Preenche o núcleo interno. As faixas laterais e superior/inferior
-  // definem a silhueta, mas sozinhas deixam o centro transparente.
-  ctx.fillRect(
-    new Rect(
-      rect.x + leftBandWidth,
-      rect.y + topBandHeight,
-      Math.max(0, rect.width - leftBandWidth - rightBandWidth),
-      Math.max(0, rect.height - topBandHeight - bottomBandHeight)
-    )
-  );
-  ctx.fillEllipse(
-    new Rect(rect.x, rect.y, topLeft * 2, topLeft * 2)
-  );
-  ctx.fillEllipse(
-    new Rect(
-      rect.x + rect.width - topRight * 2,
-      rect.y,
-      topRight * 2,
-      topRight * 2
-    )
-  );
-  ctx.fillEllipse(
-    new Rect(
-      rect.x + rect.width - bottomRight * 2,
-      rect.y + rect.height - bottomRight * 2,
-      bottomRight * 2,
-      bottomRight * 2
-    )
-  );
-  ctx.fillEllipse(
-    new Rect(
-      rect.x,
-      rect.y + rect.height - bottomLeft * 2,
-      bottomLeft * 2,
-      bottomLeft * 2
-    )
-  );
+  ctx.addPath(path);
+  ctx.fillPath();
 }
 
 function titleDayMonthLabel(date) {
@@ -5423,7 +5243,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     // Grade temporal fixa: uma posição com símbolo e a seguinte vazia.
     // Usa o mesmo volume e a mesma cor da barra, sem alterar sua escala.
     if (Math.floor(entry.timestamp / quarterHourMilliseconds) % 2 === 0) {
-      drawRainTopMarker(ctx, centerX, solarLineY() + scaleVertical(12),
+      drawRainTopMarker(ctx, centerX, solarLineY() + scaleVertical(12) - 5,
         scaleVertical(16 + 24 * normalized),
         Math.max(scaleVertical(7), Math.min(scaleVertical(13), quarterWidth * 1.15)),
         entry.storm, new Color(SETTINGS.rainLineColor, opacity));

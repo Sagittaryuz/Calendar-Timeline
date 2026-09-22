@@ -25,6 +25,13 @@ class Point {
 class Color {}
 
 const context = {
+  WIDGET_CONTOUR: {extentX:102, extentY:101, exponent:2.45},
+  Path: class {
+    constructor() { this.points = []; }
+    move(p) { this.points.push(p); }
+    addLine(p) { this.points.push(p); }
+    closeSubpath() {}
+  },
   CANVAS: {width: 1092, height: 510},
   SETTINGS: { birthdayLabelGap: 30 },
   Rect,
@@ -51,10 +58,15 @@ const fillStart = source.indexOf('function fillTitleCardShape(');
 const fillEnd = source.indexOf('function titleDayMonthLabel(', fillStart);
 assert(fillStart >= 0 && fillEnd > fillStart, 'Localizar helper dos quadros.');
 vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('function appendContourArc('),
+  source.indexOf('function widgetContourInsetAtY(')), context);
 vm.runInContext(source.slice(fillStart, fillEnd), context);
 
 const fillRects = [];
+const filledPaths = [];
 const fillContext = {
+  addPath: path => filledPaths.push(path),
+  fillPath() {},
   setFillColor() {},
   fillRect: rect => fillRects.push(rect),
   fillEllipse() {},
@@ -66,16 +78,17 @@ context.fillTitleCardShape(
   {}
 );
 
-assert(
-  fillRects.some(
-    rect =>
-      rect.x === 20 &&
-      rect.y === 32 &&
-      rect.width === 78 &&
-      rect.height === 38
-  ),
-  'O núcleo interno do quadro precisa ser pintado.'
-);
+const polygon = filledPaths[0].points;
+function contains(x, y) {
+  let inside = false;
+  for (let i=0,j=polygon.length-1;i<polygon.length;j=i++) {
+    const a=polygon[i], b=polygon[j];
+    if ((a.y>y)!==(b.y>y) && x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x) inside=!inside;
+  }
+  return inside;
+}
+assert(contains(60,45), 'O núcleo do caminho preenchido deve cobrir o centro.');
+assert(contains(11,69) && contains(109,69), 'Cantos inferiores retos preenchidos.');
 
 const birthdayStart = source.indexOf('function drawBirthdayGroupLabel(');
 const birthdayEnd = source.indexOf('function birthdayLabelWidth(', birthdayStart);
