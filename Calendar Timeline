@@ -245,9 +245,11 @@ const CANVAS = {
   width: 1092,
   height: WIDGET_CANVAS_HEIGHT,
   headerHeight: scaleVertical(128),
-  marginX: 30,
-  plotLeft: 30,
-  plotRight: 1062,
+  // Layout horizontal full-bleed: os 60 px de margem externa anteriores
+  // foram incorporados à área útil sem alterar a escala vertical.
+  marginX: 0,
+  plotLeft: 0,
+  plotRight: 1092,
   // Coordenadas verticais mapeadas para a nova caixa interna.
   timelineTop: mapLegacyContentY(120),
   // O painel termina 2 px depois da borda inferior do círculo, sem recortá-lo.
@@ -3603,10 +3605,13 @@ function titleCardGap() {
     WIDGET_CONTENT_TOP_MARGIN - dayBoundaryLineWidth() / 2;
   const regularCardBottom =
     regularCardTop + TITLE_CARD_HEIGHT;
-  return Math.max(
+  const verticalGap = Math.max(
     0,
     CANVAS.timelineTop - regularCardBottom
   );
+  // O vão entre cartões acompanha a mesma ampliação horizontal aplicada
+  // ao conteúdo, mantendo a distribuição proporcional original.
+  return verticalGap * (timelineWidth() / 1032);
 }
 
 function titleDayCardRect(index) {
