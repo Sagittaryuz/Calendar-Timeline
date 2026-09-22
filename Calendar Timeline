@@ -2909,7 +2909,7 @@ async function drawDayEndCapsules(ctx) {
       canvas.width = ${CANVAS.width}; canvas.height = ${CANVAS.height};
       const g = canvas.getContext('2d');
       for (const entry of ${JSON.stringify(entries)}) {
-        g.save(); g.translate(entry.x, ${centerY}); g.rotate(-Math.PI / 2);
+        g.save(); g.translate(entry.x, ${centerY}); g.rotate(Math.PI / 2);
         const w = ${height}, h = ${width}, r = h / 2;
         g.beginPath();
         g.moveTo(-w/2+r, -h/2); g.lineTo(w/2-r, -h/2);
@@ -2917,13 +2917,12 @@ async function drawDayEndCapsules(ctx) {
         g.lineTo(-w/2+r, h/2);
         g.arc(-w/2+r, 0, r, Math.PI/2, Math.PI*1.5);
         g.closePath(); g.fillStyle = '#' + entry.color.replace('#',''); g.fill();
-        let fontSize = ${scaleFontSize(19)};
+        let fontSize = ${scaleFontSize(24)};
         g.font = '900 ' + fontSize + 'px -apple-system, sans-serif';
-        while (g.measureText(entry.label).width > w - 8 && fontSize > 8) {
-          fontSize--; g.font = '900 ' + fontSize + 'px -apple-system, sans-serif';
-        }
         const metrics = g.measureText(entry.label);
+        const labelScale = Math.min(1, (w - 8) / Math.max(1, metrics.width));
         g.fillStyle = '#000000'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+        g.scale(labelScale, 1);
         g.fillText(entry.label, 0, (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
         g.restore();
       }
@@ -5228,11 +5227,11 @@ function drawRainTopMarker(ctx, x, top, height, width, storm, color) {
   } else {
     path.move(new Point(x, top));
     path.addCurve(new Point(x, top + height),
-      new Point(x - width, top + height * 0.7),
-      new Point(x - width / 2, top + height));
+      new Point(x - width, top + height * 0.58),
+      new Point(x - width * 0.72, top + height));
     path.addCurve(new Point(x, top),
-      new Point(x + width / 2, top + height),
-      new Point(x + width, top + height * 0.7));
+      new Point(x + width * 0.72, top + height),
+      new Point(x + width, top + height * 0.58));
   }
   path.closeSubpath();
   ctx.setFillColor(color);
@@ -5259,10 +5258,13 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         : intervalEnd - 60 * 60 * 1000;
     const evidence = rainEvidenceForForecast(hour);
     const amount = rainMillimetersForHour(hour);
+    const storm =
+      weatherSymbolGroup(hour) === 6 ||
+      /thunder|storm/i.test(String(hour.symbol ?? ""));
 
     if (
-      !evidence.hasRain ||
-      amount < SETTINGS.rainEvidenceMinMM ||
+      (!evidence.hasRain && !storm) ||
+      (amount < SETTINGS.rainEvidenceMinMM && !storm) ||
       intervalEnd <= intervalStart
     ) {
       continue;
@@ -5285,12 +5287,14 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         rainByQuarter.set(timestamp, {
           amount,
           timestamp,
-          storm: weatherSymbolGroup(hour) === 6 || /thunder|storm/i.test(String(hour.symbol ?? "")),
+          storm,
           rainChance: Math.max(
             0,
             Math.min(100, Number(hour.rainChance) || 0)
           ),
         });
+      } else if (storm) {
+        existing.storm = true;
       }
     }
   }
@@ -5352,22 +5356,24 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       continue;
     }
 
-    drawOutlinedRainBar(
-      ctx,
-      new Rect(
-        centerX - barWidth / 2,
-        graphBottom - height,
-        barWidth,
-        height
-      ),
-      new Color(SETTINGS.rainLineColor, opacity)
-    );
+    if (entry.amount >= SETTINGS.rainEvidenceMinMM) {
+      drawOutlinedRainBar(
+        ctx,
+        new Rect(
+          centerX - barWidth / 2,
+          graphBottom - height,
+          barWidth,
+          height
+        ),
+        new Color(SETTINGS.rainLineColor, opacity)
+      );
+    }
     // Grade temporal fixa: uma posição com símbolo e a seguinte vazia.
     // Usa o mesmo volume e a mesma cor da barra, sem alterar sua escala.
     if (Math.floor(entry.timestamp / quarterHourMilliseconds) % 2 === 0) {
       drawRainTopMarker(ctx, centerX, solarLineY() + scaleVertical(12),
-        scaleVertical(5 + 15 * normalized),
-        Math.min(barWidth, quarterWidth * 0.75),
+        scaleVertical(16 + 24 * normalized),
+        Math.max(scaleVertical(7), Math.min(scaleVertical(13), quarterWidth * 1.15)),
         entry.storm, new Color(SETTINGS.rainLineColor, opacity));
     }
   }
