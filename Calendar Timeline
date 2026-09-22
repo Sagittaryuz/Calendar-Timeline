@@ -49,11 +49,11 @@ const SETTINGS = {
   cloudEvidenceMinCloudiness: 32,
   denseCloudMinCloudiness: 78,
   // Ciano reservado às barras e às gotas de chuva.
-  rainLineColor: "#03DDF8",
+  rainLineColor: "#17BAEC",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
-  nonTodayTimelineOverlayColor: "#5A5A5F",
+  nonTodayTimelineOverlayColor: "#3B3C3E",
   nonTodayTimelineOverlayOpacity: 0.64,
   // Desfoque de foco aplicado somente aos dias posteriores
   // enquanto ainda houver compromissos ou pendências válidas hoje.
@@ -8188,7 +8188,7 @@ function drawTimelineItemLayer(
 
 
 function diagonalWeekdayLabelColor(_) {
-  return SETTINGS.futureTimelineBlurTintColor;
+  return "#FFFFFF";
 }
 
 function diagonalWeekdayLabelEntries() {
@@ -10894,6 +10894,11 @@ function drawEventArrivalGuideLabel(
   return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
 }
 
+function eventArrivalGuideDisplayLabel(guide) {
+  // O tempo restante até o fim do dia não precisa aparecer junto ao tracejado.
+  return guide?.event ? guide.label : "";
+}
+
 function drawEventArrivalGuides(ctx, items, day) {
   const isTomorrow = day === "tomorrow";
   const guides = isTomorrow
@@ -10917,7 +10922,8 @@ function drawEventArrivalGuides(ctx, items, day) {
       0,
       Math.min(timelineWidth(), targetX)
     );
-    const labelWidth = eventArrivalGuideLabelWidth(guide.label);
+    const label = eventArrivalGuideDisplayLabel(guide);
+    const labelWidth = eventArrivalGuideLabelWidth(label);
     const layout = eventArrivalGuideLayout(
       day,
       dayBoundaryX,
@@ -10925,7 +10931,7 @@ function drawEventArrivalGuides(ctx, items, day) {
     );
     const lineStartX = drawEventArrivalGuideLabel(
       ctx,
-      guide.label,
+      label,
       layout.labelX,
       centerY,
       labelWidth
