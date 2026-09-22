@@ -2940,9 +2940,13 @@ async function renderWidget(items, loadError) {
   );
 
   // A linha inferior é prolongamento da curva lateral e é desenhada
-  // no mesmo Path, em primeiro plano. O círculo da mudança de dia
-  // continua sendo composto no painel e permanece visualmente à frente.
+  // no mesmo Path, em primeiro plano.
   drawCurrentDayFrameOverlay(contentCtx, items);
+
+  // A restauração dos cantos e a moldura podem cobrir a borda inferior
+  // do círculo quando ele encosta na linha branca. Recompõe somente o
+  // círculo da virada depois da moldura, usando o mesmo centro da legenda.
+  drawCurrentDayBoundaryBadgeOnForeground(contentCtx);
 
   // A borda da Lua é redesenhada após o contorno externo da timeline.
   // A borda superior da timeline não pode cobrir seu aro branco.
@@ -8581,6 +8585,15 @@ function drawWeekdayBadgesOnTop(ctx) {
 
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
+
+    // A virada imediatamente seguinte é recomposta no canvas principal,
+    // depois da moldura, para que o círculo encoste nela sem ser mascarado.
+    if (
+      dateKey(tick) ===
+      dateKey(addDays(startOfDay(windowStart), 1))
+    ) {
+      continue;
+    }
 
     const x = timelineLegendCenterX(tick);
     const style = dayBadgeStyle(tick, loadResult.holidayDates);
