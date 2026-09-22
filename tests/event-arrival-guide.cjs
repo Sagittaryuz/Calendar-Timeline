@@ -154,9 +154,19 @@ assert.equal(fallback.event, null, 'Sem evento futuro, deve usar fallback.');
 assert.equal(fallback.row, 1, 'Fallback deve ocupar a primeira linha livre.');
 assert.equal(fallback.label, '6 h', 'Fallback deve mostrar o tempo restante do dia.');
 assert.equal(
+  context.eventArrivalGuideDisplayLabel(fallback),
+  '',
+  'O tempo restante do dia não deve aparecer junto à linha tracejada.'
+);
+assert.equal(
   fallback.end.getTime(),
   at(21, 0).getTime(),
   'Fallback deve seguir até a meia-noite.'
+);
+assert.equal(
+  context.eventArrivalGuideDisplayLabel(selected),
+  selected.label,
+  'A contagem até um próximo evento continua visível.'
 );
 
 const tomorrowOnly = context.todayEventArrivalGuide([
@@ -180,6 +190,11 @@ console.log('OK: guia de chegada escolhe o próximo evento e usa a primeira linh
 
 // A referência de amanhã é sua meia-noite, independentemente da hora atual.
 assert.equal(context.tomorrowEventArrivalGuides([])[0].label, '24 h');
+assert.equal(
+  context.eventArrivalGuideDisplayLabel(context.tomorrowEventArrivalGuides([])[0]),
+  '',
+  'O rótulo de restante do dia seguinte também deve ser ocultado.'
+);
 const lateNow = at(20, 23, 45);
 assert.equal(context.tomorrowEventArrivalGuides([
   event('Amanhã', at(21, 10), at(21, 11), 0)
