@@ -118,5 +118,8 @@ for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
     assert(Math.abs(path.points[i+1].y-externalTop[i].y)<1e-5);
   }
 }
-assert(source.includes('solarLineY() + scaleVertical(12) - 5,'), 'Gotas sobem 5 unidades');
-console.log('OK: espelhamento de hoje, ponte sem cruzamento e gotas -5.');
+assert(source.includes('const RAIN_TOP_MARKER_VERTICAL_OFFSET = -10;'),
+  'Gotas acumulam mais 5 unidades de deslocamento');
+assert(source.includes('solarLineY() + scaleVertical(12) + RAIN_TOP_MARKER_VERTICAL_OFFSET,'),
+  'Gotas usam o deslocamento vertical centralizado');
+console.log('OK: espelhamento de hoje, ponte sem cruzamento e gotas -10 no total.');

@@ -182,6 +182,9 @@ const WIDGET_CONTOUR = Object.freeze({
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 1;
 const HOUR_LEGEND_HEIGHT_REDUCTION = 1;
 const DAY_CARD_TEXT_VERTICAL_OFFSET = -4;
+// O marcador superior das gotas já estava 5 px acima da posição original.
+// Este segundo deslocamento acrescenta mais 5 px, totalizando -10 px.
+const RAIN_TOP_MARKER_VERTICAL_OFFSET = -10;
 const VERTICAL_LAYOUT_SCALE =
   (WIDGET_CANVAS_HEIGHT -
     WIDGET_CONTENT_TOP_MARGIN -
@@ -5243,7 +5246,8 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     // Grade temporal fixa: uma posição com símbolo e a seguinte vazia.
     // Usa o mesmo volume e a mesma cor da barra, sem alterar sua escala.
     if (Math.floor(entry.timestamp / quarterHourMilliseconds) % 2 === 0) {
-      drawRainTopMarker(ctx, centerX, solarLineY() + scaleVertical(12) - 5,
+      drawRainTopMarker(ctx, centerX,
+        solarLineY() + scaleVertical(12) + RAIN_TOP_MARKER_VERTICAL_OFFSET,
         scaleVertical(16 + 24 * normalized),
         Math.max(scaleVertical(7), Math.min(scaleVertical(13), quarterWidth * 1.15)),
         entry.storm, new Color(SETTINGS.rainLineColor, opacity));
