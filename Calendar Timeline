@@ -48,9 +48,8 @@ const SETTINGS = {
   rainSymbolMinChance: 35,
   cloudEvidenceMinCloudiness: 32,
   denseCloudMinCloudiness: 78,
-  // Cor compartilhada pelas barras de chuva e pelos rótulos das horas.
-  rainLineColor: "#18BFF3",
-  hourLegendColor: "#18BFF3",
+  // Ciano reservado às barras e às gotas de chuva.
+  rainLineColor: "#03DDF8",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
@@ -5166,10 +5165,6 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
           amount,
           timestamp,
           storm,
-          rainChance: Math.max(
-            0,
-            Math.min(100, Number(hour.rainChance) || 0)
-          ),
         });
       } else if (storm) {
         existing.storm = true;
@@ -5217,15 +5212,8 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       scaleVertical(2),
       maximumBarHeight * normalized
     );
-    // A probabilidade influencia a transparência, não a altura.
-    const probability = Math.max(
-      0,
-      Math.min(100, Number(entry.rainChance) || 0)
-    );
-    const opacity = Math.max(
-      0.42,
-      Math.min(1.0, 0.42 + (probability / 100) * 0.58)
-    );
+    // A chuva mantém opacidade total para o ciano continuar claro.
+    const opacity = 1.0;
     const centerX = timeToX(new Date(entry.timestamp));
     if (
       centerX < -barWidth ||
@@ -5235,7 +5223,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
     }
 
     if (entry.amount >= SETTINGS.rainEvidenceMinMM) {
-      drawOutlinedRainBar(
+      drawRainBar(
         ctx,
         new Rect(
           centerX - barWidth / 2,
@@ -5258,29 +5246,13 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   }
 }
 
-function drawOutlinedRainBar(ctx, rect, fillColor) {
+function drawRainBar(ctx, rect, fillColor) {
   const width = Math.max(0, rect.width);
   const height = Math.max(0, rect.height);
   if (width <= 0 || height <= 0) return;
 
-  // A borda fica dentro da área original da barra para não alterar a
-  // distribuição dos quartos de hora nem encostar nas barras vizinhas.
-  const borderWidth = Math.min(
-    1,
-    Math.min(width, height) / 3
-  );
-  ctx.setFillColor(new Color("#000000", 1.0));
-  ctx.fillRect(new Rect(rect.x, rect.y, width, height));
-
   ctx.setFillColor(fillColor);
-  ctx.fillRect(
-    new Rect(
-      rect.x + borderWidth,
-      rect.y + borderWidth,
-      Math.max(0.1, width - borderWidth * 2),
-      Math.max(0.1, height - borderWidth * 2)
-    )
-  );
+  ctx.fillRect(new Rect(rect.x, rect.y, width, height));
 }
 
 function rainMillimetersForHour(hour) {
@@ -5799,7 +5771,7 @@ function drawRainProbabilityBars(
       ? opacityForTick(tick, forecast)
       : 0.22;
 
-    drawOutlinedRainBar(
+    drawRainBar(
       ctx,
       new Rect(x, y, barWidth, height),
       new Color(SETTINGS.rainLineColor, opacity)
@@ -6007,13 +5979,20 @@ function drawBottomHourLegend(ctx) {
     const hour = tick.getHours();
     if (hour === 0) continue;
 
+    const isDaylightHour =
+      hour >= SETTINGS.daylightStartHour &&
+      hour <= SETTINGS.daylightEndHour;
     const isSecondaryNightHour =
       isSecondaryNightLegendHour(hour);
 
     const labelFont = isSecondaryNightHour
       ? Font.regularMonospacedSystemFont(hourFontSize)
       : Font.blackMonospacedSystemFont(hourFontSize);
-    const labelColor = new Color(SETTINGS.hourLegendColor, 1.0);
+    const labelColor = isSecondaryNightHour
+      ? secondaryNightLegendColor()
+      : isDaylightHour
+        ? daylightHourColor(tick)
+        : Color.white();
 
     ctx.setFont(labelFont);
     ctx.setTextColor(labelColor);
@@ -6195,9 +6174,13 @@ function drawWeatherPathSegment(
   x2,
   y2,
   color,
-  lineWidth
+  lineWidth,
+  opacityOverride = null
 ) {
-  ctx.setStrokeColor(new Color(color, weatherElementOpacity(0.96)));
+  const opacity = opacityOverride === null
+    ? weatherElementOpacity(0.96)
+    : Math.max(0, Math.min(1, Number(opacityOverride)));
+  ctx.setStrokeColor(new Color(color, opacity));
   ctx.setLineWidth(lineWidth);
   const path = new Path();
   path.move(new Point(x1, y1));
@@ -6356,8 +6339,9 @@ function drawWeatherRainDrops(ctx, centerX, centerY, size) {
       startY,
       x - size * 0.045,
       endY,
-      "#64D2FF",
-      lineWidth
+      SETTINGS.rainLineColor,
+      lineWidth,
+      1.0
     );
   }
 }
@@ -7717,10 +7701,7 @@ function drawWeatherRainCurtains(ctx, weather) {
         hourWidthLimit
       )
     );
-    const columnOpacity = Math.min(
-      0.98,
-      0.64 + strength * 0.34
-    );
+    const columnOpacity = 1.0;
 
     drawHourlyRainColumn(
       ctx,
@@ -7762,7 +7743,7 @@ function drawHourlyRainColumn(
     )
   );
 
-  drawOutlinedRainBar(
+  drawRainBar(
     ctx,
     new Rect(
       centerX - width / 2,
@@ -8086,7 +8067,6 @@ async function renderTimelinePanel(items, loadError) {
 
   // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
   // eventos e lembretes permanecem como a camada visual superior da agenda.
-  drawBottomHourLegend(baseCtx);
   // A moldura inferior contínua é composta depois, no canvas principal,
   // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
   drawTimelineDayBoundariesOnTop(baseCtx);
@@ -8130,10 +8110,12 @@ async function renderTimelinePanel(items, loadError) {
     await drawDiagonalWeekdayLabels(ctx);
   }
 
-  // Estes dois elementos são exceções estruturais: o astro da mudança
-  // de dia e o círculo inferior com o nome do dia permanecem nítidos
-  // e acima do blur. Todos os demais elementos meteorológicos e horários
-  // continuam pertencendo à base desfocada do futuro.
+  // Redesenha a legenda depois do blur para manter as horas nítidas
+  // e centralizadas na mesma altura do círculo de mudança de dia.
+  drawBottomHourLegend(ctx);
+
+  // O astro de mudança de dia e o círculo inferior também permanecem
+  // nítidos e acima do blur.
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
 
@@ -10254,9 +10236,27 @@ function hourGridLineColor(tick) {
     : new Color("#3A3A3C", 1.0);
 }
 
+function daylightHourColor(tick) {
+  const hour = tick.getHours() + tick.getMinutes() / 60;
+  const strength = daylightStrengthAtHour(hour);
+  const edgeStrength = 0.28;
+  const peakProgress = Math.max(
+    0,
+    Math.min(1, (strength - edgeStrength) / (1 - edgeStrength))
+  );
+  return new Color(
+    interpolateHexColor(
+      SETTINGS.daylightEdgeColor,
+      SETTINGS.daylightPeakColor,
+      peakProgress
+    ),
+    1.0
+  );
+}
+
 function isSecondaryNightLegendHour(hour) {
-  // Nas janelas acima de 24 horas, os rótulos noturnos mantêm a fonte
-  // regular para facilitar a leitura na régua de 12 em 12 horas.
+  // Nas janelas acima de 24 horas, os rótulos noturnos visíveis recebem
+  // o mesmo cinza para manter a leitura em uma régua de 12 em 12 horas.
   if (!usesEvenHourCadence()) {
     return (
       hour >= SETTINGS.nightStartHour ||
