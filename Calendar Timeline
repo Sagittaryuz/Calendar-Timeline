@@ -179,8 +179,8 @@ const WIDGET_CONTOUR = Object.freeze({
   strokeInset: 4,
   textClearance: 8,
 });
-const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 1;
-const HOUR_LEGEND_HEIGHT_REDUCTION = 1;
+const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
+const HOUR_LEGEND_HEIGHT_REDUCTION = 2;
 const DAY_CARD_TEXT_VERTICAL_OFFSET = -4;
 // O marcador superior das gotas já estava 5 px acima da posição original.
 // Este segundo deslocamento acrescenta mais 5 px, totalizando -10 px.

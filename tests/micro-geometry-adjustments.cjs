@@ -7,12 +7,12 @@ const source = fs.readFileSync(
   'utf8'
 );
 
-assert.match(source, /const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 1;/);
+assert.match(source, /const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;/);
 assert.match(
   source,
   /return bottomLegendCenterY\(\) \+ DAY_CHANGE_CIRCLE_VERTICAL_OFFSET;/
 );
-assert.match(source, /const HOUR_LEGEND_HEIGHT_REDUCTION = 1;/);
+assert.match(source, /const HOUR_LEGEND_HEIGHT_REDUCTION = 2;/);
 assert.match(
   source,
   /legendTextHeight\(\) - HOUR_LEGEND_HEIGHT_REDUCTION/
@@ -27,5 +27,5 @@ assert.match(
 );
 
 console.log(
-  'OK: círculo/horas +1 px, caixa superior das horas -1 px e textos dos quadros -4 px.'
+  'OK: círculo/horas +2 px, caixa superior das horas -2 px e textos dos quadros -4 px.'
 );
