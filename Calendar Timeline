@@ -161,14 +161,15 @@ const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 6;
 const EVENT_ARRIVAL_GUIDE_LABEL_PADDING = 8;
 const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 
-// O canvas continua completo para preservar o background. O conteúdo é
-// comprimido somente no eixo vertical para respeitar 30 px em cada margem,
-// exatamente como as margens laterais.
+// O canvas continua completo para preservar o background. O conteúdo ocupa
+// toda a altura disponível, sem margens externas superior ou inferior. A
+// escala vertical mantém a proporção da geometria-base enquanto amplia a
+// timeline até as duas extremidades do widget.
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
-const WIDGET_CONTENT_TOP_MARGIN = 30;
-const WIDGET_CONTENT_BOTTOM_MARGIN = 30;
+const WIDGET_CONTENT_TOP_MARGIN = 0;
+const WIDGET_CONTENT_BOTTOM_MARGIN = 0;
 const VERTICAL_LAYOUT_SCALE =
   (WIDGET_CANVAS_HEIGHT -
     WIDGET_CONTENT_TOP_MARGIN -
@@ -245,17 +246,19 @@ const CANVAS = {
   width: 1092,
   height: WIDGET_CANVAS_HEIGHT,
   headerHeight: scaleVertical(128),
-  // Layout horizontal full-bleed: os 60 px de margem externa anteriores
-  // foram incorporados à área útil sem alterar a escala vertical.
+  // Layout full-bleed: as margens externas anteriores foram incorporadas
+  // à área útil, horizontal e verticalmente, sem alterar a proporção.
   marginX: 0,
   plotLeft: 0,
   plotRight: 1092,
-  // Coordenadas verticais mapeadas para a nova caixa interna.
+  // Coordenadas verticais mapeadas para a caixa completa do widget.
   timelineTop: mapLegacyContentY(120),
-  // O painel termina 2 px depois da borda inferior do círculo, sem recortá-lo.
-  timelineBottom: mapLegacyContentY(499),
+  // O painel termina na borda inferior do canvas, alinhado ao círculo.
+  // O valor legado 499 avançava 2 px além do círculo e seria recortado
+  // depois da remoção da margem inferior.
+  timelineBottom: mapLegacyContentY(LEGACY_CONTENT_BOTTOM_EDGE),
   footerTop: mapLegacyContentY(454),
-  footerBottom: mapLegacyContentY(500),
+  footerBottom: WIDGET_CANVAS_HEIGHT,
   localPlotTop: scaleVertical(48),
   timelineLegendGap: scaleVertical(7),
   temperatureLegendVerticalOffset: scaleVertical(7),
@@ -6019,8 +6022,8 @@ function thermalBandBottomY() {
 }
 
 function bottomLegendCenterY() {
-  // A borda inferior do círculo fica exatamente 30 px acima do canvas.
-  // A coordenada retornada é local ao painel da timeline.
+  // A borda inferior do círculo coincide com a extremidade inferior do
+  // canvas. A coordenada retornada é local ao painel da timeline.
   return (
     CANVAS.height -
     WIDGET_CONTENT_BOTTOM_MARGIN -
