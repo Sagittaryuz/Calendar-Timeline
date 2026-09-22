@@ -48,8 +48,9 @@ const SETTINGS = {
   rainSymbolMinChance: 35,
   cloudEvidenceMinCloudiness: 32,
   denseCloudMinCloudiness: 78,
-  // Azul claro original usado nas barras verticais de chuva.
-  rainLineColor: "#14C1F5",
+  // Cor compartilhada pelas barras de chuva e pelos rótulos das horas.
+  rainLineColor: "#18BFF3",
+  hourLegendColor: "#18BFF3",
   backgroundColor: "#0A0A0B",
   timelineBackgroundColor: "#000000",
   // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
@@ -5993,7 +5994,11 @@ function timelineBarVerticalRect(item) {
 
 function drawBottomHourLegend(ctx) {
   const centerY = dayChangeLegendCenterY();
-  const bottomY = bottomLegendTextBottomY(centerY);
+  const hourTextHeight = Math.max(
+    1,
+    legendTextHeight() - HOUR_LEGEND_HEIGHT_REDUCTION
+  );
+  const bottomY = bottomLegendTextBottomY(centerY, hourTextHeight);
   // A fonte permanece exatamente a mesma do widget de 24 horas.
   const hourFontSize = scaleFontSize(24);
 
@@ -6002,20 +6007,13 @@ function drawBottomHourLegend(ctx) {
     const hour = tick.getHours();
     if (hour === 0) continue;
 
-    const isDaylightHour =
-      hour >= SETTINGS.daylightStartHour &&
-      hour <= SETTINGS.daylightEndHour;
     const isSecondaryNightHour =
       isSecondaryNightLegendHour(hour);
 
     const labelFont = isSecondaryNightHour
       ? Font.regularMonospacedSystemFont(hourFontSize)
       : Font.blackMonospacedSystemFont(hourFontSize);
-    const labelColor = isSecondaryNightHour
-      ? secondaryNightLegendColor()
-      : isDaylightHour
-        ? daylightHourColor(tick)
-        : Color.white();
+    const labelColor = new Color(SETTINGS.hourLegendColor, 1.0);
 
     ctx.setFont(labelFont);
     ctx.setTextColor(labelColor);
@@ -6025,10 +6023,7 @@ function drawBottomHourLegend(ctx) {
       centerX,
       bottomY,
       legendLabelWidth(),
-      Math.max(
-        1,
-        legendTextHeight() - HOUR_LEGEND_HEIGHT_REDUCTION
-      )
+      hourTextHeight
     );
     drawHourLegendLabelClipped(
       ctx,
@@ -10259,27 +10254,9 @@ function hourGridLineColor(tick) {
     : new Color("#3A3A3C", 1.0);
 }
 
-function daylightHourColor(tick) {
-  const hour = tick.getHours() + tick.getMinutes() / 60;
-  const strength = daylightStrengthAtHour(hour);
-  const edgeStrength = 0.28;
-  const peakProgress = Math.max(
-    0,
-    Math.min(1, (strength - edgeStrength) / (1 - edgeStrength))
-  );
-  return new Color(
-    interpolateHexColor(
-      SETTINGS.daylightEdgeColor,
-      SETTINGS.daylightPeakColor,
-      peakProgress
-    ),
-    1.0
-  );
-}
-
 function isSecondaryNightLegendHour(hour) {
-  // Nas janelas acima de 24 horas, os rótulos noturnos visíveis recebem
-  // o mesmo cinza para manter a leitura em uma régua de 12 em 12 horas.
+  // Nas janelas acima de 24 horas, os rótulos noturnos mantêm a fonte
+  // regular para facilitar a leitura na régua de 12 em 12 horas.
   if (!usesEvenHourCadence()) {
     return (
       hour >= SETTINGS.nightStartHour ||
@@ -10331,8 +10308,8 @@ function centeredLegendTextRect(centerX, centerY) {
   );
 }
 
-function bottomLegendTextBottomY(centerY) {
-  return centerY + legendTextHeight() / 2;
+function bottomLegendTextBottomY(centerY, height = legendTextHeight()) {
+  return centerY + height / 2;
 }
 
 function bottomAlignedLegendTextRect(
