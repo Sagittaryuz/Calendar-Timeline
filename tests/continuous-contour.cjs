@@ -111,15 +111,36 @@ for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
   }
   assert(Math.abs(path.points.at(-1).x-bridge.endpointX)<1e-6);
   assert(Math.abs(path.points.at(-1).y-120)<1e-6);
-  const externalTop=c.widgetLeftContourPoints().slice(0,65);
-  // O arco direito é exatamente o reflexo do esquerdo no centro do cartão.
-  for(let i=1;i<=64;i++) {
-    assert(Math.abs(path.points[i+1].x-(card.width-externalTop[i].x))<1e-5);
-    assert(Math.abs(path.points[i+1].y-externalTop[i].y)<1e-5);
-  }
+  const pathInset=run('titleDayCardRect(0).x===CANVAS.plotLeft?WIDGET_CONTOUR.strokeInset:2');
+  const rightEdge=card.x+card.width-pathInset;
+  assert.equal(path.points[1].x,rightEdge,'O canto interno superior termina na lateral, sem arco.');
+  assert.equal(path.points[1].y,card.y,'A linha superior chega ao canto em 90 graus.');
+  assert.equal(path.points[2].x,rightEdge,'A lateral começa no mesmo canto quadrado.');
+  assert.equal(path.points[2].y,bridge.startY);
+}
+
+const weekdayTitles=texts.filter(({t})=>t==='TER');
+const dateTitles=texts.filter(({t})=>t==='22/09');
+assert.equal(weekdayTitles.length,4);
+assert.equal(dateTitles.length,4);
+const titleLineHeight=font*1.15;
+const titleBandTop=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
+const centeredTitleY=c.titleSafeTextY(
+  9*font*0.62+4,
+  titleLineHeight,
+  titleBandTop+(run('scaleVertical(44)')-titleLineHeight)/2
+);
+for(let i=0;i<4;i++) {
+  const titleCard=c.titleDayCardRect(i);
+  const titleWidth=9*font*0.62;
+  const titleStart=titleCard.x+(titleCard.width-titleWidth)/2;
+  assert(Math.abs(weekdayTitles[i].p.x-titleStart)<1e-6,'Título centralizado horizontalmente no cartão.');
+  assert(Math.abs(dateTitles[i].p.x-(titleStart+4*font*0.62))<1e-6);
+  assert.equal(weekdayTitles[i].p.y,centeredTitleY,'Título centralizado na faixa superior.');
+  assert.equal(dateTitles[i].p.y,centeredTitleY);
 }
 assert(source.includes('const RAIN_TOP_MARKER_VERTICAL_OFFSET = -10;'),
   'Gotas acumulam mais 5 unidades de deslocamento');
 assert(source.includes('solarLineY() + scaleVertical(12) + RAIN_TOP_MARKER_VERTICAL_OFFSET,'),
   'Gotas usam o deslocamento vertical centralizado');
-console.log('OK: espelhamento de hoje, ponte sem cruzamento e gotas -10 no total.');
+console.log('OK: canto interno reto, títulos centralizados, ponte sem cruzamento e gotas -10 no total.');
