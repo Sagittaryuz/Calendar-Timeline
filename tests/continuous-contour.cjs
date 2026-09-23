@@ -45,10 +45,12 @@ for(const p of points) {
   }
 }
 for(let i=0;i<4;i++) assert(c.titleDayCardRect(i).y>=0,'No negative card position');
-const font=c.titleHeaderFontSize(), width=9*font*0.62;
-const titleY=c.titleSafeTextY(width+4,font*1.15,6);
-const left=(c.titleDayCardRect(0).width-width)/2;
-assert(left>=c.widgetContourInsetAtY(titleY)+8);
+const font=c.titleHeaderFontSize(), width=9*font*0.60;
+const visibleTop=font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
+const titleY=c.titleSafeTextY(width+4,font*1.15,6,
+  run('WIDGET_CONTOUR.textClearance'),visibleTop);
+const left=(c.titleDayCardRect(0).width-width-4)/2;
+assert(left>=c.widgetContourInsetAtY(titleY+visibleTop)+8);
 const detailFont=run('scaleFontSize(22)');
 const detailCenter=Math.max(2+run('scaleVertical(75)'),titleY+font*1.15+5+detailFont/2);
 assert(detailCenter+run('scaleVertical(30)')/2 < c.titleDayCardRect(0).y+c.titleDayCardRect(0).height,
@@ -90,9 +92,12 @@ for(let i=0;i<4;i++) {
   c.drawTitleDayCard(textCtx,c.addDays(c.windowStart,i),c.titleDayCardRect(i),i===0,i===3);
 }
 for(const {t,p,size} of texts) {
-  for(const y of [p.y,p.y+size*1.15]) {
+  const visualTop=p.y+(['TER','22/09'].includes(t)?
+    size*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO'):0);
+  for(const y of [visualTop,p.y+size*1.15]) {
     const inset=c.widgetContourInsetAtY(y);
-    assert(p.x>=inset && p.x+t.length*size*0.62<=1092-inset, 'Title text inside curve');
+    const cellWidth=size*(['TER','22/09'].includes(t)?0.60:0.62);
+    assert(p.x>=inset && p.x+t.length*cellWidth<=1092-inset, 'Title text inside curve');
   }
 }
 assert(icons.every(icon=>icon.y+icon.size/2<last.y+last.height));
@@ -126,25 +131,28 @@ assert.equal(dateTitles.length,4);
 const titleLineHeight=font*1.15;
 const titleBandTop=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
 const titleClearance=run('Math.max(0,WIDGET_CONTOUR.textClearance-scaleVertical(6))');
+const visibleTop=font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
 const centeredTitleY=c.titleSafeTextY(
-  9*font*0.62+4,
+  9*font*0.60+4,
   titleLineHeight,
-  titleBandTop+(run('scaleVertical(44)')-titleLineHeight)/2,
-  titleClearance
+  titleBandTop+(run('scaleVertical(44)')-titleLineHeight)/2+
+    run('scaleVertical(-7)'),
+  titleClearance,
+  visibleTop
 );
 const priorTitleY=c.titleSafeTextY(
-  9*font*0.62+4,
+  9*font*0.60+4,
   titleLineHeight,
   titleBandTop+run('scaleVertical(5)')+
     (run('scaleVertical(42)')-font)/2+run('DAY_CARD_TEXT_VERTICAL_OFFSET')
 );
-assert(centeredTitleY<priorTitleY,'Títulos sobem mantendo margem segura do contorno externo.');
+assert(centeredTitleY<priorTitleY-6,'Títulos sobem mantendo margem segura do contorno externo.');
 for(let i=0;i<4;i++) {
   const titleCard=c.titleDayCardRect(i);
-  const titleWidth=9*font*0.62;
+  const titleWidth=9*font*0.60;
   const titleStart=titleCard.x+(titleCard.width-titleWidth)/2;
   assert(Math.abs(weekdayTitles[i].p.x-titleStart)<1e-6,'Título centralizado horizontalmente no cartão.');
-  assert(Math.abs(dateTitles[i].p.x-(titleStart+4*font*0.62))<1e-6);
+  assert(Math.abs(dateTitles[i].p.x-(titleStart+4*font*0.60))<1e-6);
   assert.equal(weekdayTitles[i].p.y,centeredTitleY,'Título centralizado na faixa superior.');
   assert.equal(dateTitles[i].p.y,centeredTitleY);
 }
