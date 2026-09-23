@@ -4174,8 +4174,9 @@ function buildCurrentDayUpperPath(
     bridgeRadius, direction, inset);
   if (direction === "right") {
     path.move(new Point(card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX : left + rx, card.y));
-    path.addLine(new Point(right - rx, card.y));
-    appendContourArc(path, right - rx, card.y + ry, rx, ry, -Math.PI/2, 0);
+    // A virada do dia é um canto interno: conecta o topo direto à lateral.
+    // Os raios externos à esquerda continuam seguindo o contorno do widget.
+    path.addLine(new Point(right, card.y));
     path.addLine(new Point(right, bridge.startY));
   } else {
     path.move(new Point(right - rx, card.y));
@@ -4531,9 +4532,9 @@ function drawTitleDayCard(
 
   const titleRow = new Rect(
     card.x + 8,
-    sharedTextTop + scaleVertical(5),
+    sharedTextTop,
     card.width - 16,
-    scaleVertical(42)
+    scaleVertical(44)
   );
   const detailRow = new Rect(
     card.x + 8,
@@ -4542,13 +4543,13 @@ function drawTitleDayCard(
     scaleVertical(42)
   );
 
+  const titleTextHeight = titleFontSize * 1.15;
   const titleStartX =
-    card.x + (card.width - titleGroupWidth) / 2;
+    titleRow.x + (titleRow.width - titleGroupWidth) / 2;
   const titleY =
-    titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
+    titleSafeTextY(titleGroupWidth + 4, titleTextHeight,
       titleRow.y +
-      (titleRow.height - titleFontSize) / 2 +
-      DAY_CARD_TEXT_VERTICAL_OFFSET);
+      (titleRow.height - titleTextHeight) / 2);
 
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
