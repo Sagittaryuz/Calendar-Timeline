@@ -10692,6 +10692,7 @@ function eventArrivalGuidesForDay(
       (item) =>
         item?.kind === "event" &&
         !isBirthdayItem(item) &&
+        !item.isAllDay &&
         item.start instanceof Date &&
         item.end instanceof Date &&
         item.start.getTime() > reference.getTime() &&
@@ -10706,44 +10707,12 @@ function eventArrivalGuidesForDay(
         a.end.getTime() - b.end.getTime()
     );
 
-  if (futureEvents.length > 0) {
-    return futureEvents.map((event) => ({
-      event,
-      row: Number(event.gridRow),
-      end: event.start,
-      label: formatEventArrivalHours(event.start, countdownReference),
-    }));
-  }
-
-  // Quando não existe outro evento futuro naquele dia, mantém a régua
-  // original até o fim do dia na primeira linha realmente livre.
-  const occupiedRows = new Set(
-    source
-      .filter(
-        (item) =>
-          item?.start instanceof Date &&
-          item?.end instanceof Date &&
-          item.start.getTime() < dayEnd.getTime() &&
-          item.end.getTime() > dayStart.getTime() &&
-          Number.isFinite(Number(item.gridRow))
-      )
-      .map((item) => Number(item.gridRow))
-  );
-  const firstEmptyRow = Array.from(
-    { length: SETTINGS.maxItems },
-    (_, row) => row
-  ).find((row) => !occupiedRows.has(row));
-
-  if (firstEmptyRow === undefined) return [];
-
-  return [
-    {
-      event: null,
-      row: firstEmptyRow,
-      end: dayEnd,
-      label: formatEventArrivalHours(dayEnd, countdownReference),
-    },
-  ];
+  return futureEvents.map((event) => ({
+    event,
+    row: Number(event.gridRow),
+    end: event.start,
+    label: formatEventArrivalHours(event.start, countdownReference),
+  }));
 }
 
 function todayEventArrivalGuides(items, referenceDate = now) {
