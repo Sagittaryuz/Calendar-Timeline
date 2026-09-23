@@ -10863,11 +10863,6 @@ function drawEventArrivalGuideLabel(
   return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
 }
 
-function eventArrivalGuideDisplayLabel(guide) {
-  // O tempo restante até o fim do dia não precisa aparecer junto ao tracejado.
-  return guide?.event ? guide.label : "";
-}
-
 function drawEventArrivalGuides(ctx, items, day) {
   const isTomorrow = day === "tomorrow";
   const guides = isTomorrow
