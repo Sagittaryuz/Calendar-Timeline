@@ -14,7 +14,7 @@ A revisão cobriu configuração, aquisição de agenda/clima/localização/feri
 - Quatro cartões, mesmos tamanhos, espaçamentos, posições e fontes do modo 24h.
 - Janela de 1 a 96 horas; valores inteiros acima de 96 limitados a 96. Até 24h, cadência 2h; acima, 12h. Manter as exceções estruturais da meia-noite.
 - Cartões não atuais: ambos os cantos inferiores retos. Não alterar topo nem forma integrada de hoje.
-- Sábado azul, domingo vermelho, feriado amarelo. Cartões normais futuros em `#2D2D31` durante blur e na cor normal quando ele termina.
+- Sábado azul, domingo vermelho, feriado amarelo. Cartões normais futuros em `#232327` durante blur e na cor normal quando ele termina.
 - Amanhã: astros, curva, temperaturas, solar, horas e agenda futura abaixo do blur. Itens de hoje e prolongamentos autorizados acima; aro/astro da mudança e círculo do dia acima.
 - Eventos conservam duração real. Somente lembretes incompletos elegíveis usam extensão até 06:00; preservar o corte de elegibilidade atual até decisão explícita.
 - Nomes dos charts podem ultrapassar a própria barra; não remover caracteres inteiros só porque não cabem. Borda externa continua sendo limite físico.
