@@ -4455,16 +4455,16 @@ function drawTitleDayCard(
     1.0
   );
 
-  // Preserva os raios superiores. Todos os cartões futuros têm os dois
-  // cantos inferiores perpendiculares; somente as regras externas definem
-  // os cantos superiores e o canto externo do último quadro.
+  // Só as extremidades externas da faixa recebem raio. As junções entre
+  // cartões permanecem retas; a moldura contínua de hoje é desenhada à parte.
   const rightCornerRadius = isLast
     ? TITLE_CARD_OUTER_CORNER_RADIUS
-    : TITLE_CARD_STANDARD_CORNER_RADIUS;
+    : 0;
+  const leftCornerRadius = card.x <= CANVAS.marginX + 1
+    ? TITLE_CARD_OUTER_CORNER_RADIUS
+    : 0;
   const cornerRadii = {
-    topLeft: card.x <= CANVAS.marginX + 1
-      ? TITLE_CARD_OUTER_CORNER_RADIUS
-      : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    topLeft: leftCornerRadius,
     topRight: rightCornerRadius,
     // Hoje mantém sua geometria contínua própria, desenhada separadamente.
     bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,
