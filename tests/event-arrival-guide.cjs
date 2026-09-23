@@ -136,10 +136,9 @@ const tomorrowAllDayGuides =
   context.tomorrowEventArrivalGuides([tomorrowAllDay]);
 assert.equal(
   tomorrowAllDayGuides.length,
-  1,
-  'Evento futuro de dia inteiro também deve receber uma guia.'
+  0,
+  'Evento de dia inteiro não deve gerar linha tracejada.'
 );
-assert.equal(tomorrowAllDayGuides[0].label, '0 m');
 
 const endedEvent = event('Encerrado', at(20, 16), at(20, 17), 0);
 const birthday = event(
@@ -149,32 +148,23 @@ const birthday = event(
   2,
   { isAllDay: true, isBirthday: true }
 );
-const fallback = context.todayEventArrivalGuide([endedEvent, birthday]);
-assert.equal(fallback.event, null, 'Sem evento futuro, deve usar fallback.');
-assert.equal(fallback.row, 1, 'Fallback deve ocupar a primeira linha livre.');
-assert.equal(fallback.label, '6 h', 'Fallback deve mostrar o tempo restante do dia.');
-assert.equal(
-  context.eventArrivalGuideDisplayLabel(fallback),
-  '',
-  'O tempo restante do dia não deve aparecer junto à linha tracejada.'
-);
-assert.equal(
-  fallback.end.getTime(),
-  at(21, 0).getTime(),
-  'Fallback deve seguir até a meia-noite.'
-);
-assert.equal(
-  context.eventArrivalGuideDisplayLabel(selected),
-  selected.label,
-  'A contagem até um próximo evento continua visível.'
+assert.deepEqual(
+  Array.from(context.todayEventArrivalGuides([endedEvent, birthday]), guide => guide.event.title),
+  [],
+  'Sem evento futuro com horário definido, não deve existir tracejado.'
 );
 
 const tomorrowOnly = context.todayEventArrivalGuide([
   event('Amanhã', at(21, 10), at(21, 11), 3),
 ]);
-assert.equal(tomorrowOnly.row, 0, 'Evento de amanhã não ocupa a linha de hoje.');
-assert.equal(tomorrowOnly.end.getTime(), at(21, 0).getTime());
-assert.equal(tomorrowOnly.label, '6 h');
+assert.equal(tomorrowOnly, null, 'Evento de amanhã não cria tracejado no dia de hoje.');
+assert.equal(
+  context.tomorrowEventArrivalGuides([
+    event('Amanhã', at(21, 10), at(21, 11), 3),
+  ]).length,
+  1,
+  'O mesmo evento deve criar tracejado no dia em que ocorre.'
+);
 
 const occupied = Array.from(
   { length: 5 },
@@ -186,15 +176,9 @@ assert.equal(
   'Sem linha livre, a guia não deve sobrepor um chart.'
 );
 
-console.log('OK: guia de chegada escolhe o próximo evento e usa a primeira linha livre no fim do dia.');
+console.log('OK: linhas tracejadas aparecem somente para eventos futuros com horário no dia correspondente.');
 
-// A referência de amanhã é sua meia-noite, independentemente da hora atual.
-assert.equal(context.tomorrowEventArrivalGuides([])[0].label, '24 h');
-assert.equal(
-  context.eventArrivalGuideDisplayLabel(context.tomorrowEventArrivalGuides([])[0]),
-  '',
-  'O rótulo de restante do dia seguinte também deve ser ocultado.'
-);
+assert.equal(context.tomorrowEventArrivalGuides([]).length, 0);
 const lateNow = at(20, 23, 45);
 assert.equal(context.tomorrowEventArrivalGuides([
   event('Amanhã', at(21, 10), at(21, 11), 0)
