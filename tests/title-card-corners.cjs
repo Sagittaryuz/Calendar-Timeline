@@ -66,12 +66,31 @@ for (const selected of [false, true]) {
             'Todos os quadros futuros mantêm a base perpendicular.'
           );
           assert.equal(radii.bottomRight, 0);
-          assert(radii.topLeft > 0 && radii.topRight > 0);
+          assert.equal(radii.topLeft, 0, 'Junções internas à esquerda ficam retas.');
+          assert.equal(
+            radii.topRight,
+            last ? (shapeIndex === 0 ? 48 : 46) : 0,
+            'Somente a extremidade direita mantém o raio externo.'
+          );
         });
       }
     }
   }
 }
+
+shapes = [];
+try {
+  context.drawTitleDayCard(
+    {},
+    new Date(2026, 8, 21),
+    new Rect(30, 30, 240, 96),
+    false,
+    false
+  );
+  assert.fail('Esperado alcançar a fase de textos.');
+} catch (error) { assert.equal(error, stop); }
+assert.equal(shapes[0].radii.topLeft, 48, 'O canto externo esquerdo conserva seu raio.');
+assert.equal(shapes[0].radii.topRight, 0, 'O canto interno do primeiro quadro fica reto.');
 
 function cardFillColor(day, blur) {
   blurEnabled = blur;
