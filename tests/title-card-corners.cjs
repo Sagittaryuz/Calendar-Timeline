@@ -105,13 +105,20 @@ function cardFillColor(day, blur) {
     );
     assert.fail('Esperado alcançar a fase de textos.');
   } catch (error) { assert.equal(error, stop); }
-  return shapes[1].color.hex;
+  return shapes[1].color;
 }
 
-assert.equal(cardFillColor(21, false), '#3B3C3E', 'Dia útil sem blur usa o cinza pedido.');
-assert.equal(cardFillColor(21, true), '#2D2D31', 'Dia útil mantém o tom próprio durante o blur.');
-assert.equal(cardFillColor(19, false), '#0D3F68', 'Sábado mantém a cor especial.');
-assert.equal(cardFillColor(20, false), '#521720', 'Domingo mantém a cor especial.');
-assert.equal(cardFillColor(22, false), '#3A2A00', 'Feriado mantém a cor especial.');
+const normalDayWithoutBlur = cardFillColor(21, false);
+const normalDayWithBlur = cardFillColor(21, true);
+assert.equal(normalDayWithoutBlur.hex, '#3B3C3E', 'Dia útil sem blur usa o cinza pedido.');
+assert.equal(normalDayWithoutBlur.opacity, 1, 'O preenchimento normal não recebe transparência.');
+assert.equal(normalDayWithBlur.hex, '#232327', 'Dia útil durante o blur usa a cor exata pedida.');
+assert.equal(normalDayWithBlur.opacity, 1, 'O preenchimento com blur permanece opaco.');
+assert.equal(cardFillColor(19, false).hex, '#0D3F68', 'Sábado mantém a cor especial.');
+assert.equal(cardFillColor(20, false).hex, '#521720', 'Domingo mantém a cor especial.');
+assert.equal(cardFillColor(22, false).hex, '#3A2A00', 'Feriado mantém a cor especial.');
+assert.equal(cardFillColor(19, true).hex, '#0D3F68', 'Sábado não muda com o blur.');
+assert.equal(cardFillColor(20, true).hex, '#521720', 'Domingo não muda com o blur.');
+assert.equal(cardFillColor(22, true).hex, '#3A2A00', 'Feriado não muda com o blur.');
 assert.match(source, /nonTodayTimelineOverlayColor:\s*"#3B3C3E"/);
-console.log('OK: cores de dias úteis e especiais; amanhã igual aos quadros futuros; bases perpendiculares.');
+console.log('OK: cores exatas e opacas nos dias úteis; sábados, domingos e feriados preservados.');
