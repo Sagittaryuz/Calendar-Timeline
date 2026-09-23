@@ -125,11 +125,20 @@ assert.equal(weekdayTitles.length,4);
 assert.equal(dateTitles.length,4);
 const titleLineHeight=font*1.15;
 const titleBandTop=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
+const titleClearance=run('Math.max(0,WIDGET_CONTOUR.textClearance-scaleVertical(6))');
 const centeredTitleY=c.titleSafeTextY(
   9*font*0.62+4,
   titleLineHeight,
-  titleBandTop+(run('scaleVertical(44)')-titleLineHeight)/2
+  titleBandTop+(run('scaleVertical(44)')-titleLineHeight)/2,
+  titleClearance
 );
+const priorTitleY=c.titleSafeTextY(
+  9*font*0.62+4,
+  titleLineHeight,
+  titleBandTop+run('scaleVertical(5)')+
+    (run('scaleVertical(42)')-font)/2+run('DAY_CARD_TEXT_VERTICAL_OFFSET')
+);
+assert(centeredTitleY<priorTitleY,'Títulos sobem mantendo margem segura do contorno externo.');
 for(let i=0;i<4;i++) {
   const titleCard=c.titleDayCardRect(i);
   const titleWidth=9*font*0.62;
