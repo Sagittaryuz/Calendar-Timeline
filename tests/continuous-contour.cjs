@@ -131,7 +131,6 @@ assert.equal(dateTitles.length,4);
 const titleLineHeight=font*1.15;
 const titleBandTop=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
 const titleClearance=run('Math.max(0,WIDGET_CONTOUR.textClearance-scaleVertical(6))');
-const visibleTop=font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
 const centeredTitleY=c.titleSafeTextY(
   9*font*0.60+4,
   titleLineHeight,
