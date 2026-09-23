@@ -8237,6 +8237,9 @@ function diagonalWeekdayLabelEntries() {
 
       entries.push({
         label: weekdayLabels[dayStart.getDay()],
+        dateLabel: `${String(dayStart.getDate()).padStart(2, "0")}/${String(
+          dayStart.getMonth() + 1
+        ).padStart(2, "0")}`,
         x0: sunnyStartX,
         x1: sunnyEndX,
         centerX: (sunnyStartX + sunnyEndX) / 2,
@@ -8318,6 +8321,7 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "  const minFontSize = " +
       scaleFontSize(isCompactMode() ? 26 : 30) +
       ";",
+    "  const minDateFontSize = " + scaleFontSize(12) + ";",
     "  const maxFontSize = " +
       scaleFontSize(
         isCompactMode()
@@ -8348,10 +8352,16 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    let closestAboveMaximum = null;",
     "    let closestBelowMinimum = null;",
     "    for (let candidateSize = minFontSize; candidateSize <= maxFontSize; candidateSize += 2) {",
-    "      context.font = '900 ' + candidateSize + 'px ' + fontFamily;",
-    "      const measuredWidth = Math.max(1, context.measureText(entry.label).width);",
-    "      const strokeWidth = Math.max(2.6, candidateSize * 0.07);",
-    "      const textHeight = candidateSize * verticalScale + strokeWidth * 2;",
+      "      context.font = '900 ' + candidateSize + 'px ' + fontFamily;",
+      "      const measuredWidth = Math.max(1, context.measureText(entry.label).width);",
+      "      const strokeWidth = Math.max(2.6, candidateSize * 0.07);",
+      "      const dateFontSize = Math.max(minDateFontSize, Math.round(candidateSize * 0.28));",
+      "      const dateStrokeWidth = Math.max(1, dateFontSize * 0.07);",
+      "      const weekdayHeight = candidateSize * verticalScale + strokeWidth * 2;",
+      "      const dateHeight = dateFontSize * verticalScale + dateStrokeWidth * 2;",
+      "      const lineGap = Math.max(2, dateFontSize * 0.2);",
+      "      const textHeight = weekdayHeight + lineGap + dateHeight;",
+      "      const weekdayDateCenterOffset = weekdayHeight / 2 + lineGap + dateHeight / 2;",
     "      const widthLimit =",
     "        (dx - textHeight * sinTheta) / cosTheta;",
     "      const heightLimit =",
@@ -8360,10 +8370,13 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "        Math.max(1, Math.min(widthLimit, heightLimit)) * 0.94;",
     "      const horizontalScale = safeLength / measuredWidth;",
     "      const typography = {",
-    "        fontSize: candidateSize,",
-    "        measuredWidth,",
-    "        strokeWidth,",
-    "        safeLength,",
+      "        fontSize: candidateSize,",
+      "        measuredWidth,",
+      "        strokeWidth,",
+      "        dateFontSize,",
+      "        dateStrokeWidth,",
+      "        weekdayDateCenterOffset,",
+      "        safeLength,",
     "        horizontalScale,",
     "        angle,",
     "      };",
@@ -8429,14 +8442,27 @@ async function rasterizeDiagonalWeekdayLabels(entries) {
     "    context.rotate(typography.angle);",
     "    context.scale(typography.horizontalScale, verticalScale);",
     "    context.lineJoin = 'round';",
+    "    const weekdayCenterY = -typography.weekdayDateCenterOffset / 2;",
+    "    const dateCenterY = typography.weekdayDateCenterOffset / 2;",
     "    context.lineWidth = typography.strokeWidth + 1.8;",
     "    context.strokeStyle = rgba('#000000', 0.22);",
-    "    context.strokeText(entry.label, 0, 0);",
+    "    context.strokeText(entry.label, 0, weekdayCenterY);",
     "    context.lineWidth = typography.strokeWidth;",
     "    context.strokeStyle = rgba('#FFFFFF', 0.30);",
-    "    context.strokeText(entry.label, 0, 0);",
+    "    context.strokeText(entry.label, 0, weekdayCenterY);",
     "    context.fillStyle = rgba(entry.color, 1);",
-    "    context.fillText(entry.label, 0, 0);",
+    "    context.fillText(entry.label, 0, weekdayCenterY);",
+    "    if (entry.dateLabel) {",
+    "      context.font = '900 ' + typography.dateFontSize + 'px ' + fontFamily;",
+    "      context.lineWidth = typography.dateStrokeWidth + 1.2;",
+    "      context.strokeStyle = rgba('#000000', 0.22);",
+    "      context.strokeText(entry.dateLabel, 0, dateCenterY);",
+    "      context.lineWidth = typography.dateStrokeWidth;",
+    "      context.strokeStyle = rgba('#FFFFFF', 0.30);",
+    "      context.strokeText(entry.dateLabel, 0, dateCenterY);",
+    "      context.fillStyle = rgba(entry.color, 1);",
+    "      context.fillText(entry.dateLabel, 0, dateCenterY);",
+    "    }",
     "    context.restore();",
     "  }",
     "  context.restore();",
@@ -8489,6 +8515,7 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
     const centerOffsetY = targetCenterY - originalCenterY;
     const characters = Array.from(entry.label);
     if (characters.length === 0) continue;
+    const dateCharacters = Array.from(String(entry.dateLabel ?? ""));
 
     const fontSize = Math.max(
       minFontSize,
@@ -8500,6 +8527,17 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
         )
       )
     );
+    const dateFontSize = dateCharacters.length
+      ? Math.max(scaleFontSize(12), Math.round(fontSize * 0.28))
+      : 0;
+    const dateGap = dateCharacters.length
+      ? Math.max(scaleVertical(2), dateFontSize * 0.2)
+      : 0;
+    const weekdayDateCenterOffset = dateCharacters.length
+      ? (fontSize + dateFontSize) / 2 + dateGap
+      : 0;
+    const lineNormalX = dy / diagonalLength;
+    const lineNormalY = dx / diagonalLength;
     const thickOffsets = [
       [-1, 0], [1, 0], [0, -1], [0, 1],
     ];
@@ -8511,9 +8549,11 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
           ? 0.5
           : 0.08 + (index / (characters.length - 1)) * 0.84;
       const glyphX =
-        x0 + dx * progress + centerOffsetX;
+        x0 + dx * progress + centerOffsetX -
+        lineNormalX * weekdayDateCenterOffset / 2;
       const glyphY =
-        bottom - dy * progress + centerOffsetY;
+        bottom - dy * progress + centerOffsetY -
+        lineNormalY * weekdayDateCenterOffset / 2;
       const glyphRect = new Rect(
         glyphX - fontSize,
         glyphY - fontSize,
@@ -8536,6 +8576,52 @@ function drawDiagonalWeekdayLabelsFallback(ctx, entries) {
 
       ctx.setTextColor(new Color(entry.color, 1));
       ctx.drawTextInRect(characters[index], glyphRect);
+    }
+
+    if (dateCharacters.length > 0) {
+      const dateProgressSpan = Math.min(
+        0.84,
+        0.84 *
+          (dateFontSize * dateCharacters.length) /
+          Math.max(1, fontSize * characters.length)
+      );
+      const dateCenterOffset = weekdayDateCenterOffset / 2;
+      ctx.setFont(Font.blackRoundedSystemFont(dateFontSize));
+      for (let index = 0; index < dateCharacters.length; index++) {
+        const progress =
+          dateCharacters.length === 1
+            ? 0.5
+            : 0.5 - dateProgressSpan / 2 +
+              (index / (dateCharacters.length - 1)) * dateProgressSpan;
+        const glyphX =
+          x0 + dx * progress + centerOffsetX +
+          lineNormalX * dateCenterOffset;
+        const glyphY =
+          bottom - dy * progress + centerOffsetY +
+          lineNormalY * dateCenterOffset;
+        const glyphRect = new Rect(
+          glyphX - dateFontSize,
+          glyphY - dateFontSize,
+          dateFontSize * 2,
+          dateFontSize * 2
+        );
+
+        ctx.setTextColor(new Color("#000000", 0.20));
+        for (const [offsetX, offsetY] of thickOffsets) {
+          ctx.drawTextInRect(
+            dateCharacters[index],
+            new Rect(
+              glyphRect.x + offsetX,
+              glyphRect.y + offsetY,
+              glyphRect.width,
+              glyphRect.height
+            )
+          );
+        }
+
+        ctx.setTextColor(new Color(entry.color, 1));
+        ctx.drawTextInRect(dateCharacters[index], glyphRect);
+      }
     }
   }
 }
