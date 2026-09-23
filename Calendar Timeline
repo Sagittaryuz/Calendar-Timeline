@@ -55,6 +55,8 @@ const SETTINGS = {
   // Os dias que não são hoje recebem um véu neutro para reduzir seu peso visual.
   nonTodayTimelineOverlayColor: "#3B3C3E",
   nonTodayTimelineOverlayOpacity: 0.64,
+  // Cartões futuros sem blur usam um tom mais escuro que o véu da timeline.
+  nonBlurredFutureCardColor: "#2E2E30",
   // Desfoque de foco aplicado somente aos dias posteriores
   // enquanto ainda houver compromissos ou pendências válidas hoje.
   futureTimelineBlurEnabled: true,
@@ -4468,7 +4470,7 @@ function drawTitleDayCard(
       ? dayBackgroundColor
       : shouldBlurFutureTimeline()
         ? "#232327"
-        : SETTINGS.nonTodayTimelineOverlayColor,
+        : SETTINGS.nonBlurredFutureCardColor,
     1.0
   );
 
