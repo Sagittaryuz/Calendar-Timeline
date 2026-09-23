@@ -10886,8 +10886,7 @@ function drawEventArrivalGuides(ctx, items, day) {
       0,
       Math.min(timelineWidth(), targetX)
     );
-    const label = eventArrivalGuideDisplayLabel(guide);
-    const labelWidth = eventArrivalGuideLabelWidth(label);
+    const labelWidth = eventArrivalGuideLabelWidth(guide.label);
     const layout = eventArrivalGuideLayout(
       day,
       dayBoundaryX,
@@ -10895,7 +10894,7 @@ function drawEventArrivalGuides(ctx, items, day) {
     );
     const lineStartX = drawEventArrivalGuideLabel(
       ctx,
-      label,
+      guide.label,
       layout.labelX,
       centerY,
       labelWidth
