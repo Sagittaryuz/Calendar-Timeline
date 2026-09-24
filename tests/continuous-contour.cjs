@@ -22,10 +22,33 @@ function load(name) {
   const end=tail.search(/\n(?:async )?function /);
   vm.runInContext(source.slice(start,end<0?source.length:start+1+end),c);
 }
-for(const name of ['dayBoundaryLineWidth','timelineWidth','titleCardGap','titleDayCardRect',
-  'bottomLegendCenterY','hourLegendVisibleBoundsAtY','drawCurrentDayRoundedSideFrame',
-  'fillTitleCardShape']) load(name);
+for(const name of ['dayBoundaryLineWidth','timelineWidth','timelineHeight',
+  'titleCardGap','titleDayCardRect','weatherStripBottomY','weatherIconCenterY',
+  'timelineChartTop','bottomLegendCenterY','hourLegendVisibleBoundsAtY',
+  'drawCurrentDayRoundedSideFrame','fillTitleCardShape']) load(name);
 const run=s=>vm.runInContext(s,c);
+const adjustment=run('TITLE_TIMELINE_GAP_ADJUSTMENT');
+const originalTimelineTop=c.CANVAS.timelineTop-adjustment;
+const regularCardBottom=run('WIDGET_CONTOUR.strokeInset-DAY_BOUNDARY_LINE_WIDTH/2+TITLE_CARD_HEIGHT');
+const originalGap=originalTimelineTop-regularCardBottom;
+const expectedGap=originalGap*((c.CANVAS.plotRight-c.CANVAS.plotLeft)/1032);
+const actualGap=c.CANVAS.timelineTop-regularCardBottom;
+assert(Math.abs(actualGap-expectedGap)<1e-9,'Vão vertical igual ao vão horizontal.');
+assert(Math.abs(c.titleCardGap()-expectedGap)<1e-9,'Vão entre quadros mantém a mesma espessura.');
+assert(Math.abs(adjustment-(expectedGap-originalGap))<1e-9);
+assert(Math.abs(c.CANVAS.timelineTop+c.weatherIconCenterY()-
+  (originalTimelineTop+run('ASTRO_CENTER_TARGET_24H')))<1e-9,
+  'O centro dos astros não se desloca.');
+assert(Math.abs(c.CANVAS.timelineTop+c.weatherStripBottomY()-
+  (originalTimelineTop+run('WEATHER_ASTRO_STRIP_HEIGHT_24H')))<1e-9,
+  'A base da faixa dos astros não se desloca.');
+const oldChartTop=originalTimelineTop+
+  run('WEATHER_ASTRO_STRIP_HEIGHT_24H+scaleVertical(5)-TIMELINE_GRID_TOP_EXTENSION');
+assert(Math.abs(c.CANVAS.timelineTop+c.timelineChartTop()-
+  (oldChartTop+adjustment))<1e-9,'Só o topo dos charts desce pelo ajuste.');
+const oldTimelineHeight=c.CANVAS.timelineBottom-originalTimelineTop;
+assert(Math.abs(c.timelineHeight()-(oldTimelineHeight-adjustment))<1e-9,
+  'A altura retirada vem da área dos charts.');
 // Four corners measured independently; these synthetic coordinates contain
 // only silhouette samples, no personal content from the supplied capture.
 const measured=[[20,120],[30,101],[40,90],[60,77],[80,71],[100,69]];
