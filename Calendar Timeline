@@ -182,6 +182,7 @@ const WIDGET_CONTOUR = Object.freeze({
   textClearance: 8,
 });
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
+const DAY_BOUNDARY_LINE_WIDTH = 4;
 // Expansão vertical do grid completo, em pixels do canvas lógico.
 // O topo acompanha a borda inferior da Lua; a base alcança o topo do círculo.
 const TIMELINE_GRID_TOP_EXTENSION = 6;
@@ -386,6 +387,21 @@ CANVAS.timelineTop += CANVAS.timelineVerticalOffset;
 CANVAS.timelineBottom += CANVAS.timelineVerticalOffset;
 CANVAS.footerTop += CANVAS.timelineVerticalOffset;
 CANVAS.footerBottom += CANVAS.timelineVerticalOffset;
+
+// O vão vertical passa a usar a mesma medida do vão horizontal dos cartões.
+// A diferença sai do topo dos charts; os astros permanecem na mesma posição.
+const TITLE_CARD_BASE_VERTICAL_GAP = Math.max(
+  0,
+  CANVAS.timelineTop -
+    (WIDGET_CONTOUR.strokeInset -
+      DAY_BOUNDARY_LINE_WIDTH / 2 +
+      TITLE_CARD_HEIGHT)
+);
+const TITLE_CARD_SPACING = TITLE_CARD_BASE_VERTICAL_GAP *
+  ((CANVAS.plotRight - CANVAS.plotLeft) / 1032);
+const TITLE_TIMELINE_GAP_ADJUSTMENT =
+  TITLE_CARD_SPACING - TITLE_CARD_BASE_VERTICAL_GAP;
+CANVAS.timelineTop += TITLE_TIMELINE_GAP_ADJUSTMENT;
 
 const now = new Date();
 now.setSeconds(0, 0);
@@ -3639,19 +3655,9 @@ function hexToRGB(hex) {
 }
 
 function titleCardGap() {
-  // O vão horizontal usa a mesma distância vertical existente entre
-  // a borda inferior dos cartões comuns e a moldura superior da timeline.
-  const regularCardTop =
-    WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
-  const regularCardBottom =
-    regularCardTop + TITLE_CARD_HEIGHT;
-  const verticalGap = Math.max(
-    0,
-    CANVAS.timelineTop - regularCardBottom
-  );
-  // O vão entre cartões acompanha a mesma ampliação horizontal aplicada
-  // ao conteúdo, mantendo a distribuição proporcional original.
-  return verticalGap * (timelineWidth() / 1032);
+  // O mesmo valor é usado no vão horizontal entre cartões e no vão vertical
+  // até a moldura superior da timeline.
+  return TITLE_CARD_SPACING;
 }
 
 function titleDayCardRect(index) {
@@ -5817,8 +5823,9 @@ function temperatureHeatColor(
 
 
 function weatherStripBottomY() {
-  // A faixa superior reduz na mesma proporção do conteúdo vertical.
-  return WEATHER_ASTRO_STRIP_HEIGHT_24H;
+  // Mantém a base da faixa dos astros fixa enquanto o topo do painel desce.
+  return WEATHER_ASTRO_STRIP_HEIGHT_24H -
+    TITLE_TIMELINE_GAP_ADJUSTMENT;
 }
 
 // A faixa superior pertence exclusivamente aos astros e ícones de clima.
@@ -5828,10 +5835,9 @@ function weatherIconSize() {
 }
 
 function weatherIconCenterY() {
-  // O centro absoluto dos astros permanece fixo. A borda inferior da
-  // faixa foi reduzida até coincidir com esse centro, sem subir os astros
-  // novamente.
-  return ASTRO_CENTER_TARGET_24H;
+  // O painel desce alguns centésimos; o centro absoluto dos astros não muda.
+  return ASTRO_CENTER_TARGET_24H -
+    TITLE_TIMELINE_GAP_ADJUSTMENT;
 }
 
 function dayBoundaryMoonBorderTopY() {
@@ -5908,7 +5914,8 @@ function timelineChartTop() {
   return (
     weatherStripBottomY() +
     scaleVertical(5) -
-    TIMELINE_GRID_TOP_EXTENSION
+    TIMELINE_GRID_TOP_EXTENSION +
+    TITLE_TIMELINE_GAP_ADJUSTMENT
   );
 }
 
@@ -10334,10 +10341,9 @@ function compactEventHourMarkers() {
 }
 
 function dayBoundaryLineWidth() {
-  // A linha estrutural usa quatro pixels reais em todas as primitivas.
   // O valor inteiro evita diferenças de rasterização entre fillRect,
   // strokePath e strokeEllipse depois da compressão vertical do layout.
-  return 4;
+  return DAY_BOUNDARY_LINE_WIDTH;
 }
 
 function hourGridLineColor(tick) {
