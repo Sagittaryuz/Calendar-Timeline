@@ -388,19 +388,20 @@ CANVAS.timelineBottom += CANVAS.timelineVerticalOffset;
 CANVAS.footerTop += CANVAS.timelineVerticalOffset;
 CANVAS.footerBottom += CANVAS.timelineVerticalOffset;
 
-// O vão vertical passa a usar a mesma medida do vão horizontal dos cartões.
-// A diferença sai do topo dos charts; os astros permanecem na mesma posição.
-const TITLE_CARD_BASE_VERTICAL_GAP = Math.max(
+// O vão livre é medido até a face externa do traço superior da timeline.
+// Assim a espessura do contorno não consome o espaço visível solicitado.
+const TIMELINE_OUTER_BORDER_WIDTH = 2;
+const TITLE_CARD_BASE_CLEAR_GAP = Math.max(
   0,
   CANVAS.timelineTop -
     (WIDGET_CONTOUR.strokeInset -
       DAY_BOUNDARY_LINE_WIDTH / 2 +
-      TITLE_CARD_HEIGHT)
+      TITLE_CARD_HEIGHT) -
+    TIMELINE_OUTER_BORDER_WIDTH / 2
 );
-const TITLE_CARD_SPACING = TITLE_CARD_BASE_VERTICAL_GAP *
-  ((CANVAS.plotRight - CANVAS.plotLeft) / 1032);
+const TITLE_CARD_SPACING = 1.2287;
 const TITLE_TIMELINE_GAP_ADJUSTMENT =
-  TITLE_CARD_SPACING - TITLE_CARD_BASE_VERTICAL_GAP;
+  TITLE_CARD_SPACING - TITLE_CARD_BASE_CLEAR_GAP;
 CANVAS.timelineTop += TITLE_TIMELINE_GAP_ADJUSTMENT;
 
 const now = new Date();
@@ -3431,7 +3432,7 @@ function drawTimelineOuterBorder(ctx) {
     }
   }
   ctx.setStrokeColor(new Color("#303136", 0.82));
-  ctx.setLineWidth(2);
+  ctx.setLineWidth(TIMELINE_OUTER_BORDER_WIDTH);
   ctx.addPath(path);
   ctx.strokePath();
 }
@@ -5835,7 +5836,7 @@ function weatherIconSize() {
 }
 
 function weatherIconCenterY() {
-  // O painel desce alguns centésimos; o centro absoluto dos astros não muda.
+  // O painel desce para abrir o vão; o centro absoluto dos astros não muda.
   return ASTRO_CENTER_TARGET_24H -
     TITLE_TIMELINE_GAP_ADJUSTMENT;
 }
@@ -7861,7 +7862,8 @@ function drawCompactThermalBand(ctx, weather) {
   // Barras opacas sobre a curva e antes dos textos de temperatura.
   // A chuva ocupa a faixa livre até quase a base dos astros.
   // Os charts são desenhados depois e continuam visualmente por cima.
-  const rainBarTop = weatherStripBottomY();
+  const rainBarTop =
+    weatherStripBottomY() + TITLE_TIMELINE_GAP_ADJUSTMENT;
   drawThermalRainBars(
     ctx,
     sourceHours,

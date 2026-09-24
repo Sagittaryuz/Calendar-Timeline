@@ -28,26 +28,35 @@ for(const name of ['dayBoundaryLineWidth','timelineWidth','timelineHeight',
   'drawCurrentDayRoundedSideFrame','fillTitleCardShape']) load(name);
 const run=s=>vm.runInContext(s,c);
 const adjustment=run('TITLE_TIMELINE_GAP_ADJUSTMENT');
-const originalTimelineTop=c.CANVAS.timelineTop-adjustment;
+const originalTimelineTop=run('CANVAS.timelineTop')-adjustment;
 const regularCardBottom=run('WIDGET_CONTOUR.strokeInset-DAY_BOUNDARY_LINE_WIDTH/2+TITLE_CARD_HEIGHT');
-const originalGap=originalTimelineTop-regularCardBottom;
-const expectedGap=originalGap*((c.CANVAS.plotRight-c.CANVAS.plotLeft)/1032);
-const actualGap=c.CANVAS.timelineTop-regularCardBottom;
-assert(Math.abs(actualGap-expectedGap)<1e-9,'Vão vertical igual ao vão horizontal.');
-assert(Math.abs(c.titleCardGap()-expectedGap)<1e-9,'Vão entre quadros mantém a mesma espessura.');
-assert(Math.abs(adjustment-(expectedGap-originalGap))<1e-9);
-assert(Math.abs(c.CANVAS.timelineTop+c.weatherIconCenterY()-
+const originalClearGap=originalTimelineTop-regularCardBottom-
+  run('TIMELINE_OUTER_BORDER_WIDTH/2');
+const actualClearGap=run('CANVAS.timelineTop')-regularCardBottom-
+  run('TIMELINE_OUTER_BORDER_WIDTH/2');
+const expectedGap=run('TITLE_CARD_SPACING');
+assert(Math.abs(actualClearGap-expectedGap)<1e-9,
+  'Vão livre até a borda externa da timeline iguala o vão entre cartões.');
+assert(Math.abs(c.titleCardGap()-expectedGap)<1e-9,
+  'Vão horizontal entre cartões mantém 1,2287 px.');
+assert(Math.abs(adjustment-(expectedGap-originalClearGap))<1e-9);
+for(let i=0;i<3;i++) {
+  const current=c.titleDayCardRect(i), next=c.titleDayCardRect(i+1);
+  assert(Math.abs(next.x-(current.x+current.width)-expectedGap)<1e-9,
+    'Vãos horizontais dos cartões são iguais.');
+}
+assert(Math.abs(run('CANVAS.timelineTop+weatherIconCenterY()')-
   (originalTimelineTop+run('ASTRO_CENTER_TARGET_24H')))<1e-9,
   'O centro dos astros não se desloca.');
-assert(Math.abs(c.CANVAS.timelineTop+c.weatherStripBottomY()-
+assert(Math.abs(run('CANVAS.timelineTop+weatherStripBottomY()')-
   (originalTimelineTop+run('WEATHER_ASTRO_STRIP_HEIGHT_24H')))<1e-9,
   'A base da faixa dos astros não se desloca.');
 const oldChartTop=originalTimelineTop+
   run('WEATHER_ASTRO_STRIP_HEIGHT_24H+scaleVertical(5)-TIMELINE_GRID_TOP_EXTENSION');
-assert(Math.abs(c.CANVAS.timelineTop+c.timelineChartTop()-
+assert(Math.abs(run('CANVAS.timelineTop+timelineChartTop()')-
   (oldChartTop+adjustment))<1e-9,'Só o topo dos charts desce pelo ajuste.');
-const oldTimelineHeight=c.CANVAS.timelineBottom-originalTimelineTop;
-assert(Math.abs(c.timelineHeight()-(oldTimelineHeight-adjustment))<1e-9,
+const oldTimelineHeight=run('CANVAS.timelineBottom')-originalTimelineTop;
+assert(Math.abs(run('timelineHeight()')-(oldTimelineHeight-adjustment))<1e-9,
   'A altura retirada vem da área dos charts.');
 // Four corners measured independently; these synthetic coordinates contain
 // only silhouette samples, no personal content from the supplied capture.

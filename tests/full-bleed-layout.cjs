@@ -9,11 +9,14 @@ const source = fs.readFileSync(
 assert.match(source, /marginX: 0,/);
 assert.match(source, /plotLeft: 0,/);
 assert.match(source, /plotRight: 1092,/);
+assert.match(source, /const TIMELINE_OUTER_BORDER_WIDTH = 2;/);
+assert.match(source, /const TITLE_CARD_SPACING = 1\.2287;/);
 assert.match(
   source,
-  /return verticalGap \* \(timelineWidth\(\) \/ 1032\);/
+  /const TITLE_CARD_BASE_CLEAR_GAP = Math\.max\([\s\S]*?TIMELINE_OUTER_BORDER_WIDTH \/ 2\s*\);/
 );
+assert.match(source, /TITLE_CARD_SPACING - TITLE_CARD_BASE_CLEAR_GAP/);
 assert.match(source, /const cardsLeft = CANVAS\.marginX;/);
 assert.match(source, /const cardsRight = CANVAS\.width - CANVAS\.marginX;/);
 
-console.log('OK: conteúdo horizontal ocupa 100% do canvas e conserva a distribuição proporcional.');
+console.log('OK: conteúdo horizontal ocupa o canvas e usa vão livre igual de 1,2287 px.');
