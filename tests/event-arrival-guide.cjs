@@ -18,7 +18,7 @@ const context = {
   now,
   windowStart: now,
   SETTINGS: { maxItems: 5 },
-  EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 5,
+  EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 8,
   EVENT_ARRIVAL_GUIDE_LABEL_GAP: 6,
   startOfDay: date =>
     new Date(Date.UTC(
@@ -96,17 +96,17 @@ assert.deepEqual(
 );
 const tomorrowLayout =
   context.eventArrivalGuideLayout('tomorrow', 500, 40);
-assert.equal(tomorrowLayout.labelX, 505);
+assert.equal(tomorrowLayout.labelX, 508);
 assert.equal(
   tomorrowLayout.lineStartX,
   500,
   'A guia de amanhã deve começar na mudança de dia e deixar o rótulo à esquerda.'
 );
 const todayLayout = context.eventArrivalGuideLayout('today', 0, 40);
-assert.equal(todayLayout.labelX, 5);
+assert.equal(todayLayout.labelX, 8);
 assert.equal(
   todayLayout.lineStartX,
-  51,
+  54,
   'A guia de hoje deve manter a margem da borda esquerda.'
 );
 
@@ -184,4 +184,14 @@ assert.equal(context.tomorrowEventArrivalGuides([
   event('Amanhã', at(21, 10), at(21, 11), 0)
 ], lateNow)[0].label, '10 h');
 assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '0 m');
-assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 255);
+assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 258);
+
+const panel = source.slice(
+  source.indexOf('async function renderTimelinePanel('),
+  source.indexOf('function timelineItemsStartingToday(')
+);
+assert(
+  panel.lastIndexOf('drawEventStartLines(ctx, timelineItemsStartingToday(items))') >
+    panel.lastIndexOf('drawTimelineItemLayer('),
+  'A linha vertical dos eventos deve ser recomposta acima dos charts.'
+);

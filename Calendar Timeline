@@ -158,7 +158,7 @@ const EVENT_ARRIVAL_GUIDE_COLOR = "#FF9F0A";
 const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 2;
 const EVENT_ARRIVAL_GUIDE_DASH_WIDTH = 8;
 const EVENT_ARRIVAL_GUIDE_GAP_WIDTH = 7;
-const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 5;
+const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 8;
 const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 6;
 const EVENT_ARRIVAL_GUIDE_LABEL_PADDING = 8;
 const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
@@ -3038,10 +3038,13 @@ async function drawDayEndCapsules(ctx) {
         let fontSize = ${scaleFontSize(24)};
         g.font = '900 ' + fontSize + 'px -apple-system, sans-serif';
         const metrics = g.measureText(entry.label);
-        const labelScale = Math.min(1, (w - 8) / Math.max(1, metrics.width));
+        const labelScale = Math.min(1, (w - 12) / Math.max(1, metrics.width));
+        const alignmentMetrics = g.measureText('0 h');
+        const textBaseline =
+          (alignmentMetrics.actualBoundingBoxAscent - alignmentMetrics.actualBoundingBoxDescent) / 2;
         g.fillStyle = '#000000'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
         g.scale(labelScale, 1);
-        g.fillText(entry.label, 0, (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
+        g.fillText(entry.label, 0, textBaseline);
         g.restore();
       }
       return canvas.toDataURL('image/png').split(',')[1];
@@ -8163,6 +8166,9 @@ async function renderTimelinePanel(items, loadError) {
       "today",
       items
     );
+    // A linha de início fica na frente dos charts, da chuva e da curva
+    // térmica; os contornos e indicadores estruturais seguem nítidos acima.
+    drawEventStartLines(ctx, timelineItemsStartingToday(items));
   }
   return ctx.getImage();
 }
