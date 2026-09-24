@@ -289,12 +289,12 @@ function titleSafeTextY(
 
 function titleHeaderFontSize() {
   const card = titleDayCardRect(0);
-  // Nove caracteres em "TER 22/09". Mesma fonte para os quatro títulos;
-  // reduzir só quando as duas linhas não cabem na área curva disponível.
+  // O conjunto ocupa 8,5 células: três do dia, cinco da data e meia célula
+  // entre eles. Mesma fonte e largura para os quatro cartões, inclusive hoje.
   let size = scaleFontSize(38);
   while (size > scaleFontSize(30)) {
     const y = titleSafeTextY(
-      9 * size * 0.60 + 4,
+      8.5 * size * 0.60 + 4,
       size * 1.15,
       6,
       WIDGET_CONTOUR.textClearance,
@@ -4541,15 +4541,15 @@ function drawTitleDayCard(
   const weekdayLabel = shortWeekday(date);
   const dateLabel = titleDayMonthLabel(date);
 
-  // Como a fonte é monoespaçada, o espaço entre o dia e a data
-  // ocupa exatamente uma célula. Isso mantém, por exemplo, "QUI 10/09".
+  // O nome do dia e a data formam um conjunto centrado no cartão. O vão
+  // entre eles usa meia célula para aproximar os textos sem alterar a fonte.
   const titleFontSize = titleHeaderFontSize();
   // 0.60 corresponde melhor à largura visual das células monoespaçadas
   // neste tamanho, mantendo o grupo alinhado ao centro real do cartão.
   const titleCharacterWidth = titleFontSize * 0.60;
   const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
   const dateWidth = dateLabel.length * titleCharacterWidth;
-  const titleGap = titleCharacterWidth;
+  const titleGap = titleCharacterWidth / 2;
   const titleGroupWidth =
     weekdayWidth + titleGap + dateWidth;
 
@@ -4575,7 +4575,7 @@ function drawTitleDayCard(
 
   const titleTextHeight = titleFontSize * 1.15;
   const titleStartX =
-    titleRow.x + (titleRow.width - titleGroupWidth) / 2;
+    card.x + (card.width - titleGroupWidth) / 2;
   const titleY =
     titleSafeTextY(titleGroupWidth + 4, titleTextHeight,
       titleRow.y +
