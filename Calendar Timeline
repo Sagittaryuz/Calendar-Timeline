@@ -4574,8 +4574,13 @@ function drawTitleDayCard(
   );
 
   const titleTextHeight = titleFontSize * 1.15;
+  // Os cartões das extremidades recuam o conjunto dia/data da curvatura:
+  // hoje vai 5 px para a direita e o quarto cartão, 5 px para a esquerda.
+  const titleHorizontalInsetOffset =
+    isSelected ? 5 : isLast ? -5 : 0;
   const titleStartX =
-    card.x + (card.width - titleGroupWidth) / 2;
+    card.x + (card.width - titleGroupWidth) / 2 +
+    titleHorizontalInsetOffset;
   const titleY =
     titleSafeTextY(titleGroupWidth + 4, titleTextHeight,
       titleRow.y +

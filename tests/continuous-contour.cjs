@@ -182,11 +182,14 @@ for(let i=0;i<4;i++) {
   const titleCard=c.titleDayCardRect(i);
   const titleWidth=8.5*font*0.60;
   const titleStart=titleCard.x+(titleCard.width-titleWidth)/2;
-  assert(Math.abs(weekdayTitles[i].p.x-titleStart)<1e-6,'Título centralizado horizontalmente no cartão.');
-  assert(Math.abs(dateTitles[i].p.x-(titleStart+3.5*font*0.60))<1e-6,
-    'Data mantém somente meia célula de espaço depois do dia.');
-  assert(Math.abs((titleStart+titleWidth/2)-(titleCard.x+titleCard.width/2))<1e-6,
-    'Hoje e os dias seguintes usam o centro do próprio cartão como referência.');
+  const expectedTitleOffset=i===0?5:i===3?-5:0;
+  assert(Math.abs(weekdayTitles[i].p.x-(titleStart+expectedTitleOffset))<1e-6,
+    'Só os títulos das extremidades recebem o recuo horizontal pedido.');
+  assert(Math.abs(dateTitles[i].p.x-(titleStart+3.5*font*0.60+expectedTitleOffset))<1e-6,
+    'Dia e data mantêm juntos o deslocamento e a meia célula de espaço.');
+  assert(Math.abs((titleStart+titleWidth/2+expectedTitleOffset)-
+    (titleCard.x+titleCard.width/2+expectedTitleOffset))<1e-6,
+    'O grupo mantém o centro do cartão como referência antes do recuo de extremidade.');
   assert.equal(weekdayTitles[i].p.y,centeredTitleY,'Título centralizado na faixa superior.');
   assert.equal(dateTitles[i].p.y,centeredTitleY);
 }
