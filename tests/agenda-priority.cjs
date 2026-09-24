@@ -62,6 +62,18 @@ function birthday(dayOffset = 0, title = '🎂 Ana R. (8)') {
   };
 }
 
+function allDayEvent(title = 'Evento de dia inteiro', dayOffset = 0, isHoliday = false) {
+  return {
+    kind: 'event',
+    title,
+    start: at(0, dayOffset),
+    end: at(0, dayOffset + 1),
+    isAllDay: true,
+    isBirthday: false,
+    isHoliday,
+  };
+}
+
 function select(items) {
   return makeContext().chooseItems(
     items,
@@ -113,6 +125,58 @@ assert.equal(
   agendaWithSpace.find(item => item.isBirthdayGroup).gridRow,
   4,
   'Aniversário deve ficar na linha inferior quando ela estiver livre.'
+);
+
+const allDayBeforeBirthday = select([
+  allDayEvent(),
+  birthday(),
+]);
+assert.equal(
+  allDayBeforeBirthday.find(item => item.title === 'Evento de dia inteiro').gridRow,
+  3,
+  'Evento de dia inteiro fica acima do aniversário.'
+);
+assert.equal(
+  allDayBeforeBirthday.find(item => item.isBirthdayGroup).gridRow,
+  4,
+  'Aniversário fica abaixo do evento de dia inteiro.'
+);
+
+const allDayBirthdayHoliday = select([
+  allDayEvent(),
+  birthday(),
+  allDayEvent('Feriado', 0, true),
+]);
+assert.equal(
+  allDayBirthdayHoliday.find(item => item.title === 'Evento de dia inteiro').gridRow,
+  2,
+  'Evento de dia inteiro permanece acima do aniversário e do feriado.'
+);
+assert.equal(
+  allDayBirthdayHoliday.find(item => item.isBirthdayGroup).gridRow,
+  3,
+  'Aniversário fica abaixo do evento de dia inteiro.'
+);
+assert.equal(
+  allDayBirthdayHoliday.find(item => item.title === 'Feriado').gridRow,
+  4,
+  'Aniversário fica acima do feriado.'
+);
+
+const birthdayTakesPriorityOverHoliday = select([
+  ...Array.from({ length: 4 }, (_, index) => timedEvent(index + 1, index * 2)),
+  birthday(),
+  allDayEvent('Feriado', 0, true),
+]);
+assert.equal(
+  birthdayTakesPriorityOverHoliday.filter(item => item.isBirthdayGroup).length,
+  1,
+  'Aniversário usa a última linha livre antes do feriado.'
+);
+assert.equal(
+  birthdayTakesPriorityOverHoliday.filter(item => item.title === 'Feriado').length,
+  0,
+  'Feriado não toma a única linha disponível do aniversário.'
 );
 
 const currentAllDayReminder = {

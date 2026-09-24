@@ -697,6 +697,7 @@ async function loadWindow() {
         end: view.end,
         isAllDay: view.isAllDay,
         isBirthday,
+        isHoliday: isHolidayEvent(event),
         identifier:
           event.identifier ??
           `${event.title}-${view.start.getTime()}`,
@@ -2315,6 +2316,13 @@ function isBirthdayGroup(item) {
   return item?.isBirthdayGroup === true;
 }
 
+function isHolidayItem(item) {
+  return item?.kind === "event" &&
+    item?.isAllDay === true &&
+    item?.isHoliday === true &&
+    !isBirthdayGroup(item);
+}
+
 function groupBirthdayItems(items) {
   const grouped = new Map();
   const output = [];
@@ -2405,7 +2413,8 @@ function chooseItems(items, _referenceDate, limit) {
       (item) =>
         item.kind === "event" &&
         item.isAllDay &&
-        !isBirthdayGroup(item)
+        !isBirthdayGroup(item) &&
+        !isHolidayItem(item)
     )
     .map((item) => ({
       start: item.start,
@@ -2424,10 +2433,14 @@ function chooseItems(items, _referenceDate, limit) {
     const isBottomItem = (item) =>
       item.kind === "event" &&
       item.isAllDay &&
-      !isBirthdayGroup(item);
+      !isBirthdayGroup(item) &&
+      !isHolidayItem(item);
 
     const bottomItems = [...dayItems]
       .filter(isBottomItem)
+      .sort(byTime);
+    const holidayItems = [...dayItems]
+      .filter(isHolidayItem)
       .sort(byTime);
     const dayStart =
       dayKey === dateKey(windowStart)
@@ -2546,11 +2559,9 @@ function chooseItems(items, _referenceDate, limit) {
       return availableRow;
     };
 
-    // Itens especiais ocupam a base primeiro: o primeiro fica na última
-    // linha, o próximo sobe uma linha, e assim por diante. Isso reserva a
-    // área inferior antes de distribuir os itens com horário. Aniversários
-    // não participam dessa reserva: eles só entram depois dos prioritários
-    // quando existir uma linha livre.
+    // Eventos de dia inteiro que não são feriados ocupam a base primeiro:
+    // o primeiro fica na última linha e os próximos sobem. Isso reserva a
+    // área inferior antes de distribuir os itens com horário.
     const bottomRowOrder = Array.from(
       { length: limit },
       (_, index) => limit - 1 - index
@@ -2569,7 +2580,8 @@ function chooseItems(items, _referenceDate, limit) {
         (item) =>
           item.kind === "event" &&
           !isBottomItem(item) &&
-          !isBirthdayGroup(item)
+          !isBirthdayGroup(item) &&
+          !isHolidayItem(item)
       )
       .sort(byTime);
 
@@ -2626,21 +2638,151 @@ function chooseItems(items, _referenceDate, limit) {
       });
     }
 
-    if (birthdayGroup) {
-      // O aniversário só pode entrar depois de eventos e lembretes, sem
-      // compartilhar sua linha. Se não houver espaço, ele fica fora da
-      // seleção visual para preservar a prioridade e a geometria fixa.
-      const birthdayRow = [...Array(limit).keys()]
-        .reverse()
-        .find((row) => rows[row].length === 0);
-      if (birthdayRow !== undefined) {
+    // Monta a faixa inferior na ordem visual: eventos de dia inteiro,
+    // aniversários e feriados. Itens de prioridade menor só usam linhas
+    // livres depois dos eventos e lembretes.
+    const movableAllDayItems = new Set();
+    for (const rowItems of rows) {
+      for (const item of rowItems) {
+        if (isBottomItem(item) && itemsOverlap(item, dayInterval)) {
+          movableAllDayItems.add(item);
+        }
+      }
+    }
+
+    const carriedHolidayRows = rows
+      .flatMap((rowItems, row) =>
+        rowItems.some((item) =>
+          isHolidayItem(item) && itemsOverlap(item, dayInterval)
+        ) ? [row] : []
+      );
+    const maxCarriedHolidayRow = carriedHolidayRows.length
+      ? Math.min(...carriedHolidayRows)
+      : limit;
+
+    const getLowPriorityPlan = (shift) => {
+      const movedRows = new Map();
+      for (const item of movableAllDayItems) {
+        const targetRow = Number(item.gridRow) - shift;
+        if (targetRow < 0 || targetRow >= limit) return null;
+        movedRows.set(item, targetRow);
+      }
+
+      for (const [item, targetRow] of movedRows) {
+        const conflict = placed.some((other) =>
+          !movableAllDayItems.has(other) &&
+          Number(other.gridRow) === targetRow &&
+          itemsOverlap(item, other)
+        );
+        if (conflict) return null;
+      }
+
+      const occupiedRows = new Set();
+      for (let row = 0; row < limit; row++) {
+        if (rows[row].some((item) => !movableAllDayItems.has(item))) {
+          occupiedRows.add(row);
+        }
+      }
+      for (const row of movedRows.values()) occupiedRows.add(row);
+
+      const freeRows = [...Array(limit).keys()]
+        .filter((row) => !occupiedRows.has(row));
+      const allDayRows = [...movedRows.values()];
+      const lowestAllDayRow = allDayRows.length
+        ? Math.max(...allDayRows)
+        : -1;
+
+      if (birthdayGroup) {
+        const birthdayCandidates = freeRows.filter((row) =>
+          row > lowestAllDayRow && row < maxCarriedHolidayRow
+        );
+        if (!birthdayCandidates.length) return null;
+
+        const birthdayRow = birthdayCandidates
+          .map((row) => ({
+            row,
+            holidayRows: freeRows.filter((freeRow) => freeRow > row)
+              .slice(0, holidayItems.length),
+          }))
+          .sort((first, second) =>
+            second.holidayRows.length - first.holidayRows.length ||
+            second.row - first.row
+          )[0];
+        return {
+          shift,
+          movedRows,
+          birthdayRow: birthdayRow.row,
+          holidayRows: birthdayRow.holidayRows,
+        };
+      }
+
+      const availableHolidayRows = holidayItems.length
+        ? freeRows
+          .filter((row) => row > lowestAllDayRow)
+          .slice(-holidayItems.length)
+        : [];
+      return {
+        shift,
+        movedRows,
+        birthdayRow: null,
+        holidayRows: availableHolidayRows,
+      };
+    };
+
+    let lowPriorityPlan = null;
+    const maximumShift = movableAllDayItems.size
+      ? limit - 1
+      : 0;
+    for (let shift = 0; shift <= maximumShift; shift++) {
+      const candidate = getLowPriorityPlan(shift);
+      if (!candidate) continue;
+      if (
+        !lowPriorityPlan ||
+        candidate.holidayRows.length > lowPriorityPlan.holidayRows.length ||
+        (candidate.holidayRows.length === lowPriorityPlan.holidayRows.length &&
+          (Number(candidate.birthdayRow ?? -1) >
+            Number(lowPriorityPlan.birthdayRow ?? -1) ||
+            (candidate.birthdayRow === lowPriorityPlan.birthdayRow &&
+              candidate.shift < lowPriorityPlan.shift)))
+      ) {
+        lowPriorityPlan = candidate;
+      }
+    }
+
+    if (lowPriorityPlan) {
+      if (lowPriorityPlan.shift > 0) {
+        for (let row = 0; row < limit; row++) {
+          rows[row] = rows[row].filter(
+            (item) => !movableAllDayItems.has(item)
+          );
+        }
+        for (const [item, row] of lowPriorityPlan.movedRows) {
+          item.gridRow = row;
+          rows[row].push(item);
+        }
+      }
+
+      if (lowPriorityPlan.birthdayRow !== null) {
         const positionedBirthdayGroup = {
           ...birthdayGroup,
-          gridRow: birthdayRow,
+          gridRow: lowPriorityPlan.birthdayRow,
         };
-        rows[birthdayRow].push(positionedBirthdayGroup);
+        rows[lowPriorityPlan.birthdayRow].push(positionedBirthdayGroup);
         placed.push(positionedBirthdayGroup);
       }
+
+      const visibleHolidayCount = lowPriorityPlan.holidayRows.length;
+      holidayItems.slice(0, visibleHolidayCount).forEach((item, index) => {
+        const positionedHoliday = {
+          ...item,
+          gridRow: lowPriorityPlan.holidayRows[index],
+        };
+        rows[positionedHoliday.gridRow].push(positionedHoliday);
+        placed.push(positionedHoliday);
+      });
+      hidden.push(...holidayItems.slice(visibleHolidayCount));
+    } else {
+      hidden.push(...holidayItems);
     }
 
   }
