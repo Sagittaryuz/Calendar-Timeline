@@ -188,6 +188,9 @@ const DAY_BOUNDARY_LINE_WIDTH = 4;
 const TIMELINE_GRID_TOP_EXTENSION = 6;
 const TIMELINE_GRID_BOTTOM_EXTENSION = 4;
 const HOUR_LEGEND_HEIGHT_REDUCTION = 2;
+const THERMAL_LABEL_GAP_MAX_HEIGHT = 0.34;
+const THERMAL_CURVE_MAX_HEIGHT = 30.67;
+const THERMAL_TEMPERATURE_LABEL_HEIGHT = 30.67;
 const DAY_CARD_TEXT_VERTICAL_OFFSET = -4;
 // Ajusta em 7 px para cima o conjunto de textos no cabeçalho de cada dia.
 const TITLE_CARD_CONTENT_VERTICAL_OFFSET = -7;
@@ -432,15 +435,8 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
-// o Calendário, conservando o intervalo definido no parâmetro do widget.
-let refreshURL = addURLParameter(
-  URLScheme.forRunningScript(),
-  "refresh",
-  "1"
-);
-refreshURL = addURLParameter(refreshURL, "hours", String(windowHours));
-widget.url = refreshURL;
+// Abre o Calendário diretamente ao tocar, sem executar o Scriptable.
+widget.url = calendarURL(now);
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -6023,16 +6019,21 @@ function solarLineY() {
 }
 
 function thermalBandTopY() {
-  // No modo compacto, o bloco térmico mantém a proporção original:
-  // 12 px para a curva + 28 px para a legenda de temperaturas.
+  // Preserva o tamanho compacto original e limita a curva a 30,67 px.
   return thermalBandBottomY() -
-    scaleVertical(isCompactMode() ? 12 : 30);
+    Math.min(
+      scaleVertical(isCompactMode() ? 12 : 30),
+      THERMAL_CURVE_MAX_HEIGHT
+    );
 }
 
 function thermalTemperatureLabelTopY() {
-  // A legenda numérica continua separada dos charts e também é comprimida.
+  // Mantém a escala compacta original, com 30,67 px no layout atual.
   return thermalBandTopY() -
-    scaleVertical(isCompactMode() ? 28 : 32);
+    Math.min(
+      scaleVertical(isCompactMode() ? 28 : 32),
+      THERMAL_TEMPERATURE_LABEL_HEIGHT
+    );
 }
 
 function thermalBandBottomY() {
@@ -6071,9 +6072,12 @@ function timelineChartTop() {
 }
 
 function timelineChartBottom() {
-  // O início da agenda e o espaço antes da legenda térmica acompanham
-  // a mesma escala vertical.
-  return thermalTemperatureLabelTopY() - scaleVertical(5);
+  // O espaço poupado nas faixas térmicas retorna às linhas dos charts.
+  return thermalTemperatureLabelTopY() -
+    Math.min(
+      scaleVertical(5),
+      THERMAL_LABEL_GAP_MAX_HEIGHT
+    );
 }
 
 function timelineRowHeight() {
@@ -11909,14 +11913,6 @@ function calendarURL(date) {
     (date.getTime() - appleReferenceDate) / 1000
   );
   return `calshow:${secondsSinceReference}`;
-}
-
-function addURLParameter(url, name, value) {
-  const separator = url.includes("?") ? "&" : "?";
-  return (
-    `${url}${separator}` +
-    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
-  );
 }
 
 function isHolidayEvent(event) {
