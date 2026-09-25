@@ -435,8 +435,15 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// Abre o Calendário diretamente ao tocar, sem executar o Scriptable.
-widget.url = calendarURL(now);
+// Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
+// o Calendário, conservando o intervalo definido no parâmetro do widget.
+let refreshURL = addURLParameter(
+  URLScheme.forRunningScript(),
+  "refresh",
+  "1"
+);
+refreshURL = addURLParameter(refreshURL, "hours", String(windowHours));
+widget.url = refreshURL;
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -11913,6 +11920,14 @@ function calendarURL(date) {
     (date.getTime() - appleReferenceDate) / 1000
   );
   return `calshow:${secondsSinceReference}`;
+}
+
+function addURLParameter(url, name, value) {
+  const separator = url.includes("?") ? "&" : "?";
+  return (
+    `${url}${separator}` +
+    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
+  );
 }
 
 function isHolidayEvent(event) {
