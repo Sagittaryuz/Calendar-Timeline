@@ -52,23 +52,33 @@ function event(title, startDate, endDate, gridRow, extra = {}) {
 
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 30), now),
-  '30 m',
+  '30min',
   'Meia hora deve ser exibida em minutos inteiros.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 19), now),
-  '1 h',
-  'Hora inteira não deve receber zero decimal.'
+  '1h00min',
+  'Hora inteira deve manter minutos com dois dígitos.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 5), now),
-  '10 m',
+  '10min',
   'Minutos devem ser arredondados em blocos de dez.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 19, 30), now),
-  '1,5 h',
-  'Horas e meia devem usar vírgula e unidade separada.'
+  '1h30min',
+  'Horas e meia devem usar o mesmo formato da cápsula.'
+);
+assert.equal(
+  context.formatEventArrivalHours(at(20, 20, 30), now),
+  '2h30min',
+  'A linha tracejada deve usar o mesmo rótulo de duas horas e meia.'
+);
+assert.equal(
+  context.formatEventArrivalHours(at(20, 18, 59), now),
+  '50min',
+  'Abaixo de uma hora, deve aparecer somente a contagem em minutos.'
 );
 
 const next = event('Próximo', at(20, 18, 30), at(20, 19, 30), 2);
@@ -76,7 +86,7 @@ const later = event('Depois', at(20, 20), at(20, 21), 3);
 const selected = context.todayEventArrivalGuide([later, next]);
 assert.equal(selected.event, next, 'A guia deve escolher o próximo evento.');
 assert.equal(selected.row, 2, 'A guia deve acompanhar a linha do evento.');
-assert.equal(selected.label, '30 m');
+assert.equal(selected.label, '30min');
 assert.equal(selected.end, next.start);
 
 const todayGuides = context.todayEventArrivalGuides([next, later]);
@@ -91,8 +101,8 @@ assert.deepEqual(
 );
 assert.deepEqual(
   todayGuides.map(guide => guide.label),
-  ['30 m', '2 h'],
-  'Cada guia deve mostrar a unidade correspondente.'
+  ['30min', '2h00min'],
+  'Cada guia deve usar o formato da cápsula.'
 );
 const tomorrowLayout =
   context.eventArrivalGuideLayout('tomorrow', 500, 40);
@@ -121,8 +131,8 @@ assert.equal(
 );
 assert.deepEqual(
   tomorrowGuides.map(guide => guide.label),
-  ['10 h', '13 h'],
-  'As guias de amanhã devem manter o sufixo h.'
+  ['10h00min', '13h00min'],
+  'As guias de amanhã devem usar o formato da cápsula.'
 );
 
 const tomorrowAllDay = event(
@@ -182,8 +192,8 @@ assert.equal(context.tomorrowEventArrivalGuides([]).length, 0);
 const lateNow = at(20, 23, 45);
 assert.equal(context.tomorrowEventArrivalGuides([
   event('Amanhã', at(21, 10), at(21, 11), 0)
-], lateNow)[0].label, '10 h');
-assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '0 m');
+], lateNow)[0].label, '10h00min');
+assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '0min');
 assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 258);
 
 const panel = source.slice(
