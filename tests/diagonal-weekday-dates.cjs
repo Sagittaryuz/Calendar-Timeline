@@ -96,18 +96,38 @@ const weekday = visibleGlyphs.slice(0, 6);
 const date = visibleGlyphs.slice(6);
 assert.equal(weekday.map(glyph => glyph.text).join(''), 'QUARTA');
 assert.equal(date.map(glyph => glyph.text).join(''), '24/09');
-assert(fontSizes.length === 2 && fontSizes[1] < fontSizes[0] * 0.5,
-  'A data usa a mesma fonte, em tamanho bem menor.');
+assert(fontSizes.length === 2 &&
+  fontSizes[1] >= fontSizes[0] * 0.35 &&
+  fontSizes[1] < fontSizes[0] * 0.5,
+  'A data aumenta de tamanho e permanece menor que o dia da semana.');
 const average = glyphs => ({
   x: glyphs.reduce((sum, glyph) => sum + glyph.x, 0) / glyphs.length,
   y: glyphs.reduce((sum, glyph) => sum + glyph.y, 0) / glyphs.length,
 });
 const weekdayCenter = average(weekday);
 const dateCenter = average(date);
-assert(dateCenter.x > weekdayCenter.x && dateCenter.y > weekdayCenter.y,
+const diagonalLength = Math.hypot(240, 100);
+const tangent = { x: 240 / diagonalLength, y: -100 / diagonalLength };
+const normal = { x: 100 / diagonalLength, y: 240 / diagonalLength };
+const localOffset = center => ({
+  tangent: (center.x - 120) * tangent.x + (center.y - 60) * tangent.y,
+  normal: (center.x - 120) * normal.x + (center.y - 60) * normal.y,
+});
+const weekdayOffset = localOffset(weekdayCenter);
+const dateOffset = localOffset(dateCenter);
+assert(dateOffset.normal > weekdayOffset.normal,
   'A data fica abaixo e acompanha a mesma inclinação.');
-assert(Math.abs((weekdayCenter.x + dateCenter.x) / 2 - 120) < 1e-9);
-assert(Math.abs((weekdayCenter.y + dateCenter.y) / 2 - 60) < 1e-9);
+assert(Math.abs(weekdayOffset.tangent) < 1e-9);
+assert(Math.abs(dateOffset.tangent) < 1e-9,
+  'As duas linhas permanecem centradas no eixo horizontal inclinado.');
+const dateGap = Math.max(2, fontSizes[1] * 0.2);
+const groupTop = weekdayOffset.normal - fontSizes[0] / 2;
+const groupBottom = dateOffset.normal + fontSizes[1] / 2;
+assert(Math.abs((groupTop + groupBottom) / 2) < 1e-9,
+  'A caixa total de dia e data fica centrada verticalmente, apesar dos tamanhos diferentes.');
+assert(Math.abs((dateOffset.normal - fontSizes[1] / 2) -
+  (weekdayOffset.normal + fontSizes[0] / 2) - dateGap) < 1e-9,
+  'O intervalo entre as duas linhas preserva a folga definida.');
 const slope = glyphs =>
   (glyphs.at(-1).y - glyphs[0].y) / (glyphs.at(-1).x - glyphs[0].x);
 assert(Math.abs(slope(weekday) - slope(date)) < 1e-9,
@@ -191,12 +211,34 @@ vm.runInContext(rasterizer, rasterContext);
   assert.deepEqual(rasterizedGlyphs.map(glyph => glyph.text), ['QUARTA', '24/09']);
   assert.equal(rasterizedGlyphs[0].align, 'center');
   assert.equal(rasterizedGlyphs[1].align, 'center');
-  assert(rasterizedGlyphs[1].font.startsWith('900 '));
-  assert(Number(rasterizedGlyphs[1].font.match(/\d+(?:\.\d+)?px/)[0].replace('px', '')) <
-    Number(rasterizedGlyphs[0].font.match(/\d+(?:\.\d+)?px/)[0].replace('px', '')) * 0.5);
-  assert(rasterizedGlyphs[0].y < 0 && rasterizedGlyphs[1].y > 0,
+  const weekdayRaster = rasterizedGlyphs[0];
+  const dateRaster = rasterizedGlyphs[1];
+  const rasterFontSize = glyph =>
+    Number(glyph.font.match(/\d+(?:\.\d+)?px/)[0].replace('px', ''));
+  const rasterWeekdaySize = rasterFontSize(weekdayRaster);
+  const rasterDateSize = rasterFontSize(dateRaster);
+  assert(weekdayRaster.font.startsWith('900 '));
+  assert(rasterDateSize >= rasterWeekdaySize * 0.35 &&
+    rasterDateSize < rasterWeekdaySize * 0.5,
+    'A data maior também é aplicada no caminho rasterizado.');
+  assert.equal(weekdayRaster.x, 0);
+  assert.equal(dateRaster.x, 0,
+    'As duas linhas rasterizadas compartilham o centro horizontal.');
+  assert(weekdayRaster.y < 0 && dateRaster.y > 0,
     'A data fica abaixo do dia da semana no caminho rasterizado.');
-  console.log('OK: datas dd/MM, virada do mês, fonte menor e alinhamento diagonal nos dois caminhos.');
+  const weekdayHeight = rasterWeekdaySize * 1.05 +
+    Math.max(2.6, rasterWeekdaySize * 0.07) * 2;
+  const dateHeight = rasterDateSize * 1.05 +
+    Math.max(1, rasterDateSize * 0.07) * 2;
+  const lineGap = Math.max(2, rasterDateSize * 0.2);
+  assert(Math.abs(weekdayRaster.y + (lineGap + dateHeight) / 2) < 1e-9);
+  assert(Math.abs(dateRaster.y - (weekdayHeight + lineGap) / 2) < 1e-9);
+  assert(Math.abs(
+    (weekdayRaster.y - weekdayHeight / 2 +
+      dateRaster.y + dateHeight / 2) / 2
+  ) < 1e-9,
+  'O agrupamento rasterizado permanece centrado verticalmente.');
+  console.log('OK: dd/MM maior, grupo centralizado e alinhamento diagonal nos dois caminhos.');
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
