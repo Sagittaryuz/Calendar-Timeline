@@ -36,9 +36,10 @@ const badges = source.slice(source.indexOf('function drawWeekdayBadgesOnTop('), 
 assert(badges.includes('dateKey(tick)') && badges.includes('continue;'));
 assert(source.includes('g.rotate(Math.PI / 2)'));
 assert(source.includes('const height = DAY_CHANGE_CIRCLE_DIAMETER;'));
-assert(source.includes('let fontSize = ${scaleFontSize(24)}'));
-assert(source.includes('const labelScale = Math.min(1'));
-assert(source.includes('(w - 12) / Math.max(1, metrics.width)'));
+assert(source.includes('const fontSize = ${scaleFontSize(24)}'));
+assert(source.includes('const capsuleLength = Math.max(w, Math.ceil(metrics.width + 12))'));
+assert(source.includes('g.moveTo(-capsuleLength/2+r, -h/2)'));
+assert(!source.includes('g.scale(labelScale, 1)'));
 assert(source.includes("const alignmentMetrics = g.measureText('0 h')"));
 assert(source.includes('g.fillText(entry.label, 0, textBaseline)'));
 const diagonal = source.slice(source.indexOf('async function drawDiagonalWeekdayLabels('), source.indexOf('async function rasterizeDiagonalWeekdayLabels('));
