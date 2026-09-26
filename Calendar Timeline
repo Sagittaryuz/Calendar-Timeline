@@ -3184,7 +3184,7 @@ async function drawDayEndCapsules(ctx) {
         g.lineTo(-capsuleLength/2+r, h/2);
         g.arc(-capsuleLength/2+r, 0, r, Math.PI/2, Math.PI*1.5);
         g.closePath(); g.fillStyle = '#' + entry.color.replace('#',''); g.fill();
-        const alignmentMetrics = g.measureText('0 h');
+        const alignmentMetrics = g.measureText('0h00min');
         const textBaseline =
           (alignmentMetrics.actualBoundingBoxAscent - alignmentMetrics.actualBoundingBoxDescent) / 2;
         g.fillStyle = '#000000'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
@@ -10915,41 +10915,14 @@ function eventStartsAtDayChange(event) {
 }
 
 function formatEventArrivalHours(eventStart, referenceDate = now) {
-  if (
-    !(eventStart instanceof Date) ||
-    !(referenceDate instanceof Date) ||
-    !Number.isFinite(eventStart.getTime()) ||
-    !Number.isFinite(referenceDate.getTime())
-  ) {
-    return "";
-  }
-
-  const totalMinutes = Math.max(
-    0,
-    Math.ceil(
-      Math.max(0, eventStart.getTime() - referenceDate.getTime()) /
-        60000
-    )
-  );
-
-  if (totalMinutes === 0) return "0 m";
-
-  if (totalMinutes < 60) {
-    const roundedMinutes = Math.max(
-      10,
-      Math.ceil(totalMinutes / 10) * 10
-    );
-    if (roundedMinutes < 60) {
-      return `${roundedMinutes} m`;
-    }
-  }
-
-  const halfHours = Math.max(2, Math.ceil(totalMinutes / 30));
-  const wholeHours = Math.floor(halfHours / 2);
-  return wholeHours + (halfHours % 2 ? ",5" : "") + " h";
+  return formatTenMinuteCountdown(eventStart, referenceDate);
 }
 
 function formatDayEndCountdown(eventStart, referenceDate = now) {
+  return formatTenMinuteCountdown(eventStart, referenceDate);
+}
+
+function formatTenMinuteCountdown(eventStart, referenceDate = now) {
   if (
     !(eventStart instanceof Date) ||
     !(referenceDate instanceof Date) ||
@@ -10959,29 +10932,30 @@ function formatDayEndCountdown(eventStart, referenceDate = now) {
     return "";
   }
 
-  const totalMinutes = Math.max(
+  const remainingMilliseconds = Math.max(
     0,
-    Math.ceil(
-      Math.max(0, eventStart.getTime() - referenceDate.getTime()) /
-        60000
-    )
+    eventStart.getTime() - referenceDate.getTime()
   );
 
-  if (totalMinutes === 0) return "0min";
+  if (remainingMilliseconds === 0) return "0min";
 
-  if (totalMinutes < 60) {
-    const roundedMinutes = Math.max(
-      10,
-      Math.ceil(totalMinutes / 10) * 10
+  // Arredonda para cima em passos de dez minutos. Abaixo de uma hora,
+  // limita o maior rótulo a 50min para não exibir "1h00min" antes da hora.
+  if (remainingMilliseconds < 60 * 60000) {
+    const roundedMinutes = Math.min(
+      50,
+      Math.max(10, Math.ceil(remainingMilliseconds / 600000) * 10)
     );
-    if (roundedMinutes < 60) return `${roundedMinutes}min`;
+    return `${roundedMinutes}min`;
   }
 
-  const halfHours = Math.max(2, Math.ceil(totalMinutes / 30));
-  const wholeHours = Math.floor(halfHours / 2);
-  return halfHours % 2
-    ? `${wholeHours}h30min`
-    : `${wholeHours}h`;
+  const roundedMinutes = Math.ceil(remainingMilliseconds / 600000) * 10;
+  const wholeHours = Math.floor(roundedMinutes / 60);
+  const minuteRemainder = roundedMinutes % 60;
+  const minuteText = minuteRemainder < 10
+    ? `0${minuteRemainder}`
+    : String(minuteRemainder);
+  return `${wholeHours}h${minuteText}min`;
 }
 
 function eventArrivalGuidesForDay(
@@ -11127,7 +11101,7 @@ function eventArrivalGuideLabelWidth(label) {
   const fontSize = scaleFontSize(
     EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
-  // A margem extra impede que o "h" final seja cortado pelo retângulo
+  // A margem extra impede que o final de "min" seja cortado pelo retângulo
   // estimado quando o DrawContext usa a métrica real da fonte do iOS.
   return Math.ceil(
     estimatedTextWidth(label, fontSize) +
