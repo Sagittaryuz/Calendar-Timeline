@@ -3174,21 +3174,20 @@ async function drawDayEndCapsules(ctx) {
       for (const entry of ${JSON.stringify(entries)}) {
         g.save(); g.translate(entry.x, ${centerY}); g.rotate(Math.PI / 2);
         const w = ${height}, h = ${width}, r = h / 2;
-        g.beginPath();
-        g.moveTo(-w/2+r, -h/2); g.lineTo(w/2-r, -h/2);
-        g.arc(w/2-r, 0, r, -Math.PI/2, Math.PI/2);
-        g.lineTo(-w/2+r, h/2);
-        g.arc(-w/2+r, 0, r, Math.PI/2, Math.PI*1.5);
-        g.closePath(); g.fillStyle = '#' + entry.color.replace('#',''); g.fill();
-        let fontSize = ${scaleFontSize(24)};
+        const fontSize = ${scaleFontSize(24)};
         g.font = '900 ' + fontSize + 'px -apple-system, sans-serif';
         const metrics = g.measureText(entry.label);
-        const labelScale = Math.min(1, (w - 12) / Math.max(1, metrics.width));
+        const capsuleLength = Math.max(w, Math.ceil(metrics.width + 12));
+        g.beginPath();
+        g.moveTo(-capsuleLength/2+r, -h/2); g.lineTo(capsuleLength/2-r, -h/2);
+        g.arc(capsuleLength/2-r, 0, r, -Math.PI/2, Math.PI/2);
+        g.lineTo(-capsuleLength/2+r, h/2);
+        g.arc(-capsuleLength/2+r, 0, r, Math.PI/2, Math.PI*1.5);
+        g.closePath(); g.fillStyle = '#' + entry.color.replace('#',''); g.fill();
         const alignmentMetrics = g.measureText('0 h');
         const textBaseline =
           (alignmentMetrics.actualBoundingBoxAscent - alignmentMetrics.actualBoundingBoxDescent) / 2;
         g.fillStyle = '#000000'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-        g.scale(labelScale, 1);
         g.fillText(entry.label, 0, textBaseline);
         g.restore();
       }
