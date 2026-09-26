@@ -25,6 +25,7 @@ const context = {
     nonBlurredFutureCardColor: '#2E2E30',
     saturdayTimelineBackgroundColor: '#0D3F68',
     sundayTimelineBackgroundColor: '#521720',
+    blurredSundayCardColor: '#3A151C',
     holidayTimelineBackgroundColor: '#3A2A00',
   },
   CANVAS: { marginX: 30 },
@@ -119,8 +120,10 @@ assert.equal(cardFillColor(19, false).hex, '#0D3F68', 'Sábado mantém a cor esp
 assert.equal(cardFillColor(20, false).hex, '#521720', 'Domingo mantém a cor especial.');
 assert.equal(cardFillColor(22, false).hex, '#3A2A00', 'Feriado mantém a cor especial.');
 assert.equal(cardFillColor(19, true).hex, '#0D3F68', 'Sábado não muda com o blur.');
-assert.equal(cardFillColor(20, true).hex, '#521720', 'Domingo não muda com o blur.');
+assert.equal(cardFillColor(20, true).hex, '#3A151C', 'Domingo escurece durante o blur.');
 assert.equal(cardFillColor(22, true).hex, '#3A2A00', 'Feriado não muda com o blur.');
+assert.equal(cardFillColor(20, false).hex, '#521720', 'Domingo sem blur mantém a cor original.');
 assert.match(source, /nonTodayTimelineOverlayColor:\s*"#3B3C3E"/);
 assert.match(source, /nonBlurredFutureCardColor:\s*"#2E2E30"/);
+assert.match(source, /blurredSundayCardColor:\s*"#3A151C"/);
 console.log('OK: cores exatas e opacas nos dias úteis; sábados, domingos e feriados preservados.');
