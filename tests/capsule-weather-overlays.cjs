@@ -16,7 +16,17 @@ vm.createContext(context);
 vm.runInContext(source.slice(source.indexOf('function formatEventArrivalHours('), source.indexOf('function eventArrivalGuidesForDay(')), context);
 vm.runInContext(source.slice(source.indexOf('function dayEndCapsuleEntries('), source.indexOf('async function drawDayEndCapsules(')), context);
 const entries = context.dayEndCapsuleEntries();
-assert.deepEqual(Array.from(entries, e => e.label), ['6 h', '24 h']);
+assert.deepEqual(Array.from(entries, e => e.label), ['6h', '24h']);
+const inMinutes = minutes => new Date(context.now.getTime() + minutes * 60000);
+assert.equal(
+  context.formatDayEndCountdown(inMinutes(150), context.now),
+  '2h30min'
+);
+assert.equal(context.formatDayEndCountdown(inMinutes(120), context.now), '2h');
+assert.equal(context.formatDayEndCountdown(inMinutes(40), context.now), '40min');
+assert.equal(context.formatDayEndCountdown(inMinutes(25), context.now), '30min');
+assert.equal(context.formatDayEndCountdown(inMinutes(0), context.now), '0min');
+assert.equal(context.formatDayEndCountdown(null, context.now), '');
 assert.equal(entries[0].x, 36);
 assert.equal(entries[0].color, 'FFFFFF');
 const widget = source.slice(source.indexOf('async function renderWidget('), source.indexOf('function dayEndCapsuleEntries('));
