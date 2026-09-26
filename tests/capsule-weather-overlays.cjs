@@ -16,13 +16,19 @@ vm.createContext(context);
 vm.runInContext(source.slice(source.indexOf('function formatEventArrivalHours('), source.indexOf('function eventArrivalGuidesForDay(')), context);
 vm.runInContext(source.slice(source.indexOf('function dayEndCapsuleEntries('), source.indexOf('async function drawDayEndCapsules(')), context);
 const entries = context.dayEndCapsuleEntries();
-assert.deepEqual(Array.from(entries, e => e.label), ['6h', '24h']);
+assert.deepEqual(Array.from(entries, e => e.label), ['6h00min', '24h00min']);
 const inMinutes = minutes => new Date(context.now.getTime() + minutes * 60000);
 assert.equal(
   context.formatDayEndCountdown(inMinutes(150), context.now),
   '2h30min'
 );
-assert.equal(context.formatDayEndCountdown(inMinutes(120), context.now), '2h');
+assert.equal(context.formatDayEndCountdown(inMinutes(720), context.now), '12h00min');
+assert.equal(context.formatDayEndCountdown(inMinutes(710), context.now), '11h50min');
+assert.equal(context.formatDayEndCountdown(inMinutes(700), context.now), '11h40min');
+assert.equal(context.formatDayEndCountdown(inMinutes(120), context.now), '2h00min');
+assert.equal(context.formatDayEndCountdown(inMinutes(60), context.now), '1h00min');
+assert.equal(context.formatDayEndCountdown(inMinutes(59), context.now), '50min');
+assert.equal(context.formatDayEndCountdown(inMinutes(50), context.now), '50min');
 assert.equal(context.formatDayEndCountdown(inMinutes(40), context.now), '40min');
 assert.equal(context.formatDayEndCountdown(inMinutes(25), context.now), '30min');
 assert.equal(context.formatDayEndCountdown(inMinutes(0), context.now), '0min');
@@ -40,7 +46,7 @@ assert(source.includes('const fontSize = ${scaleFontSize(24)}'));
 assert(source.includes('const capsuleLength = Math.max(w, Math.ceil(metrics.width + 12))'));
 assert(source.includes('g.moveTo(-capsuleLength/2+r, -h/2)'));
 assert(!source.includes('g.scale(labelScale, 1)'));
-assert(source.includes("const alignmentMetrics = g.measureText('0 h')"));
+assert(source.includes("const alignmentMetrics = g.measureText('0h00min')"));
 assert(source.includes('g.fillText(entry.label, 0, textBaseline)'));
 const diagonal = source.slice(source.indexOf('async function drawDiagonalWeekdayLabels('), source.indexOf('async function rasterizeDiagonalWeekdayLabels('));
 assert(diagonal.includes('if (!shouldBlurFutureTimeline()) return;'));
