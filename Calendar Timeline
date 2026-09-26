@@ -66,6 +66,7 @@ const SETTINGS = {
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
   saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
+  blurredSundayCardColor: "#3A151C",
   holidayTimelineBackgroundColor: "#3A2A00",
   primaryTextColor: "#FFFFFF",
   secondaryTextColor: "#A9A9B0",
@@ -4614,15 +4615,22 @@ function drawTitleDayCard(
   const dayBackgroundColor = timelineBackgroundColorForDate(date);
   const isSpecialDay =
     dayBackgroundColor !== SETTINGS.timelineBackgroundColor;
+  const blurEnabled = shouldBlurFutureTimeline();
+  const useBlurredSundayColor =
+    !isSelected &&
+    blurEnabled &&
+    date.getDay() === 0 &&
+    dayBackgroundColor === SETTINGS.sundayTimelineBackgroundColor;
   // Dias úteis não atuais usam o cinza da timeline; sábado, domingo e
-  // feriado preservam respectivamente azul, vermelho e amarelo.
-  // O blur altera somente os dias normais: durante o desfoque eles usam
-  // #232327; quando o blur termina, retornam ao cinza normal. As cores
-  // especiais de sábado, domingo e feriado permanecem sempre preservadas.
+  // feriado preservam respectivamente azul, vermelho e amarelo. Durante
+  // o blur, apenas o cartão futuro de domingo usa o vermelho mais escuro.
+  // Os demais cartões seguem as cores especiais ou o cinza do dia útil.
   const cardColor = new Color(
-    isSpecialDay
+    useBlurredSundayColor
+      ? SETTINGS.blurredSundayCardColor
+      : isSpecialDay
       ? dayBackgroundColor
-      : shouldBlurFutureTimeline()
+      : blurEnabled
         ? "#232327"
         : SETTINGS.nonBlurredFutureCardColor,
     1.0
