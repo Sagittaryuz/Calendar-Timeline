@@ -2721,11 +2721,10 @@ function chooseItems(items, _referenceDate, limit) {
       )
       .sort(byTime);
 
-    timedEvents.forEach((item, index) => {
-      const preferredRow = Math.min(index, timedRowLimit - 1);
+    timedEvents.forEach((item) => {
       placeItem(
         item,
-        rowOrderFor(item, preferredRow, timedRowLimit)
+        rowOrderFor(item, 0, timedRowLimit)
       );
     });
 
@@ -2749,14 +2748,14 @@ function chooseItems(items, _referenceDate, limit) {
             timedRowLimit - 1
           );
 
-    // Os lembretes do dia vêm antes dos atrasados. Assim, um item antigo
-    // não toma a vaga dos lembretes que realmente vencem hoje. Os compatíveis
-    // com um evento em até seis horas podem subir para a linha do evento.
+    // O lembrete atrasado fica visível primeiro; os demais seguem a ordem
+    // do dia e, quando não couberem, entram no indicador de excedentes.
     const reminders = [...dayItems]
       .filter((item) => item.kind === "reminder")
       .sort(
         (a, b) =>
-          Number(a.isOverdue) - Number(b.isOverdue) ||
+          Number(b.isOverdue === true) -
+          Number(a.isOverdue === true) ||
           byTime(a, b)
       );
     if (reminderFirstRow >= timedRowLimit) {
@@ -2933,11 +2932,7 @@ function chooseItems(items, _referenceDate, limit) {
 
   const overflowMarkers = [];
   for (const [hiddenDayKey, dayHiddenItems] of overflowByDay) {
-    let pendingHiddenItems = [...dayHiddenItems];
-    while (pendingHiddenItems.length > 0) {
-      const group = groupOverflowItems(pendingHiddenItems)[0];
-      if (!group) break;
-
+    for (const group of groupOverflowItems(dayHiddenItems)) {
       const marker = {
         kind: "overflow",
         title: "+" + group.count,
@@ -2947,93 +2942,92 @@ function chooseItems(items, _referenceDate, limit) {
         color: SETTINGS.overflowColor,
       };
 
-      const overlapsPlacedItem = (row) =>
-        [...placed, ...overflowMarkers]
-          .filter(
-            (item) =>
-              item.gridRow === row &&
-              displayDayKey(item) === hiddenDayKey
+      // O +N fica sobre um chart já visível, com espaço reservado para o
+      // título dele. O lembrete atrasado é a primeira âncora possível.
+      const anchorPriority = (item) =>
+        item.kind === "reminder"
+          ? item.isOverdue ? 3 : 2
+          : 1;
+      const anchors = placed
+        .filter((item) =>
+          displayDayKey(item) === hiddenDayKey &&
+          (item.kind === "event" || item.kind === "reminder") &&
+          !item.isAllDay &&
+          !isBirthdayItem(item) &&
+          !item.overflowBadgeRight &&
+          !overflowMarkers.some((existing) =>
+            existing.isOverlay && existing.gridRow === item.gridRow
           )
-          .some((item) => itemsOverlap(marker, item));
-      let markerRow = [...Array(limit).keys()]
-        .reverse()
-        .find((row) => !overlapsPlacedItem(row));
+        )
+        .sort((first, second) =>
+          anchorPriority(second) - anchorPriority(first) ||
+          (timelineItemVisualFootprint(second).barRight -
+            timelineItemVisualFootprint(second).left) -
+          (timelineItemVisualFootprint(first).barRight -
+            timelineItemVisualFootprint(first).left)
+        );
+      const markerWidth = 62;
+      let overlayAnchor = null;
+      let overlayX = 0;
+      for (const candidate of anchors) {
+        const bounds = timelineItemVisualFootprint(candidate);
+        const markerX = bounds.left;
+        const badgeRight = markerX + markerWidth;
+        if (
+          badgeRight > bounds.barRight ||
+          badgeRight > timelineWidth()
+        ) continue;
 
-      if (markerRow === undefined) {
-        // Se todas as linhas estiverem ocupadas, o indicador substitui o
-        // lembrete de menor prioridade daquela faixa. O item removido também
-        // entra na contagem do “+N”, sem encobrir eventos.
-        const candidateRows = [...new Set(
-          placed
-            .filter(
-              (item) =>
-                item.kind === "reminder" &&
-                displayDayKey(item) === hiddenDayKey &&
-                itemsOverlap(marker, item)
-            )
-            .map((item) => item.gridRow)
-        )]
-          .map((row) => ({
-            row,
-            blockers: placed.filter(
-              (item) =>
-                item.gridRow === row &&
-                displayDayKey(item) === hiddenDayKey &&
-                itemsOverlap(marker, item)
-            ),
-          }))
-          .filter(
-            (candidate) =>
-              candidate.blockers.length > 0 &&
-              candidate.blockers.every(
-                (item) => item.kind === "reminder"
-              )
-          )
-          .sort((first, second) => {
-            const evictionScore = (item) =>
-              item.isOverdue
-                ? 0
-                : item.priority > 0 && item.priority <= 4
-                  ? 3
-                  : item.priority > 0
-                    ? 2
-                    : 1;
-            const firstScore = Math.max(
-              ...first.blockers.map(evictionScore)
+        const reserved = timelineItemVisualFootprint({
+          ...candidate,
+          overflowBadgeRight: badgeRight,
+        });
+        const textGap = scaleVertical(8);
+        const sameRow = placed.filter((other) =>
+          other !== candidate &&
+          other.gridRow === candidate.gridRow &&
+          displayDayKey(other) === hiddenDayKey
+        );
+        if (
+          reserved.right > timelineWidth() ||
+          sameRow.some((other) => {
+            const otherBounds = timelineItemVisualFootprint(other);
+            return !(
+              reserved.right + textGap <= otherBounds.left ||
+              otherBounds.right + textGap <= reserved.left
             );
-            const secondScore = Math.max(
-              ...second.blockers.map(evictionScore)
-            );
-            return firstScore - secondScore || second.row - first.row;
-          });
+          })
+        ) continue;
 
-        const replacement = candidateRows[0];
-        if (replacement) {
-          markerRow = replacement.row;
-          const displaced = new Set(replacement.blockers);
-          for (let index = placed.length - 1; index >= 0; index--) {
-            if (displaced.has(placed[index])) placed.splice(index, 1);
-          }
-          pendingHiddenItems.push(...replacement.blockers);
-          continue;
-        }
+        overlayAnchor = candidate;
+        overlayX = markerX;
+        break;
       }
 
-      // Se não há vaga nem lembrete substituível, preserva os charts e não
-      // desenha o indicador sobre eventos prioritários.
-      if (markerRow === undefined) {
-        const groupedItems = new Set(group.items);
-        pendingHiddenItems = pendingHiddenItems.filter(
-          (item) => !groupedItems.has(item)
-        );
+      if (overlayAnchor) {
+        overlayAnchor.overflowBadgeRight = overlayX + markerWidth;
+        overflowMarkers.push({
+          ...marker,
+          gridRow: overlayAnchor.gridRow,
+          markerX: overlayX,
+          isOverlay: true,
+        });
         continue;
       }
 
-      overflowMarkers.push({ ...marker, gridRow: markerRow });
-      const groupedItems = new Set(group.items);
-      pendingHiddenItems = pendingHiddenItems.filter(
-        (item) => !groupedItems.has(item)
-      );
+      // Sem chart largo o bastante, usa apenas uma linha livre. Nunca troca
+      // o lembrete atrasado por um indicador nem cobre outro título.
+      const markerRow = [...Array(limit).keys()]
+        .reverse()
+        .find((row) =>
+          [...placed, ...overflowMarkers].every((item) =>
+            item.gridRow !== row ||
+            displayDayKey(item) !== hiddenDayKey
+          )
+        );
+      if (markerRow !== undefined) {
+        overflowMarkers.push({ ...marker, gridRow: markerRow });
+      }
     }
   }
 
@@ -3102,43 +3096,96 @@ function itemsOverlap(first, second) {
   return firstStart < secondEnd && secondStart < firstEnd;
 }
 
+function timelineItemBarSegmentsForDisplay(item) {
+  const originalX = timeToX(timelineItemCollisionStart(item));
+  const x = item.kind === "reminder"
+    ? Math.max(0, originalX)
+    : originalX;
+  const exactWidth = Math.max(1, timeToX(item.end) - x);
+  const minimumWidth = item.kind === "event"
+    ? isCompactMode()
+      ? SETTINGS.compactMinimumChartWidth
+      : SETTINGS.minimumChartWidth
+    : 1;
+  const width = Math.max(exactWidth, minimumWidth);
+  return timelineBarSegments(item, x, x + width)
+    .map((segment) => ({ ...segment, x: segment.x - 1 }));
+}
+
+function timelineItemVisualFootprint(item) {
+  // Usa os mesmos segmentos, início do texto e fonte do desenho. Assim a
+  // decisão muda naturalmente quando a janela da timeline se desloca.
+  const segments = timelineItemBarSegmentsForDisplay(item);
+  const left = Math.max(
+    0,
+    Math.min(...segments.map((segment) => segment.x))
+  );
+  const barRight = Math.min(
+    timelineWidth(),
+    Math.max(...segments.map(
+      (segment) => segment.x + segment.width
+    ))
+  );
+  const badgeRight = Number(item.overflowBadgeRight);
+  const contentLeft = Number.isFinite(badgeRight)
+    ? Math.max(left, badgeRight + scaleVertical(4))
+    : left;
+  const reminderMarkerDiameter = item.kind === "reminder"
+    ? isCompactMode()
+      ? Math.max(9, compactTimelineScale() * scaleVertical(10))
+      : scaleVertical(12)
+    : 0;
+  const titleX = contentLeft + 7 + reminderMarkerDiameter +
+    (item.kind === "reminder" ? 5 : 0);
+  const titleSize = isCompactMode()
+    ? compactTimelineFontSize(21)
+    : scaleFontSize(28);
+  const title = reminderPriorityPrefix(item) +
+    String(item.title ?? "").toLocaleUpperCase("pt-BR");
+  // A largura estimada não é uma métrica exata da fonte arredondada do iOS.
+  // Esta folga conservadora impede compartilhar por poucos pixels e acabar
+  // encostando uma palavra na outra no dispositivo.
+  const titleRight = titleX +
+    estimatedTextWidth(title, titleSize) * 1.18 +
+    scaleVertical(12);
+  return {
+    left,
+    right: Math.max(barRight, titleRight),
+    barRight,
+    titleRight,
+  };
+}
+
 function itemsCanShareTimelineRow(first, second) {
   if (itemsOverlap(first, second)) return false;
 
-  // Eventos com horário são sempre apresentados antes dos lembretes e não
-  // compartilham a mesma linha entre si, mesmo quando há poucos minutos ou
-  // horas entre eles.
+  // Compartilhamento novo vale somente para itens temporizados; lembretes
+  // sem horário continuam exclusivos, como eventos de dia inteiro.
   if (
-    first.kind === "event" &&
-    second.kind === "event" &&
-    !first.isAllDay &&
-    !second.isAllDay
+    first.isAllDay || second.isAllDay ||
+    (first.kind === "reminder" && first.sourceIsAllDay) ||
+    (second.kind === "reminder" && second.sourceIsAllDay)
   ) {
     return false;
   }
 
-  // Lembretes continuam em linhas separadas entre si. A regra das seis
-  // horas vale para evento-lembrete.
-  if (
-    first.kind === "reminder" &&
-    second.kind === "reminder"
-  ) {
-    return false;
+  if (first.kind !== second.kind) {
+    // Preserva o limite já definido para compartilhar evento e lembrete.
+    const firstStart = first.start.getTime();
+    const secondStart = second.start.getTime();
+    const firstEnd = effectiveItemEnd(first);
+    const secondEnd = effectiveItemEnd(second);
+    const gap = firstEnd <= secondStart
+      ? secondStart - firstEnd
+      : firstStart - secondEnd;
+    if (gap > TIMELINE_ROW_SHARE_GAP_MS) return false;
   }
 
-  // Eventos de dia inteiro ficam na última linha e não devem bloquear um
-  // trecho que esteja fora do seu próprio intervalo.
-  if (first.isAllDay || second.isAllDay) return true;
-
-  const firstStart = first.start.getTime();
-  const secondStart = second.start.getTime();
-  const firstEnd = effectiveItemEnd(first);
-  const secondEnd = effectiveItemEnd(second);
-  const gap = firstEnd <= secondStart
-    ? secondStart - firstEnd
-    : firstStart - secondEnd;
-
-  return gap <= TIMELINE_ROW_SHARE_GAP_MS;
+  const firstBounds = timelineItemVisualFootprint(first);
+  const secondBounds = timelineItemVisualFootprint(second);
+  const textGap = scaleVertical(8);
+  return firstBounds.right + textGap <= secondBounds.left ||
+    secondBounds.right + textGap <= firstBounds.left;
 }
 
 function effectiveItemEnd(item) {
@@ -11649,13 +11696,15 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
   if (item.isOverflow) {
     const markerWidth = 62;
-    const markerX = Math.max(
-      0,
-      Math.min(
-        timelineWidth() - markerWidth,
-        timeToX(timelineItemDisplayStart(item))
-      )
-    ) - 1;
+    const markerX = Number.isFinite(item.markerX)
+      ? item.markerX
+      : Math.max(
+          0,
+          Math.min(
+            timelineWidth() - markerWidth,
+            timeToX(timelineItemDisplayStart(item))
+          )
+        ) - 1;
 
     drawTimelineBar(
       ctx,
@@ -11695,24 +11744,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     return;
   }
 
-  const originalX = timeToX(timelineItemDisplayStart(item));
-  const x =
-    item.kind === "reminder"
-      ? Math.max(0, originalX)
-      : originalX;
-  const exactWidth = Math.max(1, timeToX(item.end) - x);
-  const minimumWidth =
-    item.kind === "event"
-      ? isCompactMode()
-        ? SETTINGS.compactMinimumChartWidth
-        : SETTINGS.minimumChartWidth
-      : 1;
-  const width = Math.max(exactWidth, minimumWidth);
-  const barSegments = timelineBarSegments(
-    item,
-    x,
-    x + width
-  ).map((segment) => ({ ...segment, x: segment.x - 1 }));
+  const barSegments = timelineItemBarSegmentsForDisplay(item);
 
   for (const segment of barSegments) {
     const barRect = new Rect(
@@ -11809,15 +11841,19 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
         : scaleVertical(12)
       : 0;
   const reminderMarkerGap = item.kind === "reminder" ? 5 : 0;
+  const badgeRight = Number(item.overflowBadgeRight);
+  const contentLeft = Number.isFinite(badgeRight)
+    ? Math.max(visibleLeft, badgeRight + scaleVertical(4))
+    : visibleLeft;
   const textPoint = new Point(
-    visibleLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
+    contentLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
     titleTextY
   );
   if (item.kind === "reminder") {
     // O círculo fica no mesmo eixo horizontal do centro do chart.
     drawReminderMarker(
       ctx,
-      visibleLeft + 8 + reminderMarkerDiameter / 2,
+      contentLeft + 8 + reminderMarkerDiameter / 2,
       centerY,
       reminderMarkerDiameter,
       color

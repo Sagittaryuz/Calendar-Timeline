@@ -18,6 +18,8 @@ function makeContext() {
     SETTINGS: {
       birthdayChartColor: '#000000',
       overflowColor: '#636366',
+      minimumChartWidth: 34,
+      compactMinimumChartWidth: 18,
     },
     TIMELINE_ROW_SHARE_GAP_MS: 6 * 60 * 60 * 1000,
     ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
@@ -30,9 +32,28 @@ function makeContext() {
       new Date(date.getFullYear(), date.getMonth(), date.getDate() + days),
     dateKey: date =>
       `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
+    timelineWidth: () => 1024,
+    scaleVertical: value => value * 510 / 484,
+    scaleFontSize: value => Math.round(value * 510 / 484),
   };
+  context.timeToX = date =>
+    (date.getTime() - context.windowStart.getTime()) /
+    (context.windowEnd.getTime() - context.windowStart.getTime()) *
+    context.timelineWidth();
   vm.createContext(context);
   vm.runInContext(source.slice(start, end), context);
+  vm.runInContext(source.slice(
+    source.indexOf('function timelineDayBoundaryGap('),
+    source.indexOf('function timelineItemDisplayStart(')
+  ), context);
+  vm.runInContext(source.slice(
+    source.indexOf('function reminderPriorityPrefix('),
+    source.indexOf('function timelineItemStatus(')
+  ), context);
+  vm.runInContext(source.slice(
+    source.indexOf('function estimatedTextWidth('),
+    source.indexOf('function drawPermissionState(')
+  ), context);
   return context;
 }
 
@@ -108,7 +129,7 @@ function selectAcrossMidnight(items) {
 
 const fiveEvents = Array.from(
   { length: 5 },
-  (_, index) => timedEvent(index + 1, index * 2)
+  (_, index) => timedEvent(index + 1, 8)
 );
 const fullAgenda = select([...fiveEvents, birthday()]);
 assert.equal(
@@ -177,7 +198,7 @@ assert.equal(
 );
 
 const birthdayTakesPriorityOverHoliday = select([
-  ...Array.from({ length: 4 }, (_, index) => timedEvent(index + 1, index * 2)),
+  ...Array.from({ length: 4 }, (_, index) => timedEvent(index + 1, 8)),
   birthday(),
   allDayEvent('Feriado', 0, true),
 ]);
@@ -245,21 +266,20 @@ const remindersTogether = currentTimeContext.chooseItems(
   5
 );
 assert(
-  remindersTogether.find(item => item.title === 'Lembrete de hoje').gridRow <
-    remindersTogether.find(item => item.title === 'Lembrete atrasado').gridRow,
-  'Lembretes vencendo hoje devem ocupar as linhas antes dos atrasados.'
+  remindersTogether.find(item => item.title === 'Lembrete atrasado').gridRow <
+    remindersTogether.find(item => item.title === 'Lembrete de hoje').gridRow,
+  'O lembrete atrasado deve aparecer antes dos demais lembretes do dia.'
 );
 
 const crowdedReminderDay = currentTimeContext.chooseItems(
   [
-    timedEvent(1, 8),
-    timedEvent(2, 10),
-    timedEvent(3, 12),
-    timedEvent(4, 14),
-    reminder('Lembrete de hoje', at(0), at(0, 1)),
+    ...Array.from({ length: 4 }, (_, index) => timedEvent(index + 1, 8)),
     reminder('Lembrete atrasado', at(0), at(0, 1), {
       isOverdue: true,
     }),
+    ...Array.from({ length: 6 }, (_, index) =>
+      reminder(`Lembrete de hoje ${index + 1}`, at(0), at(0, 1))
+    ),
   ],
   currentTime,
   5
@@ -267,23 +287,134 @@ const crowdedReminderDay = currentTimeContext.chooseItems(
 assert.equal(
   crowdedReminderDay.filter(item => item.isOverflow).length,
   1,
-  'Uma linha ocupada por lembretes deve poder virar o indicador de excedentes.'
+  'Os seis lembretes ocultos devem gerar um único indicador de excedentes.'
 );
 assert.equal(
   crowdedReminderDay.find(item => item.isOverflow).title,
-  '+2',
-  'O indicador deve contar os dois lembretes ocultos, inclusive o atrasado.'
+  '+6',
+  'O indicador deve contar apenas os seis lembretes ocultos, não o atrasado visível.'
 );
 assert.equal(
   crowdedReminderDay.filter(item => item.kind === 'event').length,
   4,
   'O indicador de excedentes não pode remover eventos.'
 );
+const visibleOverdue = crowdedReminderDay.find(item => item.isOverdue);
+const overflowBadge = crowdedReminderDay.find(item => item.isOverflow);
+assert(visibleOverdue, 'O chart do lembrete atrasado deve permanecer visível.');
+assert.equal(visibleOverdue.gridRow, 4);
+assert.equal(overflowBadge.gridRow, visibleOverdue.gridRow);
+assert.equal(overflowBadge.isOverlay, true);
+assert(visibleOverdue.overflowBadgeRight >= 62);
+assert.equal(
+  crowdedReminderDay.filter(item =>
+    item.kind === 'reminder' && !item.isOverdue
+  ).length,
+  0,
+  'Os lembretes de hoje devem ficar ocultos neste cenário cheio.'
+);
+
+const shareContext = makeContext();
+shareContext.windowStart = at(8);
+shareContext.windowEnd = at(8, 1);
+const portuguese = {
+  ...timedEvent(1, 7),
+  title: 'Bimestral de Português',
+  end: at(11),
+};
+const dentist = {
+  ...timedEvent(2, 16),
+  title: 'Dentista',
+};
+const longTitles = shareContext.chooseItems(
+  [portuguese, dentist], at(8), 5
+);
+assert.notEqual(
+  longTitles[0].gridRow,
+  longTitles[1].gridRow,
+  'Bimestral de Português e Dentista não devem compartilhar linha com textos sobrepostos.'
+);
+const shortPortuguese = { ...portuguese, title: 'Português' };
+const shortTitles = shareContext.chooseItems(
+  [shortPortuguese, dentist], at(8), 5
+);
+assert.equal(
+  shortTitles[0].gridRow,
+  shortTitles[1].gridRow,
+  'Português e Dentista devem dividir a primeira linha quando houver espaço.'
+);
+const lateWindow = makeContext();
+lateWindow.windowStart = new Date(2026, 8, 18, 10, 59);
+lateWindow.windowEnd = new Date(2026, 8, 19, 10, 59);
+const lateLayout = lateWindow.chooseItems(
+  [shortPortuguese, dentist], lateWindow.windowStart, 5
+);
+assert.notEqual(
+  lateLayout[0].gridRow,
+  lateLayout[1].gridRow,
+  'Pouco antes das 11h, Dentista deve descer se o texto Português impedir.'
+);
+
+const timedReminders = select([
+  reminder('A', at(8), at(9), { sourceIsAllDay: false }),
+  reminder('B', at(16), at(17), { sourceIsAllDay: false }),
+]);
+assert.equal(
+  timedReminders[0].gridRow,
+  timedReminders[1].gridRow,
+  'Dois lembretes com horário podem compartilhar linha sem colisão visual.'
+);
+const overlappingTimedReminders = select([
+  reminder('A', at(8), at(10), { sourceIsAllDay: false }),
+  reminder('B', at(9), at(11), { sourceIsAllDay: false }),
+]);
+assert.notEqual(
+  overlappingTimedReminders[0].gridRow,
+  overlappingTimedReminders[1].gridRow,
+  'Lembretes simultâneos não podem dividir a linha.'
+);
+const allDayReminders = select([
+  reminder('A', at(0), at(0, 1)),
+  reminder('B', at(0), at(0, 1)),
+]);
+assert.notEqual(
+  allDayReminders[0].gridRow,
+  allDayReminders[1].gridRow,
+  'Lembretes de dia inteiro continuam em linhas separadas.'
+);
+const mixedNear = select([
+  timedEvent(1, 8),
+  reminder('Curto', at(14), at(15), { sourceIsAllDay: false }),
+]);
+assert.equal(
+  mixedNear[0].gridRow,
+  mixedNear[1].gridRow,
+  'Evento e lembrete próximos ainda podem compartilhar se os textos couberem.'
+);
+const mixedFar = select([
+  timedEvent(1, 8),
+  reminder('Curto', at(16), at(17), { sourceIsAllDay: false }),
+]);
+assert.notEqual(
+  mixedFar[0].gridRow,
+  mixedFar[1].gridRow,
+  'O limite existente de seis horas entre evento e lembrete deve permanecer.'
+);
 
 const saturated = select([
   ...Array.from({ length: 6 }, (_, index) => timedEvent(index + 1, 8)),
 ]);
 for (const marker of saturated.filter(item => item.isOverflow)) {
+  if (marker.isOverlay) {
+    assert(
+      saturated.some(item =>
+        !item.isOverflow && item.gridRow === marker.gridRow &&
+        item.overflowBadgeRight >= marker.markerX + 62
+      ),
+      'Indicador sobreposto deve reservar espaço no chart que o sustenta.'
+    );
+    continue;
+  }
   for (const item of saturated.filter(
     candidate => !candidate.isOverflow && candidate.gridRow === marker.gridRow
   )) {
@@ -295,4 +426,4 @@ function contextItemsOverlap(first, second) {
   return first.start < second.end && second.start < first.end;
 }
 
-console.log('OK: eventos prioritários preservados; aniversários só usam linha livre; overflow sem colisão.');
+console.log('OK: prioridade, compartilhamento por texto e excedentes sobre chart com título preservado.');
