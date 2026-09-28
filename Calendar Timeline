@@ -11260,12 +11260,13 @@ function eventArrivalGuidesForDay(
       ? referenceDate
       : now;
   const countdownReference = dayStart > reference ? dayStart : reference;
-  const futureEvents = source
+  const futureItems = source
     .filter(
       (item) =>
-        item?.kind === "event" &&
+        (item?.kind === "event" || item?.kind === "reminder") &&
         !isBirthdayItem(item) &&
         !item.isAllDay &&
+        !(item.kind === "reminder" && item.sourceIsAllDay) &&
         item.start instanceof Date &&
         item.end instanceof Date &&
         item.start.getTime() > reference.getTime() &&
@@ -11280,12 +11281,12 @@ function eventArrivalGuidesForDay(
         a.end.getTime() - b.end.getTime()
     );
 
-  return futureEvents
-    .map((event) => ({
-      event,
-      row: Number(event.gridRow),
-      end: event.start,
-      label: formatEventArrivalHours(event.start, countdownReference),
+  return futureItems
+    .map((item) => ({
+      event: item,
+      row: Number(item.gridRow),
+      end: item.start,
+      label: formatEventArrivalHours(item.start, countdownReference),
     }))
     .filter((guide) => guide.label);
 }
@@ -11382,11 +11383,11 @@ function eventArrivalGuideLabelWidth(label) {
   const fontSize = scaleFontSize(
     EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
-  // A margem extra evita cortar os últimos caracteres pelo retângulo
-  // estimado quando o DrawContext usa a métrica real da fonte do iOS.
+  // A fonte arredondada do iOS pode ocupar mais que a estimativa, sobretudo
+  // nos minutos. Reserva o texto inteiro antes da origem comum dos traços.
   return Math.ceil(
-    estimatedTextWidth(label, fontSize) +
-      scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING)
+    estimatedTextWidth(label, fontSize) * 1.3 +
+      scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING + 12)
   );
 }
 

@@ -20,7 +20,12 @@ const context = {
   SETTINGS: { maxItems: 5 },
   EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 8,
   EVENT_ARRIVAL_GUIDE_LABEL_GAP: 6,
+  EVENT_ARRIVAL_GUIDE_LABEL_PADDING: 8,
+  EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE: 21,
   EVENT_STARTING_SOON_WINDOW_MS: 30 * 60 * 1000,
+  scaleFontSize: value => value,
+  scaleVertical: value => value,
+  estimatedTextWidth: (text, fontSize) => text.length * fontSize * 0.62,
   startOfDay: date =>
     new Date(Date.UTC(
       date.getUTCFullYear(),
@@ -263,6 +268,37 @@ assert.deepEqual(
   todayGuides.map(guide => guide.label),
   ['30m', '2h'],
   'Cada guia deve usar o formato da cápsula.'
+);
+const timedReminder = {
+  kind: 'reminder',
+  title: 'Consulta marcada',
+  start: at(20, 19, 40),
+  end: at(21, 0),
+  gridRow: 4,
+  isAllDay: false,
+  sourceIsAllDay: false,
+};
+const allDayReminder = {
+  ...timedReminder,
+  title: 'Sem horário',
+  start: at(20, 0),
+  sourceIsAllDay: true,
+};
+const timedReminderGuides = context.todayEventArrivalGuides(
+  [next, timedReminder, allDayReminder],
+  now
+);
+assert.deepEqual(
+  Array.from(timedReminderGuides, guide => guide.label),
+  ['30m', '1h e 40m'],
+  'Lembrete com horário deve usar a mesma contagem do evento; o de dia inteiro não.'
+);
+assert.equal(timedReminderGuides[1].row, 4);
+assert.equal(timedReminderGuides[1].event, timedReminder);
+assert(
+  context.eventArrivalGuideLabelWidth('5h e 50m') >
+    context.estimatedTextWidth('5h e 50m', 21) + 35,
+  'O rótulo deve reservar folga para os minutos completos na fonte arredondada.'
 );
 const tomorrowLayout =
   context.eventArrivalGuideLayout('tomorrow', 500, 40);
