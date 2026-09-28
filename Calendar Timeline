@@ -161,7 +161,7 @@ const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 2;
 const EVENT_ARRIVAL_GUIDE_DASH_WIDTH = 8;
 const EVENT_ARRIVAL_GUIDE_GAP_WIDTH = 7;
 const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 8;
-const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 6;
+const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 4;
 const EVENT_ARRIVAL_GUIDE_LABEL_PADDING = 8;
 const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 
@@ -11383,11 +11383,11 @@ function eventArrivalGuideLabelWidth(label) {
   const fontSize = scaleFontSize(
     EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
-  // A fonte arredondada do iOS pode ocupar mais que a estimativa, sobretudo
-  // nos minutos. Reserva o texto inteiro antes da origem comum dos traços.
+  // A folga preserva os minutos completos, sem afastar demais os traços.
+  // O texto é desenhado sem um retângulo que possa cortá-lo no iPhone.
   return Math.ceil(
-    estimatedTextWidth(label, fontSize) * 1.3 +
-      scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING + 12)
+    estimatedTextWidth(label, fontSize) * 1.16 +
+      scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING + 4)
   );
 }
 
@@ -11429,17 +11429,10 @@ function drawEventArrivalGuideLabel(
     fontSize + scaleVertical(4),
     scaleVertical(20)
   );
-  const labelRect = new Rect(
-    startX,
-    centerY - labelHeight / 2,
-    labelWidth,
-    labelHeight
-  );
-
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
   ctx.setTextColor(new Color(EVENT_ARRIVAL_GUIDE_COLOR, 1.0));
-  ctx.drawTextInRect(label, labelRect);
+  ctx.drawText(label, new Point(startX, centerY - labelHeight / 2));
   return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
 }
 

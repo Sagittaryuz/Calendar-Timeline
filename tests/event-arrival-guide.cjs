@@ -19,7 +19,7 @@ const context = {
   windowStart: now,
   SETTINGS: { maxItems: 5 },
   EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 8,
-  EVENT_ARRIVAL_GUIDE_LABEL_GAP: 6,
+  EVENT_ARRIVAL_GUIDE_LABEL_GAP: 4,
   EVENT_ARRIVAL_GUIDE_LABEL_PADDING: 8,
   EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE: 21,
   EVENT_STARTING_SOON_WINDOW_MS: 30 * 60 * 1000,
@@ -297,32 +297,39 @@ assert.equal(timedReminderGuides[1].row, 4);
 assert.equal(timedReminderGuides[1].event, timedReminder);
 assert(
   context.eventArrivalGuideLabelWidth('5h e 50m') >
-    context.estimatedTextWidth('5h e 50m', 21) + 35,
+    context.estimatedTextWidth('5h e 50m', 21) + 15,
   'O rótulo deve reservar folga para os minutos completos na fonte arredondada.'
 );
+const labelSource = source.slice(
+  source.indexOf('function drawEventArrivalGuideLabel('),
+  source.indexOf('function drawEventArrivalGuides(')
+);
+assert(labelSource.includes('ctx.drawText(label, new Point('));
+assert(!labelSource.includes('ctx.drawTextInRect('),
+  'O texto da contagem não deve ser cortado pelo próprio retângulo.');
 const tomorrowLayout =
   context.eventArrivalGuideLayout('tomorrow', 500, 40);
 assert.equal(tomorrowLayout.labelX, 508);
 assert.equal(
   tomorrowLayout.lineStartX,
-  554,
+  552,
   'A guia de amanhã deve reservar a largura completa do rótulo antes do tracejado.'
 );
 const todayLayout = context.eventArrivalGuideLayout('today', 0, 40);
 assert.equal(todayLayout.labelX, 8);
 assert.equal(
   todayLayout.lineStartX,
-  54,
+  52,
   'A guia de hoje deve manter a margem da borda esquerda.'
 );
 assert.equal(
   context.eventArrivalGuideLayout('today', 0, 80).lineStartX,
-  94,
+  92,
   'A coluna reservada deve acompanhar o rótulo mais largo e manter uma origem comum.'
 );
 assert.equal(
   context.eventArrivalGuideLayout('tomorrow', 500, 80).lineStartX,
-  594,
+  592,
   'Todas as guias de amanhã devem começar depois da mesma largura reservada.'
 );
 
@@ -450,7 +457,7 @@ assert.equal(context.tomorrowEventArrivalGuides([
 ], lateNow)[0].label, '10h');
 assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '');
 assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 258);
-assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).lineStartX, 344);
+assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).lineStartX, 342);
 
 const panel = source.slice(
   source.indexOf('async function renderTimelinePanel('),
