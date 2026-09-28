@@ -74,6 +74,19 @@ function allDayEvent(title = 'Evento de dia inteiro', dayOffset = 0, isHoliday =
   };
 }
 
+function reminder(title, start, end, extra = {}) {
+  return {
+    kind: 'reminder',
+    title,
+    start,
+    end,
+    isAllDay: false,
+    sourceIsAllDay: true,
+    priority: 0,
+    ...extra,
+  };
+}
+
 function select(items) {
   return makeContext().chooseItems(
     items,
@@ -203,6 +216,68 @@ assert.equal(
   midnightReflow.find(item => item.title === 'Lembrete de amanhã').gridRow,
   0,
   'Lembrete de amanhã deve reutilizar a linha liberada às 06:00.'
+);
+
+const currentTime = new Date(2026, 8, 18, 8);
+const currentTimeContext = makeContext();
+currentTimeContext.windowStart = currentTime;
+currentTimeContext.windowEnd = new Date(2026, 8, 19, 8);
+const overdueReminder = reminder(
+  'Lembrete atrasado',
+  at(0),
+  at(0, 1),
+  { isOverdue: true }
+);
+const todaysReminder = reminder(
+  'Lembrete de hoje',
+  at(0),
+  at(0, 1)
+);
+const remindersTogether = currentTimeContext.chooseItems(
+  [
+    timedEvent(1, 8),
+    timedEvent(2, 10),
+    timedEvent(3, 12),
+    todaysReminder,
+    overdueReminder,
+  ],
+  currentTime,
+  5
+);
+assert(
+  remindersTogether.find(item => item.title === 'Lembrete de hoje').gridRow <
+    remindersTogether.find(item => item.title === 'Lembrete atrasado').gridRow,
+  'Lembretes vencendo hoje devem ocupar as linhas antes dos atrasados.'
+);
+
+const crowdedReminderDay = currentTimeContext.chooseItems(
+  [
+    timedEvent(1, 8),
+    timedEvent(2, 10),
+    timedEvent(3, 12),
+    timedEvent(4, 14),
+    reminder('Lembrete de hoje', at(0), at(0, 1)),
+    reminder('Lembrete atrasado', at(0), at(0, 1), {
+      isOverdue: true,
+    }),
+  ],
+  currentTime,
+  5
+);
+assert.equal(
+  crowdedReminderDay.filter(item => item.isOverflow).length,
+  1,
+  'Uma linha ocupada por lembretes deve poder virar o indicador de excedentes.'
+);
+assert.equal(
+  crowdedReminderDay.find(item => item.isOverflow).title,
+  '+2',
+  'O indicador deve contar os dois lembretes ocultos, inclusive o atrasado.'
+);
+assert.equal(
+  crowdedReminderDay.filter(item => item.kind === 'event').length,
+  4,
+  'O indicador de excedentes não pode remover eventos.'
 );
 
 const saturated = select([

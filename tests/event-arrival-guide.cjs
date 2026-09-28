@@ -20,6 +20,7 @@ const context = {
   SETTINGS: { maxItems: 5 },
   EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 8,
   EVENT_ARRIVAL_GUIDE_LABEL_GAP: 6,
+  EVENT_STARTING_SOON_WINDOW_MS: 30 * 60 * 1000,
   startOfDay: date =>
     new Date(Date.UTC(
       date.getUTCFullYear(),
@@ -49,6 +50,15 @@ vm.runInContext(
   context
 );
 vm.runInContext(source.slice(start, end), context);
+context.applyPendingDayCarryover = () => {};
+context.itemsOverlap = () => false;
+const prepareStart = source.indexOf('function prepareTimelineItems(');
+const prepareEnd = source.indexOf(
+  'function isPendingDayCarryoverCandidate(',
+  prepareStart
+);
+assert(prepareStart >= 0 && prepareEnd > prepareStart);
+vm.runInContext(source.slice(prepareStart, prepareEnd), context);
 
 function at(day, hour, minute = 0) {
   return new Date(Date.UTC(2026, 8, day, hour, minute));
@@ -202,8 +212,8 @@ assert.equal(
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 5), now),
-  '10m',
-  'Minutos devem ser arredondados em blocos de dez.'
+  '',
+  'A contagem regressiva deve sumir antes dos 30 minutos.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 19, 30), now),
@@ -218,7 +228,17 @@ assert.equal(
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 59), now),
   '50m',
-  'Abaixo de uma hora, deve aparecer somente a contagem em minutos.'
+  'A partir de 30 minutos, abaixo de uma hora deve aparecer somente a contagem em minutos.'
+);
+assert.equal(
+  context.formatEventArrivalHours(at(20, 18, 29), now),
+  '',
+  'A contagem não deve aparecer com 29 minutos restantes.'
+);
+assert.equal(
+  context.formatEventArrivalHours(at(20, 18, 30), now),
+  '30m',
+  'A contagem deve aparecer exatamente quando faltam 30 minutos.'
 );
 
 const next = event('Próximo', at(20, 18, 30), at(20, 19, 30), 2);
@@ -249,8 +269,8 @@ const tomorrowLayout =
 assert.equal(tomorrowLayout.labelX, 508);
 assert.equal(
   tomorrowLayout.lineStartX,
-  500,
-  'A guia de amanhã deve começar na mudança de dia e deixar o rótulo à esquerda.'
+  554,
+  'A guia de amanhã deve reservar a largura completa do rótulo antes do tracejado.'
 );
 const todayLayout = context.eventArrivalGuideLayout('today', 0, 40);
 assert.equal(todayLayout.labelX, 8);
@@ -258,6 +278,16 @@ assert.equal(
   todayLayout.lineStartX,
   54,
   'A guia de hoje deve manter a margem da borda esquerda.'
+);
+assert.equal(
+  context.eventArrivalGuideLayout('today', 0, 80).lineStartX,
+  94,
+  'A coluna reservada deve acompanhar o rótulo mais largo e manter uma origem comum.'
+);
+assert.equal(
+  context.eventArrivalGuideLayout('tomorrow', 500, 80).lineStartX,
+  594,
+  'Todas as guias de amanhã devem começar depois da mesma largura reservada.'
 );
 
 const tomorrowGuides = context.tomorrowEventArrivalGuides([
@@ -326,6 +356,55 @@ assert.equal(
   'Sem linha livre, a guia não deve sobrepor um chart.'
 );
 
+const imminent = event('Em breve', at(20, 18, 29), at(20, 19, 29), 1);
+assert.equal(
+  context.todayEventArrivalGuides([imminent]).length,
+  0,
+  'Evento a menos de 30 minutos não mantém rótulo nem tracejado.'
+);
+const startingInThirty = event(
+  'Em meia hora',
+  at(20, 18, 30),
+  at(20, 19, 30),
+  1
+);
+assert.equal(
+  context.todayEventArrivalGuides([startingInThirty])[0].label,
+  '30m',
+  'Evento a exatamente 30 minutos ainda recebe rótulo e tracejado.'
+);
+
+const startingSoon = context.prepareTimelineItems([imminent], now)[0];
+const exactlyThirtyMinutes = context.prepareTimelineItems(
+  [startingInThirty],
+  now
+)[0];
+const inProgress = context.prepareTimelineItems(
+  [event('Agora', at(20, 17), at(20, 19), 1)],
+  now
+)[0];
+assert.equal(startingSoon.isStartingSoon, true);
+assert.equal(exactlyThirtyMinutes.isStartingSoon, false);
+assert.equal(inProgress.isCurrentEvent, true);
+assert.equal(inProgress.isStartingSoon, false);
+
+const barStart = source.indexOf('function drawTimelineBar(');
+const barSource = source.slice(
+  barStart,
+  source.indexOf('function reminderPriorityPrefix(', barStart)
+);
+assert(barSource.includes('item.kind === "event" && item.isCurrentEvent'));
+assert(barSource.includes('new Color("#FFFFFF", 1.0)'));
+const itemStart = source.indexOf('function drawTimelineItem(');
+const itemSource = source.slice(
+  itemStart,
+  source.indexOf('function drawOutlinedTimelineText(', itemStart)
+);
+assert(itemSource.includes('if (item.isStartingSoon)'));
+assert(itemSource.includes('"#FF1F1F"'));
+assert(itemSource.includes('"#FFFFFF"'));
+assert(itemSource.includes('"#000000"'));
+
 console.log('OK: linhas tracejadas aparecem somente para eventos futuros com horário no dia correspondente.');
 
 assert.equal(context.tomorrowEventArrivalGuides([]).length, 0);
@@ -333,8 +412,9 @@ const lateNow = at(20, 23, 45);
 assert.equal(context.tomorrowEventArrivalGuides([
   event('Amanhã', at(21, 10), at(21, 11), 0)
 ], lateNow)[0].label, '10h');
-assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '0m');
+assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '');
 assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 258);
+assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).lineStartX, 344);
 
 const panel = source.slice(
   source.indexOf('async function renderTimelinePanel('),
@@ -344,4 +424,14 @@ assert(
   panel.lastIndexOf('drawEventStartLines(ctx, timelineItemsStartingToday(items))') >
     panel.lastIndexOf('drawTimelineItemLayer('),
   'A linha vertical dos eventos deve ser recomposta acima dos charts.'
+);
+assert(
+  panel.indexOf('drawBottomHourLegend(baseCtx)') >= 0 &&
+    panel.indexOf('drawBottomHourLegend(baseCtx)') <
+      panel.indexOf('const baseImage = baseCtx.getImage()'),
+  'A legenda inferior deve entrar na imagem-base para receber o blur de amanhã.'
+);
+assert(
+  !panel.includes('drawBottomHourLegend(ctx)'),
+  'A legenda não deve ser redesenhada nítida sobre a região desfocada.'
 );

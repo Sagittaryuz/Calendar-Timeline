@@ -145,6 +145,7 @@ const THERMAL_COLOR_STOPS = [
 // Lembretes podem subir para uma linha de evento quando a distância entre
 // eles não passa de seis horas.
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
+const EVENT_STARTING_SOON_WINDOW_MS = 30 * 60 * 1000;
 const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
 const PENDING_DAY_CARRYOVER_END_HOUR = 6;
 const ALL_DAY_REMINDER_DISPLAY_START_HOUR = 6;
@@ -2245,6 +2246,10 @@ function prepareTimelineItems(items, referenceDate) {
     event.isCurrentEvent =
       event.start <= referenceDate &&
       event.end > referenceDate;
+    const timeUntilStart = event.start.getTime() - referenceDate.getTime();
+    event.isStartingSoon =
+      timeUntilStart > 0 &&
+      timeUntilStart < EVENT_STARTING_SOON_WINDOW_MS;
     event.conflictCount = events.filter(
       (candidate) => candidate !== event && itemsOverlap(event, candidate)
     ).length;
@@ -2744,14 +2749,14 @@ function chooseItems(items, _referenceDate, limit) {
             timedRowLimit - 1
           );
 
-    // Lembretes atrasados vêm primeiro. Os compatíveis com um evento em
-    // até seis horas podem subir para a linha do evento; os demais ficam
-    // abaixo do último evento.
+    // Os lembretes do dia vêm antes dos atrasados. Assim, um item antigo
+    // não toma a vaga dos lembretes que realmente vencem hoje. Os compatíveis
+    // com um evento em até seis horas podem subir para a linha do evento.
     const reminders = [...dayItems]
       .filter((item) => item.kind === "reminder")
       .sort(
         (a, b) =>
-          Number(b.isOverdue) - Number(a.isOverdue) ||
+          Number(a.isOverdue) - Number(b.isOverdue) ||
           byTime(a, b)
       );
     if (reminderFirstRow >= timedRowLimit) {
@@ -2927,9 +2932,12 @@ function chooseItems(items, _referenceDate, limit) {
   }
 
   const overflowMarkers = [];
-  for (const hiddenItems of overflowByDay.values()) {
-    const hiddenDayKey = displayDayKey(hiddenItems[0]);
-    for (const group of groupOverflowItems(hiddenItems)) {
+  for (const [hiddenDayKey, dayHiddenItems] of overflowByDay) {
+    let pendingHiddenItems = [...dayHiddenItems];
+    while (pendingHiddenItems.length > 0) {
+      const group = groupOverflowItems(pendingHiddenItems)[0];
+      if (!group) break;
+
       const marker = {
         kind: "overflow",
         title: "+" + group.count,
@@ -2938,23 +2946,94 @@ function chooseItems(items, _referenceDate, limit) {
         isOverflow: true,
         color: SETTINGS.overflowColor,
       };
-      const occupied = [
-        ...placed,
-        ...overflowMarkers,
-      ].filter((item) =>
-        displayDayKey(item) === hiddenDayKey
-      );
-      const markerRow = [...Array(limit).keys()]
+
+      const overlapsPlacedItem = (row) =>
+        [...placed, ...overflowMarkers]
+          .filter(
+            (item) =>
+              item.gridRow === row &&
+              displayDayKey(item) === hiddenDayKey
+          )
+          .some((item) => itemsOverlap(marker, item));
+      let markerRow = [...Array(limit).keys()]
         .reverse()
-        .find((row) =>
-          occupied
-            .filter((item) => item.gridRow === row)
-            .every((item) => !itemsOverlap(marker, item))
+        .find((row) => !overlapsPlacedItem(row));
+
+      if (markerRow === undefined) {
+        // Se todas as linhas estiverem ocupadas, o indicador substitui o
+        // lembrete de menor prioridade daquela faixa. O item removido também
+        // entra na contagem do “+N”, sem encobrir eventos.
+        const candidateRows = [...new Set(
+          placed
+            .filter(
+              (item) =>
+                item.kind === "reminder" &&
+                displayDayKey(item) === hiddenDayKey &&
+                itemsOverlap(marker, item)
+            )
+            .map((item) => item.gridRow)
+        )]
+          .map((row) => ({
+            row,
+            blockers: placed.filter(
+              (item) =>
+                item.gridRow === row &&
+                displayDayKey(item) === hiddenDayKey &&
+                itemsOverlap(marker, item)
+            ),
+          }))
+          .filter(
+            (candidate) =>
+              candidate.blockers.length > 0 &&
+              candidate.blockers.every(
+                (item) => item.kind === "reminder"
+              )
+          )
+          .sort((first, second) => {
+            const evictionScore = (item) =>
+              item.isOverdue
+                ? 0
+                : item.priority > 0 && item.priority <= 4
+                  ? 3
+                  : item.priority > 0
+                    ? 2
+                    : 1;
+            const firstScore = Math.max(
+              ...first.blockers.map(evictionScore)
+            );
+            const secondScore = Math.max(
+              ...second.blockers.map(evictionScore)
+            );
+            return firstScore - secondScore || second.row - first.row;
+          });
+
+        const replacement = candidateRows[0];
+        if (replacement) {
+          markerRow = replacement.row;
+          const displaced = new Set(replacement.blockers);
+          for (let index = placed.length - 1; index >= 0; index--) {
+            if (displaced.has(placed[index])) placed.splice(index, 1);
+          }
+          pendingHiddenItems.push(...replacement.blockers);
+          continue;
+        }
+      }
+
+      // Se não há vaga nem lembrete substituível, preserva os charts e não
+      // desenha o indicador sobre eventos prioritários.
+      if (markerRow === undefined) {
+        const groupedItems = new Set(group.items);
+        pendingHiddenItems = pendingHiddenItems.filter(
+          (item) => !groupedItems.has(item)
         );
-      // Não desenha um indicador sobre outro chart quando todas as linhas
-      // estão ocupadas; a área disponível continua sendo a restrição real.
-      if (markerRow === undefined) continue;
+        continue;
+      }
+
       overflowMarkers.push({ ...marker, gridRow: markerRow });
+      const groupedItems = new Set(group.items);
+      pendingHiddenItems = pendingHiddenItems.filter(
+        (item) => !groupedItems.has(item)
+      );
     }
   }
 
@@ -3084,11 +3163,13 @@ function groupOverflowItems(items) {
         Math.max(current.end.getTime(), end)
       );
       current.count++;
+      current.items.push(item);
     } else {
       groups.push({
         start: new Date(start),
         end: new Date(end),
         count: 1,
+        items: [item],
       });
     }
   }
@@ -8410,6 +8491,11 @@ async function renderTimelinePanel(items, loadError) {
     );
   }
 
+  // A legenda integra a imagem-base para que o trecho de amanhã receba o
+  // mesmo blur dos outros elementos futuros; o círculo da virada continua
+  // sendo redesenhado nítido na camada superior.
+  drawBottomHourLegend(baseCtx);
+
   const baseImage = baseCtx.getImage();
   const ctx = new DrawContext();
   ctx.size = new Size(timelineWidth(), timelineHeight());
@@ -8437,10 +8523,6 @@ async function renderTimelinePanel(items, loadError) {
     ctx.drawImageAtPoint(blurCtx.getImage(), new Point(0, 0));
     await drawDiagonalWeekdayLabels(ctx);
   }
-
-  // Redesenha a legenda depois do blur para manter as horas nítidas
-  // e centralizadas na mesma altura do círculo de mudança de dia.
-  drawBottomHourLegend(ctx);
 
   // O astro de mudança de dia e o círculo inferior também permanecem
   // nítidos e acima do blur.
@@ -11057,6 +11139,24 @@ function eventStartsAtDayChange(event) {
 }
 
 function formatEventArrivalHours(eventStart, referenceDate = now) {
+  if (
+    !(eventStart instanceof Date) ||
+    !(referenceDate instanceof Date) ||
+    !Number.isFinite(eventStart.getTime()) ||
+    !Number.isFinite(referenceDate.getTime())
+  ) {
+    return "";
+  }
+
+  const remainingMilliseconds =
+    eventStart.getTime() - referenceDate.getTime();
+  if (
+    remainingMilliseconds <= 0 ||
+    remainingMilliseconds < EVENT_STARTING_SOON_WINDOW_MS
+  ) {
+    return "";
+  }
+
   return formatTenMinuteCountdown(eventStart, referenceDate);
 }
 
@@ -11142,12 +11242,14 @@ function eventArrivalGuidesForDay(
         a.end.getTime() - b.end.getTime()
     );
 
-  return futureEvents.map((event) => ({
-    event,
-    row: Number(event.gridRow),
-    end: event.start,
-    label: formatEventArrivalHours(event.start, countdownReference),
-  }));
+  return futureEvents
+    .map((event) => ({
+      event,
+      row: Number(event.gridRow),
+      end: event.start,
+      label: formatEventArrivalHours(event.start, countdownReference),
+    }))
+    .filter((guide) => guide.label);
 }
 
 function todayEventArrivalGuides(items, referenceDate = now) {
@@ -11250,21 +11352,25 @@ function eventArrivalGuideLabelWidth(label) {
   );
 }
 
-function eventArrivalGuideLayout(day, dayBoundaryX, labelWidth) {
+function eventArrivalGuideLayout(day, dayBoundaryX, reservedLabelWidth) {
+  const labelX =
+    (day === "tomorrow" ? dayBoundaryX : 0) +
+    EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
+  const lineStartX =
+    labelX +
+    reservedLabelWidth +
+    EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+
   if (day === "tomorrow") {
     return {
-      labelX:
-        dayBoundaryX + EVENT_ARRIVAL_GUIDE_LEFT_MARGIN,
-      lineStartX: dayBoundaryX,
+      labelX,
+      lineStartX,
     };
   }
 
   return {
-    labelX: EVENT_ARRIVAL_GUIDE_LEFT_MARGIN,
-    lineStartX:
-      EVENT_ARRIVAL_GUIDE_LEFT_MARGIN +
-      labelWidth +
-      EVENT_ARRIVAL_GUIDE_LABEL_GAP,
+    labelX,
+    lineStartX,
   };
 }
 
@@ -11310,6 +11416,10 @@ function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
     ? timeToX(tomorrowStart)
     : 0;
   const rowHeight = timelineRowHeight();
+  const reservedLabelWidth = Math.max(
+    0,
+    ...guides.map((guide) => eventArrivalGuideLabelWidth(guide.label))
+  );
 
   for (const guide of guides) {
     const centerY =
@@ -11325,7 +11435,7 @@ function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
     const layout = eventArrivalGuideLayout(
       day,
       dayBoundaryX,
-      labelWidth
+      reservedLabelWidth
     );
     if (labelsOnly) {
       drawEventArrivalGuideLabel(
@@ -11338,7 +11448,7 @@ function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
       continue;
     }
 
-    const lineStartX = drawEventArrivalGuideLabel(
+    drawEventArrivalGuideLabel(
       ctx,
       guide.label,
       layout.labelX,
@@ -11348,7 +11458,7 @@ function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
 
     drawEventArrivalGuideDashes(
       ctx,
-      lineStartX,
+      layout.lineStartX,
       visibleTargetX,
       centerY
     );
@@ -11605,17 +11715,25 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   ).map((segment) => ({ ...segment, x: segment.x - 1 }));
 
   for (const segment of barSegments) {
+    const barRect = new Rect(
+      segment.x,
+      barY,
+      segment.width,
+      barHeight
+    );
     drawTimelineBar(
       ctx,
-      new Rect(
-        segment.x,
-        barY,
-        segment.width,
-        barHeight
-      ),
+      barRect,
       color,
       item
     );
+    if (item.isStartingSoon) {
+      drawPendingDayCarryoverBorder(
+        ctx,
+        barRect,
+        isCompactMode() ? scaleVertical(6) : scaleVertical(7)
+      );
+    }
   }
 
   const priorityPrefix = reminderPriorityPrefix(item);
@@ -11668,6 +11786,15 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       : 0;
   const visibleTitle = title;
   if (!visibleTitle && statusWidth === 0) return;
+  const emphasizedEventText =
+    item.kind === "event" &&
+    (item.isCurrentEvent || item.isStartingSoon);
+  const emphasizedTextColor = item.isStartingSoon
+    ? "#FF1F1F"
+    : "#FFFFFF";
+  const emphasizedOutlineColor = item.isStartingSoon
+    ? "#FFFFFF"
+    : "#000000";
 
   const titleTextY =
     barY +
@@ -11698,15 +11825,26 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   }
 
   if (visibleTitle) {
-    ctx.setTextAlignedLeft();
-    ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
-    ctx.setTextColor(new Color("#000000", 0.85));
-    ctx.drawText(
-      visibleTitle,
-      new Point(textPoint.x + 2, textPoint.y + 2)
-    );
-    ctx.setTextColor(Color.white());
-    ctx.drawText(visibleTitle, textPoint);
+    if (emphasizedEventText) {
+      drawOutlinedTimelineText(
+        ctx,
+        visibleTitle,
+        textPoint,
+        titleFontSize,
+        emphasizedTextColor,
+        emphasizedOutlineColor
+      );
+    } else {
+      ctx.setTextAlignedLeft();
+      ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
+      ctx.setTextColor(new Color("#000000", 0.85));
+      ctx.drawText(
+        visibleTitle,
+        new Point(textPoint.x + 2, textPoint.y + 2)
+      );
+      ctx.setTextColor(Color.white());
+      ctx.drawText(visibleTitle, textPoint);
+    }
 
     if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
       ctx.setTextColor(new Color("#FF453A"));
@@ -11715,34 +11853,101 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   }
 
   if (statusWidth > 0) {
-    ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackRoundedSystemFont(statusFontSize));
-    ctx.setTextColor(Color.white());
-    ctx.drawTextInRect(
-      statusText,
-      new Rect(
-        visibleRight - statusWidth,
-        barY + scaleVertical(6),
-        statusWidth,
-        barHeight - scaleVertical(6)
-      )
+    const statusRect = new Rect(
+      visibleRight - statusWidth,
+      barY + scaleVertical(6),
+      statusWidth,
+      barHeight - scaleVertical(6)
     );
+    if (emphasizedEventText) {
+      drawOutlinedTimelineTextInRect(
+        ctx,
+        statusText,
+        statusRect,
+        statusFontSize,
+        emphasizedTextColor,
+        emphasizedOutlineColor
+      );
+    } else {
+      ctx.setTextAlignedCenter();
+      ctx.setFont(Font.blackRoundedSystemFont(statusFontSize));
+      ctx.setTextColor(Color.white());
+      ctx.drawTextInRect(statusText, statusRect);
+    }
   }
 
   if (metadataWidth > 0) {
-    ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackRoundedSystemFont(metadataFontSize));
-    ctx.setTextColor(new Color("#FF453A"));
+    const metadataRect = new Rect(
+      visibleRight - statusWidth - metadataWidth,
+      barY + scaleVertical(6),
+      metadataWidth,
+      barHeight - scaleVertical(6)
+    );
+    if (emphasizedEventText) {
+      drawOutlinedTimelineTextInRect(
+        ctx,
+        metadataText,
+        metadataRect,
+        metadataFontSize,
+        emphasizedTextColor,
+        emphasizedOutlineColor
+      );
+    } else {
+      ctx.setTextAlignedCenter();
+      ctx.setFont(Font.blackRoundedSystemFont(metadataFontSize));
+      ctx.setTextColor(new Color("#FF453A"));
+      ctx.drawTextInRect(metadataText, metadataRect);
+    }
+  }
+}
+
+function drawOutlinedTimelineText(
+  ctx,
+  text,
+  point,
+  fontSize,
+  fillColor,
+  outlineColor
+) {
+  const offset = Math.max(1, scaleVertical(1));
+  ctx.setTextAlignedLeft();
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(new Color(outlineColor, 1.0));
+  for (const [dx, dy] of [
+    [-offset, -offset], [0, -offset], [offset, -offset],
+    [-offset, 0],                        [offset, 0],
+    [-offset, offset],  [0, offset],  [offset, offset],
+  ]) {
+    ctx.drawText(text, new Point(point.x + dx, point.y + dy));
+  }
+  ctx.setTextColor(new Color(fillColor, 1.0));
+  ctx.drawText(text, point);
+}
+
+function drawOutlinedTimelineTextInRect(
+  ctx,
+  text,
+  rect,
+  fontSize,
+  fillColor,
+  outlineColor
+) {
+  const offset = Math.max(1, scaleVertical(1));
+  ctx.setTextAlignedCenter();
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(new Color(outlineColor, 1.0));
+  for (const [dx, dy] of [
+    [-offset, -offset], [0, -offset], [offset, -offset],
+    [-offset, 0],                        [offset, 0],
+    [-offset, offset],  [0, offset],  [offset, offset],
+  ]) {
     ctx.drawTextInRect(
-      metadataText,
-      new Rect(
-        visibleRight - statusWidth - metadataWidth,
-        barY + scaleVertical(6),
-        metadataWidth,
-        barHeight - scaleVertical(6)
-      )
+      text,
+      new Rect(rect.x + dx, rect.y + dy, rect.width, rect.height)
     );
   }
+  ctx.setTextColor(new Color(fillColor, 1.0));
+  ctx.drawTextInRect(text, rect);
 }
 
 function drawBirthdayLabel(ctx, item, y, rowHeight) {
@@ -11905,6 +12110,18 @@ function drawTimelineBar(ctx, rect, color, item) {
       ctx,
       rect,
       cornerRadius
+    );
+    return;
+  }
+
+  if (item.kind === "event" && item.isCurrentEvent) {
+    // Mantém somente o contorno preto comum e pinta todo o interior de
+    // branco; o texto branco continua legível com contorno preto.
+    fillRoundedRect(
+      ctx,
+      outlinedRect,
+      Math.max(1, cornerRadius - outlineWidth),
+      new Color("#FFFFFF", 1.0)
     );
     return;
   }
