@@ -30,6 +30,8 @@ const context = {
     new Date(date.getTime() + days * 24 * 60 * 60 * 1000),
   isBirthdayItem: item =>
     item?.isBirthday === true || item?.isBirthdayGroup === true,
+  dateKey: date =>
+    `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
 };
 vm.createContext(context);
 
@@ -106,6 +108,66 @@ assert.equal(
   'Evento convertido para 07h–11h deve voltar a receber linha de chegada.'
 );
 assert.equal(editedEventGuide[0].label, '6h');
+
+const convertedOccurrence = {
+  identifier: 'bimestral-portugues',
+  title: 'Bimestral de Português',
+  isAllDay: false,
+  startDate: at(20, 7),
+  endDate: at(20, 11),
+};
+const staleTodayOccurrence = {
+  ...convertedOccurrence,
+  isAllDay: true,
+  endDate: at(21, 7),
+};
+const convertedView = {
+  event: convertedOccurrence,
+  ...context.calendarEventDisplayInterval(
+    convertedOccurrence,
+    false,
+    null
+  ),
+  occursToday: false,
+};
+const staleTodayView = {
+  event: staleTodayOccurrence,
+  ...context.calendarEventDisplayInterval(
+    staleTodayOccurrence,
+    true,
+    at(21, 0)
+  ),
+  occursToday: true,
+};
+assert.equal(
+  context.preferCalendarEventView(convertedView, staleTodayView),
+  convertedView,
+  'A cópia antiga de dia inteiro não pode substituir a versão 07h–11h retornada pela consulta por intervalo.'
+);
+const reconciledViews = context.removeSupersededCalendarEventViews([
+  staleTodayView,
+  convertedView,
+]);
+assert.equal(reconciledViews.length, 1);
+assert.equal(reconciledViews[0], convertedView);
+assert.equal(reconciledViews[0].end.getTime(), at(20, 11).getTime());
+
+const convertedGuide = context.todayEventArrivalGuides(
+  [event(
+    'Bimestral de Português',
+    reconciledViews[0].start,
+    reconciledViews[0].end,
+    1,
+    { isAllDay: reconciledViews[0].isAllDay }
+  )],
+  at(20, 6, 24)
+);
+assert.equal(
+  convertedGuide.length,
+  1,
+  'A ocorrência convertida deve ter novamente a linha de chegada.'
+);
+assert.equal(convertedGuide[0].label, '40m');
 
 const zeroDurationAllDay = context.calendarEventDisplayInterval(
   { isAllDay: true, startDate: at(20, 0), endDate: at(20, 0) },

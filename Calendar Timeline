@@ -633,16 +633,6 @@ async function loadWindow() {
     // CalendarEvent.between() pode não devolver um evento cujo início ficou
     // antes de windowStart. CalendarEvent.today() é a fonte autoritativa
     // para ocorrências que o Calendário considera pertencentes ao dia atual.
-    const eventOccurrenceKey = (event) => {
-      const sourceIdentifier =
-        event.identifier ??
-        `${event.calendar?.identifier ?? event.calendar?.title ?? ""}-${event.title ?? "Evento"}`;
-      const occurrenceStart = event.startDate
-        ? event.startDate.getTime()
-        : "sem-inicio";
-      return `${sourceIdentifier}::${occurrenceStart}`;
-    };
-
     const displayEventMap = new Map();
     const collectDisplayEvent = (event, occursToday = false) => {
       if (!includeCalendar(event.calendar)) return;
@@ -662,12 +652,18 @@ async function loadWindow() {
         eventStart >= windowEnd
       ) return;
 
-      displayEventMap.set(eventOccurrenceKey(event), {
+      const view = {
         event,
         start: eventStart,
         end: eventEnd,
         isAllDay,
-      });
+        occursToday,
+      };
+      const key = calendarEventOccurrenceKey(event);
+      displayEventMap.set(
+        key,
+        preferCalendarEventView(displayEventMap.get(key), view)
+      );
     };
 
     events.forEach((event) => collectDisplayEvent(event, false));
@@ -675,7 +671,9 @@ async function loadWindow() {
     // sobre uma eventual duplicata da consulta por intervalo.
     todayEvents.forEach((event) => collectDisplayEvent(event, true));
 
-    const eventItems = [...displayEventMap.values()].map((view) => {
+    const eventItems = removeSupersededCalendarEventViews(
+      [...displayEventMap.values()]
+    ).map((view) => {
       const event = view.event;
       const isBirthday = isBirthdayCalendarEvent(event);
       return {
@@ -750,7 +748,7 @@ async function loadWindow() {
         return;
       }
 
-      countEventMap.set(eventOccurrenceKey(event), {
+      countEventMap.set(calendarEventOccurrenceKey(event), {
         start: eventStart,
         end: eventEnd,
       });
@@ -2092,6 +2090,92 @@ function calendarEventDisplayInterval(event, occursToday, currentDayEnd) {
   }
 
   return { start, end, isAllDay };
+}
+
+function calendarEventSourceIdentifier(event) {
+  return (
+    event?.identifier ??
+    `${event?.calendar?.identifier ?? event?.calendar?.title ?? ""}-${event?.title ?? "Evento"}`
+  );
+}
+
+function calendarEventOccurrenceKey(event) {
+  const occurrenceStart = event?.startDate
+    ? new Date(event.startDate).getTime()
+    : "sem-inicio";
+  return `${calendarEventSourceIdentifier(event)}::${occurrenceStart}`;
+}
+
+function calendarEventViewDayIdentity(view) {
+  if (!(view?.start instanceof Date) || !view.event) return "";
+  return `${calendarEventSourceIdentifier(view.event)}::${dateKey(view.start)}`;
+}
+
+function calendarEventRepresentationScore(view) {
+  const start = view?.start;
+  const end = view?.end;
+  if (
+    !(start instanceof Date) ||
+    !(end instanceof Date) ||
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(end.getTime()) ||
+    end <= start
+  ) {
+    return 0;
+  }
+
+  // Quando CalendarEvent.today() ainda entrega a cópia antiga de dia inteiro,
+  // a consulta por intervalo pode ter a versão atual com horas definidas.
+  // A flag nativa já desativada é a evidência mais forte de que essa cópia é
+  // a ocorrência editada. Uma duração curta também ajuda quando a flag antiga
+  // ainda não foi sincronizada pelo EventKit.
+  if (!Boolean(view.event?.isAllDay)) return 3;
+  if (!view.isAllDay) return 2;
+  return 0;
+}
+
+function preferCalendarEventView(existing, incoming) {
+  if (!existing) return incoming;
+
+  const existingScore = calendarEventRepresentationScore(existing);
+  const incomingScore = calendarEventRepresentationScore(incoming);
+  if (incomingScore !== existingScore) {
+    return incomingScore > existingScore ? incoming : existing;
+  }
+
+  // Se ambas as cópias ainda mantêm a flag antiga, a duração explícita menor
+  // é a melhor representação do evento convertido. Nos demais empates, a
+  // ocorrência de hoje continua prevalecendo, como antes.
+  if (
+    existingScore === 2 &&
+    incoming.end.getTime() - incoming.start.getTime() !==
+      existing.end.getTime() - existing.start.getTime()
+  ) {
+    return incoming.end < existing.end ? incoming : existing;
+  }
+
+  return incoming.occursToday ? incoming : existing;
+}
+
+function removeSupersededCalendarEventViews(views) {
+  const candidates = Array.isArray(views) ? views : [];
+  return candidates.filter((view) => {
+    const identity = calendarEventViewDayIdentity(view);
+    if (!identity) return true;
+
+    const score = calendarEventRepresentationScore(view);
+    return !candidates.some((other) => {
+      if (other === view || calendarEventViewDayIdentity(other) !== identity) {
+        return false;
+      }
+      if (calendarEventRepresentationScore(other) <= score) return false;
+
+      return (
+        view.start < other.end &&
+        other.start < view.end
+      );
+    });
+  });
 }
 
 function calculateScheduleSummary(events, rangeStart, rangeEnd) {
@@ -8431,6 +8515,13 @@ function drawTimelineItemLayer(
       drawTimelineItem(ctx, item, y, rowHeight)
     );
   }
+
+  if (arrivalGuideDay) {
+    // Um evento que começa em poucos minutos pode cobrir o rótulo da guia,
+    // pois o início do chart fica quase na borda esquerda. Reimprime só o
+    // texto por cima do chart; os traços continuam restritos ao espaço livre.
+    drawEventArrivalGuides(ctx, guideItems, arrivalGuideDay, true);
+  }
 }
 
 
@@ -11207,7 +11298,7 @@ function drawEventArrivalGuideLabel(
   return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
 }
 
-function drawEventArrivalGuides(ctx, items, day) {
+function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
   const isTomorrow = day === "tomorrow";
   const guides = isTomorrow
     ? tomorrowEventArrivalGuides(items)
@@ -11236,6 +11327,17 @@ function drawEventArrivalGuides(ctx, items, day) {
       dayBoundaryX,
       labelWidth
     );
+    if (labelsOnly) {
+      drawEventArrivalGuideLabel(
+        ctx,
+        guide.label,
+        layout.labelX,
+        centerY,
+        labelWidth
+      );
+      continue;
+    }
+
     const lineStartX = drawEventArrivalGuideLabel(
       ctx,
       guide.label,
