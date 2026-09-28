@@ -3185,7 +3185,7 @@ async function drawDayEndCapsules(ctx) {
         g.lineTo(-capsuleLength/2+r, h/2);
         g.arc(-capsuleLength/2+r, 0, r, Math.PI/2, Math.PI*1.5);
         g.closePath(); g.fillStyle = '#' + entry.color.replace('#',''); g.fill();
-        const alignmentMetrics = g.measureText('0h00min');
+        const alignmentMetrics = g.measureText('0h e 00m');
         const textBaseline =
           (alignmentMetrics.actualBoundingBoxAscent - alignmentMetrics.actualBoundingBoxDescent) / 2;
         g.fillStyle = '#000000'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
@@ -10945,25 +10945,24 @@ function formatTenMinuteCountdown(eventStart, referenceDate = now) {
     eventStart.getTime() - referenceDate.getTime()
   );
 
-  if (remainingMilliseconds === 0) return "0min";
+  if (remainingMilliseconds === 0) return "0m";
 
   // Arredonda para cima em passos de dez minutos. Abaixo de uma hora,
-  // limita o maior rótulo a 50min para não exibir "1h00min" antes da hora.
+  // limita o maior rótulo a 50m para não exibir "1h" antes da hora.
   if (remainingMilliseconds < 60 * 60000) {
     const roundedMinutes = Math.min(
       50,
       Math.max(10, Math.ceil(remainingMilliseconds / 600000) * 10)
     );
-    return `${roundedMinutes}min`;
+    return `${roundedMinutes}m`;
   }
 
   const roundedMinutes = Math.ceil(remainingMilliseconds / 600000) * 10;
   const wholeHours = Math.floor(roundedMinutes / 60);
   const minuteRemainder = roundedMinutes % 60;
-  const minuteText = minuteRemainder < 10
-    ? `0${minuteRemainder}`
-    : String(minuteRemainder);
-  return `${wholeHours}h${minuteText}min`;
+  return minuteRemainder === 0
+    ? `${wholeHours}h`
+    : `${wholeHours}h e ${minuteRemainder}m`;
 }
 
 function eventArrivalGuidesForDay(
@@ -11109,7 +11108,7 @@ function eventArrivalGuideLabelWidth(label) {
   const fontSize = scaleFontSize(
     EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
-  // A margem extra impede que o final de "min" seja cortado pelo retângulo
+  // A margem extra evita cortar os últimos caracteres pelo retângulo
   // estimado quando o DrawContext usa a métrica real da fonte do iOS.
   return Math.ceil(
     estimatedTextWidth(label, fontSize) +
