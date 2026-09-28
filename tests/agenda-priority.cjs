@@ -314,6 +314,32 @@ assert.equal(
   'Os lembretes de hoje devem ficar ocultos neste cenário cheio.'
 );
 
+const lastRowBadge = currentTimeContext.chooseItems(
+  [
+    ...Array.from({ length: 3 }, (_, index) => timedEvent(index + 1, 8)),
+    reminder('Lembrete atrasado', at(0), at(0, 1), {
+      isOverdue: true,
+    }),
+    reminder('Ligar pra Ronan', at(0), at(0, 1)),
+    reminder('Outro lembrete', at(0), at(0, 1)),
+  ],
+  currentTime,
+  5
+);
+const lastBadge = lastRowBadge.find(item => item.isOverflow);
+assert.equal(lastBadge.title, '+1');
+assert.equal(lastBadge.gridRow, 4, 'O +1 deve ficar na última linha.');
+assert.equal(lastBadge.isOverlay, true);
+assert.equal(
+  lastRowBadge.find(item => item.title === 'Ligar pra Ronan').gridRow,
+  4,
+  'O +1 deve acompanhar o chart da última linha, não o atrasado acima.'
+);
+assert.equal(
+  lastRowBadge.find(item => item.title === 'Lembrete atrasado').gridRow,
+  3
+);
+
 const shareContext = makeContext();
 shareContext.windowStart = at(8);
 shareContext.windowEnd = at(8, 1);

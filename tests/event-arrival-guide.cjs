@@ -420,6 +420,27 @@ const panel = source.slice(
   source.indexOf('async function renderTimelinePanel('),
   source.indexOf('function timelineItemsStartingToday(')
 );
+const itemLayer = source.slice(
+  source.indexOf('function drawTimelineItemLayer('),
+  source.indexOf('function diagonalWeekdayLabelColor(')
+);
+assert.equal(
+  itemLayer.match(/drawEventArrivalGuides\(/g)?.length,
+  1,
+  'Rótulos e tracejados devem ser desenhados uma única vez, atrás dos charts.'
+);
+assert(
+  itemLayer.indexOf('drawEventArrivalGuides(') <
+    itemLayer.indexOf('rowItems.forEach('),
+  'O chart e o título precisam cobrir a guia de chegada.'
+);
+const markerSource = source.slice(
+  source.indexOf('function drawReminderMarker('),
+  source.indexOf('function drawTimelineBar(', source.indexOf('function drawReminderMarker('))
+);
+assert(markerSource.includes('ctx.setStrokeColor(Color.white())'));
+assert(markerSource.includes('ctx.strokeEllipse('));
+assert(!markerSource.includes('fillEllipse('), 'O aro dos lembretes deve ser vazado.');
 assert(
   panel.lastIndexOf('drawEventStartLines(ctx, timelineItemsStartingToday(items))') >
     panel.lastIndexOf('drawTimelineItemLayer('),

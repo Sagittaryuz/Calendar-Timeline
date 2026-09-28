@@ -2942,8 +2942,8 @@ function chooseItems(items, _referenceDate, limit) {
         color: SETTINGS.overflowColor,
       };
 
-      // O +N fica sobre um chart já visível, com espaço reservado para o
-      // título dele. O lembrete atrasado é a primeira âncora possível.
+      // O +N fica sempre na última linha, sobre um chart já visível e com
+      // espaço reservado para o título dele.
       const anchorPriority = (item) =>
         item.kind === "reminder"
           ? item.isOverdue ? 3 : 2
@@ -2951,6 +2951,7 @@ function chooseItems(items, _referenceDate, limit) {
       const anchors = placed
         .filter((item) =>
           displayDayKey(item) === hiddenDayKey &&
+          item.gridRow === limit - 1 &&
           (item.kind === "event" || item.kind === "reminder") &&
           !item.isAllDay &&
           !isBirthdayItem(item) &&
@@ -3015,18 +3016,14 @@ function chooseItems(items, _referenceDate, limit) {
         continue;
       }
 
-      // Se nenhum chart permitir deslocar seu título com segurança, usa
-      // apenas uma linha livre. Nunca troca o lembrete atrasado pelo +N.
-      const markerRow = [...Array(limit).keys()]
-        .reverse()
-        .find((row) =>
-          [...placed, ...overflowMarkers].every((item) =>
-            item.gridRow !== row ||
-            displayDayKey(item) !== hiddenDayKey
-          )
-        );
-      if (markerRow !== undefined) {
-        overflowMarkers.push({ ...marker, gridRow: markerRow });
+      // Sem âncora, o indicador só pode usar a última linha se ela estiver
+      // livre; nunca pula para uma linha acima dos charts visíveis.
+      const lastRow = limit - 1;
+      if ([...placed, ...overflowMarkers].every((item) =>
+        item.gridRow !== lastRow ||
+        displayDayKey(item) !== hiddenDayKey
+      )) {
+        overflowMarkers.push({ ...marker, gridRow: lastRow });
       }
     }
   }
@@ -8645,12 +8642,6 @@ function drawTimelineItemLayer(
     );
   }
 
-  if (arrivalGuideDay) {
-    // Um evento que começa em poucos minutos pode cobrir o rótulo da guia,
-    // pois o início do chart fica quase na borda esquerda. Reimprime só o
-    // texto por cima do chart; os traços continuam restritos ao espaço livre.
-    drawEventArrivalGuides(ctx, guideItems, arrivalGuideDay, true);
-  }
 }
 
 
@@ -11451,7 +11442,7 @@ function drawEventArrivalGuideLabel(
   return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
 }
 
-function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
+function drawEventArrivalGuides(ctx, items, day) {
   const isTomorrow = day === "tomorrow";
   const guides = isTomorrow
     ? tomorrowEventArrivalGuides(items)
@@ -11484,17 +11475,6 @@ function drawEventArrivalGuides(ctx, items, day, labelsOnly = false) {
       dayBoundaryX,
       reservedLabelWidth
     );
-    if (labelsOnly) {
-      drawEventArrivalGuideLabel(
-        ctx,
-        guide.label,
-        layout.labelX,
-        centerY,
-        labelWidth
-      );
-      continue;
-    }
-
     drawEventArrivalGuideLabel(
       ctx,
       guide.label,
@@ -11856,7 +11836,6 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       contentLeft + 8 + reminderMarkerDiameter / 2,
       centerY,
       reminderMarkerDiameter,
-      color
     );
   }
 
@@ -12067,34 +12046,15 @@ function birthdayLabelWidth(label, fontSize) {
   );
 }
 
-function drawReminderMarker(ctx, centerX, centerY, diameter, color) {
-  const outerDiameter = diameter + 2;
-  ctx.setFillColor(new Color("#000000", 0.95));
-  ctx.fillEllipse(
-    new Rect(
-      centerX - outerDiameter / 2,
-      centerY - outerDiameter / 2,
-      outerDiameter,
-      outerDiameter
-    )
-  );
-  ctx.setFillColor(color);
-  ctx.fillEllipse(
+function drawReminderMarker(ctx, centerX, centerY, diameter) {
+  ctx.setStrokeColor(Color.white());
+  ctx.setLineWidth(Math.max(2, scaleVertical(2.5)));
+  ctx.strokeEllipse(
     new Rect(
       centerX - diameter / 2,
       centerY - diameter / 2,
       diameter,
       diameter
-    )
-  );
-  const innerDiameter = Math.max(2, diameter - 5);
-  ctx.setFillColor(new Color("#000000", 0.88));
-  ctx.fillEllipse(
-    new Rect(
-      centerX - innerDiameter / 2,
-      centerY - innerDiameter / 2,
-      innerDiameter,
-      innerDiameter
     )
   );
 }
