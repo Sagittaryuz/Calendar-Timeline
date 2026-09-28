@@ -2974,7 +2974,7 @@ function chooseItems(items, _referenceDate, limit) {
         const markerX = bounds.left;
         const badgeRight = markerX + markerWidth;
         if (
-          badgeRight > bounds.barRight ||
+          bounds.barRight <= markerX ||
           badgeRight > timelineWidth()
         ) continue;
 
@@ -3015,8 +3015,8 @@ function chooseItems(items, _referenceDate, limit) {
         continue;
       }
 
-      // Sem chart largo o bastante, usa apenas uma linha livre. Nunca troca
-      // o lembrete atrasado por um indicador nem cobre outro título.
+      // Se nenhum chart permitir deslocar seu título com segurança, usa
+      // apenas uma linha livre. Nunca troca o lembrete atrasado pelo +N.
       const markerRow = [...Array(limit).keys()]
         .reverse()
         .find((row) =>

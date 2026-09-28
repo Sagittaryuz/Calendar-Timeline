@@ -404,6 +404,11 @@ assert.notEqual(
 const saturated = select([
   ...Array.from({ length: 6 }, (_, index) => timedEvent(index + 1, 8)),
 ]);
+assert.equal(
+  saturated.filter(item => item.isOverflow).length,
+  1,
+  'Mesmo com cinco charts curtos, o excedente deve aparecer sobre um deles.'
+);
 for (const marker of saturated.filter(item => item.isOverflow)) {
   if (marker.isOverlay) {
     assert(
