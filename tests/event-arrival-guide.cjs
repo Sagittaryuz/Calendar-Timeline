@@ -32,6 +32,20 @@ const context = {
     item?.isBirthday === true || item?.isBirthdayGroup === true,
 };
 vm.createContext(context);
+
+const allDayInferenceStart = source.indexOf('function calendarEventIsAllDay(');
+const allDayInferenceEnd = source.indexOf(
+  'function calculateScheduleSummary(',
+  allDayInferenceStart
+);
+assert(
+  allDayInferenceStart >= 0 && allDayInferenceEnd > allDayInferenceStart,
+  'Localizar a normalização da flag de dia inteiro.'
+);
+vm.runInContext(
+  source.slice(allDayInferenceStart, allDayInferenceEnd),
+  context
+);
 vm.runInContext(source.slice(start, end), context);
 
 function at(day, hour, minute = 0) {
@@ -49,6 +63,70 @@ function event(title, startDate, endDate, gridRow, extra = {}) {
     ...extra,
   };
 }
+
+const editedAllDayEvent = {
+  isAllDay: true,
+  startDate: at(20, 7),
+  endDate: at(20, 11),
+};
+const editedAllDayFlag = context.calendarEventIsAllDay(
+  editedAllDayEvent,
+  editedAllDayEvent.startDate,
+  editedAllDayEvent.endDate
+);
+assert.equal(
+  editedAllDayFlag,
+  false,
+  'Uma flag antiga de dia inteiro não deve sobrepor um intervalo explícito de 07h a 11h.'
+);
+const editedEventInterval = context.calendarEventDisplayInterval(
+  editedAllDayEvent,
+  true,
+  at(21, 0)
+);
+assert.equal(editedEventInterval.isAllDay, false);
+assert.equal(
+  editedEventInterval.end.getTime(),
+  at(20, 11).getTime(),
+  'O evento convertido não deve ser estendido até a meia-noite.'
+);
+const editedEventGuide = context.todayEventArrivalGuides(
+  [event(
+    'Bimestral de Português',
+    editedEventInterval.start,
+    editedEventInterval.end,
+    1,
+    { isAllDay: editedEventInterval.isAllDay }
+  )],
+  at(20, 1, 7)
+);
+assert.equal(
+  editedEventGuide.length,
+  1,
+  'Evento convertido para 07h–11h deve voltar a receber linha de chegada.'
+);
+assert.equal(editedEventGuide[0].label, '6h');
+
+const zeroDurationAllDay = context.calendarEventDisplayInterval(
+  { isAllDay: true, startDate: at(20, 0), endDate: at(20, 0) },
+  true,
+  at(21, 0)
+);
+assert.equal(zeroDurationAllDay.isAllDay, true);
+assert.equal(
+  zeroDurationAllDay.end.getTime(),
+  at(21, 0).getTime(),
+  'Fim bruto zero continua sendo estendido para eventos de dia inteiro.'
+);
+assert.equal(
+  context.calendarEventIsAllDay({
+    isAllDay: true,
+    startDate: at(20, 0),
+    endDate: at(21, 0),
+  }),
+  true,
+  'Eventos de dia inteiro com duração de 24 horas preservam a classificação.'
+);
 
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 30), now),

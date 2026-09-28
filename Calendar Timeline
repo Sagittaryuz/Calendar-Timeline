@@ -647,26 +647,13 @@ async function loadWindow() {
     const collectDisplayEvent = (event, occursToday = false) => {
       if (!includeCalendar(event.calendar)) return;
 
-      const eventStart = event.startDate
-        ? new Date(event.startDate)
-        : null;
-      let eventEnd = event.endDate
-        ? new Date(event.endDate)
-        : null;
-      const isAllDay = Boolean(event.isAllDay);
-
-      if (!eventStart || !eventEnd) return;
-
-      // Em eventos de dia inteiro, alguns calendários entregam endDate em
-      // 00:00 do último dia exibido. Se CalendarEvent.today() confirmou que
-      // a ocorrência pertence a hoje, ela deve permanecer visível até 00:00
-      // do dia seguinte, independentemente desse limite bruto.
-      if (isAllDay && occursToday) {
-        const currentDayEnd = addDays(startOfDay(windowStart), 1);
-        if (eventEnd < currentDayEnd) {
-          eventEnd = currentDayEnd;
-        }
-      }
+      const interval = calendarEventDisplayInterval(
+        event,
+        occursToday,
+        occursToday ? addDays(startOfDay(windowStart), 1) : null
+      );
+      if (!interval) return;
+      const { start: eventStart, end: eventEnd, isAllDay } = interval;
 
       // Eventos nunca recebem extensão artificial para o dia seguinte.
       // Somente lembretes pendentes passam pela regra de carryover.
@@ -733,7 +720,7 @@ async function loadWindow() {
     }
 
     const countEventMap = new Map();
-    const collectCountEvent = (event, occursToday = false) => {
+    const collectCountEvent = (event) => {
       if (!includeCalendar(event.calendar)) return;
 
       const eventStart = event.startDate
@@ -742,23 +729,17 @@ async function loadWindow() {
       let eventEnd = event.endDate
         ? new Date(event.endDate)
         : null;
-      const isAllDay = Boolean(event.isAllDay);
+      const isAllDay = calendarEventIsAllDay(
+        event,
+        eventStart,
+        eventEnd
+      );
 
       if (!eventStart || !eventEnd) return;
 
       // Eventos de dia inteiro continuam disponíveis para a timeline,
       // mas não entram no quantitativo "E:n" dos cartões.
       if (isAllDay) return;
-
-      // A ocorrência confirmada por CalendarEvent.today() prevalece
-      // inclusive quando o fim bruto de um evento de dia inteiro vem
-      // antes da meia-noite real.
-      if (isAllDay && occursToday) {
-        const currentDayEnd = addDays(titleScheduleStart, 1);
-        if (eventEnd < currentDayEnd) {
-          eventEnd = currentDayEnd;
-        }
-      }
 
       if (
         !Number.isFinite(eventStart.getTime()) ||
@@ -775,10 +756,10 @@ async function loadWindow() {
       });
     };
 
-    events.forEach((event) => collectCountEvent(event, false));
+    events.forEach(collectCountEvent);
     // A consulta específica de hoje também corrige recorrências e
     // substitui eventual duplicata da consulta por intervalo.
-    todayEvents.forEach((event) => collectCountEvent(event, true));
+    todayEvents.forEach(collectCountEvent);
 
     for (const event of countEventMap.values()) {
       for (
@@ -2051,10 +2032,72 @@ function eventHasVideoLink(event) {
   );
 }
 
+function calendarEventIsAllDay(event, eventStart = null, eventEnd = null) {
+  if (!Boolean(event?.isAllDay)) return false;
+
+  const start =
+    eventStart instanceof Date
+      ? eventStart
+      : event?.startDate instanceof Date
+        ? event.startDate
+        : event?.start;
+  const end =
+    eventEnd instanceof Date
+      ? eventEnd
+      : event?.endDate instanceof Date
+        ? event.endDate
+        : event?.end;
+
+  if (
+    !(start instanceof Date) ||
+    !(end instanceof Date) ||
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(end.getTime())
+  ) {
+    return true;
+  }
+
+  const duration = end.getTime() - start.getTime();
+  // Uma ocorrência de dia inteiro dura aproximadamente 24 horas (23 ou 25
+  // nas mudanças de horário sazonal). Se a flag ainda estiver ativa após a
+  // edição, um intervalo positivo menor que 20 horas contém horário explícito
+  // e deve ser tratado como evento com hora marcada. Duração zero permanece
+  // como dia inteiro, pois alguns calendários omitem o fim do dia seguinte.
+  if (duration > 0 && duration < 20 * 60 * 60 * 1000) {
+    return false;
+  }
+
+  return true;
+}
+
+function calendarEventDisplayInterval(event, occursToday, currentDayEnd) {
+  const start = event.startDate
+    ? new Date(event.startDate)
+    : null;
+  let end = event.endDate
+    ? new Date(event.endDate)
+    : null;
+  if (!start || !end) return null;
+
+  const isAllDay = calendarEventIsAllDay(event, start, end);
+  // Alguns calendários informam o fim de um evento de dia inteiro à 00:00
+  // do último dia incluído. Hoje ele permanece visível até a próxima meia-noite.
+  if (
+    isAllDay &&
+    occursToday &&
+    currentDayEnd instanceof Date &&
+    end < currentDayEnd
+  ) {
+    end = new Date(currentDayEnd);
+  }
+
+  return { start, end, isAllDay };
+}
+
 function calculateScheduleSummary(events, rangeStart, rangeEnd) {
   const intervals = events
     .filter((event) => {
-      const isAllDay = Boolean(event.isAllDay);
+      const isAllDay = calendarEventIsAllDay(event);
       const availability = event.availability ?? "busy";
       return !isAllDay && availability !== "free";
     })
@@ -11950,7 +11993,7 @@ function addURLParameter(url, name, value) {
 }
 
 function isHolidayEvent(event) {
-  if (!event.isAllDay) return false;
+  if (!calendarEventIsAllDay(event)) return false;
   const searchableText = normalizeSearchText(
     `${event.calendar?.title ?? ""} ${event.title ?? ""}`
   );
