@@ -11237,6 +11237,16 @@ function formatTenMinuteCountdown(eventStart, referenceDate = now) {
     : `${wholeHours}h e ${minuteRemainder}m`;
 }
 
+function arrivalGuideStart(item) {
+  if (!(item?.start instanceof Date)) return null;
+  if (item.kind === "reminder" && item.sourceIsAllDay) {
+    // O lembrete não tem hora de vencimento: a guia aponta somente para
+    // o início visual do chart, às 06h, sem alterar a data original.
+    return timelineItemDisplayStart(item);
+  }
+  return item.start;
+}
+
 function eventArrivalGuidesForDay(
   items,
   dayStart,
@@ -11266,10 +11276,9 @@ function eventArrivalGuidesForDay(
         (item?.kind === "event" || item?.kind === "reminder") &&
         !isBirthdayItem(item) &&
         !item.isAllDay &&
-        !(item.kind === "reminder" && item.sourceIsAllDay) &&
         item.start instanceof Date &&
         item.end instanceof Date &&
-        item.start.getTime() > reference.getTime() &&
+        arrivalGuideStart(item)?.getTime() > reference.getTime() &&
         item.start.getTime() >= dayStart.getTime() &&
         item.start.getTime() < dayEnd.getTime() &&
         item.end.getTime() > item.start.getTime() &&
@@ -11277,7 +11286,7 @@ function eventArrivalGuidesForDay(
     )
     .sort(
       (a, b) =>
-        a.start.getTime() - b.start.getTime() ||
+        arrivalGuideStart(a).getTime() - arrivalGuideStart(b).getTime() ||
         a.end.getTime() - b.end.getTime()
     );
 
@@ -11285,8 +11294,11 @@ function eventArrivalGuidesForDay(
     .map((item) => ({
       event: item,
       row: Number(item.gridRow),
-      end: item.start,
-      label: formatEventArrivalHours(item.start, countdownReference),
+      end: arrivalGuideStart(item),
+      label: formatEventArrivalHours(
+        arrivalGuideStart(item),
+        countdownReference
+      ),
     }))
     .filter((guide) => guide.label);
 }
@@ -11326,7 +11338,7 @@ function timelineEventGuideTargetX(event) {
     return 0;
   }
 
-  const startX = timeToX(event.start);
+  const startX = timeToX(arrivalGuideStart(event));
   const endX = timeToX(event.end);
   const x = event.kind === "reminder"
     ? Math.max(0, startX)

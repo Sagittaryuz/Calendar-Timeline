@@ -23,6 +23,7 @@ const context = {
   EVENT_ARRIVAL_GUIDE_LABEL_PADDING: 8,
   EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE: 21,
   EVENT_STARTING_SOON_WINDOW_MS: 30 * 60 * 1000,
+  ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
   scaleFontSize: value => value,
   scaleVertical: value => value,
   estimatedTextWidth: (text, fontSize) => text.length * fontSize * 0.62,
@@ -55,6 +56,16 @@ vm.runInContext(
   context
 );
 vm.runInContext(source.slice(start, end), context);
+const collisionStart = source.indexOf('function timelineItemCollisionStart(');
+vm.runInContext(source.slice(
+  collisionStart,
+  source.indexOf('function itemsOverlap(', collisionStart)
+), context);
+const displayStart = source.indexOf('function timelineItemDisplayStart(');
+vm.runInContext(source.slice(
+  displayStart,
+  source.indexOf('function drawTimelineItem(', displayStart)
+), context);
 context.applyPendingDayCarryover = () => {};
 context.itemsOverlap = () => false;
 const prepareStart = source.indexOf('function prepareTimelineItems(');
@@ -347,6 +358,44 @@ assert.deepEqual(
   ['10h', '13h'],
   'As guias de amanhã devem usar o formato da cápsula.'
 );
+const tomorrowNoTimeReminder = {
+  kind: 'reminder',
+  title: 'Pegar suporte',
+  start: new Date(2026, 8, 21, 0),
+  end: new Date(2026, 8, 22, 0),
+  gridRow: 1,
+  isAllDay: false,
+  sourceIsAllDay: true,
+};
+const previousWindowStart = context.windowStart;
+const previousStartOfDay = context.startOfDay;
+context.windowStart = new Date(2026, 8, 20, 0);
+context.startOfDay = date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const tomorrowReminderGuide = context.tomorrowEventArrivalGuides(
+  [tomorrowNoTimeReminder]
+)[0];
+assert.equal(tomorrowReminderGuide.label, '6h');
+assert.equal(tomorrowReminderGuide.end.getTime(), new Date(2026, 8, 21, 6).getTime());
+assert.equal(tomorrowReminderGuide.event, tomorrowNoTimeReminder);
+assert.equal(tomorrowNoTimeReminder.start.getTime(), new Date(2026, 8, 21, 0).getTime(),
+  'A guia visual não pode modificar a data original do lembrete.');
+const todayNoTimeReminder = {
+  ...tomorrowNoTimeReminder,
+  start: new Date(2026, 8, 20, 0),
+  end: new Date(2026, 8, 21, 0),
+};
+assert.equal(
+  context.todayEventArrivalGuides([todayNoTimeReminder], new Date(2026, 8, 20, 1))[0].label,
+  '5h'
+);
+assert.equal(
+  context.todayEventArrivalGuides([todayNoTimeReminder], new Date(2026, 8, 20, 6)).length,
+  0,
+  'A contagem desaparece quando o chart do lembrete já começou.'
+);
+context.windowStart = previousWindowStart;
+context.startOfDay = previousStartOfDay;
 
 const tomorrowAllDay = event(
   'Feriado futuro',
