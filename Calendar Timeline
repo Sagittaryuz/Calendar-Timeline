@@ -3805,17 +3805,25 @@ function restoreRoundedRightCorners(ctx, rect, radius) {
   restoreRoundedSideCorners(ctx, rect, radius, "right");
 }
 
+function timelineOuterBorderTopY() {
+  // Centraliza o traço superior no vão de 1,2287 px. Como o traço mede
+  // 2 px, 0,38565 px da sua borda fica sobre o limite do cartão.
+  return CANVAS.timelineTop -
+    (TIMELINE_OUTER_BORDER_WIDTH + TITLE_CARD_SPACING) / 2;
+}
+
 function drawTimelineOuterBorder(ctx) {
   const inset = WIDGET_CONTOUR.strokeInset;
+  const topY = timelineOuterBorderTopY();
   const left = widgetLeftContourPoints(inset);
   const rightBottom = left.filter(p => p.y >= CANVAS.height / 2)
     .map(p => new Point(CANVAS.width - p.x, p.y));
   const vertices = [
-    new Point(inset, CANVAS.timelineTop),
-    new Point(CANVAS.width - inset, CANVAS.timelineTop),
+    new Point(inset, topY),
+    new Point(CANVAS.width - inset, topY),
     ...rightBottom,
-    ...left.slice().reverse().filter(p => p.y >= CANVAS.timelineTop),
-    new Point(inset, CANVAS.timelineTop),
+    ...left.slice().reverse().filter(p => p.y >= topY),
+    new Point(inset, topY),
   ];
   const path = new Path();
   path.move(vertices[0]);

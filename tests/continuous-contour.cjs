@@ -23,7 +23,8 @@ function load(name) {
   vm.runInContext(source.slice(start,end<0?source.length:start+1+end),c);
 }
 for(const name of ['dayBoundaryLineWidth','timelineWidth','timelineHeight',
-  'titleCardGap','titleDayCardRect','weatherStripBottomY','weatherIconCenterY',
+  'titleCardGap','titleDayCardRect','timelineOuterBorderTopY',
+  'weatherStripBottomY','weatherIconCenterY',
   'timelineChartTop','bottomLegendCenterY','hourLegendVisibleBoundsAtY',
   'drawCurrentDayRoundedSideFrame','fillTitleCardShape']) load(name);
 const run=s=>vm.runInContext(s,c);
@@ -36,7 +37,14 @@ const actualClearGap=run('CANVAS.timelineTop')-regularCardBottom-
   run('TIMELINE_OUTER_BORDER_WIDTH/2');
 const expectedGap=run('TITLE_CARD_SPACING');
 assert(Math.abs(actualClearGap-expectedGap)<1e-9,
-  'Vão livre até a borda externa da timeline iguala o vão entre cartões.');
+  'O espaçamento nominal da timeline permanece igual ao vão entre cartões.');
+const borderCenter=c.timelineOuterBorderTopY();
+const gapCenter=regularCardBottom+expectedGap/2;
+assert(Math.abs(borderCenter-gapCenter)<1e-9,
+  'A linha superior da moldura deve ter seu eixo no centro do vão.');
+assert(Math.abs((borderCenter-run('TIMELINE_OUTER_BORDER_WIDTH/2'))-
+  regularCardBottom+(run('TIMELINE_OUTER_BORDER_WIDTH')-expectedGap)/2)<1e-9,
+  'A sobreposição subpixel decorre somente da linha ser mais larga que o vão.');
 assert(Math.abs(c.titleCardGap()-expectedGap)<1e-9,
   'Vão horizontal entre cartões mantém 1,2287 px.');
 assert(Math.abs(adjustment-(expectedGap-originalClearGap))<1e-9);
