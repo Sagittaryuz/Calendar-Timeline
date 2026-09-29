@@ -31,6 +31,7 @@ const SETTINGS = {
   daylightStartHour: 6,
   daylightEndHour: 18,
   weatherCacheMinutes: 30,
+  rainbowCacheMinutes: 15,
   forecaBaseURL: "https://fnw-us.foreca.com",
   forecaTokenHours: 24,
   openMeteoBaseURL: "https://api.open-meteo.com/v1/forecast",
@@ -150,6 +151,7 @@ const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
 const PENDING_DAY_CARRYOVER_END_HOUR = 6;
 const ALL_DAY_REMINDER_DISPLAY_START_HOUR = 6;
 const WEATHER_HOUR_MS = 60 * 60 * 1000;
+const WEATHER_QUARTER_MS = 15 * 60 * 1000;
 const WEATHER_EDGE_TOLERANCE_MS = 90 * 60 * 1000;
 const WEATHER_MAX_INTERPOLATION_GAP_MS = 2 * WEATHER_HOUR_MS;
 const WEATHER_SAMPLE_ORDER_CACHE = new WeakMap();
@@ -160,9 +162,8 @@ const EVENT_ARRIVAL_GUIDE_COLOR = "#FF9F0A";
 const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 2;
 const EVENT_ARRIVAL_GUIDE_DASH_WIDTH = 8;
 const EVENT_ARRIVAL_GUIDE_GAP_WIDTH = 7;
-const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 8;
-const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 4;
-const EVENT_ARRIVAL_GUIDE_LABEL_PADDING = 8;
+const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 15;
+const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 2;
 const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 
 // O canvas continua completo para preservar o background. O conteúdo ocupa
@@ -411,6 +412,9 @@ CANVAS.timelineTop += TITLE_TIMELINE_GAP_ADJUSTMENT;
 
 const now = new Date();
 now.setSeconds(0, 0);
+if (!config.runsInWidget && (args.queryParameters ?? {}).rainbow === "connect") {
+  await configureRainbowKey();
+}
 const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 const requestedHours =
   (args.queryParameters ?? {}).hours ?? args.widgetParameter;
@@ -1111,6 +1115,34 @@ function loadStoredForecaCredentials() {
   return null;
 }
 
+function loadRainbowKey() {
+  try {
+    const key = "Calendar-Timeline-Rainbow-Api-Key-v1";
+    return Keychain.contains(key) ? Keychain.get(key).trim() : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+async function configureRainbowKey() {
+  const alert = new Alert();
+  alert.title = "Conectar Rainbow.ai";
+  alert.message =
+    "Cole a chave da API. Ela ficará apenas no Keychain deste iPhone. " +
+    "O nowcast será consultado no máximo uma vez a cada 15 minutos.";
+  alert.addSecureTextField("Chave Rainbow.ai", "");
+  alert.addAction("Salvar chave");
+  alert.addDestructiveAction("Remover chave");
+  alert.addCancelAction("Cancelar");
+  const choice = await alert.presentAlert();
+  const keyName = "Calendar-Timeline-Rainbow-Api-Key-v1";
+  if (choice === 0 && alert.textFieldValue(0).trim()) {
+    Keychain.set(keyName, alert.textFieldValue(0).trim());
+  } else if (choice === 1 && Keychain.contains(keyName)) {
+    Keychain.remove(keyName);
+  }
+}
+
 async function loadHourlyWeather(location) {
   const fm = FileManager.local();
   const cachePaths = [
@@ -1136,7 +1168,10 @@ async function loadHourlyWeather(location) {
     }
   }
 
-  const cacheAge = SETTINGS.weatherCacheMinutes * 60 * 1000;
+  const rainbowKey = loadRainbowKey();
+  const cacheAge = (rainbowKey
+    ? SETTINGS.rainbowCacheMinutes
+    : SETTINGS.weatherCacheMinutes) * 60 * 1000;
   const sameLocation =
     cached &&
     finiteWeatherNumber(cached.latitude) !== null &&
@@ -1153,6 +1188,8 @@ async function loadHourlyWeather(location) {
 
   if (
     cacheFresh &&
+    cached.schemaVersion === 5 &&
+    Boolean(cached.sources?.rainbowEnabled) === Boolean(rainbowKey) &&
     Array.isArray(cached.hours) &&
     weatherCacheHasFreshSamples(cached.hours, cacheAge, fetchedAt)
   ) {
@@ -1161,12 +1198,26 @@ async function loadHourlyWeather(location) {
 
   const storedCredentials = loadStoredForecaCredentials();
   const lastAttemptAt = Date.now();
-  const [openMeteo, foreca] = await Promise.all([
+  const rainbowCacheFresh = Boolean(
+    rainbowKey &&
+    sameLocation &&
+    Array.isArray(cached?.rainbowHours) &&
+    finiteWeatherNumber(cached?.rainbowFetchedAt) !== null &&
+    Date.now() - Number(cached.rainbowFetchedAt) < cacheAge
+  );
+  const [openMeteo, foreca, metNorway, fetchedRainbow] = await Promise.all([
     loadOpenMeteoWeather(location).catch(() => null),
     storedCredentials
       ? loadForecaForecast(location, storedCredentials).catch(() => null)
       : Promise.resolve(null),
+    loadMetNorwayWeather(location).catch(() => null),
+    rainbowCacheFresh
+      ? Promise.resolve({ hours: cached.rainbowHours })
+      : rainbowKey
+      ? loadRainbowNowcast(location, rainbowKey).catch(() => null)
+      : Promise.resolve(null),
   ]);
+  const rainbow = fetchedRainbow;
   const providerFetchedAt = Date.now();
 
   const cachedHours =
@@ -1177,19 +1228,12 @@ async function loadHourlyWeather(location) {
           fetchedAt: hour?.fetchedAt ?? fetchedAt,
         }))
       : [];
-  const mergedHours = mergeHourlyWeatherHours(
-    cachedHours,
-    (openMeteo?.hours ?? []).map((hour) => ({
-      ...hour,
-      source: "open-meteo",
-      fetchedAt: providerFetchedAt,
-    })),
-    (foreca?.hours ?? []).map((hour) => ({
-      ...hour,
-      source: "foreca",
-      fetchedAt: providerFetchedAt,
-    }))
+  const freshHours = fuseWeatherForecasts(
+    { "open-meteo": openMeteo?.hours, foreca: foreca?.hours,
+      "met-norway": metNorway?.hours, rainbow: rainbow?.hours },
+    providerFetchedAt
   );
+  const mergedHours = mergeHourlyWeatherHours(cachedHours, freshHours);
   const mergedDaily = mergeDailyWeatherData(
     sameLocation
       ? tagDailyWeather(cached?.daily, "cache", fetchedAt)
@@ -1198,9 +1242,9 @@ async function loadHourlyWeather(location) {
     tagDailyWeather(foreca?.daily, "foreca", providerFetchedAt)
   );
 
-  const hasFreshProviderData = [openMeteo, foreca].some(
+  const hasFreshProviderData = [openMeteo, foreca, metNorway].some(
     hasUsableWeatherPayload
-  );
+  ) || Boolean(rainbow?.hours?.length);
 
   if (!hasFreshProviderData) {
     return sameLocation && Array.isArray(cached?.hours)
@@ -1216,7 +1260,7 @@ async function loadHourlyWeather(location) {
   }
 
   const stored = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     latitude: location.latitude,
     longitude: location.longitude,
     // fetchedAt só avança quando ao menos um provedor entrega dados
@@ -1225,10 +1269,19 @@ async function loadHourlyWeather(location) {
     lastAttemptAt,
     hours: mergedHours,
     daily: mergedDaily,
+    rainbowHours: rainbow?.hours ?? cached?.rainbowHours ?? [],
+    rainbowFetchedAt: rainbowCacheFresh
+      ? cached.rainbowFetchedAt
+      : rainbow?.hours?.length
+        ? providerFetchedAt
+        : cached?.rainbowFetchedAt ?? null,
     sources: {
       cache: cachedHours.length > 0,
       openMeteo: hasUsableWeatherPayload(openMeteo),
       foreca: hasUsableWeatherPayload(foreca),
+      metNorway: hasUsableWeatherPayload(metNorway),
+      rainbow: Boolean(rainbow?.hours?.length),
+      rainbowEnabled: Boolean(rainbowKey),
     },
   };
   try {
@@ -1434,6 +1487,244 @@ async function loadOpenMeteoWeather(location) {
   return { hours, daily };
 }
 
+async function loadMetNorwayWeather(location) {
+  const request = new Request(
+    "https://api.met.no/weatherapi/locationforecast/2.0/compact" +
+    `?lat=${encodeURIComponent(location.latitude)}` +
+    `&lon=${encodeURIComponent(location.longitude)}`
+  );
+  request.timeoutInterval = 12;
+  request.headers = {
+    "User-Agent": "Calendar-Timeline/1.0 https://github.com/Sagittaryuz/Calendar-Timeline",
+  };
+  const response = await request.loadJSON();
+  const series = response?.properties?.timeseries ?? [];
+  const hours = [];
+  for (let index = 0; index < series.length; index++) {
+    const entry = series[index];
+    const start = parseWeatherTimestamp(entry.time);
+    const precipitation = finiteWeatherNumber(
+      entry.data?.next_1_hours?.details?.precipitation_amount
+    );
+    // next_1_hours cobre [time, time+1h]; as demais APIs usam o fim.
+    if (!Number.isFinite(start) || precipitation === null) continue;
+    const temperature = finiteWeatherNumber(
+      series[index + 1]?.data?.instant?.details?.air_temperature
+    ) ?? finiteWeatherNumber(entry.data?.instant?.details?.air_temperature);
+    if (temperature === null) continue;
+    hours.push({
+      timestamp: start + WEATHER_HOUR_MS,
+      rainStartTimestamp: start,
+      temperature,
+      rainMM: Math.max(0, precipitation),
+      rainChance: null,
+      rainRate: 0,
+      symbol: "",
+      cloudiness: finiteWeatherNumber(
+        entry.data?.instant?.details?.cloud_area_fraction
+      ),
+    });
+  }
+  return { hours, daily: {} };
+}
+
+async function loadRainbowNowcast(location, key) {
+  const request = new Request(
+    "https://api.rainbow.ai/nowcast/v1/precip-global/" +
+    `${encodeURIComponent(location.longitude)}/${encodeURIComponent(location.latitude)}`
+  );
+  request.timeoutInterval = 12;
+  request.headers = { "Ocp-Apim-Subscription-Key": key };
+  return { hours: rainbowNowcastHours(await request.loadJSON()) };
+}
+
+function rainbowNowcastHours(response) {
+  const buckets = new Map();
+  for (const sample of response?.forecast ?? []) {
+    const start = parseWeatherTimestamp(sample.timestampBegin);
+    const end = parseWeatherTimestamp(sample.timestampEnd);
+    const rate = finiteWeatherNumber(sample.precipRate);
+    if (!Number.isFinite(start) || !Number.isFinite(end) ||
+        end <= start || end - start > WEATHER_HOUR_MS || rate === null) continue;
+    // Distribui cada minuto pelos intervalos horários, sem converter mm/h
+    // diretamente em mm quando a previsão cobre só parte de uma hora.
+    for (let cursor = start; cursor < end;) {
+      const hourEnd = Math.floor(cursor / WEATHER_HOUR_MS) * WEATHER_HOUR_MS + WEATHER_HOUR_MS;
+      const quarterStart =
+        Math.floor(cursor / WEATHER_QUARTER_MS) * WEATHER_QUARTER_MS;
+      const segmentEnd = Math.min(
+        end,
+        hourEnd,
+        quarterStart + WEATHER_QUARTER_MS
+      );
+      const bucket = buckets.get(hourEnd) ?? { timestamp: hourEnd,
+        rainStartTimestamp: hourEnd - WEATHER_HOUR_MS, rainMM: 0,
+        rainRate: 0, coveredMinutes: 0, intervalMap: new Map() };
+      const duration = segmentEnd - cursor;
+      const interval = bucket.intervalMap.get(quarterStart) ?? {
+        timestamp: quarterStart,
+        rainMM: 0,
+        rainRate: 0,
+        coveredMinutes: 0,
+        hasRain: false,
+        storm: false,
+      };
+      const precipitationType = String(sample.precipType ?? "").toLowerCase();
+      const isRain = ["rain", "mixed"].includes(precipitationType);
+      interval.rainMM += Math.max(0, rate) * duration / WEATHER_HOUR_MS;
+      interval.coveredMinutes += duration / 60000;
+      if (isRain) {
+        interval.hasRain = true;
+        interval.rainRate = Math.max(interval.rainRate, rate);
+        bucket.rainRate = Math.max(bucket.rainRate, rate);
+      }
+      interval.storm ||= /thunder|storm/.test(precipitationType);
+      bucket.rainMM += Math.max(0, rate) * duration / WEATHER_HOUR_MS;
+      bucket.coveredMinutes += duration / 60000;
+      bucket.intervalMap.set(quarterStart, interval);
+      buckets.set(hourEnd, bucket);
+      cursor = segmentEnd;
+    }
+  }
+  return [...buckets.values()].map((bucket) => {
+    const { intervalMap, ...hour } = bucket;
+    return {
+      ...hour,
+      rainIntervals: [...intervalMap.values()],
+    };
+  });
+}
+
+function weatherMedian(values) {
+  if (!values.length) return null;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function fuseWeatherForecasts(providers, fetchedAt) {
+  const byTimestamp = new Map();
+  for (const [source, hours] of Object.entries(providers)) {
+    for (const hour of hours ?? []) {
+      const timestamp = finiteWeatherNumber(hour?.timestamp);
+      if (timestamp === null) continue;
+      if (!byTimestamp.has(timestamp)) byTimestamp.set(timestamp, {});
+      byTimestamp.get(timestamp)[source] = hour;
+    }
+  }
+  const fused = [];
+  for (const [timestamp, samples] of byTimestamp) {
+    const modelNames = ["open-meteo", "foreca", "met-norway"]
+      .filter((source) => finiteWeatherNumber(samples[source]?.temperature) !== null);
+    if (!modelNames.length) continue;
+    const model = modelNames.map((source) => samples[source]);
+    const rainValues = model.map((sample) => Math.max(0,
+      finiteWeatherNumber(sample.rainMM) ?? 0));
+    const baseline = weatherMedian(rainValues);
+    const radar = samples.rainbow;
+    const radarCovered = Math.min(60, Math.max(0,
+      finiteWeatherNumber(radar?.coveredMinutes) ?? 0));
+    const radarMM = finiteWeatherNumber(radar?.rainMM);
+    // O nowcast próximo do solo tem prioridade nas próximas horas. Uma
+    // pancada local forte não deve sumir só porque os modelos divergem.
+    const radarWeight = radarMM !== null && radarCovered >= 15;
+    const rainMM = radarWeight
+      ? Math.max(0, baseline * (1 - radarCovered / 120) +
+          radarMM * (radarCovered / 120), radarMM * 0.75)
+      : baseline;
+    const dispersionValues = radarWeight ? [...rainValues, radarMM] : rainValues;
+    const rainMedian = weatherMedian(dispersionValues);
+    const rainMAD = weatherMedian(dispersionValues.map(
+      (value) => Math.abs(value - rainMedian)));
+    const probabilities = model.map((sample) => finiteWeatherNumber(sample.rainChance))
+      .filter((value) => value !== null);
+    const cloudValues = model.map((sample) => finiteWeatherNumber(sample.cloudiness))
+      .filter((value) => value !== null);
+    const visual = samples.foreca ?? samples["open-meteo"] ?? samples["met-norway"];
+    fused.push({
+      timestamp,
+      rainStartTimestamp: timestamp - WEATHER_HOUR_MS,
+      rainIntervals: radar?.rainIntervals ?? [],
+      temperature: weatherMedian(model.map((sample) => Number(sample.temperature))),
+      rainMM,
+      rainRate: radarWeight ? radar.rainRate : 0,
+      rainChance: probabilities.length ? weatherMedian(probabilities) : 0,
+      symbol: visual.symbol ?? "",
+      source: "consensus",
+      sources: radarWeight ? [...modelNames, "rainbow"] : modelNames,
+      rainDispersionMM: Math.max(...dispersionValues) - Math.min(...dispersionValues),
+      rainMAD,
+      rainAgreement: dispersionValues.length >= 3 &&
+          rainMAD <= 0.3 && Math.max(...dispersionValues) - Math.min(...dispersionValues) <= 0.3
+        ? "alta"
+        : dispersionValues.length >= 2 && rainMAD <= 1.5 &&
+          Math.max(...dispersionValues) - Math.min(...dispersionValues) <= 1.5
+          ? "moderada"
+          : "baixa",
+      cloudiness: weatherMedian(cloudValues),
+      fetchedAt,
+    });
+  }
+  return fused;
+}
+
+function weatherRainCurtainForecasts(hours) {
+  const entries = [];
+  for (const forecast of hours ?? []) {
+    const radarIntervals = Array.isArray(forecast?.rainIntervals)
+      ? forecast.rainIntervals.filter((interval) =>
+          finiteWeatherNumber(interval?.timestamp) !== null &&
+          finiteWeatherNumber(interval?.coveredMinutes) >= 7.5
+        )
+      : [];
+
+    if (radarIntervals.length > 0) {
+      // Quando há cobertura de radar, posiciona as colunas nos intervalos
+      // de 15 min observados e não repete a chuva horária no começo da hora.
+      for (const interval of radarIntervals) {
+        if (!interval.hasRain || finiteWeatherNumber(interval.rainRate) <= 0) {
+          continue;
+        }
+        const rainMM = Math.max(
+          0,
+          finiteWeatherNumber(interval.rainMM) ?? 0
+        );
+        const radarForecast = {
+          ...forecast,
+          timestamp: Number(interval.timestamp),
+          rainStartTimestamp: Number(interval.timestamp),
+          rainMM,
+          rainChance: 100,
+          symbol: interval.storm ? "d6" : "d5",
+        };
+        entries.push({
+          forecast: radarForecast,
+          timestamp: Number(interval.timestamp),
+          rainMM,
+          chance: 100,
+        });
+      }
+      continue;
+    }
+
+    entries.push({
+      forecast,
+      timestamp:
+        Number.isFinite(Number(forecast?.rainStartTimestamp))
+          ? Number(forecast.rainStartTimestamp)
+          : Number(forecast?.timestamp),
+      rainMM: Math.max(0, Number(forecast?.rainMM) || 0),
+      chance: Math.max(
+        0,
+        Math.min(100, Number(forecast?.rainChance) || 0)
+      ),
+    });
+  }
+  return entries;
+}
+
 function parseWeatherTimestamp(value) {
   if (typeof value === "number" || /^\d+(\.\d+)?$/.test(String(value))) {
     const numeric = Number(value);
@@ -1483,8 +1774,8 @@ function mergeDailyWeatherData(...dailySets) {
 function mergeHourlyWeatherHours(...hourSets) {
   const byTimestamp = new Map();
 
-  // A ordem de prioridade é: cache antigo, Open-Meteo e, por último,
-  // Foreca quando houver credenciais armazenadas.
+  // O cache cobre lacunas; as amostras recém-combinadas substituem seus
+  // horários correspondentes.
   for (const hours of hourSets) {
     for (const hour of hours ?? []) {
       const timestamp = finiteWeatherNumber(hour?.timestamp);
@@ -1657,9 +1948,26 @@ function buildHourlyWeather(hours, dailyOverrides = {}) {
         ),
         rainMM: Math.max(0, rainMMValue ?? 0),
         rainRate: Math.max(0, rainRateValue ?? 0),
+        rainIntervals: Array.isArray(hour?.rainIntervals)
+          ? hour.rainIntervals.map((interval) => ({
+              timestamp: finiteWeatherNumber(interval?.timestamp),
+              rainMM: Math.max(0, finiteWeatherNumber(interval?.rainMM) ?? 0),
+              rainRate: Math.max(0, finiteWeatherNumber(interval?.rainRate) ?? 0),
+              coveredMinutes: Math.max(0,
+                finiteWeatherNumber(interval?.coveredMinutes) ?? 0),
+              hasRain: interval?.hasRain === true,
+              storm: interval?.storm === true,
+            })).filter((interval) => interval.timestamp !== null)
+          : [],
         symbol: String(hour.symbol ?? ""),
         cloudiness,
         source: String(hour.source ?? "unknown"),
+        sources: Array.isArray(hour.sources)
+          ? hour.sources
+          : [String(hour.source ?? "unknown")],
+        rainDispersionMM: finiteWeatherNumber(hour.rainDispersionMM),
+        rainMAD: finiteWeatherNumber(hour.rainMAD),
+        rainAgreement: String(hour.rainAgreement ?? "indeterminada"),
       };
     })
     .filter(
@@ -2815,32 +3123,56 @@ function chooseItems(items, _referenceDate, limit) {
       const lowestAllDayRow = allDayRows.length
         ? Math.max(...allDayRows)
         : -1;
+      const lastPriorityRow = placed
+        .filter((item) =>
+          !movableAllDayItems.has(item) &&
+          !isBirthdayItem(item) &&
+          !isHolidayItem(item) &&
+          (item.kind === "event" || item.kind === "reminder") &&
+          itemsOverlap(item, dayInterval)
+        )
+        .reduce((last, item) => Math.max(last, Number(item.gridRow)), -1);
+      const requestedBirthdayRow = Math.max(
+        lastPriorityRow,
+        lowestAllDayRow
+      ) + 1;
+      const birthdayRow = birthdayGroup && requestedBirthdayRow < limit
+        ? requestedBirthdayRow
+        : null;
 
       const availableHolidayRows = holidayItems.length
         ? freeRows
-          .filter((row) => row > lowestAllDayRow)
+          .filter((row) => row > (birthdayRow ?? lowestAllDayRow))
           .slice(-holidayItems.length)
         : [];
       return {
         shift,
         movedRows,
+        birthdayRow,
         holidayRows: availableHolidayRows,
       };
     };
 
     let lowPriorityPlan = null;
+    const improvesLowPriorityPlan = (candidate, current) => {
+      if (!current) return true;
+      const candidateHasBirthday = candidate.birthdayRow !== null;
+      const currentHasBirthday = current.birthdayRow !== null;
+      if (candidateHasBirthday !== currentHasBirthday) {
+        return candidateHasBirthday;
+      }
+      if (candidate.holidayRows.length !== current.holidayRows.length) {
+        return candidate.holidayRows.length > current.holidayRows.length;
+      }
+      return candidate.shift < current.shift;
+    };
     const maximumShift = movableAllDayItems.size
       ? limit - 1
       : 0;
     for (let shift = 0; shift <= maximumShift; shift++) {
       const candidate = getLowPriorityPlan(shift);
       if (!candidate) continue;
-      if (
-        !lowPriorityPlan ||
-        candidate.holidayRows.length > lowPriorityPlan.holidayRows.length ||
-        (candidate.holidayRows.length === lowPriorityPlan.holidayRows.length &&
-          candidate.shift < lowPriorityPlan.shift)
-      ) {
+      if (improvesLowPriorityPlan(candidate, lowPriorityPlan)) {
         lowPriorityPlan = candidate;
       }
     }
@@ -2872,24 +3204,19 @@ function chooseItems(items, _referenceDate, limit) {
       hidden.push(...holidayItems);
     }
 
-    // Aniversários ficam abaixo de todos os charts visíveis deste dia,
-    // inclusive os que atravessam a meia-noite e os eventos de dia inteiro.
-    // Quando as cinco faixas já estão ocupadas, o nome continua na faixa
-    // seguinte, sem tomar a primeira linha nem expulsar itens prioritários.
-    if (birthdayGroup) {
-      const lastPriorityRow = placed
-        .filter((item) =>
-          !isBirthdayItem(item) &&
-          (item.kind === "event" || item.kind === "reminder") &&
-          itemsOverlap(item, dayInterval)
-        )
-        .reduce((last, item) => Math.max(last, Number(item.gridRow)), -1);
-      const birthdayRow = lastPriorityRow + 1;
-      const positionedBirthdayGroup = { ...birthdayGroup, gridRow: birthdayRow };
-      if (birthdayRow < limit) rows[birthdayRow].push(positionedBirthdayGroup);
+    if (birthdayGroup && lowPriorityPlan?.birthdayRow !== null) {
+      const positionedBirthdayGroup = {
+        ...birthdayGroup,
+        gridRow: lowPriorityPlan.birthdayRow,
+      };
+      rows[positionedBirthdayGroup.gridRow].push(positionedBirthdayGroup);
       placed.push(positionedBirthdayGroup);
     }
 
+    // Aniversários ficam abaixo de todos os charts visíveis deste dia,
+    // inclusive os que atravessam a meia-noite e os eventos de dia inteiro.
+    // Sem faixa livre abaixo da agenda, o aniversário não é desenhado fora
+    // da grade nem desloca um item prioritário.
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
@@ -5538,13 +5865,37 @@ function drawRainTopMarker(ctx, x, top, height, width, storm, color) {
 }
 
 function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
-  const quarterHourMilliseconds = 15 * 60 * 1000;
+  const quarterHourMilliseconds = WEATHER_QUARTER_MS;
   const visibleStart = windowStart.getTime() - quarterHourMilliseconds;
   const visibleEnd = windowEnd.getTime();
   const rainByQuarter = new Map();
+  const radarByQuarter = new Map();
+
+  for (const hour of sourceHours) {
+    for (const interval of hour.rainIntervals ?? []) {
+      const timestamp = finiteWeatherNumber(interval?.timestamp);
+      const coveredMinutes = finiteWeatherNumber(interval?.coveredMinutes);
+      if (timestamp === null || coveredMinutes === null) continue;
+      const existing = radarByQuarter.get(timestamp);
+      radarByQuarter.set(timestamp, {
+        timestamp,
+        rainMM:
+          (existing?.rainMM ?? 0) +
+          Math.max(0, finiteWeatherNumber(interval?.rainMM) ?? 0),
+        rainRate: Math.max(
+          existing?.rainRate ?? 0,
+          finiteWeatherNumber(interval?.rainRate) ?? 0
+        ),
+        coveredMinutes: (existing?.coveredMinutes ?? 0) + coveredMinutes,
+        hasRain: Boolean(existing?.hasRain || interval?.hasRain === true),
+        storm: Boolean(existing?.storm || interval?.storm === true),
+      });
+    }
+  }
 
   // A Foreca fornece a previsão em intervalos de uma hora. Cada intervalo
-  // é dividido em quatro posições para representar a chuva a cada 15 min.
+  // é dividido em quatro posições. Quando o radar cobriu uma posição, ele
+  // prevalece nessa janela para preservar o horário localizado da chuva.
   for (const hour of sourceHours) {
     const intervalEnd = Number(hour.timestamp);
     if (!Number.isFinite(intervalEnd)) continue;
@@ -5579,6 +5930,11 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       ) {
         continue;
       }
+      if (
+        (radarByQuarter.get(timestamp)?.coveredMinutes ?? 0) >= 7.5
+      ) {
+        continue;
+      }
 
       const existing = rainByQuarter.get(timestamp);
       if (!existing || amount > existing.amount) {
@@ -5591,6 +5947,25 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         existing.storm = true;
       }
     }
+  }
+
+  for (const interval of radarByQuarter.values()) {
+    if (
+      interval.timestamp < visibleStart ||
+      interval.timestamp > visibleEnd ||
+      interval.coveredMinutes < 7.5
+    ) {
+      continue;
+    }
+    if (!interval.hasRain || interval.rainRate <= 0) {
+      rainByQuarter.delete(interval.timestamp);
+      continue;
+    }
+    rainByQuarter.set(interval.timestamp, {
+      timestamp: interval.timestamp,
+      amount: Math.max(0, interval.rainMM),
+      storm: interval.storm,
+    });
   }
 
   const rainEntries = [...rainByQuarter.values()]
@@ -8028,19 +8403,7 @@ function drawStripCloud(ctx, centerX, centerY, scale, rainy) {
 }
 
 function drawWeatherRainCurtains(ctx, weather) {
-  const visibleForecasts = [...(weather?.hours ?? [])]
-    .map((forecast) => ({
-      forecast,
-      timestamp:
-        Number.isFinite(Number(forecast.rainStartTimestamp))
-          ? Number(forecast.rainStartTimestamp)
-          : Number(forecast.timestamp),
-      rainMM: Math.max(0, Number(forecast.rainMM) || 0),
-      chance: Math.max(
-        0,
-        Math.min(100, Number(forecast.rainChance) || 0)
-      ),
-    }))
+  const visibleForecasts = weatherRainCurtainForecasts(weather?.hours)
     .filter(
       (entry) =>
         Number.isFinite(entry.timestamp) &&
@@ -11376,12 +11739,9 @@ function eventArrivalGuideLabelWidth(label) {
   const fontSize = scaleFontSize(
     EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE
   );
-  // A folga preserva os minutos completos, sem afastar demais os traços.
-  // O texto é desenhado sem um retângulo que possa cortá-lo no iPhone.
-  return Math.ceil(
-    estimatedTextWidth(label, fontSize) * 1.16 +
-      scaleVertical(EVENT_ARRIVAL_GUIDE_LABEL_PADDING + 4)
-  );
+  // A linha começa depois da largura estimada dos caracteres; a folga entre
+  // o fim do texto e o primeiro traço é controlada somente por LABEL_GAP.
+  return Math.ceil(estimatedTextWidth(label, fontSize));
 }
 
 function eventArrivalGuideLayout(day, dayBoundaryX, reservedLabelWidth) {
@@ -11429,6 +11789,12 @@ function drawEventArrivalGuideLabel(
   return startX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
 }
 
+function eventArrivalGuideTrackCenterY(rowTop, rowHeight, index, count) {
+  // O primeiro evento ocupa a faixa superior. Medindo a altura a partir
+  // da base, as posições são N/(N+1), (N-1)/(N+1), ... como combinado.
+  return rowTop + rowHeight * (index + 1) / (count + 1);
+}
+
 function drawEventArrivalGuides(ctx, items, day) {
   const isTomorrow = day === "tomorrow";
   const guides = isTomorrow
@@ -11441,41 +11807,83 @@ function drawEventArrivalGuides(ctx, items, day) {
     ? timeToX(tomorrowStart)
     : 0;
   const rowHeight = timelineRowHeight();
-  const reservedLabelWidth = Math.max(
-    0,
-    ...guides.map((guide) => eventArrivalGuideLabelWidth(guide.label))
-  );
 
+  const guidesByRow = new Map();
   for (const guide of guides) {
-    const centerY =
-      timelineChartTop() + (guide.row + 0.5) * rowHeight;
-    const targetX = guide.event
-      ? timelineEventGuideTargetX(guide.event)
-      : timeToX(guide.end);
-    const visibleTargetX = Math.max(
-      0,
-      Math.min(timelineWidth(), targetX)
-    );
-    const labelWidth = eventArrivalGuideLabelWidth(guide.label);
-    const layout = eventArrivalGuideLayout(
-      day,
-      dayBoundaryX,
-      reservedLabelWidth
-    );
-    drawEventArrivalGuideLabel(
-      ctx,
-      guide.label,
-      layout.labelX,
-      centerY,
-      labelWidth
-    );
+    if (!guidesByRow.has(guide.row)) guidesByRow.set(guide.row, []);
+    guidesByRow.get(guide.row).push(guide);
+  }
 
-    drawEventArrivalGuideDashes(
-      ctx,
-      layout.lineStartX,
-      visibleTargetX,
-      centerY
+  for (const rowGuides of guidesByRow.values()) {
+    const rowTop = timelineChartTop() + rowGuides[0].row * rowHeight;
+    const baseLayout = eventArrivalGuideLayout(day, dayBoundaryX, 0);
+    const separatorWidth = scaleVertical(
+      EVENT_ARRIVAL_GUIDE_DASH_WIDTH + EVENT_ARRIVAL_GUIDE_GAP_WIDTH
     );
+    let nextLabelX = baseLayout.labelX;
+    const positionedGuides = rowGuides.map((guide, index) => {
+      const labelWidth = eventArrivalGuideLabelWidth(guide.label);
+      const positioned = {
+        guide,
+        index,
+        centerY: eventArrivalGuideTrackCenterY(
+          rowTop,
+          rowHeight,
+          index,
+          rowGuides.length
+        ),
+        labelX: nextLabelX,
+        labelWidth,
+      };
+      nextLabelX += labelWidth;
+      if (index < rowGuides.length - 1) {
+        nextLabelX += EVENT_ARRIVAL_GUIDE_LABEL_GAP + separatorWidth;
+      }
+      return positioned;
+    });
+
+    for (const positioned of positionedGuides) {
+      const { guide, index, centerY, labelX, labelWidth } = positioned;
+      drawEventArrivalGuideLabel(
+        ctx,
+        guide.label,
+        labelX,
+        centerY,
+        labelWidth
+      );
+
+      const targetX = guide.event
+        ? timelineEventGuideTargetX(guide.event)
+        : timeToX(guide.end);
+      const visibleTargetX = Math.max(
+        0,
+        Math.min(timelineWidth(), targetX)
+      );
+      let dashStartX = labelX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+      for (const following of positionedGuides.slice(index + 1)) {
+        if (visibleTargetX <= dashStartX) break;
+        drawEventArrivalGuideDashes(
+          ctx,
+          dashStartX,
+          Math.min(visibleTargetX, following.labelX),
+          centerY
+        );
+        if (visibleTargetX <= following.labelX) {
+          dashStartX = visibleTargetX;
+          break;
+        }
+        // A linha abre espaço para os próximos números e continua em seu
+        // próprio nível depois deles, sem cruzar o texto.
+        dashStartX = following.labelX + following.labelWidth +
+          EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+      }
+      drawEventArrivalGuideDashes(
+        ctx,
+        dashStartX,
+        visibleTargetX,
+        centerY
+      );
+    }
   }
 }
 

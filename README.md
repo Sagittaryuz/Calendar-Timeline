@@ -39,15 +39,36 @@ horizonte ou com lacunas inválidas não são inventadas. A localização e os
 feriados regionais também usam cache local; uma atualização parcial preserva
 as datas regionais já conhecidas.
 
+## Consenso de previsão de chuva
+
+A timeline combina Foreca, Open-Meteo e MET Norway por hora: usa a mediana
+para reduzir o efeito de um valor isolado, registra a amplitude e o desvio
+absoluto mediano (MAD), e calcula uma indicação de concordância entre os
+modelos. Essa análise é local e determinística; não treina nem chama um modelo
+de linguagem. Com uma chave opcional, o nowcast de precipitação do Rainbow.ai
+complementa as primeiras quatro horas. A resposta do Rainbow fica em cache por
+15 minutos (até 96 consultas por dia para uma localização), abaixo da franquia
+gratuita anunciada pelo serviço para um único widget.
+Os intervalos do nowcast mantêm a resolução de 15 minutos: trechos secos
+cobertos pelo radar não herdam a coluna horária dos modelos, e as barras
+chuvosas aparecem no horário previsto pelo radar.
+
+Para conectar o Rainbow, crie uma chave no portal de desenvolvedores e execute
+o script no app Scriptable com o parâmetro `rainbow=connect`. A chave é salva
+no Keychain do iPhone e nunca deve ser colada no repositório. Exemplo de URL
+do Scriptable: `scriptable:///run?scriptName=Calendar%20Timeline&rainbow=connect`.
+
 Calendário e Lembretes permanecem dados locais do aparelho. Não há dados
 pessoais incluídos no repositório ou nos testes.
 
 ## Fontes e atribuições
 
-- Foreca é a fonte meteorológica primária quando as credenciais configuradas
-  estão disponíveis; o token não deve ser versionado nem aparecer em logs.
-- Open-Meteo complementa lacunas do clima. Consulte a licença e a atribuição
-  CC BY 4.0 da API antes de redistribuir o widget.
+- Foreca, Open-Meteo e MET Norway fornecem os modelos horários combinados;
+  nenhum provedor substitui sozinho os demais.
+- Rainbow.ai fornece nowcast de precipitação de curto prazo. A integração é
+  opcional e requer chave pessoal no Keychain.
+- Consulte as condições de redistribuição e atribuição de cada API antes de
+  publicar o widget.
 - Datas nacionais são calculadas localmente; datas estaduais e municipais são
   consultadas no projeto
   [feriados-brasil](https://github.com/joaopbini/feriados-brasil).

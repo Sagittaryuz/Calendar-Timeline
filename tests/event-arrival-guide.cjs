@@ -8,6 +8,8 @@ const source = fs.readFileSync(
   path.join(__dirname, '..', 'Calendar Timeline'),
   'utf8'
 );
+assert.match(source, /const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 15;/);
+assert.match(source, /const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 2;/);
 const start = source.indexOf('function formatEventArrivalHours(');
 const end = source.indexOf('function drawEventStartLines(', start);
 assert(start >= 0 && end > start, 'Localizar a guia de chegada.');
@@ -17,13 +19,21 @@ const context = {
   Date,
   now,
   windowStart: now,
-  SETTINGS: { maxItems: 5 },
-  EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 8,
-  EVENT_ARRIVAL_GUIDE_LABEL_GAP: 4,
-  EVENT_ARRIVAL_GUIDE_LABEL_PADDING: 8,
+  SETTINGS: {
+    maxItems: 5,
+    minimumChartWidth: 34,
+    compactMinimumChartWidth: 18,
+  },
+  EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 15,
+  EVENT_ARRIVAL_GUIDE_LABEL_GAP: 2,
   EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE: 21,
+  EVENT_ARRIVAL_GUIDE_LINE_WIDTH: 2,
+  EVENT_ARRIVAL_GUIDE_DASH_WIDTH: 8,
+  EVENT_ARRIVAL_GUIDE_GAP_WIDTH: 7,
+  EVENT_ARRIVAL_GUIDE_COLOR: '#FF9F0A',
   EVENT_STARTING_SOON_WINDOW_MS: 30 * 60 * 1000,
   ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
+  timelineWidth: () => 1024,
   scaleFontSize: value => value,
   scaleVertical: value => value,
   estimatedTextWidth: (text, fontSize) => text.length * fontSize * 0.62,
@@ -306,10 +316,10 @@ assert.deepEqual(
 );
 assert.equal(timedReminderGuides[1].row, 4);
 assert.equal(timedReminderGuides[1].event, timedReminder);
-assert(
-  context.eventArrivalGuideLabelWidth('5h e 50m') >
-    context.estimatedTextWidth('5h e 50m', 21) + 15,
-  'O rótulo deve reservar folga para os minutos completos na fonte arredondada.'
+assert.equal(
+  context.eventArrivalGuideLabelWidth('5h e 50m'),
+  Math.ceil(context.estimatedTextWidth('5h e 50m', 21)),
+  'A largura reservada deve terminar junto ao texto para aplicar a folga de 2 unidades.'
 );
 const labelSource = source.slice(
   source.indexOf('function drawEventArrivalGuideLabel('),
@@ -320,28 +330,105 @@ assert(!labelSource.includes('ctx.drawTextInRect('),
   'O texto da contagem não deve ser cortado pelo próprio retângulo.');
 const tomorrowLayout =
   context.eventArrivalGuideLayout('tomorrow', 500, 40);
-assert.equal(tomorrowLayout.labelX, 508);
+assert.equal(tomorrowLayout.labelX, 515);
 assert.equal(
   tomorrowLayout.lineStartX,
-  552,
+  557,
   'A guia de amanhã deve reservar a largura completa do rótulo antes do tracejado.'
 );
 const todayLayout = context.eventArrivalGuideLayout('today', 0, 40);
-assert.equal(todayLayout.labelX, 8);
+assert.equal(todayLayout.labelX, 15);
 assert.equal(
   todayLayout.lineStartX,
-  52,
+  57,
   'A guia de hoje deve manter a margem da borda esquerda.'
 );
 assert.equal(
   context.eventArrivalGuideLayout('today', 0, 80).lineStartX,
-  92,
+  97,
   'A coluna reservada deve acompanhar o rótulo mais largo e manter uma origem comum.'
 );
 assert.equal(
   context.eventArrivalGuideLayout('tomorrow', 500, 80).lineStartX,
-  592,
+  597,
   'Todas as guias de amanhã devem começar depois da mesma largura reservada.'
+);
+assert.equal(
+  context.eventArrivalGuideTrackCenterY(100, 90, 0, 2),
+  130,
+  'A primeira guia ocupa o terço superior (2/3 medidos a partir da base).'
+);
+assert.equal(
+  context.eventArrivalGuideTrackCenterY(100, 90, 1, 2),
+  160,
+  'A segunda guia ocupa o terço inferior (1/3 medido a partir da base).'
+);
+
+class MockPoint {
+  constructor(x, y) { Object.assign(this, { x, y }); }
+}
+class MockRect {
+  constructor(x, y, width, height) {
+    Object.assign(this, { x, y, width, height });
+  }
+}
+class MockColor {
+  constructor(hex, alpha) { Object.assign(this, { hex, alpha }); }
+}
+context.Point = MockPoint;
+context.Rect = MockRect;
+context.Color = MockColor;
+context.Font = { blackRoundedSystemFont: size => ({ size }) };
+context.isCompactMode = () => false;
+context.timelineChartTop = () => 100;
+context.timelineRowHeight = () => 90;
+context.timeToX = date =>
+  (date.getTime() - context.windowStart.getTime()) /
+  (24 * 60 * 60 * 1000) * context.timelineWidth();
+const drawnArrivalLabels = [];
+const drawnArrivalDashes = [];
+const mockDrawContext = {
+  setFillColor() {},
+  setTextAlignedLeft() {},
+  setFont() {},
+  setTextColor() {},
+  drawText(text, point) { drawnArrivalLabels.push({ text, ...point }); },
+  fillRect(rect) { drawnArrivalDashes.push(rect); },
+};
+context.drawEventArrivalGuides(
+  mockDrawContext,
+  [
+    event('Segundo', at(20, 23), at(21, 0), 2),
+    event('Primeiro', at(20, 21), at(20, 22), 2),
+  ],
+  'today'
+);
+assert.deepEqual(
+  drawnArrivalLabels.map(({ text }) => text),
+  ['3h', '5h'],
+  'Os rótulos da mesma faixa seguem a ordem dos eventos.'
+);
+assert.equal(drawnArrivalLabels[0].x, 15);
+assert.ok(
+  drawnArrivalLabels[1].x > drawnArrivalLabels[0].x,
+  'Os números em uma faixa compartilhada ficam em colunas distintas.'
+);
+assert.ok(
+  drawnArrivalLabels[0].y < drawnArrivalLabels[1].y,
+  'A linha do evento mais próximo fica acima da linha seguinte.'
+);
+assert.ok(
+  drawnArrivalDashes.some(rect => rect.width === 8 && rect.x === 44),
+  'Entre os números há um separador tracejado de 15 px (8 px de traço e 7 px de vão).'
+);
+assert.ok(
+  drawnArrivalDashes.some(rect => rect.x >= 88),
+  'As extensões dos tracejados começam após a coluna de números e o vão de 2 px.'
+);
+assert.deepEqual(
+  [...new Set(drawnArrivalDashes.map(rect => rect.y))],
+  [309, 339],
+  'Os tracejados de eventos na mesma faixa nunca se sobrepõem.'
 );
 
 const tomorrowGuides = context.tomorrowEventArrivalGuides([
@@ -505,8 +592,8 @@ assert.equal(context.tomorrowEventArrivalGuides([
   event('Amanhã', at(21, 10), at(21, 11), 0)
 ], lateNow)[0].label, '10h');
 assert.equal(context.formatEventArrivalHours(at(21, 0), at(21, 0)), '');
-assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 258);
-assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).lineStartX, 342);
+assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).labelX, 265);
+assert.equal(context.eventArrivalGuideLayout('tomorrow', 250, 80).lineStartX, 347);
 
 const panel = source.slice(
   source.indexOf('async function renderTimelinePanel('),
