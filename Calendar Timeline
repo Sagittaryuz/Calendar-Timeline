@@ -2773,9 +2773,8 @@ function chooseItems(items, _referenceDate, limit) {
       });
     }
 
-    // Monta a faixa inferior na ordem visual: eventos de dia inteiro,
-    // aniversários e feriados. Itens de prioridade menor só usam linhas
-    // livres depois dos eventos e lembretes.
+    // Reserva a faixa inferior para eventos de dia inteiro e feriados.
+    // Aniversários são posicionados por último, depois de todos os charts.
     const movableAllDayItems = new Set();
     for (const rowItems of rows) {
       for (const item of rowItems) {
@@ -2784,16 +2783,6 @@ function chooseItems(items, _referenceDate, limit) {
         }
       }
     }
-
-    const carriedHolidayRows = rows
-      .flatMap((rowItems, row) =>
-        rowItems.some((item) =>
-          isHolidayItem(item) && itemsOverlap(item, dayInterval)
-        ) ? [row] : []
-      );
-    const maxCarriedHolidayRow = carriedHolidayRows.length
-      ? Math.min(...carriedHolidayRows)
-      : limit;
 
     const getLowPriorityPlan = (shift) => {
       const movedRows = new Map();
@@ -2827,30 +2816,6 @@ function chooseItems(items, _referenceDate, limit) {
         ? Math.max(...allDayRows)
         : -1;
 
-      if (birthdayGroup) {
-        const birthdayCandidates = freeRows.filter((row) =>
-          row > lowestAllDayRow && row < maxCarriedHolidayRow
-        );
-        if (!birthdayCandidates.length) return null;
-
-        const birthdayRow = birthdayCandidates
-          .map((row) => ({
-            row,
-            holidayRows: freeRows.filter((freeRow) => freeRow > row)
-              .slice(0, holidayItems.length),
-          }))
-          .sort((first, second) =>
-            second.holidayRows.length - first.holidayRows.length ||
-            second.row - first.row
-          )[0];
-        return {
-          shift,
-          movedRows,
-          birthdayRow: birthdayRow.row,
-          holidayRows: birthdayRow.holidayRows,
-        };
-      }
-
       const availableHolidayRows = holidayItems.length
         ? freeRows
           .filter((row) => row > lowestAllDayRow)
@@ -2859,7 +2824,6 @@ function chooseItems(items, _referenceDate, limit) {
       return {
         shift,
         movedRows,
-        birthdayRow: null,
         holidayRows: availableHolidayRows,
       };
     };
@@ -2875,10 +2839,7 @@ function chooseItems(items, _referenceDate, limit) {
         !lowPriorityPlan ||
         candidate.holidayRows.length > lowPriorityPlan.holidayRows.length ||
         (candidate.holidayRows.length === lowPriorityPlan.holidayRows.length &&
-          (Number(candidate.birthdayRow ?? -1) >
-            Number(lowPriorityPlan.birthdayRow ?? -1) ||
-            (candidate.birthdayRow === lowPriorityPlan.birthdayRow &&
-              candidate.shift < lowPriorityPlan.shift)))
+          candidate.shift < lowPriorityPlan.shift)
       ) {
         lowPriorityPlan = candidate;
       }
@@ -2897,15 +2858,6 @@ function chooseItems(items, _referenceDate, limit) {
         }
       }
 
-      if (lowPriorityPlan.birthdayRow !== null) {
-        const positionedBirthdayGroup = {
-          ...birthdayGroup,
-          gridRow: lowPriorityPlan.birthdayRow,
-        };
-        rows[lowPriorityPlan.birthdayRow].push(positionedBirthdayGroup);
-        placed.push(positionedBirthdayGroup);
-      }
-
       const visibleHolidayCount = lowPriorityPlan.holidayRows.length;
       holidayItems.slice(0, visibleHolidayCount).forEach((item, index) => {
         const positionedHoliday = {
@@ -2918,6 +2870,24 @@ function chooseItems(items, _referenceDate, limit) {
       hidden.push(...holidayItems.slice(visibleHolidayCount));
     } else {
       hidden.push(...holidayItems);
+    }
+
+    // Aniversários ficam abaixo de todos os charts visíveis deste dia,
+    // inclusive os que atravessam a meia-noite e os eventos de dia inteiro.
+    // Quando as cinco faixas já estão ocupadas, o nome continua na faixa
+    // seguinte, sem tomar a primeira linha nem expulsar itens prioritários.
+    if (birthdayGroup) {
+      const lastPriorityRow = placed
+        .filter((item) =>
+          !isBirthdayItem(item) &&
+          (item.kind === "event" || item.kind === "reminder") &&
+          itemsOverlap(item, dayInterval)
+        )
+        .reduce((last, item) => Math.max(last, Number(item.gridRow)), -1);
+      const birthdayRow = lastPriorityRow + 1;
+      const positionedBirthdayGroup = { ...birthdayGroup, gridRow: birthdayRow };
+      if (birthdayRow < limit) rows[birthdayRow].push(positionedBirthdayGroup);
+      placed.push(positionedBirthdayGroup);
     }
 
   }
@@ -8635,7 +8605,10 @@ function drawTimelineItemLayer(
   // As ligações são desenhadas antes dos charts, que as encobrem.
   drawEventStartLineAnchors(ctx, items);
 
-  for (let row = 0; row < SETTINGS.maxItems; row++) {
+  const lastBirthdayRow = items
+    .filter(isBirthdayGroup)
+    .reduce((last, item) => Math.max(last, Number(item.gridRow)), -1);
+  for (let row = 0; row <= Math.max(SETTINGS.maxItems - 1, lastBirthdayRow); row++) {
     const y = chartTop + row * rowHeight;
     const rowItems = items
       .filter((candidate) => candidate.gridRow === row)
