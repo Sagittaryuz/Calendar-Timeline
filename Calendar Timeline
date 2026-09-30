@@ -171,6 +171,8 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // toda a altura disponível, sem margens externas superior ou inferior. A
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
+// Identifica o código carregado; atualizar este número em cada revisão publicada.
+const WIDGET_BUILD_VERSION = "2026.09.30.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -3752,7 +3754,26 @@ async function renderWidget(items, loadError) {
   await drawDayEndCapsules(contentCtx);
 
   drawFullWidgetWhiteFrame(contentCtx);
+  drawWidgetBuildVersion(contentCtx);
   return shiftWidgetImage(contentCtx.getImage());
+}
+
+function drawWidgetBuildVersion(ctx) {
+  // Primeiro plano: a identificação permanece legível sobre o blur.
+  const height = 24;
+  const width = 184;
+  const y = CANVAS.height - 38;
+  const rightInset = Math.max(
+    widgetContourInsetAtY(y, WIDGET_CONTOUR.strokeInset),
+    widgetContourInsetAtY(y + height, WIDGET_CONTOUR.strokeInset)
+  ) + 8;
+  const rect = new Rect(CANVAS.width - rightInset - width, y, width, height);
+  ctx.setFillColor(new Color("#000000", 0.85));
+  ctx.fillRect(rect);
+  ctx.setFont(Font.boldSystemFont(17));
+  ctx.setTextColor(new Color("#FFFFFF", 1));
+  ctx.setTextAlignedCenter();
+  ctx.drawTextInRect(`v${WIDGET_BUILD_VERSION}`, rect);
 }
 
 function drawFullWidgetWhiteFrame(ctx) {

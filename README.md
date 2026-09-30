@@ -18,6 +18,11 @@ O arquivo servido no `main` é autocontido e deve ser executado pelo Scriptable;
 os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
+O canto inferior direito mostra a versão gravada no script executado, acima do
+blur. A revisão `v2026.09.30.1` introduz essa identificação. Se a versão não
+aparecer, confira se o carregador está buscando o arquivo de `main`, em vez de
+executar uma cópia antiga em cache.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.
