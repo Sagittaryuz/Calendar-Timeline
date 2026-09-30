@@ -19,9 +19,10 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.6` desce o conjunto das duas linhas em 10 px e
-aumenta a fonte e o espaçamento entre as letras dos títulos, mantendo recuos
-de 5 px no domingo e no sábado. A curva
+blur. A revisão `v2026.09.30.7` amplia novamente a fonte e o espaçamento entre
+as letras dos títulos. A moldura branca fica somente no dia de hoje. O conjunto
+das duas linhas mantém o deslocamento de 10 px para baixo e os títulos mantêm
+recuos de 5 px no domingo e no sábado. A curva
 esquerda mantém direção e raio; os quadros adjacentes acompanham os traços
 com o espaçamento existente. Dias úteis sob blur usam cinzas mais claros.
 A altura do cabeçalho e o encaixe inferior aprovado permanecem fixos. Se a versão não
