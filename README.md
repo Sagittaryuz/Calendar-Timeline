@@ -19,9 +19,9 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.12` desce mais 1 px somente o círculo inferior da
-próxima virada em relação à revisão anterior, sem deslocar a régua
-de horas ou a faixa térmica. Permite títulos e aniversariantes além do fim
+blur. A revisão `v2026.09.30.13` centraliza a segunda linha pelo retângulo de
+cada quadro, com tamanho e altura comuns aos sete dias, sem compensar
+as curvas. O encaixe do círculo inferior permanece na posição aprovada. Permite títulos e aniversariantes além do fim
 do chart ou do dia, limitando o texto somente pelo contorno externo.
 Os textos dos quadros são centralizados pela área visível,
 considerando o contorno externo e as curvas dos quadros adjacentes a hoje.
@@ -60,10 +60,11 @@ seis, as barras e os textos menores preservam os vãos. A regra vale de forma
 independente para hoje, amanhã e os demais dias da janela.
 
 As duas linhas preservam o deslocamento vertical de 10 px. O centro horizontal
-de cada linha considera a área disponível em toda sua altura, incluindo as
-curvas externas e as curvas dos cartões vizinhos ao dia atual. Somente a
-primeira linha recebe recuos de +5 px no domingo e -5 px no sábado. A fonte
-da segunda linha se adapta quando a curva do quadro reduz a largura útil:
+da primeira linha considera a área disponível em toda sua altura, incluindo
+as curvas externas e as curvas dos cartões vizinhos ao dia atual. Somente a
+primeira linha recebe recuos de +5 px no domingo e -5 px no sábado.
+A segunda linha usa o centro retangular e a mesma regra de tamanho nos sete
+quadros, sem deslocamento ou redução por causa das curvas:
 
 - `DOM 27`: dia da semana e dia do mês em fonte de maior peso, com letras bem
   próximas e o maior tamanho que cabe no contorno. Domingo recua 5 px para a

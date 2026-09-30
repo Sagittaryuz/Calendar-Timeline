@@ -209,11 +209,12 @@ for(let day=0;day<7;day++) {
     assert(Math.abs(titleCenter-(bounds.center+inset))<1e-6,
       'Somente domingo e sábado recebem 5 px de recuo.');
     const weatherCenter=(entries[5].p.x+entries[6].p.x+entries[6].t.length*entries[6].size*0.62)/2;
-    const weatherBounds=c.titleCardContentBounds(c.addDays(c.titleWeekStart(),i),card,
-      layout.weatherCenterY-layout.iconSize/2,layout.iconSize);
-    assert(Math.abs(weatherCenter-weatherBounds.center)<1e-6);
-    assert(entries[5].p.x>=weatherBounds.left &&
-      entries[6].p.x+entries[6].t.length*entries[6].size*0.62<=weatherBounds.right);
+    assert(Math.abs(weatherCenter-(card.x+card.width/2))<1e-6,
+      'A segunda linha usa o centro retangular, inclusive ao lado da curva.');
+    assert.equal(entries[5].size,texts[5].size,
+      'A curva não reduz a fonte da segunda linha.');
+    assert.equal(entries[5].p.y,texts[5].p.y,
+      'A segunda linha mantém a mesma altura nos sete dias.');
     const visualTop=entries[0].p.y+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
     const visualBottom=icons[i].y+icons[i].size/2;
     const expectedCenter=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2+TITLE_CARD_HEIGHT/2+10');

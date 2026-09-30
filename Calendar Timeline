@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.12";
+const WIDGET_BUILD_VERSION = "2026.09.30.13";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -5578,15 +5578,16 @@ function drawTitleDayCard(
   const minimum = minimumValue !== null ? String(Math.round(minimumValue)) + "º" : "--º";
   const maximum = maximumValue !== null ? String(Math.round(maximumValue)) + "º" : "--º";
   const iconGap = scaleVertical(3);
-  const weatherBounds = titleCardContentBounds(date, card,
-    layout.weatherCenterY - layout.iconSize / 2, layout.iconSize);
+  // A segunda linha usa a mesma referência retangular nos sete dias:
+  // as curvas da moldura não deslocam nem reduzem este conjunto.
+  const weatherCenterX = card.x + card.width / 2;
   const detailFontSize = Math.max(1, Math.min(scaleFontSize(24),
-    Math.floor((weatherBounds.width - 8 - layout.iconSize - iconGap * 2) /
+    Math.floor((card.width - 16 - layout.iconSize - iconGap * 2) /
       ((minimum.length + maximum.length) * 0.62))));
   const minimumWidth = minimum.length * detailFontSize * 0.62;
   const maximumWidth = maximum.length * detailFontSize * 0.62;
   const weatherWidth = minimumWidth + iconGap * 2 + layout.iconSize + maximumWidth;
-  const weatherX = weatherBounds.center - weatherWidth / 2;
+  const weatherX = weatherCenterX - weatherWidth / 2;
   const detailVisibleHeight = detailFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
   const weatherY = layout.weatherCenterY - detailVisibleHeight / 2 -
     detailFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO;
