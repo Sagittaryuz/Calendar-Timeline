@@ -287,3 +287,24 @@ assert.equal(mapX(0),1, 'A borda esquerda recua 1 px.');
 assert.equal(mapX(run('CANVAS.width')),run('CANVAS.width'),
   'A borda direita permanece fixa.');
 console.log('OK: borda esquerda retraída 1 px com as demais bordas fixas.');
+
+// O círculo recomposto tem âncora própria; a régua e o gráfico não sobem nem descem.
+for (const name of ['currentDayBoundaryBadgeCenterY','drawCurrentDayBoundaryBadgeOnForeground',
+  'timelineLegendCenterX','dayLegendCircleRect','centeredDayLegendTextRect','legendTextHeight','isCompactMode',
+  'isExtendedDetailedMode']) load(name);
+c.futureTimelineBlurMetrics=()=>({width:10});
+c.dayBadgeStyle=()=>({background:{},text:{}});
+c.Font.blackRoundedSystemFont=size=>size;
+c.timeToX=()=>400;
+let foregroundCircle;
+c.drawCurrentDayBoundaryBadgeOnForeground({...textCtx,
+  fillEllipse(rect){foregroundCircle=rect;},setTextAlignedCenter(){},drawTextInRect(){}});
+const frame=c.currentDayFrameMetrics();
+assert(Math.abs(foregroundCircle.y+foregroundCircle.height-frame.bottomLineCenterY)<1e-9);
+assert.equal(foregroundCircle.height,run('DAY_CHANGE_CIRCLE_DIAMETER'));
+assert.equal(foregroundCircle.x+foregroundCircle.width/2,run('CANVAS.plotLeft')+400);
+assert.equal(run('CANVAS.timelineTop+dayChangeLegendCenterY()+DAY_CHANGE_CIRCLE_DIAMETER/2'),505,
+  'A posição das outras legendas continua igual.');
+assert(Math.abs(foregroundCircle.y+foregroundCircle.height-(frame.bottomLineCenterY-frame.lineWidth/2)-2)<1e-9,
+  'O disco sobrepõe metade da espessura da moldura branca.');
+console.log('OK: somente o círculo da próxima virada encosta no eixo da moldura, com 2 px de sobreposição.');
