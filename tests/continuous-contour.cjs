@@ -85,12 +85,10 @@ for(const p of points) {
   }
 }
 for(let i=0;i<7;i++) assert(c.titleDayCardRect(i).y>=0,'No negative card position');
-const font=c.titleHeaderFontSize(), width=8.5*font*0.60;
-const visibleTop=font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
-const titleY=c.titleSafeTextY(width+4,font*1.15,6,
-  run('WIDGET_CONTOUR.textClearance'),visibleTop);
-const left=(c.titleDayCardRect(0).width-width-4)/2;
-assert(left>=c.widgetContourInsetAtY(titleY+visibleTop)+8);
+const font=c.titleHeaderFontSize();
+const layout=c.titleCardTypography();
+const titleY=layout.titleY;
+assert(font>23, 'O título abreviado deve usar uma fonte maior.');
 const lowerCircleEdge=run('CANVAS.timelineTop + bottomLegendCenterY() + DAY_CHANGE_CIRCLE_DIAMETER/2');
 assert(Math.abs(lowerCircleEdge-506)<1e-9);
 const paths=[];
@@ -114,6 +112,7 @@ c.titleWeekdayColor=()=>({});
 c.shortWeekday=()=> 'TER';
 c.titleDayMonthLabel=()=> '22/09';
 c.titleDailyTemperatureForDay=()=>({minimum:21,maximum:33});
+c.finiteWeatherNumber=v=>v===null||v===undefined?null:Number(v);
 c.titleScheduleCountsForDay=()=>({events:1,reminders:3});
 c.titleForecastForDay=()=>({});
 c.Font={blackMonospacedSystemFont:size=>size,regularMonospacedSystemFont:size=>size};
@@ -128,16 +127,14 @@ for(let i=0;i<7;i++) {
   c.drawTitleDayCard(textCtx,c.addDays(c.windowStart,i),c.titleDayCardRect(i),i===0,i===6);
 }
 for(const {t,p,size} of texts) {
-  const visualTop=p.y+(['TER','22/09'].includes(t)?
-    size*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO'):0);
+  const visualTop=p.y+size*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
   for(const y of [visualTop,p.y+size*1.15]) {
     const inset=c.widgetContourInsetAtY(y);
-    const cellWidth=size*(['TER','22/09'].includes(t)?0.60:0.62);
-    assert(p.x>=inset && p.x+t.length*cellWidth<=1092-inset, 'Title text inside curve');
+    const cellWidth=size*(t.length===1?0.60:0.62);
+    assert(p.x>=inset && p.x+t.length*cellWidth<=1092-inset, 'Texto dentro do contorno');
   }
 }
 assert(icons.every(icon=>icon.y+icon.size/2<last.y+last.height));
-assert.equal(new Set(texts.filter(t=>t.t==='TER').map(t=>t.p.y)).size,1,'Titles aligned');
 console.log('Calibration: header font '+font+'; title y '+titleY+'; circle edge '+lowerCircleEdge);
 console.log('OK: contorno medido, máscara, traços internos, títulos, rodapé e viradas próximas da borda.');
 
@@ -154,29 +151,18 @@ for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
   assert(Math.abs(path.points.at(-1).y-120)<1e-6);
   const pathInset=run('titleDayCardRect(0).x===CANVAS.plotLeft?WIDGET_CONTOUR.strokeInset:2');
   const rightEdge=card.x+card.width-pathInset;
-  assert.equal(path.points[1].x,rightEdge,'O canto interno superior termina na lateral, sem arco.');
-  assert.equal(path.points[1].y,card.y,'A linha superior chega ao canto em 90 graus.');
-  assert.equal(path.points[2].x,rightEdge,'A lateral começa no mesmo canto quadrado.');
-  assert.equal(path.points[2].y,bridge.startY);
-}
-
-const weekdayTitles=texts.filter(({t})=>t==='TER');
-const dateTitles=texts.filter(({t})=>t==='22/09');
-assert.equal(weekdayTitles.length,7);
-assert.equal(dateTitles.length,7);
-for(let i=0;i<7;i++) {
-  const card=c.titleDayCardRect(i);
-  const titleStart=card.x+(card.width-8.5*font*0.60)/2;
-  assert(Math.abs(weekdayTitles[i].p.x-titleStart)<1e-6);
-  assert(Math.abs(dateTitles[i].p.x-(titleStart+3.5*font*0.60))<1e-6);
+  assert(path.points.some(p=>Math.abs(p.x-rightEdge)<1e-6 && p.y>card.y),
+    'O topo encontra a lateral por um arco suave.');
+  assert(path.points.some(p=>p.x<rightEdge && p.y>card.y && p.y<card.y+run('TODAY_CARD_SOFT_CORNER_RADIUS')),
+    'O canto superior possui raio, em vez de uma aresta perpendicular.');
 }
 for(const text of texts) assert(text.p.y+text.size*1.15<=last.y+last.height,
-  'As três linhas cabem na altura original.');
+  'As duas linhas cabem na altura original.');
 assert(source.includes('const RAIN_TOP_MARKER_VERTICAL_OFFSET = -10;'),
   'Gotas acumulam mais 5 unidades de deslocamento');
 assert(source.includes('solarLineY() + scaleVertical(12) + RAIN_TOP_MARKER_VERTICAL_OFFSET,'),
   'Gotas usam o deslocamento vertical centralizado');
-console.log('OK: canto interno reto, títulos centralizados, ponte sem cruzamento e gotas -10 no total.');
+console.log('OK: canto interno suave, títulos centralizados, ponte sem cruzamento e gotas -10 no total.');
 
 // Posições fixas em todos os dias, inclusive na semana que cruza o ano.
 for (const name of ['drawDatePanel','currentDayFrameMetrics',
@@ -195,21 +181,30 @@ for(let day=0;day<7;day++) {
   const metrics=c.currentDayFrameMetrics();
   const current=c.titleDayCardRect(day);
   assert.equal(metrics.todayCard.x,current.x,'A moldura seleciona a coluna de hoje.');
-  assert.equal(texts.filter(t=>['DOM','SEG','TER','QUA','QUI','SEX','SAB'].includes(t.t)).map(t=>t.t).join(','),
-    'DOM,SEG,TER,QUA,QUI,SEX,SAB');
-  assert.equal(texts.filter(t=>/^\d{2}\/\d{2}$/.test(t.t)).map(t=>t.t).join(','),
-    '27/12,28/12,29/12,30/12,31/12,01/01,02/01');
-  assert.equal(new Set(texts.filter(t=>/^\d{2}\/\d{2}$/.test(t.t)).map(t=>t.p.y)).size,1);
+  const expectedDays=['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
   for(let i=0;i<7;i++) {
     const card=c.titleDayCardRect(i);
-    const entries=texts.slice(i*8,(i+1)*8);
-    assert.equal(entries.length,8);
-    assert(entries[0].p.y<entries[2].p.y && entries[2].p.y<entries[4].p.y,
-      'Título, temperaturas e contadores usam três linhas.');
+    const entries=texts.slice(i*7,(i+1)*7);
+    assert.equal(entries.length,7);
+    assert.equal(entries.slice(0,3).map(t=>t.t).join(''),expectedDays[i]);
+    assert.equal(entries.slice(3,5).map(t=>t.t).join(''),['27','28','29','30','31','01','02'][i]);
+    assert(entries[0].p.y<entries[5].p.y, 'Título e clima usam duas linhas.');
     assert(entries.every(t=>t.p.x>=card.x && t.p.x+t.t.length*t.size*0.62<=card.x+card.width+1));
     assert(entries.every(t=>t.p.y+t.size*1.15<=card.y+card.height));
-    assert.equal(entries.slice(4).map(t=>t.t).join(''),'E: 1 | L: 3');
+    const inset=i===0?5:i===6?-5:0;
+    const titleCenter=(entries[0].p.x+entries[4].p.x+font*0.60)/2;
+    assert(Math.abs(titleCenter-(card.x+card.width/2+inset))<1e-6,
+      'Somente domingo e sábado recebem 5 px de recuo.');
+    const weatherCenter=(entries[5].p.x+entries[6].p.x+entries[6].t.length*entries[6].size*0.62)/2;
+    assert(Math.abs(weatherCenter-(card.x+card.width/2))<1e-6);
+    const visualTop=entries[0].p.y+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
+    const visualBottom=icons[i].y+icons[i].size/2;
+    const expectedCenter=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2+TITLE_CARD_HEIGHT/2');
+    assert(Math.abs((visualTop+visualBottom)/2-expectedCenter)<1e-6,
+      'As duas linhas são centradas juntas pela caixa sem moldura.');
   }
+  assert.equal(new Set(texts.filter(t=>t.t==='D'||t.t==='S'||t.t==='T'||t.t==='Q').map(t=>t.p.y)).size,1,
+    'Hoje mantém o alinhamento vertical dos quadros comuns.');
   c.currentDayUnifiedPolygon.points=null;
   for(let i=0;i<7;i++) {
     const card=c.titleDayCardRect(i);
@@ -225,4 +220,4 @@ for(let day=0;day<7;day++) {
   assert(path.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
   assert(path.points.every(p=>p.x<=1092 && p.x>=0));
 }
-console.log('OK: sete colunas fixas, três linhas, seleção diária e semana na virada do ano.');
+console.log('OK: sete colunas fixas, duas linhas, seleção diária e semana na virada do ano.');

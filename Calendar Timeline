@@ -295,11 +295,50 @@ function titleSafeTextY(
 }
 
 function titleHeaderFontSize() {
-  return Math.min(scaleFontSize(22),
-    Math.floor((titleDayCardRect(0).width - 24) / (8.5 * 0.60)));
+  return titleCardTypography().titleFontSize;
+}
+
+function titleCardTypography() {
+  // Usa a caixa dos cartões comuns, mesmo quando hoje ocupa uma extremidade.
+  const card = titleDayCardRect(0);
+  const top = WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
+  const centerY = top + TITLE_CARD_HEIGHT / 2;
+  const iconSize = scaleVertical(30);
+  const lineGap = scaleVertical(6);
+  const titleWidthUnits = 1.60 + 0.22 + 1.10;
+  let titleFontSize = Math.floor((card.width - 16) / titleWidthUnits);
+  for (; titleFontSize > 1; titleFontSize--) {
+    const titleHeight = titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
+    const groupHeight = titleHeight + lineGap + iconSize;
+    const titleTop = centerY - groupHeight / 2;
+    const titleWidth = titleWidthUnits * titleFontSize;
+    const left = (card.width - titleWidth) / 2 + 5;
+    const contour = Math.max(widgetContourInsetAtY(titleTop),
+      widgetContourInsetAtY(titleTop + titleHeight));
+    if (titleTop >= top + 4 && left >= contour + 3 &&
+        groupHeight <= TITLE_CARD_HEIGHT - 8) break;
+  }
+  const titleHeight = titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
+  const titleTop = centerY - (titleHeight + lineGap + iconSize) / 2;
+  return {
+    titleFontSize,
+    titleY: titleTop - titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO,
+    titleWidth: titleWidthUnits * titleFontSize,
+    weatherCenterY: titleTop + titleHeight + lineGap + iconSize / 2,
+    iconSize,
+  };
+}
+
+function drawTightTitleText(ctx, text, x, y, size) {
+  // Avanço menor que a célula: letras próximas com a fonte de maior peso.
+  for (const character of text) {
+    ctx.drawText(character, new Point(x, y));
+    x += size * 0.50;
+  }
 }
 
 const TITLE_CARD_COUNT = 7;
+const TODAY_CARD_SOFT_CORNER_RADIUS = scaleVertical(6);
 
 function titleWeekStart() {
   const today = startOfDay(windowStart);
@@ -1083,6 +1122,21 @@ function weatherCacheHasFreshSamples(hours, cacheAge, fallbackFetchedAt) {
   });
 }
 
+function weatherCacheCoversPreviousWeekDays(payload) {
+  const today = startOfDay(windowStart);
+  for (let day = titleWeekStart(); day < today; day = addDays(day, 1)) {
+    const daily = payload?.daily?.[dateKey(day)];
+    const minimum = finiteWeatherNumber(daily?.minimum);
+    const maximum = finiteWeatherNumber(daily?.maximum);
+    if (minimum === null || maximum === null || minimum > maximum) return false;
+    if (weatherSymbolGroup(daily) !== null) continue;
+    const start = day.getTime(), end = addDays(day, 1).getTime();
+    if (!(payload?.hours ?? []).some(hour =>
+      hour.timestamp >= start && hour.timestamp < end && weatherSymbolGroup(hour) !== null)) return false;
+  }
+  return true;
+}
+
 function tagDailyWeather(daily, source, fetchedAt = null) {
   const tagged = {};
   for (const [key, values] of Object.entries(daily ?? {})) {
@@ -1183,10 +1237,11 @@ async function loadHourlyWeather(location) {
 
   if (
     cacheFresh &&
-    cached.schemaVersion === 5 &&
+    cached.schemaVersion === 6 &&
     Boolean(cached.sources?.rainbowEnabled) === Boolean(rainbowKey) &&
     Array.isArray(cached.hours) &&
-    weatherCacheHasFreshSamples(cached.hours, cacheAge, fetchedAt)
+    weatherCacheHasFreshSamples(cached.hours, cacheAge, fetchedAt) &&
+    weatherCacheCoversPreviousWeekDays(cached)
   ) {
     return buildHourlyWeather(cached.hours, cached.daily);
   }
@@ -1255,7 +1310,7 @@ async function loadHourlyWeather(location) {
   }
 
   const stored = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     latitude: location.latitude,
     longitude: location.longitude,
     // fetchedAt só avança quando ao menos um provedor entrega dados
@@ -1392,7 +1447,7 @@ async function loadOpenMeteoWeather(location) {
     `latitude=${encodeURIComponent(location.latitude)}`,
     `longitude=${encodeURIComponent(location.longitude)}`,
     "hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,weather_code,is_day",
-    "daily=temperature_2m_min,temperature_2m_max",
+    "daily=temperature_2m_min,temperature_2m_max,weather_code",
     `forecast_days=${forecastDays}`,
     `past_days=${titleTodayCardIndex()}`,
     "temperature_unit=celsius",
@@ -1477,7 +1532,9 @@ async function loadOpenMeteoWeather(location) {
     ) {
       continue;
     }
-    daily[key] = { minimum, maximum };
+    const weatherCode = finiteWeatherNumber(response.daily.weather_code?.[index]);
+    daily[key] = { minimum, maximum,
+      symbol: weatherCode === null ? "" : openMeteoWeatherSymbol(weatherCode, true) };
   }
 
   return { hours, daily };
@@ -1761,6 +1818,8 @@ function mergeDailyWeatherData(...dailySets) {
         minimum,
         maximum,
         source: values?.source ?? "unknown",
+        symbol: values?.symbol || merged[key]?.symbol || "",
+        fetchedAt: values?.fetchedAt ?? merged[key]?.fetchedAt ?? null,
       };
     }
   }
@@ -1972,6 +2031,7 @@ function buildHourlyWeather(hours, dailyOverrides = {}) {
         hour.temperature !== null
     );
   const daily = {};
+  const authoritativeDailyKeys = new Set();
 
   // Resumos diários válidos são a fonte preferencial para o cartão, mesmo
   // quando a série horária do mesmo dia está apenas parcialmente disponível.
@@ -1983,16 +2043,20 @@ function buildHourlyWeather(hours, dailyOverrides = {}) {
       maximum !== null &&
       minimum <= maximum
     ) {
+      authoritativeDailyKeys.add(key);
       daily[key] = {
         minimum,
         maximum,
         source: values?.source ?? "daily",
+        symbol: values?.symbol ?? "",
+        fetchedAt: values?.fetchedAt ?? null,
       };
     }
   }
 
   for (const hour of normalized) {
     const key = dateKey(new Date(hour.timestamp));
+    if (authoritativeDailyKeys.has(key)) continue;
     if (!daily[key]) {
       daily[key] = {
         minimum: hour.temperature,
@@ -4153,7 +4217,11 @@ function currentDayUnifiedShape(path = new Path()) {
   if (c.x !== CANVAS.plotLeft) {
     path.addLine(new Point(WIDGET_CONTOUR.strokeInset, m.bridgeY));
     path.addLine(new Point(c.x + m.lineWidth / 2, m.bridgeY));
-    path.addLine(new Point(c.x + m.lineWidth / 2, c.y));
+    const left = c.x + m.lineWidth / 2;
+    const softRadius = TODAY_CARD_SOFT_CORNER_RADIUS;
+    path.addLine(new Point(left, c.y + softRadius));
+    appendContourArc(path, left + softRadius, c.y + softRadius,
+      softRadius, softRadius, Math.PI, Math.PI * 1.5);
   }
   return path;
 }
@@ -4911,16 +4979,21 @@ function buildCurrentDayUpperPath(
   const bridge = currentDayBridgeMetrics(card, boundaryX, bridgeY,
     bridgeRadius, direction, inset);
   if (direction === "right") {
-    path.move(new Point(card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX : left + rx, card.y));
-    // A virada do dia é um canto interno: conecta o topo direto à lateral.
-    // Os raios externos à esquerda continuam seguindo o contorno do widget.
+    path.move(new Point(card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX
+      : left + TODAY_CARD_SOFT_CORNER_RADIUS, card.y));
+    // Os cantos internos recebem apenas um raio suave; os externos
+    // continuam seguindo o contorno já calibrado do widget.
     if (isRightEdge) {
       const edgeRadiusX = WIDGET_CONTOUR.extentX - inset;
       path.addLine(new Point(right - edgeRadiusX, card.y));
       appendContourArc(path, right - edgeRadiusX, card.y + ry,
         edgeRadiusX, ry, -Math.PI / 2, 0);
     } else {
-      path.addLine(new Point(right, card.y));
+      const softRadius = Math.min(TODAY_CARD_SOFT_CORNER_RADIUS,
+        (right - left) / 2, Math.max(0, bridge.startY - card.y));
+      path.addLine(new Point(right - softRadius, card.y));
+      appendContourArc(path, right - softRadius, card.y + softRadius,
+        softRadius, softRadius, -Math.PI / 2, 0);
     }
     path.addLine(new Point(right, bridge.startY));
   } else {
@@ -5163,8 +5236,15 @@ function drawCurrentDayFrame(ctx) {
   if (todayCard.x !== CANVAS.plotLeft) {
     const left = todayCard.x + lineWidth / 2;
     const path = new Path();
-    path.move(new Point(left, todayCard.y));
-    path.addLine(new Point(left, bridgeY));
+    const softRadius = TODAY_CARD_SOFT_CORNER_RADIUS;
+    path.move(new Point(left + softRadius, todayCard.y));
+    appendContourArc(path, left + softRadius, todayCard.y + softRadius,
+      softRadius, softRadius, -Math.PI / 2, -Math.PI);
+    const bridgeRadius = Math.min(softRadius, left - WIDGET_CONTOUR.strokeInset,
+      Math.max(0, bridgeY - todayCard.y - softRadius));
+    path.addLine(new Point(left, bridgeY - bridgeRadius));
+    appendContourArc(path, left - bridgeRadius, bridgeY - bridgeRadius,
+      bridgeRadius, bridgeRadius, 0, Math.PI / 2);
     path.addLine(new Point(WIDGET_CONTOUR.strokeInset, bridgeY));
     ctx.setStrokeColor(lineColor);
     ctx.setLineWidth(lineWidth);
@@ -5269,73 +5349,44 @@ function drawTitleDayCard(
   const dateColor = isSelected
     ? new Color("#FFFFFF", 0.96)
     : new Color(SETTINGS.secondaryTextColor, 1.0);
-  const detailColor = isSelected
-    ? new Color("#FFFFFF", 0.96)
-    : new Color("#D1D1D6", 0.96);
-
   const weekdayLabel = shortWeekday(date);
-  const dateLabel = titleDayMonthLabel(date);
-
-  const titleFontSize = titleHeaderFontSize();
-  const titleCharacterWidth = titleFontSize * 0.60;
-  const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
-  const titleGap = titleCharacterWidth / 2;
-  const titleGroupWidth = (weekdayLabel.length + dateLabel.length + 0.5) * titleCharacterWidth;
-  const titleY = titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
-    WIDGET_CONTOUR.strokeInset + scaleVertical(7),
-    scaleVertical(3), titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
-  const titleStartX = card.x + (card.width - titleGroupWidth) / 2;
+  const dayLabel = String(date.getDate()).padStart(2, "0");
+  const layout = titleCardTypography();
+  const titleInset = date.getDay() === 0 ? 5 : date.getDay() === 6 ? -5 : 0;
+  const titleStartX = card.x + (card.width - layout.titleWidth) / 2 + titleInset;
   ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
+  ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
   ctx.setTextColor(weekdayColor);
-  ctx.drawText(weekdayLabel, new Point(titleStartX, titleY));
+  drawTightTitleText(ctx, weekdayLabel, titleStartX, layout.titleY, layout.titleFontSize);
   ctx.setTextColor(dateColor);
-  ctx.drawText(dateLabel, new Point(titleStartX + weekdayWidth + titleGap, titleY));
+  // Três letras ocupam 1,60 em; o vão até os dois dígitos ocupa 0,22 em.
+  drawTightTitleText(ctx, dayLabel, titleStartX + 1.82 * layout.titleFontSize,
+    layout.titleY, layout.titleFontSize);
 
   const daily = titleDailyTemperatureForDay(date);
-  const minimum = Number.isFinite(Number(daily?.minimum))
-    ? String(Math.round(Number(daily.minimum))) + "º" : "--º";
-  const maximum = Number.isFinite(Number(daily?.maximum))
-    ? String(Math.round(Number(daily.maximum))) + "º" : "--º";
-  const counts = titleScheduleCountsForDay(date);
-  const detailFontSize = scaleFontSize(18);
-  const detailCharacterWidth = detailFontSize * 0.62;
-  const iconSize = scaleVertical(22);
-  const iconGap = scaleVertical(2);
-  const minimumWidth = minimum.length * detailCharacterWidth;
-  const maximumWidth = maximum.length * detailCharacterWidth;
-  const weatherWidth = minimumWidth + iconGap * 2 + iconSize + maximumWidth;
+  const minimumValue = finiteWeatherNumber(daily?.minimum);
+  const maximumValue = finiteWeatherNumber(daily?.maximum);
+  const minimum = minimumValue !== null ? String(Math.round(minimumValue)) + "º" : "--º";
+  const maximum = maximumValue !== null ? String(Math.round(maximumValue)) + "º" : "--º";
+  const iconGap = scaleVertical(3);
+  const detailFontSize = Math.min(scaleFontSize(24),
+    Math.floor((card.width - 16 - layout.iconSize - iconGap * 2) /
+      ((minimum.length + maximum.length) * 0.62)));
+  const minimumWidth = minimum.length * detailFontSize * 0.62;
+  const maximumWidth = maximum.length * detailFontSize * 0.62;
+  const weatherWidth = minimumWidth + iconGap * 2 + layout.iconSize + maximumWidth;
   const weatherX = card.x + (card.width - weatherWidth) / 2;
-  const weatherY = titleY + titleFontSize * 1.15 + scaleVertical(3);
-  const weatherCenterY = weatherY + detailFontSize / 2;
+  const detailVisibleHeight = detailFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
+  const weatherY = layout.weatherCenterY - detailVisibleHeight / 2 -
+    detailFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO;
   ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
   ctx.drawText(minimum, new Point(weatherX, weatherY));
   drawTitleWeatherIcon(ctx, titleForecastForDay(date),
-    weatherX + minimumWidth + iconGap + iconSize / 2, weatherCenterY, iconSize);
+    weatherX + minimumWidth + iconGap + layout.iconSize / 2,
+    layout.weatherCenterY, layout.iconSize);
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor, 1.0));
-  ctx.drawText(maximum, new Point(weatherX + minimumWidth + iconGap * 2 + iconSize, weatherY));
-
-  // Terceira linha: somente as letras E e L recebem negrito.
-  const parts = [
-    { text: "E", bold: true },
-    { text: ": " + String(counts.events) + " | ", bold: false },
-    { text: "L", bold: true },
-    { text: ": " + String(counts.reminders), bold: false },
-  ];
-  const countLength = parts.reduce((total, part) => total + part.text.length, 0);
-  const countFontSize = Math.min(scaleFontSize(16),
-    Math.floor((card.width - 16) / (countLength * 0.62)));
-  const countCharacterWidth = countFontSize * 0.62;
-  let countX = card.x + (card.width - countLength * countCharacterWidth) / 2;
-  const countY = weatherCenterY + iconSize / 2 + scaleVertical(4);
-  ctx.setTextColor(detailColor);
-  for (const part of parts) {
-    ctx.setFont(part.bold ? Font.blackMonospacedSystemFont(countFontSize)
-      : Font.regularMonospacedSystemFont(countFontSize));
-    ctx.drawText(part.text, new Point(countX, countY));
-    countX += part.text.length * countCharacterWidth;
-  }
+  ctx.drawText(maximum, new Point(weatherX + minimumWidth + iconGap * 2 + layout.iconSize, weatherY));
 }
 
 function titleDailyTemperatureForDay(date) {
@@ -5414,20 +5465,20 @@ function titleDailyWeatherForDay(date) {
 function titleForecastForDay(date) {
   const dayStart = startOfDay(date).getTime();
   const dayEnd = addDays(startOfDay(date), 1).getTime();
-  const candidates = (hourlyWeather?.hours ?? []).filter((hour) => {
-    const timestamp = Number(hour?.timestamp);
-    return timestamp >= dayStart && timestamp < dayEnd;
+  const candidates = (hourlyWeather?.hours ?? []).filter(hour => {
+    const timestamp = finiteWeatherNumber(hour?.timestamp);
+    return timestamp !== null && timestamp >= dayStart && timestamp < dayEnd &&
+      weatherSymbolGroup(hour) !== null;
   });
-  if (candidates.length === 0) return null;
-
   const target = dateAtHour(date, 12).getTime();
-  return candidates.reduce((nearest, candidate) => {
-    if (!nearest) return candidate;
-    return Math.abs(Number(candidate.timestamp) - target) <
-      Math.abs(Number(nearest.timestamp) - target)
-      ? candidate
-      : nearest;
-  }, null);
+  if (candidates.length) return candidates.reduce((nearest, candidate) =>
+    Math.abs(candidate.timestamp - target) < Math.abs(nearest.timestamp - target)
+      ? candidate : nearest);
+  // O resumo da API preserva o ícone mesmo se as horas desse dia faltarem.
+  const daily = titleDailyWeatherForDay(date);
+  return weatherSymbolGroup(daily) !== null
+    ? { ...daily, timestamp: target, temperature: daily.maximum }
+    : null;
 }
 
 function drawTitleWeatherIcon(

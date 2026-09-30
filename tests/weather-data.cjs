@@ -272,3 +272,60 @@ assert.equal(sunCalls, 0, 'Símbolo ausente não pode desenhar Sol.');
 assert.equal(overlayCalls, 1, 'Dados sem símbolo mantêm o espaço neutro.');
 
 console.log('OK: cobertura, resumos, null, lacunas, horizonte e ícones sem símbolo.');
+
+// Um resumo diário completo mantém extremos e ícone sem depender das horas.
+const forecastStart=source.indexOf('function titleDailyWeatherForDay(');
+const forecastEnd=source.indexOf('function drawTitleWeatherIcon(',forecastStart);
+vm.runInContext(source.slice(forecastStart,forecastEnd),context);
+context.dateAtHour=(date,hour)=>new Date(date.getFullYear(),date.getMonth(),date.getDate(),hour);
+const sunday=context.titleWeekStart();
+const sundayKey=context.dateKey(sunday);
+const historicalSummary=context.mergeDailyWeatherData(
+  { [sundayKey]: {minimum:20,maximum:32,symbol:'d2',fetchedAt:123} },
+  { [sundayKey]: {minimum:21,maximum:33} }
+);
+assert.equal(historicalSummary[sundayKey].symbol,'d2',
+  'Uma atualização sem condição não apaga o ícone já armazenado.');
+assert.equal(historicalSummary[sundayKey].fetchedAt,123);
+context.hourlyWeather=context.buildHourlyWeather([
+  {timestamp:context.dateAtHour(sunday,12).getTime(),temperature:40,symbol:''}
+],historicalSummary);
+assert.equal(context.hourlyWeather.daily[sundayKey].maximum,33,
+  'Uma previsão horária antiga não altera o extremo do resumo diário da API.');
+assert.equal(context.titleForecastForDay(sunday).symbol,'d2',
+  'O quadro usa a condição diária quando a amostra horária não tem símbolo.');
+context.hourlyWeather.hours.push({timestamp:context.dateAtHour(sunday,13).getTime(),temperature:30,symbol:'d3'});
+assert.equal(context.titleForecastForDay(sunday).symbol,'d3',
+  'O quadro busca a hora válida mais próxima do meio-dia.');
+const historyPayload={hours:[],daily:{}};
+assert.equal(context.weatherCacheCoversPreviousWeekDays(historyPayload),false,
+  'Um cache com a previsão de hoje precisa recuperar a história ausente.');
+for(let day=context.titleWeekStart();day<context.startOfDay(context.windowStart);day=context.addDays(day,1)) {
+  historyPayload.daily[context.dateKey(day)]={minimum:20,maximum:30,symbol:'d1'};
+}
+assert.equal(context.weatherCacheCoversPreviousWeekDays(historyPayload),true);
+const firstKey=Object.keys(historyPayload.daily)[0];
+assert(firstKey);
+historyPayload.daily[firstKey].symbol='';
+assert.equal(context.weatherCacheCoversPreviousWeekDays(historyPayload),false,
+  'Temperaturas sem a condição do clima não completam a cobertura histórica.');
+console.log('OK: história diária preserva extremos e ícones, e cache incompleto exige recuperação.');
+
+(async()=>{
+  let requestedURL='';
+  context.Request=class {
+    constructor(url) { requestedURL=url; }
+    async loadJSON() { return {
+      hourly:{},
+      daily:{time:[sundayKey],temperature_2m_min:[20],temperature_2m_max:[32],weather_code:[3]},
+    }; }
+  };
+  const weather=await context.loadOpenMeteoWeather({latitude:-23,longitude:-46});
+  assert(requestedURL.includes(`past_days=${context.windowStart.getDay()}`));
+  assert(requestedURL.includes('daily=temperature_2m_min,temperature_2m_max,weather_code'));
+  assert.equal(weather.daily[sundayKey].symbol,'d3',
+    'A resposta diária da API fornece a condição mesmo sem amostras horárias.');
+  const built=context.buildHourlyWeather([],context.mergeDailyWeatherData(weather.daily));
+  assert.equal(built.daily[sundayKey].symbol,'d3');
+  console.log('OK: Open-Meteo solicita dias anteriores e preserva weather_code até o desenho.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

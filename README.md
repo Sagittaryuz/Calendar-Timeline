@@ -36,16 +36,25 @@ O cabeçalho mostra sete quadros fixos da semana corrente, de domingo a sábado.
 A moldura branca acompanha o dia atual. A altura, o vão entre quadros e a
 posição da timeline são preservados; as larguras dividem a faixa em sete.
 
-Cada quadro usa três linhas centradas:
+Cada quadro usa duas linhas centradas em conjunto pela caixa dos quadros comuns,
+inclusive no dia atual:
 
-- `TER 29/09`: dia e data em fonte maior e negrito, com as cores existentes.
-- Mínima, ícone do clima e máxima: fonte menor, mínima azul e máxima vermelha.
-- `E: 0 | L: 2`: fonte menor, com as letras **E** e **L** em negrito.
+- `DOM 27`: dia da semana e dia do mês em fonte de maior peso, com letras bem
+  próximas e o maior tamanho que cabe no contorno. Domingo recua 5 px para a
+  direita; sábado recua 5 px para a esquerda.
+- Mínima, ícone do clima e máxima: fonte menor, mínima azul e máxima vermelha,
+  centradas na porção inferior do conjunto. Os contadores E/L saem do cabeçalho.
 
-A agenda cobre a semana inteira. A previsão inclui os dias anteriores da
-semana quando disponíveis no Open-Meteo; dados ausentes continuam como `--º`.
-Os eventos de dia inteiro permanecem fora do contador E e os lembretes
-contabilizados continuam sendo os pendentes. Hoje exclui eventos já encerrados.
+Os cantos internos superiores da moldura de hoje têm raio suave de 6 unidades
+verticais, preservando as curvas externas do widget.
+
+A agenda cobre a semana inteira. O Open-Meteo inclui os dias anteriores e seus
+resumos diários de mínima, máxima e condição do clima. Esses resumos são
+preservados no cache e fornecem o ícone se faltarem amostras horárias válidas.
+O cache passa por migração e só é reutilizado sem consulta quando cobre também
+os dias anteriores da semana. Dados ausentes continuam como `--º` e nenhuma
+condição é inventada. Os resumos representam os dados de modelo fornecidos
+pela API, não medições de uma estação meteorológica.
 
 ## Contagem até eventos e lembretes
 
