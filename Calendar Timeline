@@ -423,9 +423,6 @@ const CANVAS = {
   timelineVerticalOffset: 0,
 };
 
-// Deslocamento experimental do desenho completo, sem alterar sua escala.
-const WIDGET_HORIZONTAL_DISPLAY_OFFSET = 1;
-
 CANVAS.timelineTop += CANVAS.timelineVerticalOffset;
 CANVAS.timelineBottom += CANVAS.timelineVerticalOffset;
 CANVAS.footerTop += CANVAS.timelineVerticalOffset;
@@ -3753,18 +3750,9 @@ async function renderWidget(items, loadError) {
   // Última camada: a cápsula prevalece inclusive sobre os charts.
   await drawDayEndCapsules(contentCtx);
 
-  // Compõe o widget inteiro um pixel à direita dentro do mesmo canvas.
-  // O gradiente preenche a coluna que fica exposta na lateral esquerda.
-  const shiftedCtx = new DrawContext();
-  shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
-  shiftedCtx.opaque = true;
-  shiftedCtx.respectScreenScale = false;
-  drawIOSDarkGradient(shiftedCtx);
-  shiftedCtx.drawImageAtPoint(
-    contentCtx.getImage(),
-    new Point(WIDGET_HORIZONTAL_DISPLAY_OFFSET, 0)
-  );
-  return shiftedCtx.getImage();
+  // O cartão final já possui sua própria geometria arredondada.
+
+  return contentCtx.getImage();
 }
 
 function dayEndCapsuleEntries() {
