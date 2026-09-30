@@ -10,7 +10,7 @@ const THEME_MODE = "black"; // "black" | "dark"
 
 const SETTINGS = {
   locale: "pt_BR",
-  maxItems: 5,
+  maxItems: 6,
   defaultWindowHours: 24,
   maximumWindowHours: 96, // Limite absoluto de quatro dias.
   refreshSeconds: 60,
@@ -172,7 +172,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.3";
+const WIDGET_BUILD_VERSION = "2026.09.30.4";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -360,8 +360,10 @@ const WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS = 52;
 const WIDGET_COMMON_CORNER_RADIUS = scaleVertical(
   WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS
 );
-// Subida total: a extremidade do círculo fica 1 px dentro do traço de 4 px.
-const TITLE_CARD_HEIGHT_REDUCTION = 3;
+// Mais 10 px do cabeçalho passam à timeline para acomodar seis linhas.
+const TITLE_CARD_HEIGHT_REDUCTION = 13;
+// Mantém o encaixe inferior aprovado: sobreposição de 1 px no traço de 4 px.
+const TIMELINE_LOWER_CONTENT_LIFT = 3;
 const TITLE_CARD_HEIGHT = scaleVertical(104) - TITLE_CARD_HEIGHT_REDUCTION;
 const TITLE_CARD_STANDARD_CORNER_RADIUS =
   WIDGET_COMMON_CORNER_RADIUS;
@@ -3498,8 +3500,8 @@ function timelineItemVisualFootprint(item) {
   const titleX = contentLeft + 7 + reminderMarkerDiameter +
     (item.kind === "reminder" ? 5 : 0);
   const titleSize = isCompactMode()
-    ? compactTimelineFontSize(21)
-    : scaleFontSize(28);
+    ? compactTimelineFontSize(20)
+    : scaleFontSize(26);
   const title = reminderPriorityPrefix(item) +
     String(item.title ?? "").toLocaleUpperCase("pt-BR");
   // A largura estimada não é uma métrica exata da fonte arredondada do iOS.
@@ -6716,7 +6718,7 @@ function bottomLegendCenterY() {
     WIDGET_CONTOUR.strokeInset -
     CANVAS.timelineTop -
     DAY_CHANGE_CIRCLE_DIAMETER / 2 -
-    TITLE_CARD_HEIGHT_REDUCTION
+    TIMELINE_LOWER_CONTENT_LIFT
   );
 }
 
@@ -6777,15 +6779,15 @@ function timelineBarHeight(item) {
   const compactScale = compactTimelineScale();
   const preferredHeight = item?.isOverflow
     ? isCompactMode()
-      ? scaleVertical(29) * compactScale
-      : scaleVertical(34)
+      ? scaleVertical(27) * compactScale
+      : scaleVertical(31)
     : isCompactMode()
-      ? scaleVertical(30) * compactScale
+      ? scaleVertical(28) * compactScale
       : isExtendedDetailedMode()
-        ? scaleVertical(35)
-        : scaleVertical(38);
+        ? scaleVertical(32)
+        : scaleVertical(34);
 
-  // Ao comprimir as cinco linhas, preserva uma separação mínima entre charts.
+  // As seis linhas preservam uma separação mínima entre charts.
   return Math.min(
     preferredHeight,
     Math.max(scaleVertical(22), timelineRowHeight() - scaleVertical(4))
@@ -12121,7 +12123,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ctx.setTextAlignedCenter();
     ctx.setFont(
       Font.blackRoundedSystemFont(
-        isCompactMode() ? compactTimelineFontSize(21) : scaleFontSize(25)
+        isCompactMode() ? compactTimelineFontSize(20) : scaleFontSize(23)
       )
     );
     ctx.setTextColor(Color.white());
@@ -12190,14 +12192,14 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   const statusText = timelineItemStatus(item);
   const metadataText = eventMetadataText(item);
   const titleFontSize = isCompactMode()
-    ? compactTimelineFontSize(21)
-    : scaleFontSize(28);
+    ? compactTimelineFontSize(20)
+    : scaleFontSize(26);
   const statusFontSize = isCompactMode()
-    ? compactTimelineFontSize(13)
-    : scaleFontSize(16);
+    ? compactTimelineFontSize(12)
+    : scaleFontSize(15);
   const metadataFontSize = isCompactMode()
     ? compactTimelineFontSize(12)
-    : scaleFontSize(16);
+    : scaleFontSize(15);
   const visibleBarWidth = Math.max(0, visibleRight - visibleLeft);
   const statusMinimumWidth =
     item.conflictCount > 0 &&
@@ -12418,8 +12420,8 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   const centerY = y + rowHeight / 2;
 
   const fontSize = isCompactMode()
-    ? compactTimelineFontSize(21)
-    : scaleFontSize(28);
+    ? compactTimelineFontSize(20)
+    : scaleFontSize(26);
   // Aniversários não possuem chart nem faixa opaca. O texto ocupa a linha
   // reservada sobre o fundo original da timeline.
   const textY = centerY - fontSize / 2 - scaleVertical(4);

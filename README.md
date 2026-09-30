@@ -19,9 +19,10 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.3` faz o conteúdo abaixo dos quadros subir 3 px
-no total, incluindo o círculo da mudança de dia, cuja extremidade sobrepõe
-1 px do traço inferior de 4 px. A moldura permanece fixa. Se a versão não
+blur. A revisão `v2026.09.30.4` acomoda seis linhas na timeline: os quadros
+de datas ficam mais 10 px baixos, e os charts usam barras e fontes menores.
+O círculo de mudança de dia mantém a sobreposição aprovada de 1 px na
+moldura inferior fixa. Se a versão não
 aparecer, confira se o carregador está buscando o arquivo de `main`, em vez de
 executar uma cópia antiga em cache.
 
@@ -40,8 +41,9 @@ horas; somente a cadência muda.
 ## Quadros da semana
 
 O cabeçalho mostra sete quadros fixos da semana corrente, de domingo a sábado.
-A moldura branca acompanha o dia atual. A altura, o vão entre quadros e a
-posição da timeline são preservados; as larguras dividem a faixa em sete.
+A moldura branca acompanha o dia atual. As larguras dividem a faixa em sete;
+o cabeçalho mais baixo libera 10 px adicionais para as seis linhas da timeline.
+As barras e os textos da agenda usam tamanhos menores para preservar os vãos.
 
 Cada quadro usa duas linhas centradas em conjunto pela caixa dos quadros comuns,
 inclusive no dia atual:

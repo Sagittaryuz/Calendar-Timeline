@@ -108,11 +108,11 @@ function reminder(title, start, end, extra = {}) {
   };
 }
 
-function select(items) {
+function select(items, limit = 5) {
   return makeContext().chooseItems(
     items,
     new Date(2026, 8, 18, 8),
-    5
+    limit
   );
 }
 
@@ -131,6 +131,11 @@ const fiveEvents = Array.from(
   { length: 5 },
   (_, index) => timedEvent(index + 1, 8)
 );
+const sixAgenda = select([...fiveEvents, timedEvent(6, 8)], 6);
+assert.equal(sixAgenda.filter(item => !item.isOverflow).length, 6,
+  'Seis eventos simultâneos devem ser exibidos sem virar excedente.');
+assert.equal(new Set(sixAgenda.map(item => item.gridRow)).size, 6,
+  'Cada evento simultâneo deve ocupar uma das seis linhas.');
 const fullAgenda = select([...fiveEvents, birthday()]);
 assert.equal(
   fullAgenda.filter(item => item.kind === 'event' && !item.isBirthdayGroup).length,
@@ -373,12 +378,12 @@ const lateWindow = makeContext();
 lateWindow.windowStart = new Date(2026, 8, 18, 10, 59);
 lateWindow.windowEnd = new Date(2026, 8, 19, 10, 59);
 const lateLayout = lateWindow.chooseItems(
-  [shortPortuguese, dentist], lateWindow.windowStart, 5
+  [{...shortPortuguese, title: 'Português II'}, dentist], lateWindow.windowStart, 5
 );
 assert.notEqual(
   lateLayout[0].gridRow,
   lateLayout[1].gridRow,
-  'Pouco antes das 11h, Dentista deve descer se o texto Português impedir.'
+  'Pouco antes das 11h, Dentista deve descer se o texto Português II impedir.'
 );
 
 const timedReminders = select([
