@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.5";
+const WIDGET_BUILD_VERSION = "2026.09.30.6";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -307,11 +307,11 @@ function titleCardTypography() {
   // Usa a caixa dos cartões comuns, mesmo quando hoje ocupa uma extremidade.
   const card = titleDayCardRect(0);
   const top = WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
-  const centerY = top + TITLE_CARD_HEIGHT / 2;
+  const centerY = top + TITLE_CARD_HEIGHT / 2 + 10;
   const iconSize = scaleVertical(30);
   const lineGap = scaleVertical(3);
-  const titleWidthUnits = 1.48 + 0.12 + 1.04;
-  let titleFontSize = Math.floor((card.width - 16) / titleWidthUnits);
+  const titleWidthUnits = 1.54 + 0.12 + 1.07;
+  let titleFontSize = Math.min(35, Math.floor((card.width - 16) / titleWidthUnits));
   for (; titleFontSize > 1; titleFontSize--) {
     const titleHeight = titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
     const groupHeight = titleHeight + lineGap + iconSize;
@@ -321,7 +321,7 @@ function titleCardTypography() {
     const contour = Math.max(widgetContourInsetAtY(titleTop),
       widgetContourInsetAtY(titleTop + titleHeight));
     if (titleTop >= top + 4 && left >= contour + 3 &&
-        groupHeight <= TITLE_CARD_HEIGHT - 8) break;
+        titleTop + groupHeight <= top + TITLE_CARD_HEIGHT - 3) break;
   }
   const titleHeight = titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
   const titleTop = centerY - (titleHeight + lineGap + iconSize) / 2;
@@ -338,7 +338,7 @@ function drawTightTitleText(ctx, text, x, y, size) {
   // Avanço menor que a célula: letras próximas com a fonte de maior peso.
   for (const character of text) {
     ctx.drawText(character, new Point(x, y));
-    x += size * 0.44;
+    x += size * 0.47;
   }
 }
 
@@ -5548,7 +5548,7 @@ function drawTitleDayCard(
   drawTightTitleText(ctx, weekdayLabel, titleStartX, layout.titleY, layout.titleFontSize);
   ctx.setTextColor(dateColor);
   // Letras próximas permitem aumentar a fonte sem alterar a largura do quadro.
-  drawTightTitleText(ctx, dayLabel, titleStartX + 1.60 * layout.titleFontSize,
+  drawTightTitleText(ctx, dayLabel, titleStartX + 1.66 * layout.titleFontSize,
     layout.titleY, layout.titleFontSize);
 
   const daily = titleDailyTemperatureForDay(date);

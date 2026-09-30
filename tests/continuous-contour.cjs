@@ -203,9 +203,9 @@ for(let day=0;day<7;day++) {
     assert(Math.abs(weatherCenter-(card.x+card.width/2))<1e-6);
     const visualTop=entries[0].p.y+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
     const visualBottom=icons[i].y+icons[i].size/2;
-    const expectedCenter=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2+TITLE_CARD_HEIGHT/2');
+    const expectedCenter=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2+TITLE_CARD_HEIGHT/2+10');
     assert(Math.abs((visualTop+visualBottom)/2-expectedCenter)<1e-6,
-      'As duas linhas são centradas juntas pela caixa sem moldura.');
+      'As duas linhas ficam juntas 10 px abaixo do centro da caixa sem moldura.');
   }
   assert.equal(new Set(texts.filter(t=>t.t==='D'||t.t==='S'||t.t==='T'||t.t==='Q').map(t=>t.p.y)).size,1,
     'Hoje mantém o alinhamento vertical dos quadros comuns.');
