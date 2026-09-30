@@ -90,7 +90,10 @@ const layout=c.titleCardTypography();
 const titleY=layout.titleY;
 assert(font>23, 'O título abreviado deve usar uma fonte maior.');
 const lowerCircleEdge=run('CANVAS.timelineTop + dayChangeLegendCenterY() + DAY_CHANGE_CIRCLE_DIAMETER/2');
-assert(Math.abs(lowerCircleEdge-506)<1e-9);
+assert(Math.abs(lowerCircleEdge-505)<1e-9);
+const lowerFrameInnerEdge=run('CANVAS.height-WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
+assert(Math.abs(lowerCircleEdge-lowerFrameInnerEdge-1)<1e-9,
+  'A extremidade do círculo sobrepõe 1 px do traço inferior de 4 px.');
 const paths=[];
 const ctx={setStrokeColor(){},setLineWidth(){},addPath(p){paths.push(p);},strokePath(){},setFillColor(){},fillPath(){}};
 for(const boundary of [1,50,102,500,1092,2000]) {

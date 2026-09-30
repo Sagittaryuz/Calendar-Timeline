@@ -94,11 +94,11 @@ closeTo(
 );
 closeTo(run('TIMELINE_GRID_TOP_EXTENSION'), 6, 'Extensão superior preservada.');
 closeTo(run('TIMELINE_GRID_BOTTOM_EXTENSION'), 4, 'Extensão inferior preservada.');
-closeTo(run('timelineHeight()'), 398.1845231404958, 'Painel ganha 2 px ao subir com os quadros superiores menores.');
+closeTo(run('timelineHeight()'), 399.1845231404958, 'Painel ganha 3 px ao subir com os quadros superiores menores.');
 closeTo(
   run('CANVAS.timelineTop+dayChangeLegendCenterY()+DAY_CHANGE_CIRCLE_DIAMETER/2'),
-  506,
-  'Alinhamento do círculo inferior preservado.'
+  505,
+  'Extremidade do círculo sobrepõe 1 px da moldura inferior fixa.'
 );
 
 console.log(

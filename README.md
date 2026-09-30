@@ -19,8 +19,9 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.2` faz o conteúdo abaixo dos quadros subir 2 px,
-incluindo o círculo da mudança de dia, com a moldura inferior fixa. Se a versão não
+blur. A revisão `v2026.09.30.3` faz o conteúdo abaixo dos quadros subir 3 px
+no total, incluindo o círculo da mudança de dia, cuja extremidade sobrepõe
+1 px do traço inferior de 4 px. A moldura permanece fixa. Se a versão não
 aparecer, confira se o carregador está buscando o arquivo de `main`, em vez de
 executar uma cópia antiga em cache.
 
