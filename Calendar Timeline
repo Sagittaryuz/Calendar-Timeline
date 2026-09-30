@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.11";
+const WIDGET_BUILD_VERSION = "2026.09.30.12";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -4114,9 +4114,9 @@ function softenTimelineImage(image, width, height) {
 }
 
 function currentDayBoundaryBadgeCenterY() {
-  // Somente este círculo encosta no eixo do traço inferior. A metade
-  // superior da espessura branca fica sobreposta ao disco, sem folga.
-  return currentDayFrameMetrics().bottomLineCenterY - DAY_CHANGE_CIRCLE_DIAMETER / 2;
+  // Ajuste visual solicitado: somente este círculo desce mais 1 px
+  // em relação ao eixo do traço inferior, sem mover a régua de horas.
+  return currentDayFrameMetrics().bottomLineCenterY - DAY_CHANGE_CIRCLE_DIAMETER / 2 + 1;
 }
 
 function drawCurrentDayBoundaryBadgeOnForeground(ctx) {

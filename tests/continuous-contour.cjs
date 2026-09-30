@@ -300,11 +300,11 @@ let foregroundCircle;
 c.drawCurrentDayBoundaryBadgeOnForeground({...textCtx,
   fillEllipse(rect){foregroundCircle=rect;},setTextAlignedCenter(){},drawTextInRect(){}});
 const frame=c.currentDayFrameMetrics();
-assert(Math.abs(foregroundCircle.y+foregroundCircle.height-frame.bottomLineCenterY)<1e-9);
+assert(Math.abs(foregroundCircle.y+foregroundCircle.height-frame.bottomLineCenterY-1)<1e-9);
 assert.equal(foregroundCircle.height,run('DAY_CHANGE_CIRCLE_DIAMETER'));
 assert.equal(foregroundCircle.x+foregroundCircle.width/2,run('CANVAS.plotLeft')+400);
 assert.equal(run('CANVAS.timelineTop+dayChangeLegendCenterY()+DAY_CHANGE_CIRCLE_DIAMETER/2'),505,
   'A posição das outras legendas continua igual.');
-assert(Math.abs(foregroundCircle.y+foregroundCircle.height-(frame.bottomLineCenterY-frame.lineWidth/2)-2)<1e-9,
-  'O disco sobrepõe metade da espessura da moldura branca.');
-console.log('OK: somente o círculo da próxima virada encosta no eixo da moldura, com 2 px de sobreposição.');
+assert(Math.abs(foregroundCircle.y+foregroundCircle.height-(frame.bottomLineCenterY-frame.lineWidth/2)-3)<1e-9,
+  'O disco desce mais 1 px, sobrepondo 3 px da moldura branca.');
+console.log('OK: somente o círculo da próxima virada desce mais 1 px, com 3 px de sobreposição.');

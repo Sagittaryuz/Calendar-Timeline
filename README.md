@@ -19,8 +19,8 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.11` ancora somente o círculo inferior da próxima
-virada no eixo da moldura branca, sobrepondo os traços sem deslocar a régua
+blur. A revisão `v2026.09.30.12` desce mais 1 px somente o círculo inferior da
+próxima virada em relação à revisão anterior, sem deslocar a régua
 de horas ou a faixa térmica. Permite títulos e aniversariantes além do fim
 do chart ou do dia, limitando o texto somente pelo contorno externo.
 Os textos dos quadros são centralizados pela área visível,
