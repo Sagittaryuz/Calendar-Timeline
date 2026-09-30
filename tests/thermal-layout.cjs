@@ -93,7 +93,7 @@ closeTo(
 );
 closeTo(run('TIMELINE_GRID_TOP_EXTENSION'), 6, 'Extensão superior preservada.');
 closeTo(run('TIMELINE_GRID_BOTTOM_EXTENSION'), 4, 'Extensão inferior preservada.');
-closeTo(run('timelineHeight()'), 396.1845231404958, 'Altura total do painel preservada.');
+closeTo(run('timelineHeight()'), 398.1845231404958, 'Painel ganha 2 px ao subir com os quadros superiores menores.');
 closeTo(
   run('CANVAS.timelineTop+bottomLegendCenterY()+DAY_CHANGE_CIRCLE_DIAMETER/2'),
   506,
