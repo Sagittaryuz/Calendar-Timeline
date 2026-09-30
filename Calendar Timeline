@@ -187,6 +187,7 @@ const WIDGET_CONTOUR = Object.freeze({
 });
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
 const DAY_BOUNDARY_LINE_WIDTH = 4;
+const WIDGET_HORIZONTAL_TEST_OFFSET = 1;
 // Expansão vertical do grid completo, em pixels do canvas lógico.
 // O topo acompanha a borda inferior da Lua; a base alcança o topo do círculo.
 const TIMELINE_GRID_TOP_EXTENSION = 6;
@@ -3750,9 +3751,41 @@ async function renderWidget(items, loadError) {
   // Última camada: a cápsula prevalece inclusive sobre os charts.
   await drawDayEndCapsules(contentCtx);
 
-  // O cartão final já possui sua própria geometria arredondada.
+  drawFullWidgetWhiteFrame(contentCtx);
+  return shiftWidgetImageRight(contentCtx.getImage());
+}
 
-  return contentCtx.getImage();
+function drawFullWidgetWhiteFrame(ctx) {
+  const contour = widgetLeftContourPoints(WIDGET_CONTOUR.strokeInset);
+  const path = new Path();
+  path.move(contour[0]);
+  for (const point of contour.slice(1)) path.addLine(point);
+  const lowerLeft = contour[contour.length - 1];
+  path.addLine(new Point(CANVAS.width - lowerLeft.x, lowerLeft.y));
+  for (const point of contour.slice().reverse()) {
+    path.addLine(new Point(CANVAS.width - point.x, point.y));
+  }
+  path.addLine(contour[0]);
+  ctx.setStrokeColor(new Color("#FFFFFF", 0.96));
+  ctx.setLineWidth(dayBoundaryLineWidth());
+  ctx.addPath(path);
+  ctx.strokePath();
+}
+
+function shiftWidgetImageRight(image) {
+  const shiftedCtx = new DrawContext();
+  shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
+  shiftedCtx.opaque = true;
+  shiftedCtx.respectScreenScale = false;
+  for (let y = 0; y < CANVAS.height; y++) {
+    shiftedCtx.setFillColor(widgetGradientColorAtY(y));
+    shiftedCtx.fillRect(new Rect(0, y, WIDGET_HORIZONTAL_TEST_OFFSET, 1));
+  }
+  shiftedCtx.drawImageInRect(
+    image,
+    new Rect(WIDGET_HORIZONTAL_TEST_OFFSET, 0, CANVAS.width, CANVAS.height)
+  );
+  return shiftedCtx.getImage();
 }
 
 function dayEndCapsuleEntries() {

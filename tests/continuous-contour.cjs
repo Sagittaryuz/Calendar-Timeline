@@ -244,3 +244,34 @@ for(let day=1;day<7;day++) {
   }
 }
 console.log('OK: somente os cantos inferiores da moldura são espelhados, inclusive perto da virada.');
+
+load('drawFullWidgetWhiteFrame');
+paths.length=0;
+c.drawFullWidgetWhiteFrame(ctx);
+const outerFrame=paths.at(-1).points;
+const contourCount=c.widgetLeftContourPoints(run('WIDGET_CONTOUR.strokeInset')).length;
+assert.equal(outerFrame.length,contourCount*2+2);
+for(let i=0;i<contourCount;i++) {
+  const mirror=outerFrame.length-2-i;
+  assert(Math.abs(outerFrame[i].x+outerFrame[mirror].x-run('CANVAS.width'))<1e-6,
+    'A moldura externa é simétrica em torno do canvas.');
+  assert(Math.abs(outerFrame[i].y-outerFrame[mirror].y)<1e-6);
+}
+let shiftLayer;
+c.DrawContext=class {
+  constructor() { shiftLayer=this; this.rects=[]; this.images=[]; }
+  setFillColor() {}
+  fillRect(rect) { this.rects.push(rect); }
+  drawImageInRect(image,rect) { this.images.push({image,rect}); }
+  getImage() { return 'shifted-widget'; }
+};
+c.Size=class { constructor(width,height) { Object.assign(this,{width,height}); } };
+c.widgetGradientColorAtY=()=>({});
+load('shiftWidgetImageRight');
+assert.equal(c.shiftWidgetImageRight('rendered-widget'),'shifted-widget');
+assert.equal(shiftLayer.rects.length,run('CANVAS.height'));
+assert(shiftLayer.rects.every(rect=>rect.x===0&&rect.width===1));
+assert.equal(shiftLayer.images[0].image,'rendered-widget');
+assert.equal(shiftLayer.images[0].rect.x,1);
+assert.equal(shiftLayer.images[0].rect.width,run('CANVAS.width'));
+console.log('OK: moldura branca externa completa e composição do teste deslocada 1 px à direita.');
