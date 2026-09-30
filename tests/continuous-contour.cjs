@@ -122,6 +122,12 @@ c.titleForecastForDay=()=>({});
 c.Font={blackMonospacedSystemFont:size=>size,regularMonospacedSystemFont:size=>size};
 const a=source.indexOf('function drawTitleDayCard(');
 vm.runInContext(source.slice(a,source.indexOf('function titleDailyTemperatureForDay(',a)),c);
+for (const name of ['currentDayFrameMetrics','currentDayLeftBridgeMetrics',
+  'currentDayBridgeMetrics','appendCurrentDayBridgeCurve','buildCurrentDayUpperPath',
+  'offsetTitleBridgePoints','titleBridgeXAtY','titleCardContentBounds']) load(name);
+c.timeToX=()=>400;
+c.hourGridLineColor=()=>({});
+c.dayBoundaryMoonBorderTopY=()=>run('CANVAS.timelineTop+scaleVertical(8)');
 let fontSize=0;
 const texts=[],icons=[];
 c.drawTitleWeatherIcon=(_,forecast,x,y,size)=>icons.push({x,y,size});
@@ -197,10 +203,17 @@ for(let day=0;day<7;day++) {
     assert(entries.every(t=>t.p.y+t.size*1.15<=card.y+card.height));
     const inset=i===0?5:i===6?-5:0;
     const titleCenter=(entries[0].p.x+entries[4].p.x+font*0.60)/2;
-    assert(Math.abs(titleCenter-(card.x+card.width/2+inset))<1e-6,
+    const bounds=c.titleCardContentBounds(c.addDays(c.titleWeekStart(),i),card,
+      layout.titleY+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO'),
+      font*(1.15-run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO')));
+    assert(Math.abs(titleCenter-(bounds.center+inset))<1e-6,
       'Somente domingo e sábado recebem 5 px de recuo.');
     const weatherCenter=(entries[5].p.x+entries[6].p.x+entries[6].t.length*entries[6].size*0.62)/2;
-    assert(Math.abs(weatherCenter-(card.x+card.width/2))<1e-6);
+    const weatherBounds=c.titleCardContentBounds(c.addDays(c.titleWeekStart(),i),card,
+      layout.weatherCenterY-layout.iconSize/2,layout.iconSize);
+    assert(Math.abs(weatherCenter-weatherBounds.center)<1e-6);
+    assert(entries[5].p.x>=weatherBounds.left &&
+      entries[6].p.x+entries[6].t.length*entries[6].size*0.62<=weatherBounds.right);
     const visualTop=entries[0].p.y+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
     const visualBottom=icons[i].y+icons[i].size/2;
     const expectedCenter=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2+TITLE_CARD_HEIGHT/2+10');

@@ -19,8 +19,10 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.8` mantém a geometria e o texto dos charts que
-se estendem para o dia seguinte, sem reaplicar a grade na virada. A moldura branca fica somente no dia de hoje. O conjunto
+blur. A revisão `v2026.09.30.9` centraliza os textos dos quadros pela área visível,
+considerando o contorno externo e as curvas dos quadros adjacentes a hoje.
+Textos e marcadores da timeline respeitam margens curvas, sem mover os charts
+ou seus horários; temperaturas nas extremidades usam recorte pelo contorno. A moldura branca fica somente no dia de hoje. O conjunto
 das duas linhas mantém o deslocamento de 10 px para baixo e os títulos mantêm
 recuos de 5 px no domingo e no sábado. A curva
 esquerda mantém direção e raio; os quadros adjacentes acompanham os traços
@@ -53,8 +55,11 @@ Os dias com cinco linhas recuperam as barras e fontes maiores; nos dias com
 seis, as barras e os textos menores preservam os vãos. A regra vale de forma
 independente para hoje, amanhã e os demais dias da janela.
 
-Cada quadro usa duas linhas centradas em conjunto pela caixa dos quadros comuns,
-inclusive no dia atual:
+As duas linhas preservam o deslocamento vertical de 10 px. O centro horizontal
+de cada linha considera a área disponível em toda sua altura, incluindo as
+curvas externas e as curvas dos cartões vizinhos ao dia atual. Somente a
+primeira linha recebe recuos de +5 px no domingo e -5 px no sábado. A fonte
+da segunda linha se adapta quando a curva do quadro reduz a largura útil:
 
 - `DOM 27`: dia da semana e dia do mês em fonte de maior peso, com letras bem
   próximas e o maior tamanho que cabe no contorno. Domingo recua 5 px para a

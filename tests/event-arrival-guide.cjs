@@ -35,6 +35,7 @@ const context = {
   EVENT_STARTING_SOON_WINDOW_MS: 30 * 60 * 1000,
   ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
   timelineWidth: () => 1024,
+  timelineVisibleContentBounds: () => ({left:0, right:1024}),
   scaleFontSize: value => value,
   scaleVertical: value => value,
   estimatedTextWidth: (text, fontSize) => text.length * fontSize * 0.62,

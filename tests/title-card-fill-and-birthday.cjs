@@ -48,6 +48,7 @@ const context = {
   estimatedTextWidth: (value, size) => String(value).length * size * 0.62,
   birthdayLabelWidth: (value, size) => String(value).length * size * 0.62,
   timelineWidth: () => 100,
+  timelineVisibleContentBounds: () => ({left:0, right:100}),
   windowStart: new Date(2026, 8, 18),
   windowEnd: new Date(2026, 8, 19),
   timeToX: date =>
@@ -103,7 +104,7 @@ const birthdayContext = {
   setTextAlignedLeft() {},
   setFont() {},
   setTextColor() {},
-  drawText: (text, point) => drawnTexts.push({ text, point }),
+  drawTextInRect: (text, rect) => drawnTexts.push({ text, point:rect }),
 };
 
 context.drawBirthdayGroupLabel(

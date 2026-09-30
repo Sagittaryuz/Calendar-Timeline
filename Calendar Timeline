@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.8";
+const WIDGET_BUILD_VERSION = "2026.09.30.9";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -252,6 +252,23 @@ function widgetContourInsetAtY(y, inset = 0) {
   const n = WIDGET_CONTOUR.exponent;
   const t = Math.max(0, Math.min(1, 1 - distance / ry));
   return inset + rx * (1 - Math.pow(Math.max(0, 1 - t ** n), 1 / n));
+}
+
+// Limites comuns em coordenadas do canvas, medidos em toda a altura do texto.
+function widgetVisibleContentBounds(y, height, clearance = 2) {
+  let inset = 0;
+  const bottom = y + Math.max(0, height);
+  for (let sample = y; sample < bottom; sample += 1) {
+    inset = Math.max(inset, widgetContourInsetAtY(sample, WIDGET_CONTOUR.strokeInset));
+  }
+  inset = Math.max(inset, widgetContourInsetAtY(bottom, WIDGET_CONTOUR.strokeInset));
+  return {left: inset + clearance, right: CANVAS.width - inset - clearance};
+}
+
+function timelineVisibleContentBounds(y, height, clearance = 2) {
+  const bounds = widgetVisibleContentBounds(CANVAS.timelineTop + y, height, clearance);
+  return {left: Math.max(0, bounds.left - CANVAS.plotLeft),
+    right: Math.min(timelineWidth(), bounds.right - CANVAS.plotLeft)};
 }
 
 // Duas curvas locais de superelipse, com retas entre elas. Não deformar
@@ -5070,6 +5087,31 @@ function titleBridgeXAtY(points, y) {
   return points[points.length - 1].x;
 }
 
+function titleCardContentBounds(date, card, y, height) {
+  const outer = widgetVisibleContentBounds(y, height);
+  let left = Math.max(card.x + 2, outer.left);
+  let right = Math.min(card.x + card.width - 2, outer.right);
+  const index = date.getDay(), todayIndex = titleTodayCardIndex();
+  if (Math.abs(index - todayIndex) === 1) {
+    const m = currentDayFrameMetrics();
+    const onLeft = index < todayIndex;
+    const bridge = onLeft
+      ? currentDayLeftBridgeMetrics(m.todayCard, m.bridgeY, m.framePathRadius, m.lineWidth / 2)
+      : buildCurrentDayUpperPath(null, m.todayCard, m.bridgeY, m.lineWidth,
+          m.lineColor, "right", m.boundaryX, m.framePathRadius,
+          new Path(), m.lineWidth / 2, m.frameRadius).bridge;
+    const side = onLeft ? "left" : "right";
+    const distance = m.lineWidth / 2 + titleCardGap() + 2;
+    const points = offsetTitleBridgePoints(bridge, m.bridgeY, m.todayCard.y, distance, side);
+    for (let sample = y; sample <= y + height; sample += 0.5) {
+      const x = titleBridgeXAtY(points, sample);
+      if (side === "left") right = Math.min(right, x - 2);
+      else left = Math.max(left, x + 2);
+    }
+  }
+  return {left, right, width: Math.max(0, right - left), center: (left + right) / 2};
+}
+
 function drawAdjacentTitleCardCurve(ctx, date, card, color, borderColor) {
   const index = date.getDay(), todayIndex = titleTodayCardIndex();
   if (Math.abs(index - todayIndex) !== 1) return;
@@ -5513,7 +5555,10 @@ function drawTitleDayCard(
   const dayLabel = String(date.getDate()).padStart(2, "0");
   const layout = titleCardTypography();
   const titleInset = date.getDay() === 0 ? 5 : date.getDay() === 6 ? -5 : 0;
-  const titleStartX = card.x + (card.width - layout.titleWidth) / 2 + titleInset;
+  const titleBounds = titleCardContentBounds(date, card,
+    layout.titleY + layout.titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO,
+    layout.titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO));
+  const titleStartX = titleBounds.center - layout.titleWidth / 2 + titleInset;
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
   ctx.setTextColor(weekdayColor);
@@ -5529,13 +5574,15 @@ function drawTitleDayCard(
   const minimum = minimumValue !== null ? String(Math.round(minimumValue)) + "º" : "--º";
   const maximum = maximumValue !== null ? String(Math.round(maximumValue)) + "º" : "--º";
   const iconGap = scaleVertical(3);
-  const detailFontSize = Math.min(scaleFontSize(24),
-    Math.floor((card.width - 16 - layout.iconSize - iconGap * 2) /
-      ((minimum.length + maximum.length) * 0.62)));
+  const weatherBounds = titleCardContentBounds(date, card,
+    layout.weatherCenterY - layout.iconSize / 2, layout.iconSize);
+  const detailFontSize = Math.max(1, Math.min(scaleFontSize(24),
+    Math.floor((weatherBounds.width - 8 - layout.iconSize - iconGap * 2) /
+      ((minimum.length + maximum.length) * 0.62))));
   const minimumWidth = minimum.length * detailFontSize * 0.62;
   const maximumWidth = maximum.length * detailFontSize * 0.62;
   const weatherWidth = minimumWidth + iconGap * 2 + layout.iconSize + maximumWidth;
-  const weatherX = card.x + (card.width - weatherWidth) / 2;
+  const weatherX = weatherBounds.center - weatherWidth / 2;
   const detailVisibleHeight = detailFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
   const weatherY = layout.weatherCenterY - detailVisibleHeight / 2 -
     detailFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO;
@@ -5883,41 +5930,41 @@ function drawTemperatureFooter(ctx, weather) {
       : isExtendedDetailedMode()
         ? 24
         : 27;
-    footerCtx.setFont(
-      isDayBoundaryTemperature
+    const temperatureFont = isDayBoundaryTemperature
         ? Font.regularRoundedSystemFont(weekdayBadgeFontSize)
         : isSecondaryNightHour
           ? Font.regularMonospacedSystemFont(labelFontSize)
           : isDaylightHour || isNoon || isSolarBoundary
             ? Font.blackMonospacedSystemFont(labelFontSize)
-            : Font.regularMonospacedSystemFont(labelFontSize)
-    );
+            : Font.regularMonospacedSystemFont(labelFontSize);
+    footerCtx.setFont(temperatureFont);
     const temperatureTextRect = centeredLegendTextRect(
       centerX,
       temperatureLegendCenterY
     );
+    const contourLabelRect = new Rect(temperatureTextRect.x,
+      footerOriginY + temperatureTextRect.y - CANVAS.timelineTop,
+      temperatureTextRect.width, temperatureTextRect.height);
+    const drawTemperatureText = (rect, color) => {
+      drawHourLegendLabelClipped(footerCtx, temperatureLabel,
+        new Rect(rect.x, contourLabelRect.y + rect.y - temperatureTextRect.y,
+          rect.width, rect.height), temperatureFont, color,
+        footerOriginY - CANVAS.timelineTop);
+    };
     footerCtx.setTextColor(new Color("#000000", 0.72 * opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
       [-1, 0],            [1, 0],
       [-1, 1],  [0, 1],  [1, 1],
     ]) {
-      footerCtx.drawTextInRect(
-        temperatureLabel,
-        new Rect(
-          temperatureTextRect.x + offsetX,
-          temperatureTextRect.y + offsetY,
-          temperatureTextRect.width,
-          temperatureTextRect.height
-        )
-      );
+      drawTemperatureText(new Rect(
+        temperatureTextRect.x + offsetX, temperatureTextRect.y + offsetY,
+        temperatureTextRect.width, temperatureTextRect.height),
+        new Color("#000000", 0.72 * opacity));
     }
 
     footerCtx.setTextColor(new Color(labelColor, opacity));
-    footerCtx.drawTextInRect(
-      temperatureLabel,
-      temperatureTextRect
-    );
+    drawTemperatureText(temperatureTextRect, new Color(labelColor, opacity));
   }
 
   ctx.drawImageInRect(
@@ -11479,13 +11526,14 @@ function drawHourLegendLabelClipped(
   label,
   rect,
   font,
-  textColor
+  textColor,
+  outputOffsetY = 0
 ) {
   if (hourLegendRectIsFullyVisible(rect)) {
     ctx.setTextAlignedCenter();
     ctx.setFont(font);
     ctx.setTextColor(textColor);
-    ctx.drawTextInRect(label, rect);
+    ctx.drawTextInRect(label, new Rect(rect.x, rect.y - outputOffsetY, rect.width, rect.height));
     return;
   }
 
@@ -11548,7 +11596,7 @@ function drawHourLegendLabelClipped(
     );
     ctx.drawImageAtPoint(
       image,
-      new Point(band.left, band.y)
+      new Point(band.left, band.y - outputOffsetY)
     );
   }
 }
@@ -11933,6 +11981,8 @@ function drawEventArrivalGuides(ctx, items, day) {
     // Todos os números ficam no centro da faixa. Somente os tracejados
     // usam os níveis 1/(N+1), 2/(N+1), ... em ordem cronológica.
     const labelCenterY = rowTop + rowHeight / 2;
+    const bounds = timelineVisibleContentBounds(rowTop, rowHeight, 4);
+    baseLayout.labelX = Math.max(baseLayout.labelX, bounds.left + EVENT_ARRIVAL_GUIDE_LEFT_MARGIN);
     const separatorWidth = scaleVertical(EVENT_ARRIVAL_GUIDE_SEPARATOR_WIDTH);
     const margin = EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
     const gap = EVENT_ARRIVAL_GUIDE_LABEL_GAP;
@@ -11944,7 +11994,7 @@ function drawEventArrivalGuides(ctx, items, day) {
         !isBirthdayItem(item))
       .flatMap((item) => timelineItemBarSegmentsForDisplay(item))
       .filter((segment) => segment.x + segment.width > baseLayout.labelX);
-    const chartLeft = Math.min(timelineWidth(), ...occupiedSegments.map(
+    const chartLeft = Math.min(bounds.right, ...occupiedSegments.map(
       (segment) => segment.x
     ));
     let nextLabelX = baseLayout.labelX;
@@ -11976,7 +12026,7 @@ function drawEventArrivalGuides(ctx, items, day) {
             visibleLabels[visibleLabels.length - 1].labelWidth + gap
           : baseLayout.labelX;
       const visibleTargetX = Math.max(0, Math.min(
-        timelineWidth(), timelineEventGuideTargetX(guide.event)
+        bounds.right, timelineEventGuideTargetX(guide.event)
       ));
       for (const following of visibleLabels.slice(index + 1)) {
         // 45 px de tracejado e a margem de 15 px antes do próximo número.
@@ -12249,12 +12299,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
   const priorityPrefix = reminderPriorityPrefix(item);
   const title = priorityPrefix + item.title.toLocaleUpperCase("pt-BR");
+  const textBounds = timelineVisibleContentBounds(barY, barHeight, 4);
   const visibleLeft = Math.max(
-    0,
+    textBounds.left,
     Math.min(...barSegments.map((segment) => segment.x))
   );
   const visibleRight = Math.min(
-    timelineWidth(),
+    textBounds.right,
     Math.max(
       ...barSegments.map(
         (segment) => segment.x + segment.width
@@ -12338,31 +12389,28 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     );
   }
 
-  if (visibleTitle) {
+  const titleRect = new Rect(textPoint.x, textPoint.y,
+    Math.max(0, visibleRight - statusWidth - metadataWidth - textPoint.x - 3),
+    titleFontSize * 1.15);
+  if (visibleTitle && titleRect.width > 0) {
     if (emphasizedEventText) {
-      drawOutlinedTimelineText(
-        ctx,
-        visibleTitle,
-        textPoint,
-        titleFontSize,
-        emphasizedTextColor,
-        emphasizedOutlineColor
+      drawOutlinedTimelineTextInRect(
+        ctx, visibleTitle, titleRect, titleFontSize,
+        emphasizedTextColor, emphasizedOutlineColor, true
       );
     } else {
       ctx.setTextAlignedLeft();
       ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
       ctx.setTextColor(new Color("#000000", 0.85));
-      ctx.drawText(
-        visibleTitle,
-        new Point(textPoint.x + 2, textPoint.y + 2)
-      );
+      ctx.drawTextInRect(visibleTitle,
+        new Rect(titleRect.x + 2, titleRect.y + 2, titleRect.width, titleRect.height));
       ctx.setTextColor(Color.white());
-      ctx.drawText(visibleTitle, textPoint);
+      ctx.drawTextInRect(visibleTitle, titleRect);
     }
 
     if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
       ctx.setTextColor(new Color("#FF453A"));
-      ctx.drawText(priorityPrefix.trim(), textPoint);
+      ctx.drawTextInRect(priorityPrefix.trim(), titleRect);
     }
   }
 
@@ -12444,10 +12492,12 @@ function drawOutlinedTimelineTextInRect(
   rect,
   fontSize,
   fillColor,
-  outlineColor
+  outlineColor,
+  alignLeft = false
 ) {
   const offset = Math.max(1, scaleVertical(1));
-  ctx.setTextAlignedCenter();
+  if (alignLeft) ctx.setTextAlignedLeft();
+  else ctx.setTextAlignedCenter();
   ctx.setFont(Font.blackRoundedSystemFont(fontSize));
   ctx.setTextColor(new Color(outlineColor, 1.0));
   for (const [dx, dy] of [
@@ -12485,8 +12535,9 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   const endX = timeToX(
     new Date(Math.min(windowEnd.getTime(), item.end.getTime()))
   );
-  const visibleLeft = Math.max(0, startX);
-  const visibleRight = Math.min(timelineWidth(), endX);
+  const bounds = timelineVisibleContentBounds(y, rowHeight, 4);
+  const visibleLeft = Math.max(bounds.left, startX);
+  const visibleRight = Math.min(bounds.right, endX);
   if (visibleRight <= visibleLeft) return;
 
   const centerY = y + rowHeight / 2;
@@ -12516,20 +12567,20 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   for (const label of labels) {
     // O contorno evita que a palavra desapareça sobre a faixa escura,
     // mantendo a mesma leitura forte dos títulos dos charts normais.
+    const labelWidth = Math.min(birthdayLabelWidth(label, fontSize), visibleRight - cursorX - 2);
+    if (labelWidth <= 0) break;
     ctx.setTextColor(new Color("#000000", 1.0));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
       [-1, 0],             [1, 0],
       [-1, 1],  [0, 1],  [1, 1],
     ]) {
-      ctx.drawText(
-        label,
-        new Point(cursorX + offsetX, textY + offsetY)
-      );
+      ctx.drawTextInRect(label,
+        new Rect(cursorX + offsetX, textY + offsetY, labelWidth, fontSize * 1.2));
     }
 
     ctx.setTextColor(new Color(SETTINGS.birthdayTextColor, 1.0));
-    ctx.drawText(label, new Point(cursorX, textY));
+    ctx.drawTextInRect(label, new Rect(cursorX, textY, labelWidth, fontSize * 1.2));
     cursorX += birthdayLabelWidth(label, fontSize) + labelGap;
   }
 }
