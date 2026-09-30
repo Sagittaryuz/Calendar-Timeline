@@ -12,7 +12,7 @@ const source = fs.readFileSync(
 const context = {
   Date,
   SETTINGS: { automaticHolidays: true },
-  TITLE_CARD_COUNT: 4,
+  TITLE_CARD_COUNT: 7,
   windowStart: new Date(2026, 11, 30, 10),
   windowEnd: new Date(2026, 11, 31, 10),
   startOfDay: date =>
@@ -23,6 +23,9 @@ const context = {
   brazilianNationalHolidayDates: year => [`${year}-01-01`],
 };
 vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('function titleWeekStart('),
+  source.indexOf('// Raio estrutural comum')), context);
+
 
 const holidaysStart = source.indexOf('async function loadAutomaticHolidays(');
 const holidaysEnd = source.indexOf('async function resolveBrazilianRegion(', holidaysStart);

@@ -280,7 +280,7 @@ function titleSafeTextY(
   clearance = WIDGET_CONTOUR.textClearance,
   visibleTopOffset = 0
 ) {
-  // Mesma altura nos quatro cartões. Mede o pior caso nas extremidades.
+  // Mesma altura nos sete cartões. Mede o pior caso nas extremidades.
   const card = titleDayCardRect(0);
   const left = (card.width - width) / 2;
   const visibleOffset = Math.max(0, Number(visibleTopOffset) || 0);
@@ -295,27 +295,21 @@ function titleSafeTextY(
 }
 
 function titleHeaderFontSize() {
-  const card = titleDayCardRect(0);
-  // O conjunto ocupa 8,5 células: três do dia, cinco da data e meia célula
-  // entre eles. Mesma fonte e largura para os quatro cartões, inclusive hoje.
-  let size = scaleFontSize(38);
-  while (size > scaleFontSize(30)) {
-    const y = titleSafeTextY(
-      8.5 * size * 0.60 + 4,
-      size * 1.15,
-      6,
-      WIDGET_CONTOUR.textClearance,
-      size * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO
-    );
-    const detailBottom = y + size * 1.15 + 5 +
-      scaleFontSize(22) / 2 + scaleVertical(30) / 2;
-    if (detailBottom <= card.y + card.height - 3) break;
-    size--;
-  }
-  return size;
+  return Math.min(scaleFontSize(22),
+    Math.floor((titleDayCardRect(0).width - 24) / (8.5 * 0.60)));
 }
 
-const TITLE_CARD_COUNT = 4;
+const TITLE_CARD_COUNT = 7;
+
+function titleWeekStart() {
+  const today = startOfDay(windowStart);
+  return addDays(today, -today.getDay());
+}
+
+function titleTodayCardIndex() {
+  return windowStart.getDay();
+}
+
 // Raio estrutural comum: 52 unidades da geometria-base,
 // escaladas junto ao conteúdo; o contorno externo usa WIDGET_CONTOUR.
 // Ele é a referência externa única dos cartões, da timeline e da
@@ -481,9 +475,9 @@ async function loadWindow() {
     // nativos de acesso ao Calendário e aos Lembretes.
     // Lembretes sem horário podem chegar do EventKit como 00:00 UTC. Em
     // fusos negativos, isso aparece localmente na noite do dia anterior.
-    // Os cartões mostram quatro dias completos. A consulta de dados precisa
+    // Os cartões mostram a semana corrente completa. A consulta de dados precisa
     // alcançar todos eles, mesmo quando a timeline visível tem só 24 horas.
-    const titleScheduleStart = startOfDay(windowStart);
+    const titleScheduleStart = titleWeekStart();
     const titleScheduleEnd = addDays(
       titleScheduleStart,
       TITLE_CARD_COUNT
@@ -713,7 +707,7 @@ async function loadWindow() {
 
     // Os contadores do cabeçalho não podem reutilizar eventItems e
     // reminderItems: esses arrays já foram recortados pela janela visível.
-    // Aqui contamos as ocorrências reais de cada dia dos quatro cartões.
+    // Aqui contamos as ocorrências reais de cada dia dos sete cartões.
     const scheduleCountsByDay = {};
     for (let index = 0; index < TITLE_CARD_COUNT; index++) {
       const day = addDays(titleScheduleStart, index);
@@ -775,7 +769,7 @@ async function loadWindow() {
         // Para hoje, eventos já encerrados não são futuros; para os dias
         // seguintes, toda a ocorrência daquele dia entra no quantitativo.
         const countStart =
-          dateKey(day) === dateKey(titleScheduleStart)
+          dateKey(day) === dateKey(todayStart)
             ? windowStart
             : day;
         if (event.end > countStart && event.start < dayEnd) {
@@ -1015,7 +1009,7 @@ function weatherDataRequiredStart() {
 
 function weatherDataRequiredEnd() {
   const titleCardsEnd = addDays(
-    startOfDay(windowStart),
+    titleWeekStart(),
     TITLE_CARD_COUNT
   );
   return new Date(
@@ -1388,7 +1382,7 @@ async function loadOpenMeteoWeather(location) {
     Intl.DateTimeFormat().resolvedOptions().timeZone ||
     "America/Sao_Paulo";
   const forecastDays = Math.max(
-    1,
+    TITLE_CARD_COUNT,
     Math.min(
       16,
       Number(SETTINGS.openMeteoForecastDays) || 5
@@ -1400,6 +1394,7 @@ async function loadOpenMeteoWeather(location) {
     "hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,weather_code,is_day",
     "daily=temperature_2m_min,temperature_2m_max",
     `forecast_days=${forecastDays}`,
+    `past_days=${titleTodayCardIndex()}`,
     "temperature_unit=celsius",
     "precipitation_unit=mm",
     `timezone=${encodeURIComponent(timezone)}`,
@@ -1793,9 +1788,9 @@ function mergeHourlyWeatherHours(...hourSets) {
   }
 
   // Mantém o dia anterior para preservar extremos que ainda possam aparecer
-  // na janela móvel e limita o cache ao período necessário para os quatro
+  // na semana corrente e limita o cache ao período necessário para os sete
   // cartões e para a janela máxima de 96 horas.
-  const retentionStart = addDays(startOfDay(windowStart), -1).getTime();
+  const retentionStart = addDays(titleWeekStart(), -1).getTime();
   const retentionEnd = new Date(
     weatherDataRequiredEnd().getTime() + 2 * 24 * 60 * 60 * 1000
   ).getTime();
@@ -2080,7 +2075,7 @@ async function loadAutomaticHolidays(location) {
   if (!SETTINGS.automaticHolidays) return dates;
 
   const titleCardsEnd = addDays(
-    startOfDay(windowStart),
+    titleWeekStart(),
     TITLE_CARD_COUNT
   );
   const coveredEnd = new Date(
@@ -2088,7 +2083,7 @@ async function loadAutomaticHolidays(location) {
   );
   const years = new Set();
   for (
-    let year = windowStart.getFullYear();
+    let year = titleWeekStart().getFullYear();
     year <= coveredEnd.getFullYear();
     year++
   ) {
@@ -3663,16 +3658,18 @@ async function renderWidget(items, loadError) {
   drawTimelineOuterBorder(contentCtx);
 
   const currentDayFrame = currentDayFrameMetrics();
-  restoreRoundedSideCorners(
-    contentCtx,
-    currentDayFrame.todayCard,
-    currentDayFrame.frameRadius,
-    currentDayFrameHorizontalDirection(
+  if (titleTodayCardIndex() === 0) {
+    restoreRoundedSideCorners(
+      contentCtx,
       currentDayFrame.todayCard,
-      currentDayFrame.boundaryX
-    ),
-    currentDayFrame.lineWidth / 2
-  );
+      currentDayFrame.frameRadius,
+      currentDayFrameHorizontalDirection(
+        currentDayFrame.todayCard,
+        currentDayFrame.boundaryX
+      ),
+      currentDayFrame.lineWidth / 2
+    );
+  }
 
   // A linha inferior é prolongamento da curva lateral e é desenhada
   // no mesmo Path, em primeiro plano.
@@ -4152,7 +4149,12 @@ function currentDayUnifiedShape(path = new Path()) {
   path.addLine(new Point(m.boundaryX, m.bridgeY));
   path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
   const points = widgetLeftContourPoints();
-  for (const p of points.slice().reverse()) path.addLine(p);
+  for (const p of points.slice().reverse().filter(p => c.x === CANVAS.plotLeft || p.y >= m.bridgeY)) path.addLine(p);
+  if (c.x !== CANVAS.plotLeft) {
+    path.addLine(new Point(WIDGET_CONTOUR.strokeInset, m.bridgeY));
+    path.addLine(new Point(c.x + m.lineWidth / 2, m.bridgeY));
+    path.addLine(new Point(c.x + m.lineWidth / 2, c.y));
+  }
   return path;
 }
 
@@ -4380,14 +4382,14 @@ function titleDayCardRect(index) {
   // então os demais quadros sobem metade da espessura para alinhar
   // seus limites visuais superiores.
   const titleCardTop =
-    index === 0
+    index === titleTodayCardIndex()
       ? WIDGET_CONTOUR.strokeInset
       : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   // O cartão atual termina na mesma altura dos demais. Seu topo lógico
   // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
   // altura preserva o alinhamento externo superior sem encurtar o vão.
   const titleCardHeight =
-    index === 0
+    index === titleTodayCardIndex()
       ? Math.max(
           1,
           TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2
@@ -4406,7 +4408,7 @@ function drawDatePanel(ctx, holidayDates) {
   // A área do título agora é uma faixa compacta de previsão. O restante
   // do desenho continua começando no mesmo ponto e não sofre deslocamento.
   const cardCount = TITLE_CARD_COUNT;
-  const firstDay = startOfDay(windowStart);
+  const firstDay = titleWeekStart();
 
   for (let index = 0; index < cardCount; index++) {
     const date = addDays(firstDay, index);
@@ -4414,7 +4416,7 @@ function drawDatePanel(ctx, holidayDates) {
       ctx,
       date,
       titleDayCardRect(index),
-      index === 0,
+      index === titleTodayCardIndex(),
       index === cardCount - 1
     );
   }
@@ -4422,7 +4424,7 @@ function drawDatePanel(ctx, holidayDates) {
 
 
 function currentDayFrameMetrics() {
-  const todayCard = titleDayCardRect(0);
+  const todayCard = titleDayCardRect(titleTodayCardIndex());
   const todayBoundary = startOfDay(windowStart);
   const nextDayBoundary = addDays(todayBoundary, 1);
   const boundaryX =
@@ -4541,14 +4543,18 @@ function fillCurrentDayVerticalLine(
 
 function drawCurrentDayBottomLineUnderlay(ctx) {
   const {
-    todayCard,
+    todayCard: selectedCard,
     boundaryX,
     bottomLineCenterY,
+    bridgeY,
     framePathRadius,
     lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
 
+  const todayCard = new Rect(CANVAS.plotLeft,
+    titleTodayCardIndex() === 0 ? selectedCard.y : bridgeY,
+    selectedCard.width, selectedCard.height);
   const direction =
     currentDayFrameHorizontalDirection(
       todayCard,
@@ -4572,7 +4578,7 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
     lineWidth,
     lineColor,
     direction === "right" ? "left" : "right",
-    framePathRadius,
+    titleTodayCardIndex() === 0 ? framePathRadius : 0,
     bottomBridge.pathRadius,
     boundaryX
   );
@@ -4651,10 +4657,10 @@ function drawCurrentDayRoundedSideFrame(
   continuationX = null
 ) {
   if (side === "left" && card.x === CANVAS.plotLeft) {
-    const points = widgetLeftContourPoints();
+    const points = widgetLeftContourPoints().filter(point => point.y >= card.y);
     const path = new Path();
-    path.move(points[0]);
-    for (const point of points.slice(1)) {
+    path.move(new Point(widgetContourInsetAtY(card.y, WIDGET_CONTOUR.strokeInset), card.y));
+    for (const point of points) {
       if (point.y > CANVAS.height / 2 && Number.isFinite(continuationX) &&
           point.x > continuationX) break;
       path.addLine(point);
@@ -4886,15 +4892,16 @@ function buildCurrentDayUpperPath(
   boundaryX, radius, path = new Path(), pathInset = 0, outerRadius = radius
 ) {
   const direction = horizontalDirection === "left" ? "left" : "right";
-  const inset = card.x === CANVAS.plotLeft
+  const isRightEdge = card.x + card.width >= CANVAS.width - CANVAS.marginX - 1;
+  const inset = card.x === CANVAS.plotLeft || isRightEdge
     ? WIDGET_CONTOUR.strokeInset
     : Math.max(0, Math.min(Number(pathInset) || 0, card.width / 2));
   const left = card.x + inset, right = card.x + card.width - inset;
-  // Espelha o canto externo de hoje pelo centro do cartão.
-  const rx = Math.min(WIDGET_CONTOUR.extentX - WIDGET_CONTOUR.strokeInset,
-    (right - left) / 2);
-  const ry = Math.min(WIDGET_CONTOUR.extentY - WIDGET_CONTOUR.strokeInset,
-    Math.max(0, bridgeY - card.y));
+  // Somente os cartões das extremidades seguem o contorno externo.
+  const rx = card.x === CANVAS.plotLeft ? Math.min(WIDGET_CONTOUR.extentX - WIDGET_CONTOUR.strokeInset,
+    (right - left) / 2) : 0;
+  const ry = card.x === CANVAS.plotLeft || isRightEdge ? Math.min(WIDGET_CONTOUR.extentY - WIDGET_CONTOUR.strokeInset,
+    Math.max(0, bridgeY - card.y)) : 0;
   const bridgeEdgeX = direction === "right" ? right : left;
   const outwardSign = direction === "right" ? 1 : -1;
   const concave = (boundaryX - bridgeEdgeX) * outwardSign >= 0;
@@ -4907,7 +4914,14 @@ function buildCurrentDayUpperPath(
     path.move(new Point(card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX : left + rx, card.y));
     // A virada do dia é um canto interno: conecta o topo direto à lateral.
     // Os raios externos à esquerda continuam seguindo o contorno do widget.
-    path.addLine(new Point(right, card.y));
+    if (isRightEdge) {
+      const edgeRadiusX = WIDGET_CONTOUR.extentX - inset;
+      path.addLine(new Point(right - edgeRadiusX, card.y));
+      appendContourArc(path, right - edgeRadiusX, card.y + ry,
+        edgeRadiusX, ry, -Math.PI / 2, 0);
+    } else {
+      path.addLine(new Point(right, card.y));
+    }
     path.addLine(new Point(right, bridge.startY));
   } else {
     path.move(new Point(right - rx, card.y));
@@ -5146,6 +5160,17 @@ function drawCurrentDayFrame(ctx) {
       todayCard,
       boundaryX
     );
+  if (todayCard.x !== CANVAS.plotLeft) {
+    const left = todayCard.x + lineWidth / 2;
+    const path = new Path();
+    path.move(new Point(left, todayCard.y));
+    path.addLine(new Point(left, bridgeY));
+    path.addLine(new Point(WIDGET_CONTOUR.strokeInset, bridgeY));
+    ctx.setStrokeColor(lineColor);
+    ctx.setLineWidth(lineWidth);
+    ctx.addPath(path);
+    ctx.strokePath();
+  }
   // O arco superior e a linha horizontal até a virada do dia
   // são uma única trajetória contínua.
   drawCurrentDayRoundedTopRightFrame(
@@ -5251,169 +5276,69 @@ function drawTitleDayCard(
   const weekdayLabel = shortWeekday(date);
   const dateLabel = titleDayMonthLabel(date);
 
-  // O nome do dia e a data formam um conjunto centrado no cartão. O vão
-  // entre eles usa meia célula para aproximar os textos sem alterar a fonte.
   const titleFontSize = titleHeaderFontSize();
-  // 0.60 corresponde melhor à largura visual das células monoespaçadas
-  // neste tamanho, mantendo o grupo alinhado ao centro real do cartão.
   const titleCharacterWidth = titleFontSize * 0.60;
   const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
-  const dateWidth = dateLabel.length * titleCharacterWidth;
   const titleGap = titleCharacterWidth / 2;
-  const titleGroupWidth =
-    weekdayWidth + titleGap + dateWidth;
-
-  // O traço superior dos cartões seguintes fica 2 px acima do
-  // retângulo lógico do cartão atual. Os textos e o conteúdo da
-  // segunda linha usam a mesma referência visual para manter todos
-  // os dias, inclusive hoje, alinhados horizontalmente.
-  const sharedTextTop =
-    WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
-
-  const titleRow = new Rect(
-    card.x + 8,
-    sharedTextTop,
-    card.width - 16,
-    scaleVertical(44)
-  );
-  const detailRow = new Rect(
-    card.x + 8,
-    sharedTextTop + scaleVertical(54),
-    card.width - 16,
-    scaleVertical(42)
-  );
-
-  const titleTextHeight = titleFontSize * 1.15;
-  // Os cartões das extremidades recuam o conjunto dia/data da curvatura:
-  // hoje vai 5 px para a direita e o quarto cartão, 5 px para a esquerda.
-  const titleHorizontalInsetOffset =
-    isSelected ? 5 : isLast ? -5 : 0;
-  const titleStartX =
-    card.x + (card.width - titleGroupWidth) / 2 +
-    titleHorizontalInsetOffset;
-  const titleY =
-    titleSafeTextY(titleGroupWidth + 4, titleTextHeight,
-      titleRow.y +
-      (titleRow.height - titleTextHeight) / 2 +
-      scaleVertical(TITLE_CARD_CONTENT_VERTICAL_OFFSET),
-      Math.max(0, WIDGET_CONTOUR.textClearance - scaleVertical(6)),
-      titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
-
+  const titleGroupWidth = (weekdayLabel.length + dateLabel.length + 0.5) * titleCharacterWidth;
+  const titleY = titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
+    WIDGET_CONTOUR.strokeInset + scaleVertical(7),
+    scaleVertical(3), titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
+  const titleStartX = card.x + (card.width - titleGroupWidth) / 2;
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
   ctx.setTextColor(weekdayColor);
-  ctx.drawText(
-    weekdayLabel,
-    new Point(titleStartX, titleY)
-  );
-
-  const dateStartX =
-    titleStartX + weekdayWidth + titleGap;
+  ctx.drawText(weekdayLabel, new Point(titleStartX, titleY));
   ctx.setTextColor(dateColor);
-  ctx.drawText(
-    dateLabel,
-    new Point(dateStartX, titleY)
-  );
+  ctx.drawText(dateLabel, new Point(titleStartX + weekdayWidth + titleGap, titleY));
 
   const daily = titleDailyTemperatureForDay(date);
   const minimum = Number.isFinite(Number(daily?.minimum))
-    ? String(Math.round(Number(daily.minimum))) + "º"
-    : "--º";
+    ? String(Math.round(Number(daily.minimum))) + "º" : "--º";
   const maximum = Number.isFinite(Number(daily?.maximum))
-    ? String(Math.round(Number(daily.maximum))) + "º"
-    : "--º";
+    ? String(Math.round(Number(daily.maximum))) + "º" : "--º";
   const counts = titleScheduleCountsForDay(date);
-  const countsText =
-    "E:" + String(counts.events) + "|L:" + String(counts.reminders);
-
-  // Temperatura, ícone e contadores formam um único grupo.
-  // Há exatamente 2 px entre a temperatura e o ícone, e 2 px
-  // entre o ícone e os contadores.
-  const detailFontSize = scaleFontSize(22);
+  const detailFontSize = scaleFontSize(18);
   const detailCharacterWidth = detailFontSize * 0.62;
-  const minimumWidth = minimum.length * detailCharacterWidth;
-  const slashWidth = detailCharacterWidth;
-  const maximumWidth = maximum.length * detailCharacterWidth;
-  const temperatureGroupWidth =
-    minimumWidth + slashWidth + maximumWidth;
-  const countsWidth =
-    countsText.length * detailCharacterWidth;
-  const iconSize = scaleVertical(30);
+  const iconSize = scaleVertical(22);
   const iconGap = scaleVertical(2);
-
-  const groupWidth =
-    temperatureGroupWidth +
-    iconGap +
-    iconSize +
-    iconGap +
-    countsWidth;
-  const groupX =
-    card.x + (card.width - groupWidth) / 2;
-  const temperatureX = groupX;
-  const iconCenterX =
-    temperatureX +
-    temperatureGroupWidth +
-    iconGap +
-    iconSize / 2;
-  const countsX =
-    temperatureX +
-    temperatureGroupWidth +
-    iconGap +
-    iconSize +
-    iconGap;
-  const detailCenterY = Math.max(
-    detailRow.y + detailRow.height / 2 +
-      DAY_CARD_TEXT_VERTICAL_OFFSET,
-    titleY + titleFontSize * 1.15 + 5 + detailFontSize / 2
-  );
-  const detailY =
-    detailCenterY - detailFontSize / 2;
-
-  ctx.setTextAlignedLeft();
+  const minimumWidth = minimum.length * detailCharacterWidth;
+  const maximumWidth = maximum.length * detailCharacterWidth;
+  const weatherWidth = minimumWidth + iconGap * 2 + iconSize + maximumWidth;
+  const weatherX = card.x + (card.width - weatherWidth) / 2;
+  const weatherY = titleY + titleFontSize * 1.15 + scaleVertical(3);
+  const weatherCenterY = weatherY + detailFontSize / 2;
   ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
-  ctx.setTextColor(
-    new Color(SETTINGS.minimumTemperatureColor, 1.0)
-  );
-  ctx.drawText(
-    minimum,
-    new Point(temperatureX, detailY)
-  );
+  ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
+  ctx.drawText(minimum, new Point(weatherX, weatherY));
+  drawTitleWeatherIcon(ctx, titleForecastForDay(date),
+    weatherX + minimumWidth + iconGap + iconSize / 2, weatherCenterY, iconSize);
+  ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor, 1.0));
+  ctx.drawText(maximum, new Point(weatherX + minimumWidth + iconGap * 2 + iconSize, weatherY));
 
-  ctx.setFont(Font.regularMonospacedSystemFont(detailFontSize));
-  ctx.setTextColor(new Color("#D1D1D6", 0.92));
-  ctx.drawText(
-    "/",
-    new Point(temperatureX + minimumWidth, detailY)
-  );
-
-  ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
-  ctx.setTextColor(
-    new Color(SETTINGS.maximumTemperatureColor, 1.0)
-  );
-  ctx.drawText(
-    maximum,
-    new Point(
-      temperatureX + minimumWidth + slashWidth,
-      detailY
-    )
-  );
-
-  // E:2|L:4 usa exatamente a mesma fonte e o mesmo tamanho
-  // das temperaturas.
+  // Terceira linha: somente as letras E e L recebem negrito.
+  const parts = [
+    { text: "E", bold: true },
+    { text: ": " + String(counts.events) + " | ", bold: false },
+    { text: "L", bold: true },
+    { text: ": " + String(counts.reminders), bold: false },
+  ];
+  const countLength = parts.reduce((total, part) => total + part.text.length, 0);
+  const countFontSize = Math.min(scaleFontSize(16),
+    Math.floor((card.width - 16) / (countLength * 0.62)));
+  const countCharacterWidth = countFontSize * 0.62;
+  let countX = card.x + (card.width - countLength * countCharacterWidth) / 2;
+  const countY = weatherCenterY + iconSize / 2 + scaleVertical(4);
   ctx.setTextColor(detailColor);
-  ctx.drawText(
-    countsText,
-    new Point(countsX, detailY)
-  );
+  for (const part of parts) {
+    ctx.setFont(part.bold ? Font.blackMonospacedSystemFont(countFontSize)
+      : Font.regularMonospacedSystemFont(countFontSize));
+    ctx.drawText(part.text, new Point(countX, countY));
+    countX += part.text.length * countCharacterWidth;
+  }
+}
 
-  drawTitleWeatherIcon(
-    ctx,
-    titleForecastForDay(date),
-    iconCenterX,
-    detailCenterY,
-    iconSize
-  );
-}function titleDailyTemperatureForDay(date) {
+function titleDailyTemperatureForDay(date) {
   const daily = titleDailyWeatherForDay(date);
   if (
     daily &&

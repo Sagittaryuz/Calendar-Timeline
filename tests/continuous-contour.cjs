@@ -12,7 +12,7 @@ class Path {
   addCurve(p,a,b) { this.points.push(a,b,p); }
   closeSubpath() {}
 }
-const c = {Point, Rect, Path, Color: class {}, SETTINGS:{maxItems:5}};
+const c = {Point, Rect, Path, Color: class {}, SETTINGS:{maxItems:5}, windowStart: new Date(2026,8,20)};
 vm.createContext(c);
 vm.runInContext(source.slice(source.indexOf('const WIDGET_CANVAS_HEIGHT'), source.indexOf('const now =')), c);
 function load(name) {
@@ -84,17 +84,13 @@ for(const p of points) {
     assert(x>=c.widgetContourInsetAtY(y)-0.1,'Stroke inside measured contour');
   }
 }
-for(let i=0;i<4;i++) assert(c.titleDayCardRect(i).y>=0,'No negative card position');
+for(let i=0;i<7;i++) assert(c.titleDayCardRect(i).y>=0,'No negative card position');
 const font=c.titleHeaderFontSize(), width=8.5*font*0.60;
 const visibleTop=font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
 const titleY=c.titleSafeTextY(width+4,font*1.15,6,
   run('WIDGET_CONTOUR.textClearance'),visibleTop);
 const left=(c.titleDayCardRect(0).width-width-4)/2;
 assert(left>=c.widgetContourInsetAtY(titleY+visibleTop)+8);
-const detailFont=run('scaleFontSize(22)');
-const detailCenter=Math.max(2+run('scaleVertical(75)'),titleY+font*1.15+5+detailFont/2);
-assert(detailCenter+run('scaleVertical(30)')/2 < c.titleDayCardRect(0).y+c.titleDayCardRect(0).height,
-  'Weather icon and detail row fit below title');
 const lowerCircleEdge=run('CANVAS.timelineTop + bottomLegendCenterY() + DAY_CHANGE_CIRCLE_DIAMETER/2');
 assert(Math.abs(lowerCircleEdge-506)<1e-9);
 const paths=[];
@@ -103,11 +99,11 @@ for(const boundary of [1,50,102,500,1092,2000]) {
   c.drawCurrentDayRoundedSideFrame(ctx,c.titleDayCardRect(0),506,4,{},'left',52,52,boundary);
   assert(paths.at(-1).points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
 }
-const last=c.titleDayCardRect(3);
+const last=c.titleDayCardRect(6);
 c.fillTitleCardShape(ctx,last,{topLeft:52,topRight:52,bottomLeft:0,bottomRight:0},{});
 assert(paths.at(-1).points.every(p=>p.x<=1092&&p.y>=0));
 // Execute the actual title renderer with synthetic weather and no calendars.
-c.windowStart=new Date(2026,8,22);
+c.windowStart=new Date(2026,8,20);
 c.loadResult={holidayDates:new Set()};
 c.startOfDay=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
 c.addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
@@ -128,8 +124,8 @@ const texts=[],icons=[];
 c.drawTitleWeatherIcon=(_,forecast,x,y,size)=>icons.push({x,y,size});
 const textCtx={...ctx,fillRect(){},fillEllipse(){},setTextAlignedLeft(){},setTextColor(){},
   setFont(s){fontSize=s;},drawText(t,p){texts.push({t,p,size:fontSize});}};
-for(let i=0;i<4;i++) {
-  c.drawTitleDayCard(textCtx,c.addDays(c.windowStart,i),c.titleDayCardRect(i),i===0,i===3);
+for(let i=0;i<7;i++) {
+  c.drawTitleDayCard(textCtx,c.addDays(c.windowStart,i),c.titleDayCardRect(i),i===0,i===6);
 }
 for(const {t,p,size} of texts) {
   const visualTop=p.y+(['TER','22/09'].includes(t)?
@@ -166,43 +162,67 @@ for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
 
 const weekdayTitles=texts.filter(({t})=>t==='TER');
 const dateTitles=texts.filter(({t})=>t==='22/09');
-assert.equal(weekdayTitles.length,4);
-assert.equal(dateTitles.length,4);
-const titleLineHeight=font*1.15;
-const titleBandTop=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
-const titleClearance=run('Math.max(0,WIDGET_CONTOUR.textClearance-scaleVertical(6))');
-const centeredTitleY=c.titleSafeTextY(
-  8.5*font*0.60+4,
-  titleLineHeight,
-  titleBandTop+(run('scaleVertical(44)')-titleLineHeight)/2+
-    run('scaleVertical(-7)'),
-  titleClearance,
-  visibleTop
-);
-const priorTitleY=c.titleSafeTextY(
-  9*font*0.60+4,
-  titleLineHeight,
-  titleBandTop+run('scaleVertical(5)')+
-    (run('scaleVertical(42)')-font)/2+run('DAY_CARD_TEXT_VERTICAL_OFFSET')
-);
-assert(centeredTitleY<priorTitleY-6,'Títulos sobem mantendo margem segura do contorno externo.');
-for(let i=0;i<4;i++) {
-  const titleCard=c.titleDayCardRect(i);
-  const titleWidth=8.5*font*0.60;
-  const titleStart=titleCard.x+(titleCard.width-titleWidth)/2;
-  const expectedTitleOffset=i===0?5:i===3?-5:0;
-  assert(Math.abs(weekdayTitles[i].p.x-(titleStart+expectedTitleOffset))<1e-6,
-    'Só os títulos das extremidades recebem o recuo horizontal pedido.');
-  assert(Math.abs(dateTitles[i].p.x-(titleStart+3.5*font*0.60+expectedTitleOffset))<1e-6,
-    'Dia e data mantêm juntos o deslocamento e a meia célula de espaço.');
-  assert(Math.abs((titleStart+titleWidth/2+expectedTitleOffset)-
-    (titleCard.x+titleCard.width/2+expectedTitleOffset))<1e-6,
-    'O grupo mantém o centro do cartão como referência antes do recuo de extremidade.');
-  assert.equal(weekdayTitles[i].p.y,centeredTitleY,'Título centralizado na faixa superior.');
-  assert.equal(dateTitles[i].p.y,centeredTitleY);
+assert.equal(weekdayTitles.length,7);
+assert.equal(dateTitles.length,7);
+for(let i=0;i<7;i++) {
+  const card=c.titleDayCardRect(i);
+  const titleStart=card.x+(card.width-8.5*font*0.60)/2;
+  assert(Math.abs(weekdayTitles[i].p.x-titleStart)<1e-6);
+  assert(Math.abs(dateTitles[i].p.x-(titleStart+3.5*font*0.60))<1e-6);
 }
+for(const text of texts) assert(text.p.y+text.size*1.15<=last.y+last.height,
+  'As três linhas cabem na altura original.');
 assert(source.includes('const RAIN_TOP_MARKER_VERTICAL_OFFSET = -10;'),
   'Gotas acumulam mais 5 unidades de deslocamento');
 assert(source.includes('solarLineY() + scaleVertical(12) + RAIN_TOP_MARKER_VERTICAL_OFFSET,'),
   'Gotas usam o deslocamento vertical centralizado');
 console.log('OK: canto interno reto, títulos centralizados, ponte sem cruzamento e gotas -10 no total.');
+
+// Posições fixas em todos os dias, inclusive na semana que cruza o ano.
+for (const name of ['drawDatePanel','currentDayFrameMetrics',
+  'currentDayUnifiedShape','currentDayUnifiedPolygon','insideCurrentDayUnifiedShape',
+  'drawCurrentDayBottomLineUnderlay','currentDayFrameHorizontalDirection',
+  'currentDayBottomBridgeMetrics']) load(name);
+c.shortWeekday=d=>['DOM','SEG','TER','QUA','QUI','SEX','SAB'][d.getDay()];
+c.titleDayMonthLabel=d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+c.timeToX=()=>400;
+c.hourGridLineColor=()=>({});
+c.dayBoundaryMoonBorderTopY=()=>run('CANVAS.timelineTop+scaleVertical(8)');
+for(let day=0;day<7;day++) {
+  c.windowStart=new Date(2026,11,27+day,10);
+  texts.length=0; icons.length=0;
+  c.drawDatePanel(textCtx,new Set());
+  const metrics=c.currentDayFrameMetrics();
+  const current=c.titleDayCardRect(day);
+  assert.equal(metrics.todayCard.x,current.x,'A moldura seleciona a coluna de hoje.');
+  assert.equal(texts.filter(t=>['DOM','SEG','TER','QUA','QUI','SEX','SAB'].includes(t.t)).map(t=>t.t).join(','),
+    'DOM,SEG,TER,QUA,QUI,SEX,SAB');
+  assert.equal(texts.filter(t=>/^\d{2}\/\d{2}$/.test(t.t)).map(t=>t.t).join(','),
+    '27/12,28/12,29/12,30/12,31/12,01/01,02/01');
+  assert.equal(new Set(texts.filter(t=>/^\d{2}\/\d{2}$/.test(t.t)).map(t=>t.p.y)).size,1);
+  for(let i=0;i<7;i++) {
+    const card=c.titleDayCardRect(i);
+    const entries=texts.slice(i*8,(i+1)*8);
+    assert.equal(entries.length,8);
+    assert(entries[0].p.y<entries[2].p.y && entries[2].p.y<entries[4].p.y,
+      'Título, temperaturas e contadores usam três linhas.');
+    assert(entries.every(t=>t.p.x>=card.x && t.p.x+t.t.length*t.size*0.62<=card.x+card.width+1));
+    assert(entries.every(t=>t.p.y+t.size*1.15<=card.y+card.height));
+    assert.equal(entries.slice(4).map(t=>t.t).join(''),'E: 1 | L: 3');
+  }
+  c.currentDayUnifiedPolygon.points=null;
+  for(let i=0;i<7;i++) {
+    const card=c.titleDayCardRect(i);
+    assert.equal(c.insideCurrentDayUnifiedShape(card.x+card.width/2,card.y+card.height/2),i===day,
+      'O fundo integrado da moldura cobre somente o quadro selecionado.');
+  }
+  paths.length=0;
+  c.drawCurrentDayBottomLineUnderlay(ctx);
+  if(day>0) assert(paths.every(path=>path.points.every(p=>p.y>=metrics.bridgeY)),
+    'A moldura da timeline não seleciona domingo quando hoje está em outra coluna.');
+  const {path}=c.buildCurrentDayUpperPath(null,current,metrics.bridgeY,metrics.lineWidth,{},'right',400,
+    metrics.frameRadius,new Path(),metrics.lineWidth/2,metrics.frameRadius);
+  assert(path.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
+  assert(path.points.every(p=>p.x<=1092 && p.x>=0));
+}
+console.log('OK: sete colunas fixas, três linhas, seleção diária e semana na virada do ano.');
