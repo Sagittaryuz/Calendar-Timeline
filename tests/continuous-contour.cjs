@@ -25,7 +25,7 @@ function load(name) {
 for(const name of ['dayBoundaryLineWidth','timelineWidth','timelineHeight',
   'titleCardGap','titleDayCardRect','timelineOuterBorderTopY',
   'weatherStripBottomY','weatherIconCenterY',
-  'timelineChartTop','bottomLegendCenterY','hourLegendVisibleBoundsAtY',
+  'timelineChartTop','bottomLegendCenterY','dayChangeLegendCenterY','hourLegendVisibleBoundsAtY',
   'drawCurrentDayRoundedSideFrame','fillTitleCardShape']) load(name);
 const run=s=>vm.runInContext(s,c);
 const adjustment=run('TITLE_TIMELINE_GAP_ADJUSTMENT');
@@ -89,7 +89,7 @@ const font=c.titleHeaderFontSize();
 const layout=c.titleCardTypography();
 const titleY=layout.titleY;
 assert(font>23, 'O título abreviado deve usar uma fonte maior.');
-const lowerCircleEdge=run('CANVAS.timelineTop + bottomLegendCenterY() + DAY_CHANGE_CIRCLE_DIAMETER/2');
+const lowerCircleEdge=run('CANVAS.timelineTop + dayChangeLegendCenterY() + DAY_CHANGE_CIRCLE_DIAMETER/2');
 assert(Math.abs(lowerCircleEdge-506)<1e-9);
 const paths=[];
 const ctx={setStrokeColor(){},setLineWidth(){},addPath(p){paths.push(p);},strokePath(){},setFillColor(){},fillPath(){}};

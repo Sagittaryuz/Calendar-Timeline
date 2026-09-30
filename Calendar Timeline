@@ -172,7 +172,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.1";
+const WIDGET_BUILD_VERSION = "2026.09.30.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -360,7 +360,8 @@ const WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS = 52;
 const WIDGET_COMMON_CORNER_RADIUS = scaleVertical(
   WIDGET_COMMON_CORNER_RADIUS_BASE_UNITS
 );
-const TITLE_CARD_HEIGHT = scaleVertical(104) - 2;
+const TITLE_CARD_HEIGHT_REDUCTION = 2;
+const TITLE_CARD_HEIGHT = scaleVertical(104) - TITLE_CARD_HEIGHT_REDUCTION;
 const TITLE_CARD_STANDARD_CORNER_RADIUS =
   WIDGET_COMMON_CORNER_RADIUS;
 const TITLE_CARD_OUTER_CORNER_RADIUS =
@@ -439,13 +440,14 @@ const TITLE_CARD_BASE_CLEAR_GAP = Math.max(
   CANVAS.timelineTop -
     (WIDGET_CONTOUR.strokeInset -
       DAY_BOUNDARY_LINE_WIDTH / 2 +
-      TITLE_CARD_HEIGHT) -
+      TITLE_CARD_HEIGHT + TITLE_CARD_HEIGHT_REDUCTION) -
     TIMELINE_OUTER_BORDER_WIDTH / 2
 );
 const TITLE_CARD_SPACING = 1.2287;
 const TITLE_TIMELINE_GAP_ADJUSTMENT =
   TITLE_CARD_SPACING - TITLE_CARD_BASE_CLEAR_GAP;
-CANVAS.timelineTop += TITLE_TIMELINE_GAP_ADJUSTMENT;
+// A redução do cabeçalho sobe todo o conteúdo, sem alterar o contorno externo.
+CANVAS.timelineTop += TITLE_TIMELINE_GAP_ADJUSTMENT - TITLE_CARD_HEIGHT_REDUCTION;
 
 const now = new Date();
 now.setSeconds(0, 0);
@@ -4559,10 +4561,7 @@ function currentDayFrameMetrics() {
     CANVAS.plotLeft + timeToX(nextDayBoundary);
   const astroCenterY =
     CANVAS.timelineTop + weatherIconCenterY();
-  const boundaryBottomY =
-    CANVAS.timelineTop +
-    bottomLegendCenterY() +
-    DAY_CHANGE_CIRCLE_DIAMETER / 2;
+  const boundaryBottomY = CANVAS.height - WIDGET_CONTOUR.strokeInset;
   const cardBottomY = todayCard.y + todayCard.height;
   const lineWidth = dayBoundaryLineWidth();
   const bridgeY = dayBoundaryMoonBorderTopY();
@@ -6708,14 +6707,15 @@ function thermalBandBottomY() {
 }
 
 function bottomLegendCenterY() {
-  // Folga de 4 unidades lógicas para antialiasing e recorte do sistema.
-  // A coordenada retornada é local ao painel da timeline.
+  // O conteúdo inferior acompanha a redução do cabeçalho. A moldura mantém
+  // sua própria âncora; não compensar aqui a subida do círculo e da legenda.
   return (
     CANVAS.height -
     WIDGET_CONTENT_BOTTOM_MARGIN -
     WIDGET_CONTOUR.strokeInset -
     CANVAS.timelineTop -
-    DAY_CHANGE_CIRCLE_DIAMETER / 2
+    DAY_CHANGE_CIRCLE_DIAMETER / 2 -
+    TITLE_CARD_HEIGHT_REDUCTION
   );
 }
 
@@ -11321,11 +11321,8 @@ function hourLegendCornerRadius() {
 }
 
 function hourLegendFrameBottomY() {
-  // Usa o mesmo limite externo da linha inferior arredondada da moldura.
-  return (
-    bottomLegendCenterY() +
-    DAY_CHANGE_CIRCLE_DIAMETER / 2
-  );
+  // O limite da moldura permanece fixo enquanto a legenda sobe.
+  return CANVAS.height - WIDGET_CONTOUR.strokeInset - CANVAS.timelineTop;
 }
 
 function roundedFrameInsetAtY(y, topY, bottomY, radius) {
