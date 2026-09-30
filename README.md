@@ -19,7 +19,9 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.9` centraliza os textos dos quadros pela área visível,
+blur. A revisão `v2026.09.30.10` permite títulos e aniversariantes além do fim
+do chart ou do dia, limitando o texto somente pelo contorno externo.
+Os textos dos quadros são centralizados pela área visível,
 considerando o contorno externo e as curvas dos quadros adjacentes a hoje.
 Textos e marcadores da timeline respeitam margens curvas, sem mover os charts
 ou seus horários; temperaturas nas extremidades usam recorte pelo contorno. A moldura branca fica somente no dia de hoje. O conjunto

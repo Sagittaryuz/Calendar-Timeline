@@ -54,6 +54,35 @@ for(const {rect} of labels) {
 assert(markers[0].x-markers[0].diameter/2>=safe.left);
 assert.equal(markers[0].y,localY+height/2);
 
+load('drawOutlinedTimelineTextInRect');
+// Evento curto: o nome completo tem espaço além do retângulo do chart.
+bars.length=0; labels.length=0;
+c.timelineItemBarSegmentsForDisplay=()=>[{x:100,width:34}];
+c.drawTimelineItem(ctx,{kind:'event',title:'Natação',color:'#FF0000',layoutRows:5,isCurrentEvent:true},localY,height);
+const swimming=labels.find(entry=>entry.text==='NATAÇÃO');
+assert(swimming);
+assert(swimming.rect.width>7*30*0.7,
+  'O título completo deve caber mesmo com chart de apenas 34 px.');
+assert(swimming.rect.x+swimming.rect.width>bars[0].x+bars[0].width);
+assert.equal(bars[0].width,34);
+
+// Dois aniversariantes num trecho curto antes da meia-noite permanecem juntos.
+load('drawBirthdayGroupLabel');
+Object.assign(c,{windowEnd:new Date(2026,9,1,20),
+  timeToX:date=>date.getTime()===c.windowStart.getTime()?0:180,
+  cleanTitle:text=>text,
+  birthdayLabelWidth:(text,size)=>text.length*size*0.7,
+});
+c.SETTINGS.birthdayLabelGap=30;
+labels.length=0;
+c.drawBirthdayGroupLabel(ctx,{start:c.windowStart,end:new Date(2026,9,1),
+  layoutRows:5,birthdayItems:[{title:'🎂 Lays M. (39)'},{title:'🎂 Thiago A. (31)'}]},localY,height);
+const birthdayNames=[...new Set(labels.map(entry=>entry.text))];
+assert.deepEqual(birthdayNames,['🎂 Lays M. (39)','🎂 Thiago A. (31)']);
+const second=labels.find(entry=>entry.text.includes('Thiago'));
+assert(second.rect.x>180,'O segundo nome pode atravessar o limite do dia.');
+assert(second.rect.width>second.text.length*30*0.7);
+
 // O recorte térmico usa a altura global, mas desenha na camada do rodapé.
 for(const name of ['hourLegendVisibleBoundsAtY','hourLegendRectIsFullyVisible','drawHourLegendLabelClipped']) load(name);
 let output;

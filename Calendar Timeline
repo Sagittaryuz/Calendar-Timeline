@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.9";
+const WIDGET_BUILD_VERSION = "2026.09.30.10";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -12389,8 +12389,10 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     );
   }
 
+  // O título pode ultrapassar o chart e a virada do dia. Somente o
+  // contorno externo limita sua leitura, como no desenho por drawText.
   const titleRect = new Rect(textPoint.x, textPoint.y,
-    Math.max(0, visibleRight - statusWidth - metadataWidth - textPoint.x - 3),
+    Math.max(0, textBounds.right - textPoint.x - 3),
     titleFontSize * 1.15);
   if (visibleTitle && titleRect.width > 0) {
     if (emphasizedEventText) {
@@ -12537,8 +12539,10 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   );
   const bounds = timelineVisibleContentBounds(y, rowHeight, 4);
   const visibleLeft = Math.max(bounds.left, startX);
-  const visibleRight = Math.min(bounds.right, endX);
-  if (visibleRight <= visibleLeft) return;
+  if (Math.min(bounds.right, endX) <= visibleLeft) return;
+  // O intervalo do aniversário define sua origem, não o fim do texto.
+  // O grupo continua além da meia-noite até o limite visível do widget.
+  const visibleRight = bounds.right;
 
   const centerY = y + rowHeight / 2;
 
@@ -12567,7 +12571,7 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
   for (const label of labels) {
     // O contorno evita que a palavra desapareça sobre a faixa escura,
     // mantendo a mesma leitura forte dos títulos dos charts normais.
-    const labelWidth = Math.min(birthdayLabelWidth(label, fontSize), visibleRight - cursorX - 2);
+    const labelWidth = visibleRight - cursorX - 2;
     if (labelWidth <= 0) break;
     ctx.setTextColor(new Color("#000000", 1.0));
     for (const [offsetX, offsetY] of [
