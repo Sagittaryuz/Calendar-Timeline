@@ -221,3 +221,26 @@ for(let day=0;day<7;day++) {
   assert(path.points.every(p=>p.x<=1092 && p.x>=0));
 }
 console.log('OK: sete colunas fixas, duas linhas, seleção diária e semana na virada do ano.');
+
+for(const name of ['drawCurrentDayFrame','drawCurrentDayRoundedTopRightFrame']) load(name);
+for(let day=1;day<7;day++) {
+  c.windowStart=new Date(2026,11,27+day,10);
+  for(const boundary of [1,400,1092]) {
+    c.timeToX=()=>boundary;
+    paths.length=0;
+    c.drawCurrentDayFrame(ctx);
+    assert.equal(paths.length,2);
+    const leftCurve=paths[0].points.slice(-66,-1);
+    const rightCurve=paths[1].points.slice(-66,-1);
+    const mirrorAxisSum=leftCurve[0].x+rightCurve[0].x;
+    assert.equal(leftCurve.length,65);
+    assert.equal(rightCurve.length,65);
+    for(let i=0;i<65;i++) {
+      assert(Math.abs(leftCurve[i].x+rightCurve[i].x-mirrorAxisSum)<1e-6,
+        'As curvas inferiores são espelhadas entre as duas laterais da moldura.');
+      assert(Math.abs(leftCurve[i].y-rightCurve[i].y)<1e-6,
+        'As curvas inferiores têm a mesma altura e o mesmo raio.');
+    }
+  }
+}
+console.log('OK: somente os cantos inferiores da moldura são espelhados, inclusive perto da virada.');

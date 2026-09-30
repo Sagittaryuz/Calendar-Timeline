@@ -4208,7 +4208,7 @@ function currentDayUnifiedShape(path = new Path()) {
   const m = currentDayFrameMetrics();
   const c = m.todayCard;
   const r = m.frameRadius;
-  buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
+  const { bridge } = buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
     "right", m.boundaryX, r, path, 0, r);
   path.addLine(new Point(m.boundaryX, m.bridgeY));
   path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
@@ -4216,8 +4216,13 @@ function currentDayUnifiedShape(path = new Path()) {
   for (const p of points.slice().reverse().filter(p => c.x === CANVAS.plotLeft || p.y >= m.bridgeY)) path.addLine(p);
   if (c.x !== CANVAS.plotLeft) {
     path.addLine(new Point(WIDGET_CONTOUR.strokeInset, m.bridgeY));
-    path.addLine(new Point(c.x + m.lineWidth / 2, m.bridgeY));
     const left = c.x + m.lineWidth / 2;
+    const lowerRadius = bridge.bridgeRadius;
+    const lowerDirection = -bridge.curveDirectionSign;
+    const centerX = left + lowerDirection * lowerRadius;
+    path.addLine(new Point(centerX, m.bridgeY));
+    appendContourArc(path, centerX, m.bridgeY - lowerRadius,
+      lowerRadius, lowerRadius, Math.PI / 2, lowerDirection > 0 ? Math.PI : 0);
     const softRadius = TODAY_CARD_SOFT_CORNER_RADIUS;
     path.addLine(new Point(left, c.y + softRadius));
     appendContourArc(path, left + softRadius, c.y + softRadius,
@@ -5240,11 +5245,16 @@ function drawCurrentDayFrame(ctx) {
     path.move(new Point(left + softRadius, todayCard.y));
     appendContourArc(path, left + softRadius, todayCard.y + softRadius,
       softRadius, softRadius, -Math.PI / 2, -Math.PI);
-    const bridgeRadius = Math.min(softRadius, left - WIDGET_CONTOUR.strokeInset,
-      Math.max(0, bridgeY - todayCard.y - softRadius));
-    path.addLine(new Point(left, bridgeY - bridgeRadius));
-    appendContourArc(path, left - bridgeRadius, bridgeY - bridgeRadius,
-      bridgeRadius, bridgeRadius, 0, Math.PI / 2);
+    // Espelha exatamente o raio e a direção da curva inferior direita.
+    const { bridge } = buildCurrentDayUpperPath(null, todayCard, bridgeY,
+      lineWidth, lineColor, horizontalDirection, boundaryX,
+      framePathRadius, new Path(), lineWidth / 2, frameRadius);
+    path.addLine(new Point(left, bridge.startY));
+    appendCurrentDayBridgeCurve(path, {
+      ...bridge,
+      edgeX: left,
+      curveDirectionSign: -bridge.curveDirectionSign,
+    }, bridgeY, bridge.bridgeRadius);
     path.addLine(new Point(WIDGET_CONTOUR.strokeInset, bridgeY));
     ctx.setStrokeColor(lineColor);
     ctx.setLineWidth(lineWidth);
