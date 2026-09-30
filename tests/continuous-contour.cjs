@@ -267,11 +267,11 @@ c.DrawContext=class {
 };
 c.Size=class { constructor(width,height) { Object.assign(this,{width,height}); } };
 c.widgetGradientColorAtY=()=>({});
-load('shiftWidgetImageRight');
-assert.equal(c.shiftWidgetImageRight('rendered-widget'),'shifted-widget');
+load('shiftWidgetImage');
+assert.equal(c.shiftWidgetImage('rendered-widget'),'shifted-widget');
 assert.equal(shiftLayer.rects.length,run('CANVAS.height'));
-assert(shiftLayer.rects.every(rect=>rect.x===0&&rect.width===1));
+assert(shiftLayer.rects.every(rect=>rect.x===run('CANVAS.width-1')&&rect.width===1));
 assert.equal(shiftLayer.images[0].image,'rendered-widget');
-assert.equal(shiftLayer.images[0].rect.x,1);
+assert.equal(shiftLayer.images[0].rect.x,-1);
 assert.equal(shiftLayer.images[0].rect.width,run('CANVAS.width'));
-console.log('OK: moldura branca externa completa e composição do teste deslocada 1 px à direita.');
+console.log('OK: moldura branca externa completa e composição do teste deslocada 1 px à esquerda.');
