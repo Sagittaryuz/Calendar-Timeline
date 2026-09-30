@@ -136,6 +136,40 @@ assert.equal(sixAgenda.filter(item => !item.isOverflow).length, 6,
   'Seis eventos simultâneos devem ser exibidos sem virar excedente.');
 assert.equal(new Set(sixAgenda.map(item => item.gridRow)).size, 6,
   'Cada evento simultâneo deve ocupar uma das seis linhas.');
+
+// O último chart de hoje atravessa a meia-noite; amanhã precisa somente de cinco linhas.
+const adaptiveContext = makeContext();
+adaptiveContext.windowStart = at(8);
+adaptiveContext.windowEnd = at(8, 1);
+const crossMidnight = {...timedEvent(6, 8), title: 'Virada', end: at(4, 1)};
+const adaptiveInput = [...fiveEvents, crossMidnight,
+  ...Array.from({length: 4}, (_, index) => timedEvent(7 + index, 1, 1))];
+const rowCounts = adaptiveContext.prepareTimelineRowCounts(adaptiveInput);
+assert.deepEqual(Object.values(rowCounts), [6, 5]);
+const adaptive = adaptiveContext.chooseItems(adaptiveInput, at(8), 6, rowCounts);
+assert.equal(adaptive.filter(item => !item.isOverflow).length, 10,
+  'As duas capacidades diárias não devem ocultar nenhum dos dez eventos.');
+const carry = adaptive.find(item => item.title === 'Virada');
+assert.equal(carry.gridRow, 5);
+const tomorrowKey = adaptiveContext.dateKey(at(1, 1));
+assert.equal(carry.dayGridRows[tomorrowKey], 0,
+  'O chart da sexta linha deve ser remapeado ao entrar no dia com cinco linhas.');
+const tomorrowRows = adaptive.filter(item => item.start >= at(0, 1)).map(item => item.gridRow);
+assert.deepEqual([...tomorrowRows, carry.dayGridRows[tomorrowKey]].sort(), [0,1,2,3,4]);
+adaptiveContext.timelineRowCounts = rowCounts;
+adaptiveContext.timelineChartTop = () => 0;
+adaptiveContext.timelineRowHeight = date => 300 / adaptiveContext.timelineRowCountForDate(date);
+adaptiveContext.drawEventStartLineAnchors = () => {};
+const renderStart = source.indexOf('function drawTimelineItemLayer(');
+const renderEnd = source.indexOf('\nfunction diagonalWeekdayLabelColor(', renderStart);
+vm.runInContext(source.slice(renderStart, renderEnd), adaptiveContext);
+const rendered = [];
+adaptiveContext.drawTimelineItem = (_, item, y, rowHeight) => rendered.push({item, y, rowHeight});
+adaptiveContext.drawTimelineItemLayer({}, adaptive);
+assert(rendered.filter(entry => entry.item.layoutRows === 6).every(entry => entry.rowHeight === 50));
+assert(rendered.filter(entry => entry.item.layoutRows === 5).every(entry => entry.rowHeight === 60));
+assert.equal(rendered.filter(entry => entry.item.title === 'Virada').length, 2,
+  'O chart que cruza a virada deve usar a geometria própria de cada dia.');
 const fullAgenda = select([...fiveEvents, birthday()]);
 assert.equal(
   fullAgenda.filter(item => item.kind === 'event' && !item.isBirthdayGroup).length,

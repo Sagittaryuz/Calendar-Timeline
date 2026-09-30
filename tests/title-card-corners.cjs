@@ -37,6 +37,7 @@ const context = {
   dateKey: date => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
   windowStart: new Date(2026, 8, 18),
   shouldBlurFutureTimeline: () => blurEnabled,
+  drawAdjacentTitleCardCurve: () => {},
   fillTitleCardShape: (_, rect, radii, color) => shapes.push({rect, radii, color}),
   loadResult: {holidayDates},
   titleWeekdayColor: () => { throw stop; },
@@ -114,7 +115,7 @@ const normalDayWithoutBlur = cardFillColor(21, false);
 const normalDayWithBlur = cardFillColor(21, true);
 assert.equal(normalDayWithoutBlur.hex, '#2E2E30', 'Cartão de dia útil sem blur usa a cor exata pedida.');
 assert.equal(normalDayWithoutBlur.opacity, 1, 'O preenchimento normal não recebe transparência.');
-assert.equal(normalDayWithBlur.hex, '#232327', 'Dia útil durante o blur usa a cor exata pedida.');
+assert.equal(normalDayWithBlur.hex, '#323236', 'Dia útil durante o blur usa a cor exata pedida.');
 assert.equal(normalDayWithBlur.opacity, 1, 'O preenchimento com blur permanece opaco.');
 assert.equal(cardFillColor(19, false).hex, '#0D3F68', 'Sábado mantém a cor especial.');
 assert.equal(cardFillColor(20, false).hex, '#521720', 'Domingo mantém a cor especial.');

@@ -18,6 +18,7 @@ class Path {
 }
 
 const context = {
+  windowStart: new Date(2026,8,30),
   Point,
   Rect,
   Path,
@@ -54,6 +55,8 @@ for (const name of [
   'weatherStripBottomY',
   'timelineChartTop',
   'timelineChartBottom',
+  'timelineRowCountForDate',
+  'timelineRowCountForItem',
   'timelineRowHeight',
   'timelineHeight',
   'isExtendedDetailedMode',
@@ -84,6 +87,10 @@ for (let row = 0; row < bars.length; row++) {
   if (row) assert(bars[row].top - bars[row-1].bottom >= run('scaleVertical(4)') - 1e-9,
     'Barras adjacentes devem preservar o vão mínimo.');
 }
+assert(context.timelineBarHeight({layoutRows:5}) > context.timelineBarHeight({layoutRows:6}),
+  'Dias com cinco linhas recuperam a altura maior dos charts.');
+const fifth=context.timelineBarVerticalRect({gridRow:4,layoutRows:5});
+assert(fifth.bottom<=chartBottom,'A quinta barra maior deve caber na mesma área útil.');
 const oldGap = run('scaleVertical(5)');
 const oldCurveHeight = run('scaleVertical(30)');
 const oldTemperatureLabelHeight = run('scaleVertical(32)');

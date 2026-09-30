@@ -19,10 +19,11 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.4` acomoda seis linhas na timeline: os quadros
-de datas ficam mais 10 px baixos, e os charts usam barras e fontes menores.
-O círculo de mudança de dia mantém a sobreposição aprovada de 1 px na
-moldura inferior fixa. Se a versão não
+blur. A revisão `v2026.09.30.5` aumenta os títulos dos dias e centra as duas
+linhas em conjunto, mantendo recuos de 5 px no domingo e no sábado. A curva
+esquerda mantém direção e raio; os quadros adjacentes acompanham os traços
+com o espaçamento existente. Dias úteis sob blur usam cinzas mais claros.
+A altura do cabeçalho e o encaixe inferior aprovado permanecem fixos. Se a versão não
 aparecer, confira se o carregador está buscando o arquivo de `main`, em vez de
 executar uma cópia antiga em cache.
 
@@ -42,8 +43,12 @@ horas; somente a cadência muda.
 
 O cabeçalho mostra sete quadros fixos da semana corrente, de domingo a sábado.
 A moldura branca acompanha o dia atual. As larguras dividem a faixa em sete;
-o cabeçalho mais baixo libera 10 px adicionais para as seis linhas da timeline.
-As barras e os textos da agenda usam tamanhos menores para preservar os vãos.
+a altura atual do cabeçalho é fixa. Cada dia usa cinco linhas quando há até
+cinco charts e seis quando há seis ou mais. A contagem inclui compromissos
+que atravessam a meia-noite e agrupa aniversários na sua linha conjunta.
+Os dias com cinco linhas recuperam as barras e fontes maiores; nos dias com
+seis, as barras e os textos menores preservam os vãos. A regra vale de forma
+independente para hoje, amanhã e os demais dias da janela.
 
 Cada quadro usa duas linhas centradas em conjunto pela caixa dos quadros comuns,
 inclusive no dia atual:
