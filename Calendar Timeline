@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.7";
+const WIDGET_BUILD_VERSION = "2026.09.30.8";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -2894,8 +2894,11 @@ function prepareTimelineRowCounts(items) {
   for (let day = startOfDay(windowStart); day < windowEnd; day = addDays(day, 1)) {
     const start = Math.max(day.getTime(), windowStart.getTime());
     const end = Math.min(addDays(day, 1).getTime(), windowEnd.getTime());
-    const count = relevant.filter(item => item.start.getTime() < end &&
-      item.end.getTime() > start).length;
+    const count = relevant.filter(item => {
+      const origin = item.start < windowStart ? windowStart : item.start;
+      return dateKey(origin) === dateKey(day) &&
+        item.start.getTime() < end && item.end.getTime() > start;
+    }).length;
     counts[dateKey(day)] = count >= 6 ? 6 : 5;
   }
   return counts;
@@ -2909,7 +2912,7 @@ function timelineRowCountForDate(date) {
 
 function timelineRowCountForItem(item) {
   return item?.layoutRows ?? timelineRowCountForDate(
-    item?.layoutDate ?? (item?.start instanceof Date && item.start > windowStart
+    (item?.start instanceof Date && item.start > windowStart
       ? item.start : windowStart));
 }
 
@@ -2999,16 +3002,21 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     // itens anteriores que ainda atravessam a meia-noite.
     const rows = Array.from({ length: dayLimit }, () => []);
     for (const previous of placed) {
-      let row = Number(previous.dayGridRows?.[dayKey] ?? previous.gridRow);
-      if (previous.start < dayStart && previous.end > dayStart) {
-        if (rowCounts && (row >= dayLimit || rows[row]?.some(existing => itemsOverlap(previous, existing)))) {
-          row = isBottomItem(previous)
-            ? rows.map((entries, index) => entries.length === 0 ? index : -1).reverse().find(index => index >= 0) ?? -1
-            : rows.findIndex(entries => entries.length === 0);
-        }
-        if (row >= 0 && row < dayLimit) {
-          rows[row].push(rowCounts ? {...previous, layoutRows: dayLimit, gridRow: row, sourceItem: previous} : previous);
-          if (rowCounts) previous.dayGridRows = {...previous.dayGridRows, [dayKey]: row};
+      if (previous.start >= dayStart || previous.end <= dayStart) continue;
+      if (!rowCounts) {
+        const row = Number(previous.gridRow);
+        if (row >= 0 && row < dayLimit) rows[row].push(previous);
+        continue;
+      }
+
+      // A continuação mantém a grade de origem. Reserva as faixas que
+      // intercepta na grade nova sem mover nem redimensionar o chart.
+      const originRows = previous.layoutRows;
+      const top = previous.gridRow / originRows;
+      const bottom = (previous.gridRow + 1) / originRows;
+      for (let row = 0; row < dayLimit; row++) {
+        if (top < (row + 1) / dayLimit && bottom > row / dayLimit) {
+          rows[row].push({...previous, gridRow: row, isContinuationReservation: true});
         }
       }
     }
@@ -3138,18 +3146,10 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       );
     });
 
-    const highestEventRow = placed
-      .filter(
-        (item) =>
-          item.kind === "event" &&
-          !item.isAllDay &&
-          !isBirthdayItem(item) &&
-          itemsOverlap(item, dayInterval)
-      )
-      .reduce(
-        (highest, item) => Math.max(highest, item.dayGridRows?.[dayKey] ?? item.gridRow),
-        -1
-      );
+    const highestEventRow = rows.reduce((highest, entries, row) =>
+      entries.some(item => item.kind === "event" && !item.isAllDay &&
+        !isBirthdayItem(item) && itemsOverlap(item, dayInterval))
+        ? row : highest, -1);
     const reminderFirstRow =
       highestEventRow >= timedRowLimit
         ? timedRowLimit
@@ -3188,13 +3188,13 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     const movableAllDayItems = new Set();
     for (const rowItems of rows) {
       for (const item of rowItems) {
-        if (isBottomItem(item) && itemsOverlap(item, dayInterval)) {
+        if (!item.isContinuationReservation && isBottomItem(item) && itemsOverlap(item, dayInterval)) {
           movableAllDayItems.add(item);
         }
       }
     }
 
-    const movableOriginals = new Set([...movableAllDayItems].map(item => item.sourceItem ?? item));
+    const movableOriginals = movableAllDayItems;
     const getLowPriorityPlan = (shift) => {
       const movedRows = new Map();
       for (const item of movableAllDayItems) {
@@ -3204,11 +3204,8 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       }
 
       for (const [item, targetRow] of movedRows) {
-        const conflict = placed.some((other) =>
-          !movableOriginals.has(other) &&
-          Number(other.dayGridRows?.[dayKey] ?? other.gridRow) === targetRow &&
-          itemsOverlap(item, other)
-        );
+        const conflict = rows[targetRow].some(other =>
+          !movableOriginals.has(other) && itemsOverlap(item, other));
         if (conflict) return null;
       }
 
@@ -3226,15 +3223,11 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       const lowestAllDayRow = allDayRows.length
         ? Math.max(...allDayRows)
         : -1;
-      const lastPriorityRow = placed
-        .filter((item) =>
-          !movableOriginals.has(item) &&
-          !isBirthdayItem(item) &&
-          !isHolidayItem(item) &&
+      const lastPriorityRow = rows.reduce((last, entries, row) =>
+        entries.some(item => !movableOriginals.has(item) &&
+          !isBirthdayItem(item) && !isHolidayItem(item) &&
           (item.kind === "event" || item.kind === "reminder") &&
-          itemsOverlap(item, dayInterval)
-        )
-        .reduce((last, item) => Math.max(last, Number(item.dayGridRows?.[dayKey] ?? item.gridRow)), -1);
+          itemsOverlap(item, dayInterval)) ? row : last, -1);
       const requestedBirthdayRow = Math.max(
         lastPriorityRow,
         lowestAllDayRow
@@ -3289,7 +3282,6 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
         }
         for (const [item, row] of lowPriorityPlan.movedRows) {
           item.gridRow = row;
-          if (item.sourceItem) item.sourceItem.dayGridRows[dayKey] = row;
           rows[row].push(item);
         }
       }
@@ -3497,19 +3489,17 @@ function itemsOverlap(first, second) {
 }
 
 function timelineItemBarSegmentsForDisplay(item) {
-  const originalX = timeToX(item.layoutVisibleStart ?? timelineItemCollisionStart(item));
+  const originalX = timeToX(timelineItemCollisionStart(item));
   const x = item.kind === "reminder"
     ? Math.max(0, originalX)
     : originalX;
-  const exactWidth = Math.max(1, timeToX(item.layoutVisibleEnd ?? item.end) - x);
+  const exactWidth = Math.max(1, timeToX(item.end) - x);
   const minimumWidth = item.kind === "event"
     ? isCompactMode()
       ? SETTINGS.compactMinimumChartWidth
       : SETTINGS.minimumChartWidth
     : 1;
-  const width = item.layoutVisibleEnd
-    ? Math.max(1, Math.min(Math.max(exactWidth, minimumWidth), timeToX(item.layoutVisibleEnd) - x))
-    : Math.max(exactWidth, minimumWidth);
+  const width = Math.max(exactWidth, minimumWidth);
   return timelineBarSegments(item, x, x + width)
     .map((segment) => ({ ...segment, x: segment.x - 1 }));
 }
@@ -9104,23 +9094,14 @@ function drawTimelineItemLayer(ctx, items, arrivalGuideDay = null, guideItems = 
   if (arrivalGuideDay) drawEventArrivalGuides(ctx, guideItems, arrivalGuideDay);
   drawEventStartLineAnchors(ctx, items);
   const chartTop = timelineChartTop();
-  for (let day = startOfDay(windowStart); day < windowEnd; day = addDays(day, 1)) {
-    const dayEnd = addDays(day, 1), key = dateKey(day);
-    const rowCount = timelineRowCountForDate(day);
-    const rowHeight = timelineRowHeight(day);
-    const dayItems = items.filter(item => item.start < dayEnd && item.end > day)
-      .map(item => ({...item,
-        layoutDate: day,
-        layoutRows: rowCount,
-        gridRow: item.dayGridRows?.[key] ?? item.gridRow,
-        layoutVisibleStart: new Date(Math.max(timelineItemCollisionStart(item).getTime(), day.getTime())),
-        layoutVisibleEnd: new Date(Math.min(item.end.getTime(), dayEnd.getTime())),
-      }));
-    for (let row = 0; row < rowCount; row++) {
-      const rowItems = dayItems.filter(item => item.gridRow === row)
-        .sort((a, b) => Number(a.isOverflow) - Number(b.isOverflow) || a.start - b.start);
-      rowItems.forEach(item => drawTimelineItem(ctx, item, chartTop + row * rowHeight, rowHeight));
-    }
+  // Desenha o item inteiro com a geometria do dia de origem, inclusive
+  // sua projeção após a meia-noite. O título não recomeça na virada.
+  const ordered = [...items].sort((a, b) =>
+    a.gridRow / timelineRowCountForItem(a) - b.gridRow / timelineRowCountForItem(b) ||
+    Number(a.isOverflow) - Number(b.isOverflow) || a.start - b.start);
+  for (const item of ordered) {
+    const rowHeight = timelineRowHeight(null, timelineRowCountForItem(item));
+    drawTimelineItem(ctx, item, chartTop + item.gridRow * rowHeight, rowHeight);
   }
 }
 

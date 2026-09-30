@@ -151,14 +151,21 @@ assert.equal(adaptive.filter(item => !item.isOverflow).length, 10,
   'As duas capacidades diárias não devem ocultar nenhum dos dez eventos.');
 const carry = adaptive.find(item => item.title === 'Virada');
 assert.equal(carry.gridRow, 5);
-const tomorrowKey = adaptiveContext.dateKey(at(1, 1));
-assert.equal(carry.dayGridRows[tomorrowKey], 0,
-  'O chart da sexta linha deve ser remapeado ao entrar no dia com cinco linhas.');
+assert.equal(carry.layoutRows, 6);
+assert.equal(carry.dayGridRows, undefined,
+  'A continuação não deve receber outra linha na virada.');
 const tomorrowRows = adaptive.filter(item => item.start >= at(0, 1)).map(item => item.gridRow);
-assert.deepEqual([...tomorrowRows, carry.dayGridRows[tomorrowKey]].sort(), [0,1,2,3,4]);
+assert.deepEqual([...tomorrowRows].sort(), [0,1,2,3],
+  'Novos charts deixam livre o espaço da continuação fixa.');
+const fiveTomorrow = [...adaptiveInput, timedEvent(11, 6, 1)];
+assert.deepEqual(Object.values(adaptiveContext.prepareTimelineRowCounts(fiveTomorrow)), [6,5],
+  'Cinco charts novos mais uma continuação não ativam seis linhas amanhã.');
+const sixTomorrow = [...fiveTomorrow, timedEvent(12, 6, 1)];
+assert.deepEqual(Object.values(adaptiveContext.prepareTimelineRowCounts(sixTomorrow)), [6,6],
+  'Seis charts de origem do dia ativam seis linhas.');
 adaptiveContext.timelineRowCounts = rowCounts;
 adaptiveContext.timelineChartTop = () => 0;
-adaptiveContext.timelineRowHeight = date => 300 / adaptiveContext.timelineRowCountForDate(date);
+adaptiveContext.timelineRowHeight = (date, count) => 300 / (count ?? adaptiveContext.timelineRowCountForDate(date));
 adaptiveContext.drawEventStartLineAnchors = () => {};
 const renderStart = source.indexOf('function drawTimelineItemLayer(');
 const renderEnd = source.indexOf('\nfunction diagonalWeekdayLabelColor(', renderStart);
@@ -168,8 +175,44 @@ adaptiveContext.drawTimelineItem = (_, item, y, rowHeight) => rendered.push({ite
 adaptiveContext.drawTimelineItemLayer({}, adaptive);
 assert(rendered.filter(entry => entry.item.layoutRows === 6).every(entry => entry.rowHeight === 50));
 assert(rendered.filter(entry => entry.item.layoutRows === 5).every(entry => entry.rowHeight === 60));
-assert.equal(rendered.filter(entry => entry.item.title === 'Virada').length, 2,
-  'O chart que cruza a virada deve usar a geometria própria de cada dia.');
+const continuation = rendered.filter(entry => entry.item.title === 'Virada');
+assert.equal(continuation.length, 1,
+  'O chart que cruza a virada é desenhado uma única vez, sem repetir o título.');
+assert.equal(continuation[0].y, 250);
+assert.equal(continuation[0].rowHeight, 50);
+assert.equal(continuation[0].item.end.getTime(), at(4, 1).getTime(),
+  'A geometria inteira mantém seu fim no dia seguinte.');
+assert.equal(continuation[0].item.layoutVisibleEnd, undefined);
+
+// O sentido inverso também preserva a grade de origem (cinco para seis).
+const reverseInput = [...fiveEvents.slice(0,4), {...crossMidnight, title:'Cinco para seis'},
+  ...Array.from({length:6}, (_,index) => timedEvent(20+index,1,1))];
+const reverseCounts = adaptiveContext.prepareTimelineRowCounts(reverseInput);
+assert.deepEqual(Object.values(reverseCounts), [5,6]);
+const reverse = adaptiveContext.chooseItems(reverseInput, at(8),6,reverseCounts);
+const reverseCarry = reverse.find(item => item.title === 'Cinco para seis');
+assert.equal(reverseCarry.layoutRows,5);
+assert.equal(reverseCarry.gridRow,4);
+assert.equal(reverseCarry.dayGridRows,undefined);
+rendered.length=0;
+adaptiveContext.drawTimelineItemLayer({},reverse);
+const reverseDraw = rendered.find(entry => entry.item.title === 'Cinco para seis');
+assert.equal(reverseDraw.rowHeight,60);
+assert.equal(reverseDraw.y,240);
+assert.equal(rendered.filter(entry => entry.item.title === 'Cinco para seis').length,1);
+assert(reverse.filter(item => item.start >= at(0,1) && !item.isOverflow)
+  .every(item => (item.gridRow+1)/6 <= reverseCarry.gridRow/5),
+  'Os charts novos não sobrepõem a projeção do dia anterior.');
+// Continuações de dia inteiro também ficam fixas quando entram aniversários.
+const longAllDay = {...allDayEvent('Dia inteiro contínuo'), end: at(0,2)};
+const bottomInput = [...fiveEvents, longAllDay, birthday(1)];
+const bottomCounts = adaptiveContext.prepareTimelineRowCounts(bottomInput);
+const bottomSelection = adaptiveContext.chooseItems(bottomInput, at(8),6,bottomCounts);
+const bottomCarry = bottomSelection.find(item => item.title === longAllDay.title);
+assert.equal(bottomCarry.gridRow,5);
+assert.equal(bottomCarry.layoutRows,6);
+assert.equal(bottomCarry.dayGridRows,undefined,
+  'Aniversários do dia seguinte não reposicionam a continuação de dia inteiro.');
 const fullAgenda = select([...fiveEvents, birthday()]);
 assert.equal(
   fullAgenda.filter(item => item.kind === 'event' && !item.isBirthdayGroup).length,

@@ -19,8 +19,8 @@ os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
 O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.7` amplia novamente a fonte e o espaçamento entre
-as letras dos títulos. A moldura branca fica somente no dia de hoje. O conjunto
+blur. A revisão `v2026.09.30.8` mantém a geometria e o texto dos charts que
+se estendem para o dia seguinte, sem reaplicar a grade na virada. A moldura branca fica somente no dia de hoje. O conjunto
 das duas linhas mantém o deslocamento de 10 px para baixo e os títulos mantêm
 recuos de 5 px no domingo e no sábado. A curva
 esquerda mantém direção e raio; os quadros adjacentes acompanham os traços
@@ -46,8 +46,9 @@ horas; somente a cadência muda.
 O cabeçalho mostra sete quadros fixos da semana corrente, de domingo a sábado.
 A moldura branca acompanha o dia atual. As larguras dividem a faixa em sete;
 a altura atual do cabeçalho é fixa. Cada dia usa cinco linhas quando há até
-cinco charts e seis quando há seis ou mais. A contagem inclui compromissos
-que atravessam a meia-noite e agrupa aniversários na sua linha conjunta.
+cinco charts e seis quando há seis ou mais. A contagem considera somente os charts de origem daquele dia e agrupa
+aniversários na sua linha conjunta. As continuações de dias anteriores não
+entram nessa contagem; mantêm posição, altura, fonte e título de origem.
 Os dias com cinco linhas recuperam as barras e fontes maiores; nos dias com
 seis, as barras e os textos menores preservam os vãos. A regra vale de forma
 independente para hoje, amanhã e os demais dias da janela.

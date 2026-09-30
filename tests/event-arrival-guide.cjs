@@ -663,7 +663,7 @@ assert.equal(
 );
 assert(
   itemLayer.indexOf('drawEventArrivalGuides(') <
-    itemLayer.indexOf('rowItems.forEach('),
+    itemLayer.indexOf('drawTimelineItem(ctx,'),
   'O chart e o título precisam cobrir a guia de chegada.'
 );
 const markerSource = source.slice(
