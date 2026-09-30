@@ -30,6 +30,23 @@ são limitados a `96`. A janela não é ampliada além desse teto.
 O tamanho, as posições e as fontes do widget permanecem os do modo de 24
 horas; somente a cadência muda.
 
+## Quadros da semana
+
+O cabeçalho mostra sete quadros fixos da semana corrente, de domingo a sábado.
+A moldura branca acompanha o dia atual. A altura, o vão entre quadros e a
+posição da timeline são preservados; as larguras dividem a faixa em sete.
+
+Cada quadro usa três linhas centradas:
+
+- `TER 29/09`: dia e data em fonte maior e negrito, com as cores existentes.
+- Mínima, ícone do clima e máxima: fonte menor, mínima azul e máxima vermelha.
+- `E: 0 | L: 2`: fonte menor, com as letras **E** e **L** em negrito.
+
+A agenda cobre a semana inteira. A previsão inclui os dias anteriores da
+semana quando disponíveis no Open-Meteo; dados ausentes continuam como `--º`.
+Os eventos de dia inteiro permanecem fora do contador E e os lembretes
+contabilizados continuam sendo os pendentes. Hoje exclui eventos já encerrados.
+
 ## Contagem até eventos e lembretes
 
 As contagens usam horas com uma casa decimal (`2h`, `2,5h`) e minutos abaixo

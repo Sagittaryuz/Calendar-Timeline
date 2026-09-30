@@ -17,7 +17,7 @@ const context = {
   WEATHER_MAX_INTERPOLATION_GAP_MS: 2 * 60 * 60 * 1000,
   WEATHER_SAMPLE_ORDER_CACHE: new WeakMap(),
   SETTINGS: { openMeteoForecastDays: 5 },
-  TITLE_CARD_COUNT: 4,
+  TITLE_CARD_COUNT: 7,
   windowStart: new Date(2026, 8, 18, 10, 37),
   windowEnd: new Date(2026, 8, 19, 10, 37),
   startOfDay: date =>
@@ -33,6 +33,9 @@ const context = {
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
 };
 vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('function titleWeekStart('),
+  source.indexOf('// Raio estrutural comum')), context);
+
 
 const weatherStart = source.indexOf('function finiteWeatherNumber(');
 const weatherEnd = source.indexOf('async function showForecaConnectionError(', weatherStart);
@@ -53,7 +56,7 @@ const hour = 60 * 60 * 1000;
 const requiredStart = context.floorToHour(context.windowStart).getTime();
 const requiredEnd = Math.max(
   context.windowEnd.getTime(),
-  context.addDays(context.startOfDay(context.windowStart), 4).getTime()
+  context.addDays(context.titleWeekStart(), 7).getTime()
 );
 
 assert.equal(
