@@ -187,7 +187,7 @@ const WIDGET_CONTOUR = Object.freeze({
 });
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
 const DAY_BOUNDARY_LINE_WIDTH = 4;
-const WIDGET_HORIZONTAL_TEST_OFFSET = -1;
+const WIDGET_LEFT_EDGE_RETRACTION = 1;
 // Expansão vertical do grid completo, em pixels do canvas lógico.
 // O topo acompanha a borda inferior da Lua; a base alcança o topo do círculo.
 const TIMELINE_GRID_TOP_EXTENSION = 6;
@@ -3777,17 +3777,14 @@ function shiftWidgetImage(image) {
   shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
   shiftedCtx.opaque = true;
   shiftedCtx.respectScreenScale = false;
-  const exposedX = WIDGET_HORIZONTAL_TEST_OFFSET > 0
-    ? 0
-    : CANVAS.width + WIDGET_HORIZONTAL_TEST_OFFSET;
   for (let y = 0; y < CANVAS.height; y++) {
     shiftedCtx.setFillColor(widgetGradientColorAtY(y));
-    shiftedCtx.fillRect(new Rect(exposedX, y,
-      Math.abs(WIDGET_HORIZONTAL_TEST_OFFSET), 1));
+    shiftedCtx.fillRect(new Rect(0, y, WIDGET_LEFT_EDGE_RETRACTION, 1));
   }
   shiftedCtx.drawImageInRect(
     image,
-    new Rect(WIDGET_HORIZONTAL_TEST_OFFSET, 0, CANVAS.width, CANVAS.height)
+    new Rect(WIDGET_LEFT_EDGE_RETRACTION, 0,
+      CANVAS.width - WIDGET_LEFT_EDGE_RETRACTION, CANVAS.height)
   );
   return shiftedCtx.getImage();
 }
