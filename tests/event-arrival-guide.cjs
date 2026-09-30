@@ -25,6 +25,7 @@ const context = {
     compactMinimumChartWidth: 18,
   },
   EVENT_ARRIVAL_GUIDE_LEFT_MARGIN: 15,
+  EVENT_ARRIVAL_GUIDE_SEPARATOR_WIDTH: 45,
   EVENT_ARRIVAL_GUIDE_LABEL_GAP: 2,
   EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE: 21,
   EVENT_ARRIVAL_GUIDE_LINE_WIDTH: 2,
@@ -143,7 +144,7 @@ assert.equal(
   1,
   'Evento convertido para 07h–11h deve voltar a receber linha de chegada.'
 );
-assert.equal(editedEventGuide[0].label, '6h');
+assert.equal(editedEventGuide[0].label, '5,9h');
 
 const convertedOccurrence = {
   identifier: 'bimestral-portugues',
@@ -238,18 +239,18 @@ assert.equal(
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 5), now),
-  '',
-  'A contagem regressiva deve sumir antes dos 30 minutos.'
+  '10m',
+  'O formato não oculta a contagem: a geometria decide se ela cabe.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 19, 30), now),
-  '1h e 30m',
-  'Horas e meia devem usar o mesmo formato da cápsula.'
+  '1,5h',
+  'Horas e meia usam o formato decimal compacto.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 20, 30), now),
-  '2h e 30m',
-  'A linha tracejada deve usar o mesmo rótulo de duas horas e meia.'
+  '2,5h',
+  'Duas horas e meia devem aparecer como 2,5h.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 59), now),
@@ -258,8 +259,8 @@ assert.equal(
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 29), now),
-  '',
-  'A contagem não deve aparecer com 29 minutos restantes.'
+  '30m',
+  'Abaixo de uma hora permanece o formato em minutos.'
 );
 assert.equal(
   context.formatEventArrivalHours(at(20, 18, 30), now),
@@ -288,7 +289,7 @@ assert.deepEqual(
 assert.deepEqual(
   todayGuides.map(guide => guide.label),
   ['30m', '2h'],
-  'Cada guia deve usar o formato da cápsula.'
+  'Cada guia deve usar o formato compacto.'
 );
 const timedReminder = {
   kind: 'reminder',
@@ -311,7 +312,7 @@ const timedReminderGuides = context.todayEventArrivalGuides(
 );
 assert.deepEqual(
   Array.from(timedReminderGuides, guide => guide.label),
-  ['30m', '1h e 40m'],
+  ['30m', '1,7h'],
   'Lembrete com horário deve usar a mesma contagem do evento; o de dia inteiro não.'
 );
 assert.equal(timedReminderGuides[1].row, 4);
@@ -385,6 +386,10 @@ context.timelineRowHeight = () => 90;
 context.timeToX = date =>
   (date.getTime() - context.windowStart.getTime()) /
   (24 * 60 * 60 * 1000) * context.timelineWidth();
+context.timelineItemBarSegmentsForDisplay = item => {
+  const x = context.timeToX(context.arrivalGuideStart(item)) - 1;
+  return [{ x, width: Math.max(34, context.timeToX(item.end) - 1 - x) }];
+};
 const drawnArrivalLabels = [];
 const drawnArrivalDashes = [];
 const mockDrawContext = {
@@ -399,13 +404,13 @@ context.drawEventArrivalGuides(
   mockDrawContext,
   [
     event('Segundo', at(20, 23), at(21, 0), 2),
-    event('Primeiro', at(20, 21), at(20, 22), 2),
+    event('Primeiro', at(20, 22), at(20, 23), 2),
   ],
   'today'
 );
 assert.deepEqual(
   drawnArrivalLabels.map(({ text }) => text),
-  ['3h', '5h'],
+  ['4h', '5h'],
   'Os rótulos da mesma faixa seguem a ordem dos eventos.'
 );
 assert.equal(drawnArrivalLabels[0].x, 15);
@@ -414,15 +419,15 @@ assert.ok(
   'Os números em uma faixa compartilhada ficam em colunas distintas.'
 );
 assert.ok(
-  drawnArrivalLabels[0].y < drawnArrivalLabels[1].y,
-  'A linha do evento mais próximo fica acima da linha seguinte.'
+  drawnArrivalLabels[0].y === drawnArrivalLabels[1].y,
+  'Todos os números ficam no mesmo alinhamento vertical.'
 );
 assert.ok(
   drawnArrivalDashes.some(rect => rect.width === 8 && rect.x === 44),
-  'Entre os números há um separador tracejado de 15 px (8 px de traço e 7 px de vão).'
+  'O tracejado começa 2 px depois do primeiro número.'
 );
 assert.ok(
-  drawnArrivalDashes.some(rect => rect.x >= 88),
+  drawnArrivalDashes.some(rect => rect.x >= 133),
   'As extensões dos tracejados começam após a coluna de números e o vão de 2 px.'
 );
 assert.deepEqual(
@@ -430,6 +435,54 @@ assert.deepEqual(
   [309, 339],
   'Os tracejados de eventos na mesma faixa nunca se sobrepõem.'
 );
+
+assert.equal(drawnArrivalLabels[1].x, 104,
+  'Após o texto há 2 px, 45 px de tracejado e novamente 15 px de margem.');
+assert.deepEqual(
+  drawnArrivalDashes.filter(rect => rect.y === 309 && rect.x < 104)
+    .map(rect => [rect.x, rect.width]),
+  [[44, 8], [59, 8], [74, 8]],
+  'O separador ocupa 45 px; os 15 px seguintes ficam livres antes do número.'
+);
+assert.equal(context.formatEventArrivalHours(at(20, 19, 10), now), '1,2h');
+assert.equal(context.formatDayEndCountdown(at(20, 20, 30), now), '2h e 30m');
+
+function drawLabelsFor(items, day = 'today') {
+  drawnArrivalLabels.length = 0;
+  drawnArrivalDashes.length = 0;
+  context.drawEventArrivalGuides(mockDrawContext, items, day);
+  return drawnArrivalLabels.map(({ text }) => text);
+}
+assert.deepEqual(drawLabelsFor([
+  event('Distante', at(20, 23), at(21, 0), 2),
+  event('Próximo', at(20, 21), at(20, 22), 2),
+]), ['3h'], 'Quando o par não cabe, fica somente a contagem mais próxima.');
+assert.deepEqual(drawLabelsFor([
+  event('Uma hora', at(20, 19), at(20, 20), 0),
+]), [], 'Uma contagem sozinha também some quando o chart comprime o espaço.');
+assert.deepEqual(drawLabelsFor([
+  event('Duas horas', at(20, 20), at(20, 21), 0),
+]), ['2h'], 'A contagem sozinha aparece quando cabe antes do chart.');
+assert.deepEqual(drawLabelsFor([
+  event('Terceiro', at(20, 23), at(21, 0), 1),
+  event('Primeiro', at(20, 22), at(20, 23), 1),
+  event('Segundo', at(20, 22, 30), at(20, 23), 1),
+]), ['4h', '4,5h'], 'Com vários eventos, mantém o maior prefixo cronológico que cabe.');
+assert.deepEqual([...new Set(drawnArrivalDashes.map(rect => rect.y))],
+  [211.5, 234, 256.5], 'Os três tracejados preservam a distribuição N+1.');
+assert.deepEqual(drawLabelsFor([
+  event('Amanhã', at(21, 1), at(21, 2), 0),
+], 'tomorrow'), [], 'A margem de amanhã também entra na decisão de caber.');
+assert.deepEqual(drawLabelsFor([
+  event('Em andamento', at(20, 17), at(20, 20), 0),
+  event('Depois', at(20, 22), at(20, 23), 0),
+]), [], 'Um chart em andamento na mesma faixa também impede sobrepor o número.');
+const normalTimeToX = context.timeToX;
+context.timeToX = date => normalTimeToX(date) * 2;
+assert.deepEqual(drawLabelsFor([
+  event('Uma hora em janela ampliada', at(20, 19), at(20, 20), 0),
+]), ['1h'], 'A regra é geométrica: uma hora pode aparecer quando há espaço.');
+context.timeToX = normalTimeToX;
 
 const tomorrowGuides = context.tomorrowEventArrivalGuides([
   event('Amanhã cedo', at(21, 10), at(21, 11), 3),
@@ -538,8 +591,8 @@ assert.equal(
 const imminent = event('Em breve', at(20, 18, 29), at(20, 19, 29), 1);
 assert.equal(
   context.todayEventArrivalGuides([imminent]).length,
-  0,
-  'Evento a menos de 30 minutos não mantém rótulo nem tracejado.'
+  1,
+  'Evento iminente mantém a guia; o desenho só mostra o número se couber.'
 );
 const startingInThirty = event(
   'Em meia hora',

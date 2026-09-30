@@ -163,6 +163,7 @@ const EVENT_ARRIVAL_GUIDE_LINE_WIDTH = 2;
 const EVENT_ARRIVAL_GUIDE_DASH_WIDTH = 8;
 const EVENT_ARRIVAL_GUIDE_GAP_WIDTH = 7;
 const EVENT_ARRIVAL_GUIDE_LEFT_MARGIN = 15;
+const EVENT_ARRIVAL_GUIDE_SEPARATOR_WIDTH = 45;
 const EVENT_ARRIVAL_GUIDE_LABEL_GAP = 2;
 const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 
@@ -11530,16 +11531,15 @@ function formatEventArrivalHours(eventStart, referenceDate = now) {
     return "";
   }
 
-  const remainingMilliseconds =
-    eventStart.getTime() - referenceDate.getTime();
-  if (
-    remainingMilliseconds <= 0 ||
-    remainingMilliseconds < EVENT_STARTING_SOON_WINDOW_MS
-  ) {
-    return "";
+  const remainingMilliseconds = eventStart.getTime() - referenceDate.getTime();
+  if (remainingMilliseconds <= 0) return "";
+  if (remainingMilliseconds < 60 * 60000) {
+    return formatTenMinuteCountdown(eventStart, referenceDate);
   }
 
-  return formatTenMinuteCountdown(eventStart, referenceDate);
+  // Uma casa decimal mantém a leitura curta: 2h, 2,5h, 1,2h.
+  const hours = Math.round(remainingMilliseconds / 3600000 * 10) / 10;
+  return `${String(hours).replace(".", ",")}h`;
 }
 
 function formatDayEndCountdown(eventStart, referenceDate = now) {
@@ -11817,72 +11817,63 @@ function drawEventArrivalGuides(ctx, items, day) {
   for (const rowGuides of guidesByRow.values()) {
     const rowTop = timelineChartTop() + rowGuides[0].row * rowHeight;
     const baseLayout = eventArrivalGuideLayout(day, dayBoundaryX, 0);
-    const separatorWidth = scaleVertical(
-      EVENT_ARRIVAL_GUIDE_DASH_WIDTH + EVENT_ARRIVAL_GUIDE_GAP_WIDTH
-    );
+    // Todos os números ficam no centro da faixa. Somente os tracejados
+    // usam os níveis 1/(N+1), 2/(N+1), ... em ordem cronológica.
+    const labelCenterY = rowTop + rowHeight / 2;
+    const separatorWidth = scaleVertical(EVENT_ARRIVAL_GUIDE_SEPARATOR_WIDTH);
+    const margin = EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
+    const gap = EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+    // Usa a geometria real dos charts da faixa, incluindo um evento em
+    // andamento que já ocupe a margem onde os números seriam desenhados.
+    const occupiedSegments = items
+      .filter((item) => Number(item.gridRow) === rowGuides[0].row &&
+        (item.kind === "event" || item.kind === "reminder") &&
+        !isBirthdayItem(item))
+      .flatMap((item) => timelineItemBarSegmentsForDisplay(item))
+      .filter((segment) => segment.x + segment.width > baseLayout.labelX);
+    const chartLeft = Math.min(timelineWidth(), ...occupiedSegments.map(
+      (segment) => segment.x
+    ));
     let nextLabelX = baseLayout.labelX;
-    const positionedGuides = rowGuides.map((guide, index) => {
+    const visibleLabels = [];
+    for (const guide of rowGuides) {
       const labelWidth = eventArrivalGuideLabelWidth(guide.label);
-      const positioned = {
-        guide,
-        index,
-        centerY: eventArrivalGuideTrackCenterY(
-          rowTop,
-          rowHeight,
-          index,
-          rowGuides.length
-        ),
-        labelX: nextLabelX,
-        labelWidth,
-      };
-      nextLabelX += labelWidth;
-      if (index < rowGuides.length - 1) {
-        nextLabelX += EVENT_ARRIVAL_GUIDE_LABEL_GAP + separatorWidth;
-      }
-      return positioned;
-    });
+      // Os rótulos devem caber por inteiro antes do primeiro chart.
+      // Ao comprimir a faixa, os últimos somem primeiro; o próximo evento
+      // permanece até que nem seu próprio número caiba mais.
+      if (nextLabelX + labelWidth + gap > chartLeft) break;
+      visibleLabels.push({ guide, labelX: nextLabelX, labelWidth });
+      nextLabelX += labelWidth + gap + separatorWidth + margin;
+    }
+    for (const { guide, labelX, labelWidth } of visibleLabels) {
+      drawEventArrivalGuideLabel(ctx, guide.label, labelX, labelCenterY, labelWidth);
+    }
 
-    for (const positioned of positionedGuides) {
-      const { guide, index, centerY, labelX, labelWidth } = positioned;
-      drawEventArrivalGuideLabel(
-        ctx,
-        guide.label,
-        labelX,
-        centerY,
-        labelWidth
+    for (let index = 0; index < rowGuides.length; index++) {
+      const guide = rowGuides[index];
+      const centerY = eventArrivalGuideTrackCenterY(
+        rowTop, rowHeight, index, rowGuides.length
       );
-
-      const targetX = guide.event
-        ? timelineEventGuideTargetX(guide.event)
-        : timeToX(guide.end);
-      const visibleTargetX = Math.max(
-        0,
-        Math.min(timelineWidth(), targetX)
-      );
-      let dashStartX = labelX + labelWidth + EVENT_ARRIVAL_GUIDE_LABEL_GAP;
-      for (const following of positionedGuides.slice(index + 1)) {
-        if (visibleTargetX <= dashStartX) break;
+      const ownLabel = visibleLabels[index];
+      // Mesmo sem número, cada evento mantém sua própria linha até o chart.
+      let dashStartX = ownLabel
+        ? ownLabel.labelX + ownLabel.labelWidth + gap
+        : visibleLabels.length
+          ? visibleLabels[visibleLabels.length - 1].labelX +
+            visibleLabels[visibleLabels.length - 1].labelWidth + gap
+          : baseLayout.labelX;
+      const visibleTargetX = Math.max(0, Math.min(
+        timelineWidth(), timelineEventGuideTargetX(guide.event)
+      ));
+      for (const following of visibleLabels.slice(index + 1)) {
+        // 45 px de tracejado e a margem de 15 px antes do próximo número.
         drawEventArrivalGuideDashes(
-          ctx,
-          dashStartX,
-          Math.min(visibleTargetX, following.labelX),
-          centerY
+          ctx, dashStartX,
+          Math.min(visibleTargetX, following.labelX - margin), centerY
         );
-        if (visibleTargetX <= following.labelX) {
-          dashStartX = visibleTargetX;
-          break;
-        }
-        // A linha abre espaço para os próximos números e continua em seu
-        // próprio nível depois deles, sem cruzar o texto.
-        dashStartX = following.labelX + following.labelWidth +
-          EVENT_ARRIVAL_GUIDE_LABEL_GAP;
+        dashStartX = following.labelX + following.labelWidth + gap;
       }
-      drawEventArrivalGuideDashes(
-        ctx,
-        dashStartX,
-        visibleTargetX,
-        centerY
-      );
+      drawEventArrivalGuideDashes(ctx, dashStartX, visibleTargetX, centerY);
     }
   }
 }

@@ -30,6 +30,19 @@ são limitados a `96`. A janela não é ampliada além desse teto.
 O tamanho, as posições e as fontes do widget permanecem os do modo de 24
 horas; somente a cadência muda.
 
+## Contagem até eventos e lembretes
+
+As contagens usam horas com uma casa decimal (`2h`, `2,5h`) e minutos abaixo
+de uma hora. A cápsula da mudança de dia mantém `2h e 30m`.
+
+Na mesma faixa, os números ficam alinhados ao centro: margem inicial de
+15 px, texto, vão de 2 px, trecho tracejado de 45 px e novamente margem de
+15 px antes do próximo número. Os tracejados ocupam níveis igualmente
+espaçados por `1/(N+1)`, do evento mais próximo no alto ao mais distante embaixo.
+Quando o espaço até os charts diminui, as últimas contagens somem primeiro;
+a primeira também some se não couber. Isso vale igualmente para uma contagem
+sozinha, sem um limite fixo de uma hora.
+
 ## Cache e recuperação offline
 
 O clima é atualizado conforme a validade da previsão e fica armazenado no
