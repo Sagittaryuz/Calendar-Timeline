@@ -201,13 +201,18 @@ for(let day=0;day<7;day++) {
     assert(entries[0].p.y<entries[5].p.y, 'Título e clima usam duas linhas.');
     assert(entries.every(t=>t.p.x>=card.x && t.p.x+t.t.length*t.size*0.62<=card.x+card.width+1));
     assert(entries.every(t=>t.p.y+t.size*1.15<=card.y+card.height));
-    const inset=i===0?5:i===6?-5:0;
     const titleCenter=(entries[0].p.x+entries[4].p.x+font*0.60)/2;
     const bounds=c.titleCardContentBounds(c.addDays(c.titleWeekStart(),i),card,
       layout.titleY+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO'),
       font*(1.15-run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO')));
-    assert(Math.abs(titleCenter-(bounds.center+inset))<1e-6,
-      'Somente domingo e sábado recebem 5 px de recuo.');
+    const weatherLeft=entries[5].p.x;
+    const weatherRight=entries[6].p.x+entries[6].t.length*entries[6].size*0.62;
+    if(i===0) assert(Math.abs(entries[0].p.x+layout.titleWidth-weatherRight)<1e-6,
+      'Domingo alinha a borda direita do grupo dia/data ao clima completo.');
+    else if(i===6) assert(Math.abs(entries[0].p.x-weatherLeft)<1e-6,
+      'Sábado alinha a borda esquerda do grupo dia/data ao clima completo.');
+    else assert(Math.abs(titleCenter-bounds.center)<1e-6,
+      'Os demais dias preservam o centro disponível.');
     const weatherCenter=(entries[5].p.x+entries[6].p.x+entries[6].t.length*entries[6].size*0.62)/2;
     assert(Math.abs(weatherCenter-(card.x+card.width/2))<1e-6,
       'A segunda linha usa o centro retangular, inclusive ao lado da curva.');
@@ -239,6 +244,28 @@ for(let day=0;day<7;day++) {
   assert(path.points.every(p=>p.x<=1092 && p.x>=0));
 }
 console.log('OK: sete colunas fixas, duas linhas, seleção diária e semana na virada do ano.');
+
+// Temperaturas com larguras diferentes e dados ausentes; datas fora do exemplo.
+for(const daily of [{minimum:23,maximum:35},{minimum:7,maximum:105},
+  {minimum:-12,maximum:8},{minimum:null,maximum:null}]) {
+  c.titleDailyTemperatureForDay=()=>daily;
+  for(const date of [new Date(2026,9,4),new Date(2026,9,10)]) {
+    for(const selected of [false,true]) {
+      texts.length=0; icons.length=0;
+      const index=date.getDay();
+      c.windowStart=selected?date:new Date(2026,9,7);
+      c.drawTitleDayCard(textCtx,date,c.titleDayCardRect(index),selected,index===6);
+      const left=texts[5].p.x;
+      const right=texts[6].p.x+texts[6].t.length*texts[6].size*0.62;
+      const actual=index===0?texts[0].p.x+c.titleCardTypography().titleWidth:texts[0].p.x;
+      assert(Math.abs(actual-(index===0?right:left))<1e-6);
+      assert(Math.abs(texts[3].p.x-texts[0].p.x-1.72*texts[0].size)<1e-6,
+        'O espaço entre dia e data permanece igual.');
+    }
+  }
+}
+console.log('OK: alinhamento dos grupos completos com temperaturas variáveis, ausentes e hoje.');
+
 
 for(const name of ['currentDayLeftBridgeMetrics','drawCurrentDayFrame','drawCurrentDayRoundedTopRightFrame']) load(name);
 for(let day=1;day<7;day++) {

@@ -27,8 +27,8 @@ Os textos dos quadros são centralizados pela área visível,
 considerando o contorno externo e as curvas dos quadros adjacentes a hoje.
 Textos e marcadores da timeline respeitam margens curvas, sem mover os charts
 ou seus horários; temperaturas nas extremidades usam recorte pelo contorno. A moldura branca fica somente no dia de hoje. O conjunto
-das duas linhas mantém o deslocamento de 10 px para baixo e os títulos mantêm
-recuos de 5 px no domingo e no sábado. A curva
+das duas linhas mantém o deslocamento de 10 px para baixo e os títulos alinham
+a borda direita ao clima no domingo e a borda esquerda no sábado. A curva
 esquerda mantém direção e raio; os quadros adjacentes acompanham os traços
 com o espaçamento existente. Dias úteis sob blur usam cinzas mais claros.
 A altura do cabeçalho e o encaixe inferior aprovado permanecem fixos. Se a versão não
@@ -61,14 +61,15 @@ independente para hoje, amanhã e os demais dias da janela.
 
 As duas linhas preservam o deslocamento vertical de 10 px. O centro horizontal
 da primeira linha considera a área disponível em toda sua altura, incluindo
-as curvas externas e as curvas dos cartões vizinhos ao dia atual. Somente a
-primeira linha recebe recuos de +5 px no domingo e -5 px no sábado.
+as curvas externas e as curvas dos cartões vizinhos ao dia atual. No domingo, a borda direita do grupo dia + data coincide com a borda direita
+da linha completa mínima/ícone/máxima; no sábado, coincidem as bordas esquerdas.
+Os demais dias preservam o centro disponível da primeira linha.
 A segunda linha usa o centro retangular e a mesma regra de tamanho nos sete
 quadros, sem deslocamento ou redução por causa das curvas:
 
 - `DOM 27`: dia da semana e dia do mês em fonte de maior peso, com letras bem
-  próximas e o maior tamanho que cabe no contorno. Domingo recua 5 px para a
-  direita; sábado recua 5 px para a esquerda.
+  próximas e o maior tamanho que cabe no contorno. Domingo alinha o grupo pela
+  direita ao clima; sábado alinha pela esquerda.
 - Mínima, ícone do clima e máxima: fonte menor, mínima azul e máxima vermelha,
   centradas na porção inferior do conjunto. Os contadores E/L saem do cabeçalho.
 

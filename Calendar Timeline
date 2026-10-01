@@ -5558,20 +5558,6 @@ function drawTitleDayCard(
   const weekdayLabel = shortWeekday(date);
   const dayLabel = String(date.getDate()).padStart(2, "0");
   const layout = titleCardTypography();
-  const titleInset = date.getDay() === 0 ? 5 : date.getDay() === 6 ? -5 : 0;
-  const titleBounds = titleCardContentBounds(date, card,
-    layout.titleY + layout.titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO,
-    layout.titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO));
-  const titleStartX = titleBounds.center - layout.titleWidth / 2 + titleInset;
-  ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
-  ctx.setTextColor(weekdayColor);
-  drawTightTitleText(ctx, weekdayLabel, titleStartX, layout.titleY, layout.titleFontSize);
-  ctx.setTextColor(dateColor);
-  // Letras próximas permitem aumentar a fonte sem alterar a largura do quadro.
-  drawTightTitleText(ctx, dayLabel, titleStartX + 1.72 * layout.titleFontSize,
-    layout.titleY, layout.titleFontSize);
-
   const daily = titleDailyTemperatureForDay(date);
   const minimumValue = finiteWeatherNumber(daily?.minimum);
   const maximumValue = finiteWeatherNumber(daily?.maximum);
@@ -5588,6 +5574,24 @@ function drawTitleDayCard(
   const maximumWidth = maximum.length * detailFontSize * 0.62;
   const weatherWidth = minimumWidth + iconGap * 2 + layout.iconSize + maximumWidth;
   const weatherX = weatherCenterX - weatherWidth / 2;
+  const titleBounds = titleCardContentBounds(date, card,
+    layout.titleY + layout.titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO,
+    layout.titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO));
+  // Alinha o grupo completo dia + data aos limites da linha de clima.
+  const titleStartX = date.getDay() === 0
+    ? weatherX + weatherWidth - layout.titleWidth
+    : date.getDay() === 6
+    ? weatherX
+    : titleBounds.center - layout.titleWidth / 2;
+  ctx.setTextAlignedLeft();
+  ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
+  ctx.setTextColor(weekdayColor);
+  drawTightTitleText(ctx, weekdayLabel, titleStartX, layout.titleY, layout.titleFontSize);
+  ctx.setTextColor(dateColor);
+  // Letras próximas permitem aumentar a fonte sem alterar a largura do quadro.
+  drawTightTitleText(ctx, dayLabel, titleStartX + 1.72 * layout.titleFontSize,
+    layout.titleY, layout.titleFontSize);
+
   const detailVisibleHeight = detailFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
   const weatherY = layout.weatherCenterY - detailVisibleHeight / 2 -
     detailFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO;
