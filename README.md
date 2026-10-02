@@ -21,7 +21,10 @@ pessoal.
 O canto inferior direito mostra a versão gravada no script executado, acima do
 blur. A revisão `v2026.09.30.13` centraliza a segunda linha pelo retângulo de
 cada quadro, com tamanho e altura comuns aos sete dias, sem compensar
-as curvas. O encaixe do círculo inferior permanece na posição aprovada. Permite títulos e aniversariantes além do fim
+as curvas. A revisão `v2026.10.02.1` desenha os títulos da timeline por inteiro,
+com a fonte original, e recorta somente os pixels no contorno externo do widget.
+Nomes longos não recebem abreviação ou reticências do layout de texto; letras
+na borda podem aparecer parcialmente. O encaixe do círculo inferior permanece na posição aprovada. Permite títulos e aniversariantes além do fim
 do chart ou do dia, limitando o texto somente pelo contorno externo.
 Os textos dos quadros são centralizados pela área visível,
 considerando o contorno externo e as curvas dos quadros adjacentes a hoje.
@@ -152,6 +155,7 @@ node tests/weather-data.cjs
 node tests/window-hours.cjs
 node tests/window-and-holidays.cjs
 node tests/hour-legend-clip.cjs
+node tests/timeline-title-clip.cjs
 node tests/event-arrival-guide.cjs
 node tests/all-day-event-start.cjs
 node --input-type=module --check < 'Calendar Timeline'

@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.09.30.13";
+const WIDGET_BUILD_VERSION = "2026.10.02.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -12398,31 +12398,15 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     );
   }
 
-  // O título pode ultrapassar o chart e a virada do dia. Somente o
-  // contorno externo limita sua leitura, como no desenho por drawText.
-  const titleRect = new Rect(textPoint.x, textPoint.y,
-    Math.max(0, textBounds.right - textPoint.x - 3),
-    titleFontSize * 1.15);
-  if (visibleTitle && titleRect.width > 0) {
-    if (emphasizedEventText) {
-      drawOutlinedTimelineTextInRect(
-        ctx, visibleTitle, titleRect, titleFontSize,
-        emphasizedTextColor, emphasizedOutlineColor, true
-      );
-    } else {
-      ctx.setTextAlignedLeft();
-      ctx.setFont(Font.blackRoundedSystemFont(titleFontSize));
-      ctx.setTextColor(new Color("#000000", 0.85));
-      ctx.drawTextInRect(visibleTitle,
-        new Rect(titleRect.x + 2, titleRect.y + 2, titleRect.width, titleRect.height));
-      ctx.setTextColor(Color.white());
-      ctx.drawTextInRect(visibleTitle, titleRect);
-    }
-
-    if (priorityPrefix && visibleTitle.startsWith(priorityPrefix.trim())) {
-      ctx.setTextColor(new Color("#FF453A"));
-      ctx.drawTextInRect(priorityPrefix.trim(), titleRect);
-    }
+  // drawText preserva a linha inteira, sem truncamento do layout de texto.
+  // A camada transparente recorta pixels somente no contorno do widget.
+  if (visibleTitle) {
+    drawTimelineTitleClipped(ctx, visibleTitle, textPoint, titleFontSize, {
+      emphasized: emphasizedEventText,
+      fillColor: emphasizedTextColor,
+      outlineColor: emphasizedOutlineColor,
+      priorityPrefix,
+    });
   }
 
   if (statusWidth > 0) {
@@ -12471,6 +12455,61 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       ctx.setTextColor(new Color("#FF453A"));
       ctx.drawTextInRect(metadataText, metadataRect);
     }
+  }
+}
+
+function drawTimelineTitleClipped(ctx, text, point, fontSize, style) {
+  const margin = Math.max(2, Math.ceil(scaleVertical(1)));
+  const top = Math.floor(point.y - margin);
+  const height = Math.ceil(point.y - top + fontSize * 1.5 + margin);
+  const width = Math.ceil(timelineWidth());
+  const layer = new DrawContext();
+  layer.size = new Size(width, height);
+  layer.opaque = false;
+  layer.respectScreenScale = false;
+  const localPoint = new Point(point.x, point.y - top);
+
+  if (style.emphasized) {
+    drawOutlinedTimelineText(layer, text, localPoint, fontSize,
+      style.fillColor, style.outlineColor);
+  } else {
+    layer.setTextAlignedLeft();
+    layer.setFont(Font.blackRoundedSystemFont(fontSize));
+    layer.setTextColor(new Color("#000000", 0.85));
+    layer.drawText(text, new Point(localPoint.x + 2, localPoint.y + 2));
+    layer.setTextColor(Color.white());
+    layer.drawText(text, localPoint);
+  }
+  if (style.priorityPrefix && text.startsWith(style.priorityPrefix.trim())) {
+    layer.setTextColor(new Color("#FF453A"));
+    layer.drawText(style.priorityPrefix.trim(), localPoint);
+  }
+
+  // Recorte por linha de pixels: uma letra que cruza a curva permanece
+  // parcialmente visível. A largura do chart e a virada do dia não cortam nomes.
+  const bands = [];
+  for (let y = Math.max(0, top); y < Math.min(top + height, timelineHeight()); y++) {
+    const inset = widgetContourInsetAtY(
+      CANVAS.timelineTop + y + 0.5, WIDGET_CONTOUR.strokeInset
+    );
+    const left = Math.max(0, Math.floor(inset - CANVAS.plotLeft));
+    const right = Math.min(width, Math.ceil(CANVAS.width - inset - CANVAS.plotLeft));
+    if (right <= left) continue;
+    const previous = bands[bands.length - 1];
+    if (previous && previous.y + previous.height === y &&
+        previous.left === left && previous.right === right) {
+      previous.height++;
+    } else {
+      bands.push({y, left, right, height: 1});
+    }
+  }
+  const image = layer.getImage();
+  for (const band of bands) {
+    ctx.drawImageAtPoint(
+      cropTransparentCanvasImage(image, band.left, band.y - top,
+        band.right - band.left, band.height),
+      new Point(band.left, band.y)
+    );
   }
 }
 

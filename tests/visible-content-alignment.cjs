@@ -28,7 +28,7 @@ assert.equal(local.right,safe.right);
 
 // A barra mantém sua extensão; somente marcador e texto recebem margem.
 load('drawTimelineItem');
-const bars=[],labels=[],markers=[];
+const bars=[],labels=[],titles=[],markers=[];
 Object.assign(c,{
   Font:{blackRoundedSystemFont:size=>size},
   isCompactMode:()=>false,
@@ -38,6 +38,7 @@ Object.assign(c,{
   reminderPriorityPrefix:()=>'',timelineItemStatus:()=>'',eventMetadataText:()=>'',
   drawTimelineBar:(_,rect)=>bars.push(rect),
   drawReminderMarker:(_,x,y,diameter)=>markers.push({x,y,diameter}),
+  drawTimelineTitleClipped:(_,text,point,fontSize)=>titles.push({text,point,fontSize}),
 });
 const ctx={setTextAlignedLeft(){},setFont(){},setTextColor(){},
   drawTextInRect(text,rect){labels.push({text,rect});}};
@@ -45,25 +46,21 @@ c.drawTimelineItem(ctx,{kind:'reminder',title:'Título longo até a borda',color
 assert.equal(bars[0].x,-20);
 assert.equal(bars[0].width,1150);
 assert.equal(bars[0].y,localY);
-assert(labels.length>0);
-for(const {rect} of labels) {
-  const bounds=c.timelineVisibleContentBounds(rect.y,rect.height,2);
-  assert(rect.x>=bounds.left && rect.x+rect.width<=bounds.right,
-    'Texto e sombra permanecem no contorno útil.');
-}
+assert.equal(titles[0].text,'TÍTULO LONGO ATÉ A BORDA');
+assert(titles[0].point.x>=safe.left, 'A origem do título mantém a margem.');
+// O recorte por pixels, incluindo sombras, é exercitado em timeline-title-clip.cjs.
 assert(markers[0].x-markers[0].diameter/2>=safe.left);
 assert.equal(markers[0].y,localY+height/2);
 
 load('drawOutlinedTimelineTextInRect');
 // Evento curto: o nome completo tem espaço além do retângulo do chart.
-bars.length=0; labels.length=0;
+bars.length=0; labels.length=0; titles.length=0;
 c.timelineItemBarSegmentsForDisplay=()=>[{x:100,width:34}];
 c.drawTimelineItem(ctx,{kind:'event',title:'Natação',color:'#FF0000',layoutRows:5,isCurrentEvent:true},localY,height);
-const swimming=labels.find(entry=>entry.text==='NATAÇÃO');
+const swimming=titles.find(entry=>entry.text==='NATAÇÃO');
 assert(swimming);
-assert(swimming.rect.width>7*30*0.7,
-  'O título completo deve caber mesmo com chart de apenas 34 px.');
-assert(swimming.rect.x+swimming.rect.width>bars[0].x+bars[0].width);
+assert(swimming.point.x+7*swimming.fontSize*0.7>bars[0].x+bars[0].width,
+  'A linha completa ultrapassa o chart de apenas 34 px.');
 assert.equal(bars[0].width,34);
 
 // Dois aniversariantes num trecho curto antes da meia-noite permanecem juntos.
