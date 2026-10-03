@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.02.1";
+const WIDGET_BUILD_VERSION = "2026.10.03.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -5380,39 +5380,11 @@ function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
     currentDayBoundaryBadgeCenterY() - DAY_CHANGE_CIRCLE_DIAMETER / 2;
   const rasterWidth = Math.max(1, Math.round(lineWidth));
   const rasterLeftX = Math.round(boundaryX - rasterWidth / 2);
-  const spans = chartsCrossingDayBoundaryVerticalSpans(
-    items,
-    addDays(startOfDay(windowStart), 1)
-  );
-
-  // Fragmenta apenas o traço estrutural. Qualquer chart que atravesse
-  // a virada permanece intacto e aparece acima da linha vertical.
-  const drawLineSpan = (startY, endY) => {
-    const clippedStart = Math.max(lineTop, startY);
-    const clippedEnd = Math.min(lineBottom, endY);
-    if (clippedEnd <= clippedStart) return;
-
-    ctx.setFillColor(lineColor);
-    ctx.fillRect(
-      new Rect(
-        rasterLeftX,
-        clippedStart,
-        rasterWidth,
-        clippedEnd - clippedStart
-      )
-    );
-  };
-
-  let cursorY = lineTop;
-  for (const span of spans) {
-    const spanTop = Math.max(lineTop, span.top);
-    const spanBottom = Math.min(lineBottom, span.bottom);
-    if (spanBottom <= lineTop || spanTop >= lineBottom) continue;
-
-    drawLineSpan(cursorY, spanTop);
-    cursorY = Math.max(cursorY, spanBottom);
-  }
-  drawLineSpan(cursorY, lineBottom);
+  // O traço contínuo fica acima de qualquer chart, inclusive os que
+  // atravessam a virada. Astro e círculo preservam seus limites.
+  if (lineBottom <= lineTop) return;
+  ctx.setFillColor(lineColor);
+  ctx.fillRect(new Rect(rasterLeftX, lineTop, rasterWidth, lineBottom - lineTop));
 }
 
 function drawCurrentDayFrame(ctx) {
@@ -9055,12 +9027,6 @@ async function renderTimelinePanel(items, loadError) {
   // visualmente por cima das barras.
   drawCompactThermalBand(baseCtx, hourlyWeather);
 
-  // Estas camadas estruturais ficam prontas antes dos charts. Assim, os
-  // eventos e lembretes permanecem como a camada visual superior da agenda.
-  // A moldura inferior contínua é composta depois, no canvas principal,
-  // para que a curva lateral e sua linha horizontal compartilhem o mesmo Path.
-  drawTimelineDayBoundariesOnTop(baseCtx);
-
   // Os eventos, charts e lembretes que começam amanhã fazem parte da
   // imagem-base e serão suavizados junto com o restante do futuro.
   if (!loadError) {
@@ -9105,11 +9071,6 @@ async function renderTimelinePanel(items, loadError) {
     await drawDiagonalWeekdayLabels(ctx);
   }
 
-  // O astro de mudança de dia e o círculo inferior também permanecem
-  // nítidos e acima do blur.
-  drawWeekdayBadgesOnTop(ctx);
-  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
-
   if (loadError) {
     drawPermissionState(ctx);
   } else {
@@ -9125,6 +9086,11 @@ async function renderTimelinePanel(items, loadError) {
     // térmica; os contornos e indicadores estruturais seguem nítidos acima.
     drawEventStartLines(ctx, timelineItemsStartingToday(items));
   }
+  // Divisões de dia prevalecem sobre todos os charts, inclusive os de
+  // amanhã e as continuações de hoje. Astros e círculos cobrem as pontas.
+  drawTimelineDayBoundariesOnTop(ctx);
+  drawWeekdayBadgesOnTop(ctx);
+  drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
   return ctx.getImage();
 }
 
@@ -12795,12 +12761,13 @@ function currentEventCountdown(end) {
     0,
     Math.ceil((end.getTime() - now.getTime()) / 60000)
   );
-  if (minutes < 60) return `AGORA · ${minutes} MIN`;
+  // Dentro do chart, somente o tempo restante: sem rótulo de status verbal.
+  if (minutes < 60) return `${minutes} MIN`;
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return remainder
-    ? `AGORA · ${hours}H${remainder}`
-    : `AGORA · ${hours}H`;
+    ? `${hours}H${remainder}`
+    : `${hours}H`;
 }
 
 function nextEventCountdown(start) {
