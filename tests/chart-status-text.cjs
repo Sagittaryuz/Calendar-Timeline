@@ -1,4 +1,4 @@
-// Textos gerados dentro dos charts: tempo numérico sem palavras de status.
+// Charts sem contagem auxiliar de tempo; números legítimos do título intactos.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -19,10 +19,10 @@ for (const [minutes, expected] of [[-1, '0 MIN'], [0, '0 MIN'], [0.1, '1 MIN'],
   [59, '59 MIN'], [59.1, '1H'], [60, '1H'], [61, '1H1'], [125, '2H5'], [240, '4H']]) {
   const end = new Date(now.getTime() + minutes * 60000);
   assert.equal(context.currentEventCountdown(end), expected);
-  assert.equal(context.timelineItemStatus({isCurrentEvent: true, end}), expected);
+  assert.equal(context.timelineItemStatus({isCurrentEvent: true, end}), '');
 }
 assert.equal(context.timelineItemStatus({isCurrentEvent: true,
-  end: new Date(now.getTime() + 125 * 60000), conflictCount: 2}), '2H5  ×3');
+  end: new Date(now.getTime() + 125 * 60000), conflictCount: 2}), '×3');
 assert.equal(context.timelineItemStatus({isNextEvent: true}), '');
 assert.equal(context.timelineItemStatus({kind: 'reminder', isOverdue: true}), '');
 assert.equal(context.timelineItemStatus({kind: 'reminder', conflictCount: 1}), '×2');
@@ -50,6 +50,7 @@ Object.assign(context, {Rect, Point, Color,
 });
 const ctx = {setTextAlignedCenter() {}, setFont() {}, setTextColor() {},
   drawTextInRect: text => statuses.push(text)};
+context.currentEventCountdown = () => assert.fail('O chart não deve pedir contagem de tempo.');
 for (const [kind, state] of [['event', 'current'], ['event', 'soon'],
   ['event', 'normal'], ['reminder', 'overdue']]) {
   titles.length = statuses.length = bars.length = styles.length = 0;
@@ -66,9 +67,37 @@ for (const [kind, state] of [['event', 'current'], ['event', 'soon'],
   assert.equal(bars[0].x, 100);
   assert.equal(bars[0].width, 700);
   assert.equal(JSON.stringify(item), original);
-  assert.deepEqual(statuses, state === 'current' ? ['2H5'] : []);
+  assert.deepEqual(statuses, []);
   assert.equal(styles[0].emphasized, state === 'current' || state === 'soon');
   assert.equal(styles[0].fillColor, state === 'soon' ? '#FF1F1F' : '#FFFFFF');
   assert.equal(styles[0].outlineColor, state === 'soon' ? '#FFFFFF' : '#000000');
 }
-console.log('OK: charts sem AGORA gerado; contagem numérica, conflitos, ícones, títulos e estados visuais preservados.');
+// Minutos, horas exatas, horas+minutos e horizontes longos nos dois layouts.
+let cases = 0;
+for (const compact of [false, true]) for (const rows of [5, 6]) {
+  context.isCompactMode = () => compact;
+  context.compactTimelineFontSize = size => size;
+  for (const minutes of [0, 0.1, 59, 60, 61, 125, 240, 1440, 5760]) {
+    for (const state of ['current', 'next', 'soon']) {
+      titles.length = statuses.length = bars.length = styles.length = 0;
+      const title = 'Curso 2H5 · 10:30 · 59 MIN';
+      context.drawTimelineItem(ctx, {kind: 'event', title, color: '#FF0000',
+        layoutRows: rows, end: new Date(now.getTime() + minutes * 60000),
+        isCurrentEvent: state === 'current', isNextEvent: state === 'next',
+        isStartingSoon: state === 'soon'}, 40, 44);
+      assert.equal(titles[0].title, title.toLocaleUpperCase('pt-BR'));
+      assert.deepEqual(statuses, [], 'Nenhuma contagem é sobreposta ao título.');
+      assert.equal(bars[0].width, 700);
+      cases++;
+    }
+  }
+}
+context.isCompactMode = () => false;
+statuses.length = 0;
+context.drawTimelineItem(ctx, {kind: 'event', title: 'Curso 10:30', color: '#FF0000',
+  layoutRows: 5, isCurrentEvent: true, conflictCount: 1,
+  location: 'Local fictício', hasVideoLink: true, attendeeCount: 2,
+  availability: 'tentative', end: new Date(now.getTime() + 125 * 60000)}, 40, 44);
+assert.deepEqual(statuses, ['×2', '⌖  ▶  ◉  ?'],
+  'Contadores e ícones não relacionados ao tempo permanecem no renderer.');
+console.log(`OK: ${cases} variantes sem tempo auxiliar nos charts; números dos títulos, conflitos, ícones e estados visuais preservados.`);
