@@ -166,6 +166,8 @@ context.scaleVertical = value => value;
 context.isCompactMode = () => false;
 context.timelineWidth = () => 1024;
 context.solarLineY = () => 20;
+vm.runInContext(source.slice(source.indexOf('function rainTopMarkerTopY('),
+  source.indexOf('function drawRainTopMarker(')), context);
 context.timeToX = date =>
   (date.getTime() - context.windowStart.getTime()) /
   context.WEATHER_QUARTER_MS * 10;
@@ -186,7 +188,8 @@ context.drawRainBar = (drawContext, rect, color) => {
   drawContext.bars.push(rect);
   (drawContext.colors ??= []).push(color);
 };
-context.drawRainTopMarker = () => {};
+const rainTopMarkers = [];
+context.drawRainTopMarker = (...args) => rainTopMarkers.push(args);
 const previousWeatherWindowStart = context.windowStart;
 const previousWeatherWindowEnd = context.windowEnd;
 context.windowStart = new Date(radarStart);
@@ -197,8 +200,16 @@ assert.equal(localizedBars.bars.length, 1,
   'Os trechos secos cobertos pelo radar suprimem a hora inteira prevista pelos modelos.');
 assert.equal(localizedBars.bars[0].x, 26,
   'A barra aparece no quarto de hora do radar, não no início da hora do modelo.');
-assert.equal(localizedBars.colors[0].alpha, 0.55,
-  'Chuva sobre charts usa 55% de opacidade, preservando 45% da cor subjacente.');
+assert.equal(localizedBars.colors[0].alpha, 1,
+  'Barras sobre charts retomam a opacidade original de 100%.');
+context.drawThermalRainBars({bars:[]}, [{timestamp:consensusTimestamp, rainMM:4}], 0, 30);
+assert(rainTopMarkers.length > 0, 'Executa o desenho das gotas na grade de quartos de hora.');
+for (const marker of rainTopMarkers) {
+  assert.equal(marker.at(-1).alpha, 1, 'Gotas também retomam opacidade total.');
+  assert(Math.abs(marker[2] + marker[3] * (marker[5] ? 106331/227100 : 568451/991725) - 20) < 1e-9,
+    'Centro da gota/raio coincide com a linha solar na composição real.');
+  assert.equal(marker.at(-1).hex, context.SETTINGS.rainLineColor, 'Cor original preservada.');
+}
 assert.equal(localizedBars.bars[0].width, 8);
 assert.equal(localizedBars.bars[0].height, 28 * (2 / 10), 'Escala de volume preservada: 2 mm / referência de 10 mm.');
 context.windowStart = previousWeatherWindowStart;

@@ -40,7 +40,9 @@ const record = name => ctx => ctx.events.push(name);
 Object.assign(c, {
   drawTimelineBackground: record('background'),
   drawWeatherConditionStrip: record('weather'), drawHourAxis: record('hours'),
-  drawTimelineRainOverlay: record('rain'),
+  drawTimelineRainOverlay: ctx => {
+    ctx.setFillColor('rain'); ctx.fillRect(new Rect(0,130,1092,200));
+  },
   drawFixedDaylightGlow: record('solar'), drawCompactThermalBand: record('thermal'),
   drawBottomHourLegend: record('legend'), drawEventStartLines: record('event-start'),
   drawDiagonalWeekdayLabels: async ctx => ctx.events.push('weekday-labels'),
@@ -88,6 +90,8 @@ function topColor(image, x, y) {
       }
       const firstBoundary = image.events.indexOf('boundary');
       const rain = image.events.indexOf('rain');
+      assert.equal(topColor(image, 17, 150), 'rain',
+        'Chuva opaca cobre o chart no cruzamento, acima de hoje/amanhã/blur.');
       assert(rain > image.events.indexOf('thermal'));
       assert(firstBoundary > rain);
       if (blur) assert(rain > image.events.indexOf('blur'));

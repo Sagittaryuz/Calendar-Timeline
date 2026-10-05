@@ -168,11 +168,9 @@ for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
 }
 for(const text of texts) assert(text.p.y+text.size*1.15<=last.y+last.height,
   'As duas linhas cabem na altura original.');
-assert(source.includes('const RAIN_TOP_MARKER_VERTICAL_OFFSET = -10;'),
-  'Gotas acumulam mais 5 unidades de deslocamento');
-assert(source.includes('solarLineY() + scaleVertical(12) + RAIN_TOP_MARKER_VERTICAL_OFFSET,'),
-  'Gotas usam o deslocamento vertical centralizado');
-console.log('OK: canto interno suave, títulos centralizados, ponte sem cruzamento e gotas -10 no total.');
+assert(source.includes('rainTopMarkerTopY(markerHeight, entry.storm),'),
+  'Gotas usam seu centro visual sobre a linha solar.');
+console.log('OK: canto interno suave, títulos centralizados, ponte sem cruzamento e gotas sobre a linha solar.');
 
 // Posições fixas em todos os dias, inclusive na semana que cruza o ano.
 for (const name of ['drawDatePanel','currentDayFrameMetrics',
