@@ -18,7 +18,7 @@ const context = {
 vm.createContext(context);
 
 const start = source.indexOf('function parseWindowHours(');
-const end = source.indexOf('function calendarURL(', start);
+const end = source.indexOf('function acrossURL(', start);
 assert(start >= 0 && end > start, 'Localizar parser da janela.');
 vm.runInContext(source.slice(start, end), context);
 

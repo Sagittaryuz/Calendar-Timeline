@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.04.1";
+const WIDGET_BUILD_VERSION = "2026.10.05.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -504,7 +504,7 @@ const widget = isAccessoryFamily(widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
 // Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
-// o Calendário, conservando o intervalo definido no parâmetro do widget.
+// o Across, conservando o intervalo definido no parâmetro do widget.
 let refreshURL = addURLParameter(
   URLScheme.forRunningScript(),
   "refresh",
@@ -527,7 +527,7 @@ if (config.runsInWidget || config.runsWithSiri) {
 
   if (refreshRequested) {
     Script.setWidget(widget);
-    Safari.open(calendarURL(now));
+    Safari.open(acrossURL());
   } else {
     await widget.presentMedium();
   }
@@ -12859,12 +12859,10 @@ function parseWindowHours(parameter) {
   return Math.min(value, SETTINGS.maximumWindowHours);
 }
 
-function calendarURL(date) {
-  const appleReferenceDate = Date.UTC(2001, 0, 1, 0, 0, 0);
-  const secondsSinceReference = Math.floor(
-    (date.getTime() - appleReferenceDate) / 1000
-  );
-  return `calshow:${secondsSinceReference}`;
+function acrossURL() {
+  // Basic launch scheme discussed by DayMore and an Across user:
+  // https://blog.daymore.com/?p=1334
+  return "across://";
 }
 
 function addURLParameter(url, name, value) {
