@@ -540,3 +540,107 @@ function contextItemsOverlap(first, second) {
 }
 
 console.log('OK: prioridade, compartilhamento por texto e excedentes sobre chart com título preservado.');
+
+// Reproduz a ausência do +X: título integral da sexta tarefa excede o canvas.
+for (const count of [4, 6, 7, 9]) {
+  const c = makeContext();
+  c.windowStart = at(8); c.windowEnd = at(8, 1);
+  const input = Array.from({length: count}, (_, i) => reminder(
+    i === 5 ? 'Pagar 1333,00 para Tiago PA Engenharia — título integral bastante longo '.repeat(3) : `Pendente ${i}`,
+    at(0), at(0, 1), {identifier: `task-${i}`}));
+  const result = c.chooseItems(input, at(8), 6);
+  assert.equal(result.filter(i => !i.isOverflow).length, Math.min(6, count));
+  const badges = result.filter(i => i.isOverflow);
+  assert.equal(badges.length, count > 6 ? 1 : 0);
+  if (badges.length) {
+    assert.equal(badges[0].title, `+${count - 6}`);
+    assert.equal(badges[0].gridRow, 5);
+    assert(badges[0].markerX >= 0 && badges[0].markerX + 62 <= c.timelineWidth());
+    assert.equal(result.find(i => i.identifier === 'task-5').title, input[5].title);
+  }
+}
+
+// Intervalos ocultos distintos devem compor um único total diário.
+{
+  const c = makeContext(); c.windowStart = at(8); c.windowEnd = at(8,1);
+  const full = Array.from({length:6}, (_,i) => reminder(`Base ${i}`, at(0), at(0,1)));
+  const hidden = [reminder('Depois A', at(12), at(13), {sourceIsAllDay:false}),
+    reminder('Depois B', at(18), at(19), {sourceIsAllDay:false})];
+  const result = c.chooseItems([...full, ...hidden], at(8),6);
+  assert.deepEqual(Array.from(result.filter(i => i.isOverflow), i => i.title), ['+2']);
+  assert.equal(result.filter(i => !i.isOverflow).length, 6);
+  // Outro dia na mesma linha recebe seu próprio badge.
+  const nextDay = full.map(i => ({...i, start:at(0,1), end:at(0,2)}));
+  c.windowEnd=at(8,2);
+  const multi = c.chooseItems([...full,...hidden,...nextDay,
+    reminder('Amanhã oculto',at(0,1),at(0,2))],at(8),6);
+  assert.deepEqual(Array.from(multi.filter(i=>i.isOverflow),i=>i.title),['+2','+1']);
+}
+
+// Render real do ramo de overflow, com operações de desenho registradas.
+{
+  const c=makeContext();
+  c.Color=class {static white(){return 'white';}};
+  c.Font={blackRoundedSystemFont:size=>({size})};
+  c.timelineBarHeight=()=>30;
+  c.timelineVisibleContentBounds=()=>({left:18,right:1000});
+  const bars=[],texts=[];
+  c.drawTimelineBar=(_,rect)=>bars.push(rect);
+  c.Rect=class {constructor(x,y,width,height){Object.assign(this,{x,y,width,height});}};
+  const start=source.indexOf('function drawTimelineItem(');
+  const end=source.indexOf('\nfunction drawTimelineTitleClipped(',start);
+  vm.runInContext(source.slice(start,end),c);
+  const ctx={setTextAlignedCenter(){},setFont(font){assert(font.size>0);},
+    setTextColor(color){assert.equal(color,'white');},
+    drawTextInRect(text,rect){texts.push({text,rect});}};
+  for(const x of [-1,0,980]) c.drawTimelineItem(ctx,
+    {isOverflow:true,kind:'overflow',title:'+3',markerX:x,layoutRows:6,color:'#636366'},300,40);
+  for(const rect of bars){assert(rect.x>=18);assert(rect.x+rect.width<=1000);}
+  for(const {text,rect} of texts){assert.equal(text,'+3');assert.equal(rect.width,62);assert(rect.height>23);}
+}
+
+// Mocks reproduzem o contrato das APIs nativas de lembretes incompletos.
+(async()=>{
+  const c=makeContext(); c.now=at(8);c.windowStart=at(8);c.windowEnd=at(0,1);
+  c.TITLE_CARD_COUNT=7;c.titleWeekStart=()=>at(0);
+  Object.assign(c.SETTINGS,{showOverdueReminders:true,excludedCalendars:['Excluído']});
+  c.isHolidayEvent=()=>false;
+  c.removeSupersededCalendarEventViews=x=>x;
+  c.cleanTitle=x=>x;c.safeCalendarColor=()=> '#FFFFFF';
+  c.calculateScheduleSummary=()=>({busyMinutes:0,freeMinutes:1440});
+  c.normalizedReminderDayStart=r=>r.dueDate?c.startOfDay(r.dueDate):null;
+  const pending=Array.from({length:7},(_,i)=>({identifier:`p${i}`,title:`Pendente ${i}`,
+    dueDate:at(0),dueDateIncludesTime:false,calendar:{title:'Tarefas'},isCompleted:false}));
+  const raw=[...pending,{...pending[0],identifier:'completed',isCompleted:true},
+    {...pending[0],identifier:'excluded',calendar:{title:'Excluído'}},
+    {...pending[0],identifier:'tomorrow',dueDate:at(0,1)}];
+  c.CalendarEvent={between:async()=>[],today:async()=>[]};
+  c.Reminder={incompleteDueBetween:async()=>raw.filter(r=>!r.isCompleted),
+    incompleteDueToday:async()=>raw.filter(r=>!r.isCompleted&&r.dueDate.getTime()===at(0).getTime()),
+    scheduled:async()=>raw.filter(r=>!r.isCompleted)};
+  const start=source.indexOf('async function loadWindow(');
+  const end=source.indexOf('\nasync function loadAstronomy(',start);
+  vm.runInContext(source.slice(start,end),c);
+  const result=await c.loadWindow();
+  assert.equal(result.error,null);
+  assert.equal(result.items.length,7,'Hoje exclui concluídas, calendário excluído e amanhã fora da janela.');
+  assert.equal(new Set(result.items.map(i=>i.identifier)).size,7,'Consultas repetidas não duplicam ocorrências.');
+  const selected=c.chooseItems(result.items,at(8),6);
+  assert.equal(selected.filter(i=>!i.isOverflow).length,6);
+  assert.equal(selected.find(i=>i.isOverflow).title,'+1');
+  console.log('OK: tarefas 4/6/7/9, títulos longos, +X diário, dias independentes, render no contorno e consultas deduplicadas.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+
+{
+  const c=makeContext();c.windowStart=at(8);c.windowEnd=at(8,1);
+  const events=Array.from({length:3},(_,i)=>({...timedEvent(i,8),conflictCount:99}));
+  const tasks=Array.from({length:6},(_,i)=>reminder(`Tarefa ${i}`,at(0),at(0,1)));
+  const mixed=c.chooseItems([...tasks,...events],at(8),6);
+  assert.equal(mixed.filter(i=>i.kind==='event').length,3,'Eventos continuam prioritários.');
+  assert.equal(mixed.filter(i=>i.kind==='reminder').length,3);
+  assert.equal(mixed.find(i=>i.isOverflow).title,'+3','Conta omitidos, não conflitos.');
+  const allDay=c.chooseItems([...Array.from({length:6},(_,i)=>allDayEvent(`Dia inteiro ${i}`)),
+    reminder('Oculta',at(0),at(0,1))],at(8),6);
+  assert.equal(allDay.filter(i=>!i.isOverflow).length,6);
+  assert.equal(allDay.find(i=>i.isOverflow).title,'+1','Chart de dia inteiro também pode sustentar o badge.');
+}

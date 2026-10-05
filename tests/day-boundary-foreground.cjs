@@ -40,6 +40,7 @@ const record = name => ctx => ctx.events.push(name);
 Object.assign(c, {
   drawTimelineBackground: record('background'),
   drawWeatherConditionStrip: record('weather'), drawHourAxis: record('hours'),
+  drawTimelineRainOverlay: record('rain'),
   drawFixedDaylightGlow: record('solar'), drawCompactThermalBand: record('thermal'),
   drawBottomHourLegend: record('legend'), drawEventStartLines: record('event-start'),
   drawDiagonalWeekdayLabels: async ctx => ctx.events.push('weekday-labels'),
@@ -86,6 +87,15 @@ function topColor(image, x, y) {
         assert.equal(shape.rect.height, 320);
       }
       const firstBoundary = image.events.indexOf('boundary');
+      const rain = image.events.indexOf('rain');
+      assert(rain > image.events.indexOf('thermal'));
+      assert(firstBoundary > rain);
+      if (blur) assert(rain > image.events.indexOf('blur'));
+      if (!error) {
+        for (const chart of ['today-event', 'today-reminder', 'tomorrow-event', 'tomorrow-reminder'])
+          assert(rain > image.events.lastIndexOf(chart));
+        assert(image.events.indexOf('event-start') > rain);
+      }
       assert(firstBoundary > image.events.indexOf('legend'));
       if (!error) {
         for (const label of ['today-event', 'today-reminder', 'tomorrow-event', 'tomorrow-reminder', 'event-start']) {

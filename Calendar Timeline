@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.05.1";
+const WIDGET_BUILD_VERSION = "2026.10.05.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -3343,7 +3343,15 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
   const overflowMarkers = [];
   for (const [hiddenDayKey, dayHiddenItems] of overflowByDay) {
     const dayLimit = rowCounts?.[hiddenDayKey] ?? limit;
-    for (const group of groupOverflowItems(dayHiddenItems)) {
+    // Um badge diário conta todos os itens realmente omitidos, mesmo quando
+    // seus intervalos não se sobrepõem. Não depende da contagem de conflitos.
+    const group = {
+      count: dayHiddenItems.length,
+      start: new Date(Math.max(windowStart.getTime(),
+        Math.min(...dayHiddenItems.map(item => item.start.getTime())))),
+      end: new Date(Math.max(...dayHiddenItems.map(effectiveItemEnd))),
+    };
+    {
       const marker = {
         kind: "overflow",
         title: "+" + group.count,
@@ -3365,11 +3373,11 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
           displayDayKey(item) === hiddenDayKey &&
           item.gridRow === dayLimit - 1 &&
           (item.kind === "event" || item.kind === "reminder") &&
-          !item.isAllDay &&
           !isBirthdayItem(item) &&
           !item.overflowBadgeRight &&
           !overflowMarkers.some((existing) =>
-            existing.isOverlay && existing.gridRow === item.gridRow
+            existing.isOverlay && existing.gridRow === item.gridRow &&
+            displayDayKey(existing) === hiddenDayKey
           )
         )
         .sort((first, second) =>
@@ -3402,7 +3410,8 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
           displayDayKey(other) === hiddenDayKey
         );
         if (
-          reserved.right > timelineWidth() ||
+          // Títulos integrais podem ultrapassar o contorno do widget.
+          // Só uma colisão com outro chart impede reservar o badge.
           sameRow.some((other) => {
             const otherBounds = timelineItemVisualFootprint(other);
             return !(
@@ -6173,8 +6182,8 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
       scaleVertical(2),
       maximumBarHeight * normalized
     );
-    // A chuva mantém opacidade total para o ciano continuar claro.
-    const opacity = 1.0;
+    // Ciano ainda legível, com 45% do chart subjacente na composição.
+    const opacity = 0.55;
     const centerX = timeToX(new Date(entry.timestamp));
     if (
       centerX < -barWidth ||
@@ -8731,14 +8740,30 @@ function drawHourlyRainColumn(
   );
 }
 
-function drawCompactThermalBand(ctx, weather) {
-  const sourceHours = [...(weather?.hours ?? [])]
+function timelineRainSourceHours(weather) {
+  return [...(weather?.hours ?? [])]
     .filter(
       (hour) =>
         Number.isFinite(Number(hour.timestamp)) &&
         Number.isFinite(Number(hour.temperature))
     )
     .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+}
+
+function drawTimelineRainOverlay(ctx, weather) {
+  const sourceHours = timelineRainSourceHours(weather);
+  if (!sourceHours.some(hour =>
+    Number(hour.timestamp) >= windowStart.getTime() &&
+    Number(hour.timestamp) <= windowEnd.getTime())) return;
+  drawThermalRainBars(
+    ctx, sourceHours,
+    weatherStripBottomY() + TITLE_TIMELINE_GAP_ADJUSTMENT,
+    thermalBandBottomY()
+  );
+}
+
+function drawCompactThermalBand(ctx, weather) {
+  const sourceHours = timelineRainSourceHours(weather);
   const visibleHours = sourceHours.filter(
     (hour) =>
       Number(hour.timestamp) >= windowStart.getTime() &&
@@ -8788,17 +8813,6 @@ function drawCompactThermalBand(ctx, weather) {
     maximum
   );
 
-  // Barras opacas sobre a curva e antes dos textos de temperatura.
-  // A chuva ocupa a faixa livre até quase a base dos astros.
-  // Os charts são desenhados depois e continuam visualmente por cima.
-  const rainBarTop =
-    weatherStripBottomY() + TITLE_TIMELINE_GAP_ADJUSTMENT;
-  drawThermalRainBars(
-    ctx,
-    sourceHours,
-    rainBarTop,
-    graphBottom
-  );
   drawVisibleDailyExtremes(
     ctx,
     sourceHours,
@@ -9022,9 +9036,7 @@ async function renderTimelinePanel(items, loadError) {
   if (SETTINGS.showSolarGlow) {
     drawFixedDaylightGlow(baseCtx, hourlyWeather);
   }
-  // A chuva parte da base térmica e pode subir até quase a faixa dos astros.
-  // Ela é desenhada antes dos charts, eventos e lembretes, que permanecem
-  // visualmente por cima das barras.
+  // A curva térmica permanece na base; a chuva será composta sobre os charts.
   drawCompactThermalBand(baseCtx, hourlyWeather);
 
   // Os eventos, charts e lembretes que começam amanhã fazem parte da
@@ -9082,6 +9094,11 @@ async function renderTimelinePanel(items, loadError) {
       "today",
       items
     );
+  }
+  // Chuva translúcida sobre os charts de hoje/amanhã e sobre o blur,
+  // mantendo horários, volume e geometria da faixa térmica original.
+  drawTimelineRainOverlay(ctx, hourlyWeather);
+  if (!loadError) {
     // A linha de início fica na frente dos charts, da chuva e da curva
     // térmica; os contornos e indicadores estruturais seguem nítidos acima.
     drawEventStartLines(ctx, timelineItemsStartingToday(items));
@@ -12200,7 +12217,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
 
   if (item.isOverflow) {
     const markerWidth = 62;
-    const markerX = Number.isFinite(item.markerX)
+    const visibleBounds = timelineVisibleContentBounds(barY, barHeight);
+    const requestedMarkerX = Number.isFinite(item.markerX)
       ? item.markerX
       : Math.max(
           0,
@@ -12209,6 +12227,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
             timeToX(timelineItemDisplayStart(item))
           )
         ) - 1;
+    const markerX = Math.max(visibleBounds.left,
+      Math.min(visibleBounds.right - markerWidth, requestedMarkerX));
 
     drawTimelineBar(
       ctx,

@@ -179,8 +179,13 @@ context.Rect = class MockWeatherRect {
     Object.assign(this, { x, y, width, height });
   }
 };
-context.Color = class MockWeatherColor {};
-context.drawRainBar = (drawContext, rect) => drawContext.bars.push(rect);
+context.Color = class MockWeatherColor {
+  constructor(hex, alpha) { Object.assign(this, {hex, alpha}); }
+};
+context.drawRainBar = (drawContext, rect, color) => {
+  drawContext.bars.push(rect);
+  (drawContext.colors ??= []).push(color);
+};
 context.drawRainTopMarker = () => {};
 const previousWeatherWindowStart = context.windowStart;
 const previousWeatherWindowEnd = context.windowEnd;
@@ -192,6 +197,10 @@ assert.equal(localizedBars.bars.length, 1,
   'Os trechos secos cobertos pelo radar suprimem a hora inteira prevista pelos modelos.');
 assert.equal(localizedBars.bars[0].x, 26,
   'A barra aparece no quarto de hora do radar, não no início da hora do modelo.');
+assert.equal(localizedBars.colors[0].alpha, 0.55,
+  'Chuva sobre charts usa 55% de opacidade, preservando 45% da cor subjacente.');
+assert.equal(localizedBars.bars[0].width, 8);
+assert.equal(localizedBars.bars[0].height, 28 * (2 / 10), 'Escala de volume preservada: 2 mm / referência de 10 mm.');
 context.windowStart = previousWeatherWindowStart;
 context.windowEnd = previousWeatherWindowEnd;
 
