@@ -108,6 +108,21 @@ ou seis linhas conforme a contagem existente, sem posições fixas ou reservas
 para eventos de dia inteiro e aniversários. Excedentes geram o indicador diário
 `+N`; aniversários sem linha livre ficam ocultos sem gerar excedente artificial.
 
+A revisão `v2026.10.08.6` remove a extensão iniciada às 12h que levava
+charts de lembretes pendentes até as 06h do dia seguinte. Cada chart de
+lembrete termina, no máximo, nas 00h que encerram seu próprio dia; intervalos
+menores já existentes não são ampliados. A regra vale antes, exatamente e
+depois do meio-dia, para lembretes com ou sem horário, futuros e atrasados.
+Pendências antigas reapresentadas em hoje usam a meia-noite que encerra hoje.
+Na virada, a reapresentação como atrasado continua a cargo da consulta normal,
+sem uma barra estendida desde o dia anterior.
+
+A limitação atua somente sobre a cópia preparada para o desenho. Datas,
+horários de vencimento, títulos e prioridades da fonte não são alterados.
+Eventos reais que atravessam a meia-noite mantêm sua duração. Hierarquia,
+margens, linhas até os horários e toque no Calendário permanecem preservados.
+A regressão diária está em `tests/reminder-day-end.cjs`.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.
@@ -228,6 +243,7 @@ node tests/hour-legend-clip.cjs
 node tests/timeline-title-clip.cjs
 node tests/event-arrival-guide.cjs
 node tests/all-day-event-start.cjs
+node tests/reminder-day-end.cjs
 node --input-type=module --check < 'Calendar Timeline'
 git diff --check
 ```

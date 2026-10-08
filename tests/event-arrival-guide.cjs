@@ -78,11 +78,11 @@ vm.runInContext(source.slice(
   displayStart,
   source.indexOf('function drawTimelineItem(', displayStart)
 ), context);
-context.applyPendingDayCarryover = () => {};
+context.limitReminderChartToDay = () => {};
 context.itemsOverlap = () => false;
 const prepareStart = source.indexOf('function prepareTimelineItems(');
 const prepareEnd = source.indexOf(
-  'function isPendingDayCarryoverCandidate(',
+  'function limitReminderChartToDay(',
   prepareStart
 );
 assert(prepareStart >= 0 && prepareEnd > prepareStart);

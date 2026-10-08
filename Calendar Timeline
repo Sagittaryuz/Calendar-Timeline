@@ -110,9 +110,8 @@ const SETTINGS = {
   conflictColor: "#FF9F0A",
   nextEventColor: "#FFFFFF",
   overdueReminderColor: "#FF453A",
-  // Pendências temporizadas que atravessam a meia-noite recebem
-  // uma borda intensa, com espaçamento preservado dentro do chart.
-  pendingDayCarryoverEnabled: true,
+  // Borda intensa usada no destaque de eventos prestes a começar,
+  // com espaçamento preservado dentro do chart.
   pendingDayCarryoverBorderColor: "#FF1F1F",
   pendingDayCarryoverBorderWidth: 3,
   pendingDayCarryoverBorderGap: 2,
@@ -149,8 +148,6 @@ const THERMAL_COLOR_STOPS = [
 // eles não passa de seis horas.
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 const EVENT_STARTING_SOON_WINDOW_MS = 30 * 60 * 1000;
-const PENDING_DAY_CARRYOVER_CUTOFF_HOUR = 12;
-const PENDING_DAY_CARRYOVER_END_HOUR = 6;
 const ALL_DAY_REMINDER_DISPLAY_START_HOUR = 6;
 const WEATHER_HOUR_MS = 60 * 60 * 1000;
 const WEATHER_QUARTER_MS = 15 * 60 * 1000;
@@ -174,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.08.5";
+const WIDGET_BUILD_VERSION = "2026.10.08.6";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -706,7 +703,7 @@ async function loadWindow() {
       const { start: eventStart, end: eventEnd, isAllDay } = interval;
 
       // Eventos nunca recebem extensão artificial para o dia seguinte.
-      // Somente lembretes pendentes passam pela regra de carryover.
+      // Charts de lembretes também terminam na meia-noite do próprio dia.
       if (
         eventEnd <= windowStart ||
         eventStart >= windowEnd
@@ -2622,7 +2619,7 @@ function calculateScheduleSummary(events, rangeStart, rangeEnd) {
 function prepareTimelineItems(items, referenceDate) {
   const prepared = items.map((item) => {
     const copy = { ...item };
-    applyPendingDayCarryover(copy, referenceDate);
+    limitReminderChartToDay(copy, referenceDate);
     return copy;
   });
   const events = prepared.filter(
@@ -2630,8 +2627,8 @@ function prepareTimelineItems(items, referenceDate) {
   );
 
   for (const event of events) {
-    // Eventos seguem sempre o horário real do Calendário. Somente lembretes
-    // pendentes podem receber a extensão especial da virada do dia.
+    // Eventos seguem sempre o horário real do Calendário, sem limitar
+    // sua duração à meia-noite.
     event.isCurrentEvent =
       event.start <= referenceDate &&
       event.end > referenceDate;
@@ -2657,69 +2654,24 @@ function prepareTimelineItems(items, referenceDate) {
   return prepared;
 }
 
-function isPendingDayCarryoverCandidate(item, referenceDate) {
-  if (!SETTINGS.pendingDayCarryoverEnabled) return false;
+function limitReminderChartToDay(item, referenceDate) {
   if (
-    !item ||
-    item.kind !== "reminder" ||
+    item?.kind !== "reminder" ||
     !(item.start instanceof Date) ||
-    !(item.end instanceof Date)
-  ) {
-    return false;
-  }
-
-  const reference =
-    referenceDate instanceof Date ? referenceDate : now;
-  const todayStart = startOfDay(reference);
-  const tomorrowStart = addDays(todayStart, 1);
-  const cutoff = dateAtHour(
-    todayStart,
-    PENDING_DAY_CARRYOVER_CUTOFF_HOUR
-  );
-  const startMs = item.start.getTime();
-  const endMs = item.end.getTime();
-  const referenceMs = reference.getTime();
-
-  if (
-    !Number.isFinite(startMs) ||
-    !Number.isFinite(endMs) ||
-    reference < cutoff ||
-    endMs <= todayStart.getTime() ||
-    startMs >= tomorrowStart.getTime()
-  ) {
-    return false;
-  }
-
-  // Reminder.scheduled/incompleteDue* retorna somente lembretes pendentes.
-  // Lembretes sem horário vencem ao longo do dia; os com horário só entram
-  // depois que o horário devido já passou.
-  return (
-    item.isOverdue ||
-    item.sourceIsAllDay ||
-    startMs <= referenceMs
-  );
-}
-
-function pendingDayCarryoverEnd(referenceDate) {
-  return dateAtHour(
-    addDays(startOfDay(referenceDate), 1),
-    PENDING_DAY_CARRYOVER_END_HOUR
-  );
-}
-
-function applyPendingDayCarryover(item, referenceDate) {
-  if (!isPendingDayCarryoverCandidate(item, referenceDate)) {
-    return item;
-  }
-
-  const targetEnd = pendingDayCarryoverEnd(referenceDate);
-  if (
     !(item.end instanceof Date) ||
-    item.end.getTime() < targetEnd.getTime()
-  ) {
-    item.end = targetEnd;
-  }
-  item.isPendingDayCarryover = true;
+    !Number.isFinite(item.start.getTime()) ||
+    !Number.isFinite(item.end.getTime())
+  ) return item;
+
+  const reference = referenceDate instanceof Date ? referenceDate : now;
+  const referenceDay = startOfDay(reference);
+  // Pendências antigas são reapresentadas no dia atual pelo carregador.
+  // O limite altera apenas a cópia usada pelo desenho, nunca o lembrete.
+  const chartDay = item.isOverdue && item.start < referenceDay
+    ? referenceDay : startOfDay(item.start);
+  const dayEnd = addDays(chartDay, 1);
+  if (item.end > dayEnd) item.end = dayEnd;
+  delete item.isPendingDayCarryover;
   return item;
 }
 
@@ -3820,12 +3772,10 @@ function hasBlockingTodayTimelineItems(items) {
 
     // O item precisa ainda estar pendente/ativo e pertencer ao dia atual.
     // Isso inclui compromissos que atravessam a meia-noite.
-    const isCarryover = isPendingDayCarryoverCandidate(item, now);
-
     if (
       endMs <= todayStartMs ||
       startMs >= tomorrowStartMs ||
-      (endMs <= nowMs && !isCarryover)
+      endMs <= nowMs
     ) {
       return false;
     }
