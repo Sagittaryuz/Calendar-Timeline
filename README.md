@@ -46,6 +46,11 @@ inteiro e, por último, aniversários. Os itens usam as linhas livres de cima
 para baixo: sozinhos, também podem ocupar a primeira linha. Continuações
 preservam a linha e a geometria do dia de origem.
 
+A revisão `v2026.10.08.2` liga também os charts dos lembretes com horário
+à régua de horas, usando os mesmos trechos, cor, espessura, posição e regras
+de visibilidade dos eventos. Lembretes sem horário não recebem essa conexão
+vertical; a data original e a ordenação da agenda permanecem preservadas.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.

@@ -689,3 +689,59 @@ assert(
   !panel.includes('drawBottomHourLegend(ctx)'),
   'A legenda não deve ser redesenhada nítida sobre a região desfocada.'
 );
+
+// Conexão vertical: mesmos dois trechos e geometria dos eventos.
+{
+  const c={Date,windowStart:at(20,18),windowEnd:at(21,18),
+    isBirthdayItem:context.isBirthdayItem,
+    scaleVertical:value=>value,timelineWidth:()=>1024,
+    thermalBandBottomY:()=>500,
+    timelineBarVerticalRect:item=>Number.isFinite(item.gridRow)
+      ? {centerY:200+item.gridRow*40,bottom:220+item.gridRow*40}:null,
+    timeToX:date=>(date-c.windowStart)/(24*60*60*1000)*1024,
+    Color:MockColor,Rect:MockRect};
+  vm.createContext(c);
+  for(const name of ['prioritizedEvents','timelineStartLineItems',
+    'eventStartsAtDayChange','drawEventStartLines','drawEventStartLineAnchors']) {
+    const begin=source.indexOf('function '+name+'(');
+    const finish=source.indexOf('\nfunction ',begin+10);
+    assert(begin>=0&&finish>begin);
+    vm.runInContext(source.slice(begin,finish),c);
+  }
+  function draw(item,renderer) {
+    const rects=[],colors=[];
+    c[renderer]({setFillColor:color=>colors.push(color),fillRect:rect=>rects.push(rect)},[item]);
+    return {rects,colors};
+  }
+  const base=event('Evento',at(20,20),at(20,21),2,{color:'#FFA500'});
+  const reminder={...base,kind:'reminder',sourceIsAllDay:false};
+  for(const renderer of ['drawEventStartLines','drawEventStartLineAnchors']) {
+    const original=draw(base,renderer);
+    assert.equal(original.rects.length,1);
+    assert.deepEqual(draw(reminder,renderer),original,'Evento e lembrete usam geometria e cor idênticas.');
+    for(const item of [
+      {...reminder,sourceIsAllDay:true,start:at(20,0)},
+      {...reminder,isAllDay:true},
+      {...reminder,start:at(20,16),end:at(20,17),isOverdue:true},
+      {...reminder,start:at(20,16),end:at(21,0),isOverdue:true},
+      {...reminder,start:at(22,10),end:at(22,11)},
+      {...reminder,start:at(21,0),end:at(21,1)},
+      {...reminder,gridRow:undefined},
+    ]) assert.equal(draw(item,renderer).rects.length,0,'Não cria conexão sem horário visível válido.');
+    for(const date of [at(20,18),at(21,10),at(21,17,59)]) {
+      const item={...reminder,start:date,end:new Date(date.getTime()+3600000)};
+      const rect=draw(item,renderer).rects[0];assert(rect);
+      assert.equal(rect.x,c.timeToX(date)-2);assert.equal(rect.width,4);
+    }
+    const last={...reminder,start:at(21,18),end:at(21,19)};
+    assert.equal(draw(last,renderer).rects.length,0,'Fim da janela é exclusivo.');
+    const saved=c.timeToX;
+    for(const x of [-1,1025]) {c.timeToX=()=>x;assert.equal(draw(reminder,renderer).rects.length,0);}
+    for(const x of [0,1024]) {c.timeToX=()=>x;assert.equal(draw(reminder,renderer).rects.length,1);}
+    c.timeToX=saved;
+  }
+  assert.deepEqual(Array.from(c.timelineStartLineItems([reminder,base]),i=>i.kind),
+    ['event','reminder'],'Empates mantêm os eventos na ordem anterior.');
+  assert.equal(reminder.start.getTime(),at(20,20).getTime(),'Datas originais preservadas.');
+}
+console.log('OK: lembretes com horário recebem a conexão vertical dos eventos; sem horário não.');

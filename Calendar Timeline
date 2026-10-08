@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.08.1";
+const WIDGET_BUILD_VERSION = "2026.10.08.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -11522,6 +11522,23 @@ function drawHourLabelFrames(ctx, ticks) {
   }
 }
 
+function timelineStartLineItems(items) {
+  // A conexão usa somente horários reais. O início visual às 06h dos
+  // lembretes sem horário não cria uma linha até a régua de horas.
+  const timedReminders = items.filter((item) =>
+    item.kind === "reminder" &&
+    item.sourceIsAllDay === false &&
+    !item.isAllDay &&
+    !isBirthdayItem(item) &&
+    item.end > windowStart &&
+    item.start < windowEnd
+  );
+  return [...prioritizedEvents(items), ...timedReminders].sort((a, b) =>
+    a.start.getTime() - b.start.getTime() ||
+    a.end.getTime() - b.end.getTime()
+  );
+}
+
 function eventStartsAtDayChange(event) {
   const date = event?.start;
   return (
@@ -11893,7 +11910,7 @@ function drawEventArrivalGuides(ctx, items, day) {
 }
 
 function drawEventStartLines(ctx, items) {
-  const events = prioritizedEvents(items);
+  const events = timelineStartLineItems(items);
   const lineWidth = scaleVertical(4);
   const curveBottom = thermalBandBottomY();
 
@@ -11925,7 +11942,7 @@ function drawEventStartLines(ctx, items) {
 }
 
 function drawEventStartLineAnchors(ctx, items) {
-  const events = prioritizedEvents(items);
+  const events = timelineStartLineItems(items);
   const lineWidth = scaleVertical(4);
 
   // Este trecho alcança o centro do chart, mas fica atrás dele.
