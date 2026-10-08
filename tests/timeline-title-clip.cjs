@@ -43,9 +43,10 @@ class DrawContext {
   }
   getImage() { return {shapes: this.shapes.map(shape => ({...shape}))}; }
 }
-const c = {Point, Rect, Size, Color, DrawContext,
+const c = {Date, Point, Rect, Size, Color, DrawContext,
   Font: {blackRoundedSystemFont: size => ({size})},
-  SETTINGS: {maxItems: 6}, windowStart: new Date('2026-10-05T00:00:00Z')};
+  SETTINGS: {maxItems: 6}, ALL_DAY_REMINDER_DISPLAY_START_HOUR: 6,
+  windowStart: new Date('2026-10-05T00:00:00Z')};
 vm.createContext(c);
 vm.runInContext(source.slice(source.indexOf('const WIDGET_CANVAS_HEIGHT'),
   source.indexOf('const now =')), c);
@@ -57,7 +58,8 @@ function load(name) {
 }
 for (const name of ['timelineWidth', 'timelineHeight', 'drawTimelineTitleClipped',
   'drawOutlinedTimelineText', 'cropTransparentCanvasImage', 'drawTimelineItem',
-  'timeToX', 'estimatedTextWidth']) load(name);
+  'timeToX', 'estimatedTextWidth', 'startOfDay', 'addDays',
+  'limitReminderChartToDay', 'timelineItemCollisionStart']) load(name);
 const canvas = vm.runInContext('CANVAS', c);
 const width = c.timelineWidth();
 const height = c.timelineHeight();
@@ -125,9 +127,10 @@ for (const hours of [24, 48, 72, 96]) {
       if (state === 'reminder') {
         assert(textCalls.some(call => call.text === '!!!' && call.color.hex === '#FF453A'));
         assert.equal(markers.length, 1);
-        const right = x + barWidth - 7;
-        assert(output.shapes.every(shape => shape.x + shape.width <= right),
-          'Rótulo de lembrete não ultrapassa o fim da barra.');
+        if (edge === 'left' && title === titles[1]) {
+          assert(fill.some(shape => shape.x + shape.width > x + barWidth),
+            'Título de lembrete longo continua além da barra curta.');
+        }
       }
       cases++;
     }
@@ -196,17 +199,66 @@ for(const rows of [5,6]) for(const start of [-10,250,width-170]) {
     assert.equal(JSON.stringify(item),original,'Não muda título, prioridade ou horário.');
   }
 }
-// Sem badge: recorte termina na barra; com zero espaço não inventa título.
-for(const barWidth of [1,18,34,100,260]) {
+// Sem badge: a barra curta não limita o título; a margem do widget limita.
+for(const sourceIsAllDay of [false,true]) for(const barWidth of [1,18,34,100,260]) {
   layers.length=textCalls.length=markers.length=0;
   segments=[{x:250,width:barWidth}];
   const output=new DrawContext();output.size=new Size(width,height);
   c.drawTimelineItem(output,{kind:'reminder',title:'LEMBRETE DE TESTE LONGO',
-    color:'#0088FF',layoutRows:6,sourceIsAllDay:false},45,42);
-  assert(output.shapes.every(shape=>shape.x+shape.width<=250+barWidth-7));
-  if(barWidth<=18) assert.equal(textCalls.length,0);
+    color:'#0088FF',layoutRows:6,sourceIsAllDay},45,42);
+  assert(textCalls.some(call=>call.text.startsWith('!!! LEMBRETE')),
+    'O texto continua mesmo quando a barra é curta.');
+  assert(output.shapes.some(shape=>shape.x+shape.width>250+barWidth),
+    'O texto usa o espaço livre depois da barra.');
+  assert(output.shapes.every(shape=>shape.x>=0&&shape.x+shape.width<=width),
+    'O título permanece dentro da timeline.');
 }
-console.log('OK: margem de lembretes com badge no fim, recorte na barra e horários intactos.');
+
+// A geometria temporal continua em 00h; o título passa pelo espaço livre.
+// Referência antes, exatamente e depois do meio-dia; com e sem horário.
+{
+  c.windowStart=new Date(2026,9,5,0);
+  c.windowEnd=new Date(2026,9,7,0);
+  for(const referenceHour of [11,12,13]) for(const sourceIsAllDay of [false,true]) {
+    const start=sourceIsAllDay?new Date(2026,9,5,0):new Date(2026,9,5,18);
+    const item={kind:'reminder',title:'LEMBRETE ANÔNIMO '.repeat(8),
+      color:'#0088FF',layoutRows:6,start,end:new Date(2026,9,6,6),
+      sourceIsAllDay,isOverdue:false};
+    const reference=new Date(2026,9,5,referenceHour);
+    c.limitReminderChartToDay(item,reference);
+    const displayStart=c.timelineItemCollisionStart(item);
+    const chartRight=c.timeToX(item.end);
+    segments=[{x:c.timeToX(displayStart),width:chartRight-c.timeToX(displayStart)}];
+    layers.length=textCalls.length=bars.length=markers.length=0;
+    const output=new DrawContext();output.size=new Size(width,height);
+    c.drawTimelineItem(output,item,45,42);
+    assert.equal(item.end.getTime(),new Date(2026,9,6,0).getTime());
+    assert.equal(bars[0].x+bars[0].width,chartRight,
+      'A barra termina na meia-noite que fecha o dia.');
+    assert(output.shapes.some(shape=>shape.x+shape.width>chartRight),
+      'Título continua além do fim temporal da barra.');
+  }
+  c.windowStart=new Date('2026-10-05T00:00:00Z');
+  c.windowEnd=new Date(c.windowStart.getTime()+24*3600000);
+}
+
+// Na borda direita, cada glifo e sua sombra param no contorno do widget.
+{
+  const start=width-78;
+  segments=[{x:start,width:34}];
+  layers.length=textCalls.length=markers.length=0;
+  const output=new DrawContext();output.size=new Size(width,height);
+  c.drawTimelineItem(output,{kind:'reminder',title:'LEMBRETE ANÔNIMO '.repeat(8),
+    color:'#0088FF',layoutRows:6,sourceIsAllDay:false},45,42);
+  assert(output.shapes.length>0);
+  for(const shape of output.shapes) for(let py=Math.floor(shape.y);py<Math.ceil(shape.y+shape.height);py++) {
+    const inset=c.widgetContourInsetAtY(canvas.timelineTop+py+0.5,4);
+    assert(shape.x>=Math.max(0,Math.floor(inset-canvas.plotLeft)));
+    assert(shape.x+shape.width<=Math.min(width,Math.ceil(canvas.width-inset-canvas.plotLeft)),
+      'Título e sombra não vazam pela borda direita curva.');
+  }
+}
+console.log('OK: badge reservado, barras curtas sem corte do título e horários intactos.');
 
 // O badge se desloca para dentro da curva; o título respeita sua posição final.
 {

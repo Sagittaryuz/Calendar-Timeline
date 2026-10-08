@@ -123,6 +123,13 @@ Eventos reais que atravessam a meia-noite mantêm sua duração. Hierarquia,
 margens, linhas até os horários e toque no Calendário permanecem preservados.
 A regressão diária está em `tests/reminder-day-end.cjs`.
 
+A revisão `v2026.10.08.7` mantém o fim temporal da barra do lembrete, mas
+permite que o título use o espaço livre até o contorno da timeline. A curva do
+widget continua recortando também as sombras; o espaço do `+N` segue reservado,
+e a seleção de linhas impede sobreposição com charts do mesmo trecho e de dias
+adjacentes. A barra não é ampliada para acomodar o título. O teste de desenho
+está em `tests/timeline-title-clip.cjs`.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.

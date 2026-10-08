@@ -509,6 +509,30 @@ assert.notEqual(
   'O limite existente de seis horas entre evento e lembrete deve permanecer.'
 );
 
+// O título de um lembrete que termina à meia-noite reserva espaço no dia
+// seguinte, evitando compartilhar sua faixa com um chart adjacente.
+{
+  const c=makeContext();
+  c.windowStart=at(18);
+  c.windowEnd=at(18,2);
+  const priorDay=reminder('LEMBRETE ANÔNIMO '.repeat(8),at(18),at(0,1),
+    {sourceIsAllDay:false});
+  const nextDay=timedEvent(99,6,1);
+  assert.equal(c.itemsCanShareTimelineRow(priorDay,nextDay),false,
+    'Título após meia-noite não invade o chart do dia seguinte.');
+  const placed=c.chooseItems([priorDay,nextDay],at(18),6);
+  assert.notEqual(placed.find(item=>item.kind==='reminder').gridRow,
+    placed.find(item=>item.title==='Evento 99').gridRow,
+    'Itens adjacentes ficam em linhas distintas quando os títulos colidem.');
+
+  const shortReminder=reminder('A',at(18),at(0,1),{sourceIsAllDay:false});
+  assert.equal(c.itemsCanShareTimelineRow(shortReminder,nextDay),true,
+    'A faixa é liberada quando o título curto não alcança o próximo chart.');
+  const shortPlaced=c.chooseItems([shortReminder,nextDay],at(18),6);
+  assert.equal(shortPlaced.find(item=>item.kind==='reminder').gridRow,
+    shortPlaced.find(item=>item.title==='Evento 99').gridRow);
+}
+
 const saturated = select([
   ...Array.from({ length: 6 }, (_, index) => timedEvent(index + 1, 8)),
 ]);
@@ -576,7 +600,8 @@ for (const count of [4, 6, 7, 9]) {
   c.windowEnd=at(8,2);
   const multi = c.chooseItems([...full,...hidden,...nextDay,
     reminder('Amanhã oculto',at(0,1),at(0,2))],at(8),6);
-  assert.deepEqual(Array.from(multi.filter(i=>i.isOverflow),i=>i.title),['+2','+1']);
+  assert.deepEqual(Array.from(multi.filter(i=>i.isOverflow),i=>i.title),['+2','+2'],
+    'O segundo dia conta o item oculto cuja faixa ficou reservada pelo título anterior.');
 }
 
 // Render real do ramo de overflow, com operações de desenho registradas.
@@ -683,6 +708,8 @@ console.log('OK: prioridade compacta, itens isolados, truncamento e empates.');
   assert.equal(badge.markerX,segment.x+segment.width-62);
   assert.equal(anchor.overflowBadgeLeft,badge.markerX);
   assert.equal(anchor.overflowBadgeRight,badge.markerX+62);
+  assert(c.timelineItemVisualFootprint(anchor).titleRight<=badge.markerX-c.scaleVertical(4),
+    'O +N permanece fora da faixa reservada ao título.');
   assert.equal(anchor.start.getTime(),at(18).getTime());
   assert.equal(anchor.end.getTime(),at(0,1).getTime());
 }
@@ -743,6 +770,8 @@ for(const limit of [1,2,3,5,6]) {
   assert.equal(result.find(i=>i.title==='Com hora hoje').gridRow,1);
   assert.equal(result.find(i=>i.title==='Sem hora antigo').gridRow,2);
   assert.equal(result.find(i=>i.title==='Com hora amanhã').gridRow,0);
-  assert.equal(result.find(i=>i.title==='Sem hora amanhã').gridRow,1);
+  assert(result.find(i=>i.title==='Sem hora amanhã').gridRow>
+    result.find(i=>i.title==='Com hora amanhã').gridRow,
+    'Amanhã, o lembrete sem horário continua abaixo dos com horário.');
 }
 console.log('OK: horário precede dia inteiro, atrasos por classe, empates, datas e linhas contíguas.');
