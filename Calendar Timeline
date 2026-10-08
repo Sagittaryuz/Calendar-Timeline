@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.08.2";
+const WIDGET_BUILD_VERSION = "2026.10.08.3";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -3243,7 +3243,9 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       let overlayX = 0;
       for (const candidate of anchors) {
         const bounds = timelineItemVisualFootprint(candidate);
-        const markerX = bounds.left;
+        const markerX = candidate.kind === "reminder"
+          ? Math.max(bounds.left, bounds.barRight - markerWidth)
+          : bounds.left;
         const badgeRight = markerX + markerWidth;
         if (
           bounds.barRight <= markerX ||
@@ -3253,6 +3255,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
         const reserved = timelineItemVisualFootprint({
           ...candidate,
           overflowBadgeRight: badgeRight,
+          ...(candidate.kind === "reminder" ? {overflowBadgeLeft: markerX} : {}),
         });
         const textGap = scaleVertical(8);
         const sameRow = placed.filter((other) =>
@@ -3279,6 +3282,9 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
 
       if (overlayAnchor) {
         overlayAnchor.overflowBadgeRight = overlayX + markerWidth;
+        if (overlayAnchor.kind === "reminder") {
+          overlayAnchor.overflowBadgeLeft = overlayX;
+        }
         overflowMarkers.push({
           ...marker,
           gridRow: overlayAnchor.gridRow,
@@ -3396,7 +3402,7 @@ function timelineItemVisualFootprint(item) {
     ))
   );
   const badgeRight = Number(item.overflowBadgeRight);
-  const contentLeft = Number.isFinite(badgeRight)
+  const contentLeft = item.kind !== "reminder" && Number.isFinite(badgeRight)
     ? Math.max(left, badgeRight + scaleVertical(4))
     : left;
   const reminderMarkerDiameter = item.kind === "reminder"
@@ -12243,14 +12249,25 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
       : 0;
   const reminderMarkerGap = item.kind === "reminder" ? 5 : 0;
   const badgeRight = Number(item.overflowBadgeRight);
-  const contentLeft = Number.isFinite(badgeRight)
+  const contentLeft = item.kind !== "reminder" && Number.isFinite(badgeRight)
     ? Math.max(visibleLeft, badgeRight + scaleVertical(4))
     : visibleLeft;
+  const badgeLeft = Number(item.overflowBadgeLeft);
+  // O indicador é reposicionado pelo mesmo contorno no seu renderer.
+  // Reserve aqui a posição final, inclusive nas curvas da borda direita.
+  const badgeBounds = timelineVisibleContentBounds(barY, barHeight);
+  const visibleBadgeLeft = Number.isFinite(badgeLeft)
+    ? Math.max(badgeBounds.left, Math.min(badgeBounds.right - 62, badgeLeft))
+    : null;
+  const reminderRight = item.kind === "reminder"
+    ? Math.min(visibleRight - 7, visibleBadgeLeft !== null
+      ? visibleBadgeLeft - scaleVertical(4) : visibleRight - 7)
+    : null;
   const textPoint = new Point(
     contentLeft + 7 + reminderMarkerDiameter + reminderMarkerGap,
     titleTextY
   );
-  if (item.kind === "reminder") {
+  if (item.kind === "reminder" && textPoint.x < reminderRight) {
     // O círculo fica no mesmo eixo horizontal do centro do chart.
     drawReminderMarker(
       ctx,
@@ -12261,13 +12278,18 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   }
 
   // drawText preserva a linha inteira, sem truncamento do layout de texto.
-  // A camada transparente recorta pixels somente no contorno do widget.
-  if (visibleTitle) {
+  // Eventos mantêm o recorte no contorno; lembretes respeitam o fim da
+  // própria barra e o espaço do badge, sem deslocar o título para a direita.
+  if (visibleTitle && (reminderRight === null || textPoint.x < reminderRight)) {
     drawTimelineTitleClipped(ctx, visibleTitle, textPoint, titleFontSize, {
       emphasized: emphasizedEventText,
       fillColor: emphasizedTextColor,
       outlineColor: emphasizedOutlineColor,
       priorityPrefix,
+      ...(reminderRight === null ? {} : {
+        clipLeft: contentLeft + 7,
+        clipRight: reminderRight,
+      }),
     });
   }
 
@@ -12348,14 +12370,17 @@ function drawTimelineTitleClipped(ctx, text, point, fontSize, style) {
   }
 
   // Recorte por linha de pixels: uma letra que cruza a curva permanece
-  // parcialmente visível. A largura do chart e a virada do dia não cortam nomes.
+  // parcialmente visível. Eventos preservam títulos além do chart;
+  // os limites opcionais dos lembretes evitam invadir o chart seguinte.
   const bands = [];
   for (let y = Math.max(0, top); y < Math.min(top + height, timelineHeight()); y++) {
     const inset = widgetContourInsetAtY(
       CANVAS.timelineTop + y + 0.5, WIDGET_CONTOUR.strokeInset
     );
-    const left = Math.max(0, Math.floor(inset - CANVAS.plotLeft));
-    const right = Math.min(width, Math.ceil(CANVAS.width - inset - CANVAS.plotLeft));
+    const left = Math.max(0, Math.floor(inset - CANVAS.plotLeft),
+      Number.isFinite(style.clipLeft) ? Math.ceil(style.clipLeft) : 0);
+    const right = Math.min(width, Math.ceil(CANVAS.width - inset - CANVAS.plotLeft),
+      Number.isFinite(style.clipRight) ? Math.floor(style.clipRight) : width);
     if (right <= left) continue;
     const previous = bands[bands.length - 1];
     if (previous && previous.y + previous.height === y &&

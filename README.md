@@ -51,6 +51,14 @@ A revisão `v2026.10.08.2` liga também os charts dos lembretes com horário
 de visibilidade dos eventos. Lembretes sem horário não recebem essa conexão
 vertical; a data original e a ordenação da agenda permanecem preservadas.
 
+A revisão `v2026.10.08.3` mantém a bolinha e o título dos lembretes junto
+à margem esquerda da barra. Quando há excedentes, o indicador `+N` ocupa a
+extremidade direita da barra do lembrete. O título, seu prefixo e a sombra são
+recortados na área disponível antes do indicador ou do fim da barra, também
+nas curvas do widget, evitando invadir o chart seguinte. O texto original,
+a fonte, as datas e as linhas até os horários permanecem preservados. Eventos
+mantêm a regra anterior de títulos integrais recortados pelo contorno externo.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.

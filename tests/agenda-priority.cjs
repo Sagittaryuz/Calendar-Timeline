@@ -667,3 +667,21 @@ for (const limit of [1, 2, 3, 5, 6]) {
   }
 }
 console.log('OK: prioridade compacta, itens isolados, truncamento e empates.');
+
+// Badge no fim da barra dos lembretes, sem recuar bolinha/título.
+{
+  const c=makeContext();c.windowStart=at(8);c.windowEnd=at(8,1);
+  const input=Array.from({length:7},(_,i)=>reminder('Tarefa '+i,at(18),at(0,1),
+    {sourceIsAllDay:false,identifier:'task-'+i}));
+  const result=c.chooseItems(input,at(8),6);
+  const anchor=result.find(i=>i.identifier==='task-5');
+  const badge=result.find(i=>i.isOverflow);
+  const segment=c.timelineItemBarSegmentsForDisplay(anchor)[0];
+  assert.equal(badge.title,'+1');assert.equal(badge.gridRow,anchor.gridRow);
+  assert.equal(badge.markerX,segment.x+segment.width-62);
+  assert.equal(anchor.overflowBadgeLeft,badge.markerX);
+  assert.equal(anchor.overflowBadgeRight,badge.markerX+62);
+  assert.equal(anchor.start.getTime(),at(18).getTime());
+  assert.equal(anchor.end.getTime(),at(0,1).getTime());
+}
+console.log('OK: +N conserva contagem e linha, ancorado no fim do lembrete.');
