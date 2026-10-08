@@ -560,15 +560,17 @@ for (const count of [4, 6, 7, 9]) {
   }
 }
 
-// Intervalos ocultos distintos devem compor um único total diário.
+// Lembretes com horário compartilham antes dos sem horário; excedentes são diários.
 {
   const c = makeContext(); c.windowStart = at(8); c.windowEnd = at(8,1);
   const full = Array.from({length:6}, (_,i) => reminder(`Base ${i}`, at(0), at(0,1)));
   const hidden = [reminder('Depois A', at(12), at(13), {sourceIsAllDay:false}),
     reminder('Depois B', at(18), at(19), {sourceIsAllDay:false})];
   const result = c.chooseItems([...full, ...hidden], at(8),6);
-  assert.deepEqual(Array.from(result.filter(i => i.isOverflow), i => i.title), ['+2']);
-  assert.equal(result.filter(i => !i.isOverflow).length, 6);
+  assert.deepEqual(Array.from(result.filter(i => i.isOverflow), i => i.title), ['+1']);
+  assert.equal(result.filter(i => !i.isOverflow).length, 7);
+  assert.equal(result.filter(i=>!i.sourceIsAllDay&&!i.isOverflow).length,2);
+  assert.equal(result.filter(i=>i.sourceIsAllDay).length,5);
   // Outro dia na mesma linha recebe seu próprio badge.
   const nextDay = full.map(i => ({...i, start:at(0,1), end:at(0,2)}));
   c.windowEnd=at(8,2);
@@ -685,3 +687,62 @@ console.log('OK: prioridade compacta, itens isolados, truncamento e empates.');
   assert.equal(anchor.end.getTime(),at(0,1).getTime());
 }
 console.log('OK: +N conserva contagem e linha, ancorado no fim do lembrete.');
+
+// Horário definido precede dia inteiro, mesmo quando o sem horário está atrasado.
+for(const limit of [1,2,3,5,6]) {
+  const input=[
+    reminder('Sem hora atrasado',at(0),at(0,1),{isOverdue:true}),
+    reminder('Com hora hoje',at(18),at(0,1),{sourceIsAllDay:false}),
+    reminder('Sem hora hoje',at(0),at(0,1)),
+    reminder('Com hora atrasado',at(0),at(0,1),{sourceIsAllDay:false,isOverdue:true}),
+  ];
+  const original=JSON.stringify(input);
+  const result=select(input,limit).filter(i=>!i.isOverflow);
+  assert.deepEqual(Array.from(result,i=>i.title),
+    ['Com hora atrasado','Com hora hoje','Sem hora atrasado','Sem hora hoje'].slice(0,limit));
+  assert.deepEqual(Array.from(result,i=>i.gridRow),Array.from({length:Math.min(limit,4)},(_,i)=>i));
+  assert.equal(JSON.stringify(input),original);
+}
+// Dentro da classe, atraso, início, fim e empate estável continuam valendo.
+{
+  const input=[
+    reminder('Empate A',at(12),at(0,1),{sourceIsAllDay:false}),
+    reminder('Sem hora',at(0),at(0,1)),
+    reminder('Empate B',at(12),at(0,1),{sourceIsAllDay:false}),
+    reminder('Fim menor',at(12),at(20),{sourceIsAllDay:false}),
+    reminder('Começa antes',at(8),at(0,1),{sourceIsAllDay:false}),
+    reminder('Atrasado',at(15),at(0,1),{sourceIsAllDay:false,isOverdue:true}),
+  ];
+  assert.deepEqual(Array.from(select(input,6).filter(i=>!i.isOverflow),i=>i.title),
+    ['Atrasado','Começa antes','Fim menor','Empate A','Empate B','Sem hora']);
+}
+// Compartilhamento não deixa lacunas que permitam sem horário acima de com horário.
+{
+  const input=[timedEvent(1,8),
+    reminder('A',at(14),at(15),{sourceIsAllDay:false}),
+    reminder('B',at(19),at(0,1),{sourceIsAllDay:false}),
+    ...Array.from({length:3},(_,i)=>reminder('Sem hora '+i,at(0),at(0,1)))];
+  const result=select(input,5).filter(i=>!i.isOverflow);
+  assert.equal(result.find(i=>i.title==='A').gridRow,0,'Compartilhamento existente preservado.');
+  assert.equal(result.find(i=>i.title==='B').gridRow,1,'A próxima linha fica contígua.');
+  const timed=result.filter(i=>i.kind==='reminder'&&!i.sourceIsAllDay);
+  const noTime=result.filter(i=>i.sourceIsAllDay);
+  assert(noTime.every(i=>timed.every(j=>i.gridRow>j.gridRow)));
+  assert.deepEqual([...new Set(result.map(i=>i.gridRow))],[0,1,2,3,4]);
+}
+// Datas independentes; atrasados antigos pertencem visualmente a hoje.
+{
+  const c=makeContext();c.windowStart=at(8);c.windowEnd=at(8,2);
+  const input=[reminder('Sem hora antigo',at(0,-1),at(0,1),{isOverdue:true}),
+    reminder('Com hora hoje',at(18),at(0,1),{sourceIsAllDay:false}),
+    reminder('Sem hora amanhã',at(0,1),at(0,2)),
+    reminder('Com hora amanhã',at(18,1),at(0,2),{sourceIsAllDay:false}),
+    reminder('Com hora antigo',at(0,-1),at(0,1),{sourceIsAllDay:false,isOverdue:true})];
+  const result=c.chooseItems(input,at(8),6);
+  assert.equal(result.find(i=>i.title==='Com hora antigo').gridRow,0);
+  assert.equal(result.find(i=>i.title==='Com hora hoje').gridRow,1);
+  assert.equal(result.find(i=>i.title==='Sem hora antigo').gridRow,2);
+  assert.equal(result.find(i=>i.title==='Com hora amanhã').gridRow,0);
+  assert.equal(result.find(i=>i.title==='Sem hora amanhã').gridRow,1);
+}
+console.log('OK: horário precede dia inteiro, atrasos por classe, empates, datas e linhas contíguas.');

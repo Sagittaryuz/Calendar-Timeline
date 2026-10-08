@@ -72,6 +72,42 @@ A rota abre o aplicativo, sem escolher uma data ou evento. O esquema
 testado nesta revisão em um iPhone físico. Execute o carregador atualizado
 ou aguarde uma atualização do widget para substituir a URL da cópia anterior.
 
+A revisão `v2026.10.08.5` coloca lembretes com horário definido antes dos
+lembretes de dia inteiro/sem horário, mesmo quando estes últimos estão
+atrasados. A seleção e as linhas respeitam essa precedência dentro do dia.
+Após compartilhar uma linha, o próximo lembrete usa a primeira faixa vazia,
+evita lacunas e mantém os sem horário abaixo dos com horário.
+
+A hierarquia efetiva por dia, da maior para a menor prioridade, é:
+
+1. Eventos com horário.
+2. Lembretes com horário atrasados.
+3. Lembretes com horário não atrasados.
+4. Lembretes sem horário atrasados.
+5. Lembretes sem horário não atrasados.
+6. Feriados provenientes do Calendário.
+7. Outros eventos de dia inteiro.
+8. Aniversários, agrupados por dia.
+
+Dentro de cada classe, menor início vem primeiro, depois menor fim; empates
+preservam a ordem de entrada. Nomes dentro do grupo de aniversários seguem
+ordem alfabética em português. Os estados de evento em andamento, próximo,
+conflitos e a prioridade nativa dos lembretes afetam a apresentação, mas não
+substituem esse comparador. O helper legado `itemImportance` não é chamado
+pelo motor de seleção.
+
+As consultas regulares trazem lembretes incompletos. Pendências de dias
+anteriores reaparecem como atrasadas no dia atual quando a opção de atrasados
+está habilitada; o horário já vencido de hoje não recebe automaticamente essa
+classificação de dia anterior. Dias futuros mantêm seu próprio agrupamento.
+A janela visível filtra os intervalos. Itens temporizados podem compartilhar
+uma linha compatível; lembretes sem horário não compartilham. Continuações
+que cruzam a meia-noite conservam a linha e a grade de origem. Essas regras
+geométricas não representam uma nova prioridade. As grades diárias usam cinco
+ou seis linhas conforme a contagem existente, sem posições fixas ou reservas
+para eventos de dia inteiro e aniversários. Excedentes geram o indicador diário
+`+N`; aniversários sem linha livre ficam ocultos sem gerar excedente artificial.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.

@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.08.4";
+const WIDGET_BUILD_VERSION = "2026.10.08.5";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -3132,12 +3132,14 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
             timedRowLimit - 1
           );
 
-    // O lembrete atrasado fica visível primeiro; os demais seguem a ordem
-    // do dia e, quando não couberem, entram no indicador de excedentes.
+    // Horário definido precede dia inteiro. Dentro de cada grupo, atrasados
+    // vêm primeiro; os demais seguem início/fim e empates estáveis.
     const reminders = [...dayItems]
       .filter((item) => item.kind === "reminder")
       .sort(
         (a, b) =>
+          Number(a.sourceIsAllDay === true) -
+          Number(b.sourceIsAllDay === true) ||
           Number(b.isOverdue === true) -
           Number(a.isOverdue === true) ||
           byTime(a, b)
@@ -3150,9 +3152,24 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
           reminderFirstRow + index,
           timedRowLimit - 1
         );
+        const lastTimedReminderRow = rows.reduce((last, entries, row) =>
+          entries.some(existing =>
+            existing.kind === "reminder" &&
+            existing.sourceIsAllDay !== true &&
+            displayDayKey(existing) === dayKey
+          ) ? row : last, -1);
+        const minimumRow = item.sourceIsAllDay === true
+          ? lastTimedReminderRow + 1 : 0;
+        // Uma linha compartilhada não consome uma posição nova. Use a
+        // primeira faixa vazia para não deixar lacunas pelo índice do item.
+        const firstFreeRow = rows.findIndex((entries, row) =>
+          row >= Math.max(reminderFirstRow, minimumRow) &&
+          entries.length === 0
+        );
         placeItem(
           item,
-          rowOrderFor(item, preferredRow, timedRowLimit)
+          rowOrderFor(item, firstFreeRow >= 0 ? firstFreeRow : preferredRow,
+            timedRowLimit).filter(row => row >= minimumRow)
         );
       });
     }
