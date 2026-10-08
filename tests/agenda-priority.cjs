@@ -240,7 +240,7 @@ assert.equal(
 assert.equal(
   agendaWithSpace.find(item => item.isBirthdayGroup).gridRow,
   4,
-  'Aniversário deve ficar na linha inferior quando ela estiver livre.'
+  'Aniversário ocupa a próxima linha livre depois da agenda.'
 );
 
 const allDayBeforeBirthday = select([
@@ -249,12 +249,12 @@ const allDayBeforeBirthday = select([
 ]);
 assert.equal(
   allDayBeforeBirthday.find(item => item.title === 'Evento de dia inteiro').gridRow,
-  3,
+  0,
   'Evento de dia inteiro fica acima do aniversário.'
 );
 assert.equal(
   allDayBeforeBirthday.find(item => item.isBirthdayGroup).gridRow,
-  4,
+  1,
   'Aniversário fica abaixo do evento de dia inteiro.'
 );
 
@@ -265,34 +265,34 @@ const allDayBirthdayHoliday = select([
 ]);
 assert.equal(
   allDayBirthdayHoliday.find(item => item.title === 'Evento de dia inteiro').gridRow,
-  2,
-  'Evento de dia inteiro permanece acima do aniversário e do feriado.'
+  1,
+  'Evento de dia inteiro vem depois do feriado e antes do aniversário.'
 );
 assert.equal(
   allDayBirthdayHoliday.find(item => item.isBirthdayGroup).gridRow,
-  3,
+  2,
   'Aniversário fica abaixo do evento de dia inteiro.'
 );
 assert.equal(
   allDayBirthdayHoliday.find(item => item.title === 'Feriado').gridRow,
-  4,
-  'Aniversário fica acima do feriado.'
+  0,
+  'Feriado mantém prioridade sobre os dois tipos rebaixados.'
 );
 
-const birthdayTakesPriorityOverHoliday = select([
+const holidayKeepsPriorityOverBirthday = select([
   ...Array.from({ length: 4 }, (_, index) => timedEvent(index + 1, 8)),
   birthday(),
   allDayEvent('Feriado', 0, true),
 ]);
 assert.equal(
-  birthdayTakesPriorityOverHoliday.filter(item => item.isBirthdayGroup).length,
-  1,
-  'Aniversário usa a última linha livre antes do feriado.'
+  holidayKeepsPriorityOverBirthday.filter(item => item.isBirthdayGroup).length,
+  0,
+  'Aniversário não desloca o feriado prioritário.'
 );
 assert.equal(
-  birthdayTakesPriorityOverHoliday.filter(item => item.title === 'Feriado').length,
-  0,
-  'Feriado não toma a única linha disponível do aniversário.'
+  holidayKeepsPriorityOverBirthday.filter(item => item.title === 'Feriado').length,
+  1,
+  'Feriado ocupa a última linha antes dos tipos rebaixados.'
 );
 
 const currentAllDayReminder = {
@@ -639,8 +639,31 @@ for (const count of [4, 6, 7, 9]) {
   assert.equal(mixed.filter(i=>i.kind==='event').length,3,'Eventos continuam prioritários.');
   assert.equal(mixed.filter(i=>i.kind==='reminder').length,3);
   assert.equal(mixed.find(i=>i.isOverflow).title,'+3','Conta omitidos, não conflitos.');
-  const allDay=c.chooseItems([...Array.from({length:6},(_,i)=>allDayEvent(`Dia inteiro ${i}`)),
-    reminder('Oculta',at(0),at(0,1))],at(8),6);
+  const allDay=c.chooseItems([...Array.from({length:7},(_,i)=>allDayEvent(`Dia inteiro ${i}`))],at(8),6);
   assert.equal(allDay.filter(i=>!i.isOverflow).length,6);
   assert.equal(allDay.find(i=>i.isOverflow).title,'+1','Chart de dia inteiro também pode sustentar o badge.');
 }
+
+// Prioridade menor ocupa linhas contíguas, inclusive quando sozinha.
+for (const limit of [1, 2, 3, 5, 6]) {
+  assert.equal(select([birthday()], limit).find(i=>i.isBirthdayGroup).gridRow, 0);
+  assert.equal(select([allDayEvent()], limit)[0].gridRow, 0);
+  const days=Array.from({length:3},(_,i)=>allDayEvent('Dia '+i));
+  const result=select([...days,birthday()],limit);
+  assert.deepEqual(Array.from(result.filter(i=>!i.isOverflow),i=>i.gridRow),
+    Array.from({length:Math.min(limit,4)},(_,i)=>i));
+  assert.deepEqual(Array.from(result.filter(i=>!i.isOverflow&&!i.isBirthdayGroup),i=>i.title),
+    days.slice(0,limit).map(i=>i.title), 'Empates preservam ordem de entrada.');
+}
+{
+  const high=[timedEvent(1,8),reminder('Atrasado',at(0),at(0,1),{isOverdue:true}),
+    reminder('Hoje',at(0),at(0,1))];
+  const result=select([birthday(),allDayEvent(),...high],5);
+  for(const [title,row] of [['Evento 1',0],['Atrasado',1],['Hoje',2],['Evento de dia inteiro',3],['Aniversários',4]])
+    assert.equal(result.find(i=>i.title===title).gridRow,row);
+  for(const limit of [1,2,3]) {
+    const result=select([birthday(),allDayEvent(),...high],limit);
+    assert(!result.some(i=>i.isBirthdayGroup||i.isAllDay&&!i.isOverflow));
+  }
+}
+console.log('OK: prioridade compacta, itens isolados, truncamento e empates.');

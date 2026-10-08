@@ -38,6 +38,14 @@ A altura do cabeçalho e o encaixe inferior aprovado permanecem fixos. Se a vers
 aparecer, confira se o carregador está buscando o arquivo de `main`, em vez de
 executar uma cópia antiga em cache.
 
+
+A revisão `v2026.10.08.1` remove posições fixas e reservas de linhas para
+eventos de dia inteiro e aniversários. Eventos com horário, lembretes e
+feriados mantêm sua prioridade relativa; depois entram os eventos de dia
+inteiro e, por último, aniversários. Os itens usam as linhas livres de cima
+para baixo: sozinhos, também podem ocupar a primeira linha. Continuações
+preservam a linha e a geometria do dia de origem.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.

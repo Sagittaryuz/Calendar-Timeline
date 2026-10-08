@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.05.3";
+const WIDGET_BUILD_VERSION = "2026.10.08.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -2968,18 +2968,6 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     byDay.get(key).push({...item, layoutRows: rowCounts?.[key] ?? limit});
   }
 
-  const allDayIntervals = groupedRelevant
-    .filter(
-      (item) =>
-        item.kind === "event" &&
-        item.isAllDay &&
-        !isBirthdayGroup(item) &&
-        !isHolidayItem(item)
-    )
-    .map((item) => ({
-      start: item.start,
-      end: item.end,
-    }));
 
   const placed = [];
   const hidden = [];
@@ -3053,18 +3041,6 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       }
       if (relevantExisting.some(isBottomItem)) return false;
 
-      // Nenhum item com horário pode ocupar a última linha durante o
-      // intervalo de um evento de dia inteiro.
-      if (
-        row === dayLimit - 1 &&
-        !item.isAllDay &&
-        allDayIntervals.some((interval) =>
-          itemsOverlap(item, interval)
-        )
-      ) {
-        return false;
-      }
-
       return relevantExisting.every((existing) =>
         itemsCanShareTimelineRow(item, existing)
       );
@@ -3129,19 +3105,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       return availableRow;
     };
 
-    // Eventos de dia inteiro que não são feriados ocupam a base primeiro:
-    // o primeiro fica na última linha e os próximos sobem. Isso reserva a
-    // área inferior antes de distribuir os itens com horário.
-    const bottomRowOrder = Array.from(
-      { length: dayLimit },
-      (_, index) => dayLimit - 1 - index
-    );
-    const bottomRowsUsed = bottomItems
-      .map((item) => placeItem(item, bottomRowOrder))
-      .filter((row) => row !== null);
-    const timedRowLimit = bottomRowsUsed.length
-      ? Math.min(...bottomRowsUsed)
-      : dayLimit;
+    const timedRowLimit = dayLimit;
 
     // Eventos com horário sempre ocupam as linhas superiores, antes de
     // qualquer lembrete do mesmo dia.
@@ -3199,136 +3163,24 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       });
     }
 
-    // Reserva a faixa inferior para eventos de dia inteiro e feriados.
-    // Aniversários são posicionados por último, depois de todos os charts.
-    const movableAllDayItems = new Set();
-    for (const rowItems of rows) {
-      for (const item of rowItems) {
-        if (!item.isContinuationReservation && isBottomItem(item) && itemsOverlap(item, dayInterval)) {
-          movableAllDayItems.add(item);
-        }
+    // Prioridade menor não reserva linhas: primeiro feriados (ordem anterior
+    // entre os demais tipos), depois eventos de dia inteiro e aniversários.
+    // Todos ocupam a próxima linha livre de cima para baixo.
+    const freeRowOrder = Array.from({ length: dayLimit }, (_, row) => row);
+    holidayItems.forEach((item) => placeItem(item, freeRowOrder));
+    bottomItems.forEach((item) => placeItem(item, freeRowOrder));
+    if (birthdayGroup) {
+      const birthdayRow = freeRowOrder.find((row) =>
+        rows[row].every((item) =>
+          displayDayKey(item) !== dayKey && !itemsOverlap(item, birthdayGroup)
+        )
+      );
+      if (birthdayRow !== undefined) {
+        const positioned = { ...birthdayGroup, gridRow: birthdayRow };
+        rows[birthdayRow].push(positioned);
+        placed.push(positioned);
       }
     }
-
-    const movableOriginals = movableAllDayItems;
-    const getLowPriorityPlan = (shift) => {
-      const movedRows = new Map();
-      for (const item of movableAllDayItems) {
-        const targetRow = Number(item.gridRow) - shift;
-        if (targetRow < 0 || targetRow >= dayLimit) return null;
-        movedRows.set(item, targetRow);
-      }
-
-      for (const [item, targetRow] of movedRows) {
-        const conflict = rows[targetRow].some(other =>
-          !movableOriginals.has(other) && itemsOverlap(item, other));
-        if (conflict) return null;
-      }
-
-      const occupiedRows = new Set();
-      for (let row = 0; row < dayLimit; row++) {
-        if (rows[row].some((item) => !movableAllDayItems.has(item))) {
-          occupiedRows.add(row);
-        }
-      }
-      for (const row of movedRows.values()) occupiedRows.add(row);
-
-      const freeRows = [...Array(dayLimit).keys()]
-        .filter((row) => !occupiedRows.has(row));
-      const allDayRows = [...movedRows.values()];
-      const lowestAllDayRow = allDayRows.length
-        ? Math.max(...allDayRows)
-        : -1;
-      const lastPriorityRow = rows.reduce((last, entries, row) =>
-        entries.some(item => !movableOriginals.has(item) &&
-          !isBirthdayItem(item) && !isHolidayItem(item) &&
-          (item.kind === "event" || item.kind === "reminder") &&
-          itemsOverlap(item, dayInterval)) ? row : last, -1);
-      const requestedBirthdayRow = Math.max(
-        lastPriorityRow,
-        lowestAllDayRow
-      ) + 1;
-      const birthdayRow = birthdayGroup && requestedBirthdayRow < dayLimit
-        ? requestedBirthdayRow
-        : null;
-
-      const availableHolidayRows = holidayItems.length
-        ? freeRows
-          .filter((row) => row > (birthdayRow ?? lowestAllDayRow))
-          .slice(-holidayItems.length)
-        : [];
-      return {
-        shift,
-        movedRows,
-        birthdayRow,
-        holidayRows: availableHolidayRows,
-      };
-    };
-
-    let lowPriorityPlan = null;
-    const improvesLowPriorityPlan = (candidate, current) => {
-      if (!current) return true;
-      const candidateHasBirthday = candidate.birthdayRow !== null;
-      const currentHasBirthday = current.birthdayRow !== null;
-      if (candidateHasBirthday !== currentHasBirthday) {
-        return candidateHasBirthday;
-      }
-      if (candidate.holidayRows.length !== current.holidayRows.length) {
-        return candidate.holidayRows.length > current.holidayRows.length;
-      }
-      return candidate.shift < current.shift;
-    };
-    const maximumShift = movableAllDayItems.size
-      ? dayLimit - 1
-      : 0;
-    for (let shift = 0; shift <= maximumShift; shift++) {
-      const candidate = getLowPriorityPlan(shift);
-      if (!candidate) continue;
-      if (improvesLowPriorityPlan(candidate, lowPriorityPlan)) {
-        lowPriorityPlan = candidate;
-      }
-    }
-
-    if (lowPriorityPlan) {
-      if (lowPriorityPlan.shift > 0) {
-        for (let row = 0; row < dayLimit; row++) {
-          rows[row] = rows[row].filter(
-            (item) => !movableAllDayItems.has(item)
-          );
-        }
-        for (const [item, row] of lowPriorityPlan.movedRows) {
-          item.gridRow = row;
-          rows[row].push(item);
-        }
-      }
-
-      const visibleHolidayCount = lowPriorityPlan.holidayRows.length;
-      holidayItems.slice(0, visibleHolidayCount).forEach((item, index) => {
-        const positionedHoliday = {
-          ...item,
-          gridRow: lowPriorityPlan.holidayRows[index],
-        };
-        rows[positionedHoliday.gridRow].push(positionedHoliday);
-        placed.push(positionedHoliday);
-      });
-      hidden.push(...holidayItems.slice(visibleHolidayCount));
-    } else {
-      hidden.push(...holidayItems);
-    }
-
-    if (birthdayGroup && lowPriorityPlan?.birthdayRow !== null) {
-      const positionedBirthdayGroup = {
-        ...birthdayGroup,
-        gridRow: lowPriorityPlan.birthdayRow,
-      };
-      rows[positionedBirthdayGroup.gridRow].push(positionedBirthdayGroup);
-      placed.push(positionedBirthdayGroup);
-    }
-
-    // Aniversários ficam abaixo de todos os charts visíveis deste dia,
-    // inclusive os que atravessam a meia-noite e os eventos de dia inteiro.
-    // Sem faixa livre abaixo da agenda, o aniversário não é desenhado fora
-    // da grade nem desloca um item prioritário.
   }
 
   // Excedentes são agrupados somente com itens ocultos do mesmo dia.
