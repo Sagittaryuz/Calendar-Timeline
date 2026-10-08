@@ -174,7 +174,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.08.3";
+const WIDGET_BUILD_VERSION = "2026.10.08.4";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -502,15 +502,9 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// Ao tocar, o Scriptable recalcula o widget e encaminha imediatamente para
-// o Across, conservando o intervalo definido no parâmetro do widget.
-let refreshURL = addURLParameter(
-  URLScheme.forRunningScript(),
-  "refresh",
-  "1"
-);
-refreshURL = addURLParameter(refreshURL, "hours", String(windowHours));
-widget.url = refreshURL;
+// URL explícita tem precedência sobre a configuração de toque do widget.
+// A abertura do Calendário não altera sua atualização periódica.
+widget.url = nativeCalendarURL();
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -526,7 +520,7 @@ if (config.runsInWidget || config.runsWithSiri) {
 
   if (refreshRequested) {
     Script.setWidget(widget);
-    Safari.open(acrossURL());
+    Safari.open(nativeCalendarURL());
   } else {
     await widget.presentMedium();
   }
@@ -12780,10 +12774,10 @@ function parseWindowHours(parameter) {
   return Math.min(value, SETTINGS.maximumWindowHours);
 }
 
-function acrossURL() {
-  // Basic launch scheme discussed by DayMore and an Across user:
-  // https://blog.daymore.com/?p=1334
-  return "across://";
+function nativeCalendarURL() {
+  // Apenas abre o app Calendário. Não envia data, identificador ou assinatura.
+  // calshow é um esquema do iOS sem contrato público de navegação por data.
+  return "calshow://";
 }
 
 function addURLParameter(url, name, value) {

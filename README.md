@@ -59,6 +59,19 @@ nas curvas do widget, evitando invadir o chart seguinte. O texto original,
 a fonte, as datas e as linhas até os horários permanecem preservados. Eventos
 mantêm a regra anterior de títulos integrais recortados pelo contorno externo.
 
+A revisão `v2026.10.08.4` define o toque do widget como abertura do
+Calendário nativo do iOS, usando `calshow://` diretamente em `widget.url`.
+Essa propriedade tem precedência sobre a configuração de toque do Scriptable:
+[documentação de ListWidget.url](https://docs.scriptable.app/listwidget/#url).
+Links antigos de atualização ainda recalculam o widget e encaminham ao
+Calendário. A atualização periódica, o parâmetro de horas e os caches são
+preservados; nenhuma preferência ou dado de calendário é apagado.
+
+A rota abre o aplicativo, sem escolher uma data ou evento. O esquema
+`calshow` não tem contrato público da Apple para navegação por data e não foi
+testado nesta revisão em um iPhone físico. Execute o carregador atualizado
+ou aguarde uma atualização do widget para substituir a URL da cópia anterior.
+
 ## Parâmetro da janela
 
 O parâmetro do widget ou `?hours=` aceita horas inteiras de `1` a `96`.
