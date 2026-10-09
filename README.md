@@ -257,3 +257,28 @@ git diff --check
 
 Os testes usam dados fictícios e mocks. A equivalência final de renderização
 precisa ser conferida no Scriptable e no widget médio real do aparelho.
+
+A revisão `v2026.10.09.1` liga o cabeçalho à coordenada temporal da
+próxima meia-noite. HOJE ocupa exatamente 1/7 da largura útil, com topo e
+lado direito retos e curva somente embaixo à esquerda. Na janela padrão de
+24 horas, começa à direita, desliza com a régua e para inteiro na primeira
+posição às 20:34:17 aproximadamente; a régua continua até a meia-noite.
+O novo dia reinicia à direita. A curva na primeira posição usa raio menor
+para permanecer visível dentro do canvas e não cruzar o clima.
+
+Os demais quadros mantêm datas consecutivas e o mesmo deslocamento, sem
+sobreposição. Quadros que ainda não cabem inteiros nas extremidades não
+mostram textos parciais; entre posições inteiras há seis quadros completos.
+Janelas de 1–96 horas preservam a transformação real da timeline: a âncora
+segue sua meia-noite visível e é limitada às extremidades do cabeçalho. Assim,
+em janelas maiores que 24 horas, HOJE começa mais à esquerda e chega à
+primeira posição antes; os eventos não mudam de escala para forçar o cabeçalho.
+O horizonte de clima cobre os seis dias anteriores e os seis seguintes.
+
+Validação local: `node tests/moving-day-header.cjs` cobre 160 composições,
+quatro larguras, textos completos, alinhamentos, fundo selecionado, cantos,
+parada, meia-noite e viradas de mês/ano. A prévia sintética usa as funções
+reais de desenho e dados fictícios. Sem teste físico em iPhone/Scriptable.
+A suíte `event-arrival-guide.cjs` já falhava na revisão base `5f45eb4`,
+na assertion da linha 730; o mesmo erro permanece e não foi alterado neste
+escopo. Não há workflow de GitHub Actions versionado no repositório.

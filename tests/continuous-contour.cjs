@@ -27,6 +27,9 @@ for(const name of ['dayBoundaryLineWidth','timelineWidth','timelineHeight',
   'weatherStripBottomY','weatherIconCenterY',
   'timelineChartTop','bottomLegendCenterY','dayChangeLegendCenterY','hourLegendVisibleBoundsAtY',
   'drawCurrentDayRoundedSideFrame','fillTitleCardShape']) load(name);
+c.startOfDay=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+c.addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+c.timeToX=()=>1092;
 const run=s=>vm.runInContext(s,c);
 const adjustment=run('TITLE_TIMELINE_GAP_ADJUSTMENT');
 const originalTimelineTop=run('CANVAS.timelineTop')-adjustment;
@@ -94,199 +97,16 @@ assert(Math.abs(lowerCircleEdge-505)<1e-9);
 const lowerFrameInnerEdge=run('CANVAS.height-WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2');
 assert(Math.abs(lowerCircleEdge-lowerFrameInnerEdge-1)<1e-9,
   'A extremidade do círculo sobrepõe 1 px do traço inferior de 4 px.');
-const paths=[];
-const ctx={setStrokeColor(){},setLineWidth(){},addPath(p){paths.push(p);},strokePath(){},setFillColor(){},fillPath(){}};
-for(const boundary of [1,50,102,500,1092,2000]) {
-  c.drawCurrentDayRoundedSideFrame(ctx,c.titleDayCardRect(0),506,4,{},'left',52,52,boundary);
-  assert(paths.at(-1).points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
-}
-const last=c.titleDayCardRect(6);
-c.fillTitleCardShape(ctx,last,{topLeft:52,topRight:52,bottomLeft:0,bottomRight:0},{});
-assert(paths.at(-1).points.every(p=>p.x<=1092&&p.y>=0));
-// Execute the actual title renderer with synthetic weather and no calendars.
-c.windowStart=new Date(2026,8,20);
+// Moving-header rendering and corners are covered by moving-day-header.cjs.
+const ctx={setStrokeColor(){},setLineWidth(){},addPath(){},strokePath(){},setFillColor(){},fillPath(){}};
+const textCtx={...ctx,fillRect(){},fillEllipse(){},setTextAlignedLeft(){},setTextColor(){},setFont(){},drawText(){}};
+c.Font={blackMonospacedSystemFont:size=>size};
 c.loadResult={holidayDates:new Set()};
-c.startOfDay=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
-c.addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
-c.dateKey=d=>d.toISOString().slice(0,10);
-c.timelineBackgroundColorForDate=()=>c.SETTINGS.timelineBackgroundColor;
-c.shouldBlurFutureTimeline=()=>true;
-c.drawAdjacentTitleCardCurve=()=>{};
-c.titleWeekdayColor=()=>({});
-c.shortWeekday=()=> 'TER';
-c.titleDayMonthLabel=()=> '22/09';
-c.titleDailyTemperatureForDay=()=>({minimum:21,maximum:33});
-c.finiteWeatherNumber=v=>v===null||v===undefined?null:Number(v);
-c.titleScheduleCountsForDay=()=>({events:1,reminders:3});
-c.titleForecastForDay=()=>({});
-c.Font={blackMonospacedSystemFont:size=>size,regularMonospacedSystemFont:size=>size};
-const a=source.indexOf('function drawTitleDayCard(');
-vm.runInContext(source.slice(a,source.indexOf('function titleDailyTemperatureForDay(',a)),c);
-for (const name of ['currentDayFrameMetrics','currentDayLeftBridgeMetrics',
-  'currentDayBridgeMetrics','appendCurrentDayBridgeCurve','buildCurrentDayUpperPath',
-  'offsetTitleBridgePoints','titleBridgeXAtY','titleCardContentBounds']) load(name);
-c.timeToX=()=>400;
+c.shortWeekday=()=> 'SEX';
 c.hourGridLineColor=()=>({});
 c.dayBoundaryMoonBorderTopY=()=>run('CANVAS.timelineTop+scaleVertical(8)');
-let fontSize=0;
-const texts=[],icons=[];
-c.drawTitleWeatherIcon=(_,forecast,x,y,size)=>icons.push({x,y,size});
-const textCtx={...ctx,fillRect(){},fillEllipse(){},setTextAlignedLeft(){},setTextColor(){},
-  setFont(s){fontSize=s;},drawText(t,p){texts.push({t,p,size:fontSize});}};
-for(let i=0;i<7;i++) {
-  c.drawTitleDayCard(textCtx,c.addDays(c.windowStart,i),c.titleDayCardRect(i),i===0,i===6);
-}
-for(const {t,p,size} of texts) {
-  const visualTop=p.y+size*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
-  for(const y of [visualTop,p.y+size*1.15]) {
-    const inset=c.widgetContourInsetAtY(y);
-    const cellWidth=size*(t.length===1?0.60:0.62);
-    assert(p.x>=inset && p.x+t.length*cellWidth<=1092-inset, 'Texto dentro do contorno');
-  }
-}
-assert(icons.every(icon=>icon.y+icon.size/2<last.y+last.height));
-console.log('Calibration: header font '+font+'; title y '+titleY+'; circle edge '+lowerCircleEdge);
-console.log('OK: contorno medido, máscara, traços internos, títulos, rodapé e viradas próximas da borda.');
-
-for (const name of ['currentDayBridgeMetrics','appendCurrentDayBridgeCurve',
-  'buildCurrentDayUpperPath']) load(name);
-const card=c.titleDayCardRect(0);
-for (const boundary of [0,1,50,card.width-4,card.width+1,500,1092]) {
-  const {path,bridge}=c.buildCurrentDayUpperPath(null,card,120,4,{},'right',boundary,52,new Path(),2,54);
-  assert(path.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
-  for(let i=1;i<path.points.length;i++) {
-    assert(path.points[i].y>=path.points[i-1].y-1e-6,'Sem retorno vertical na ponte');
-  }
-  assert(Math.abs(path.points.at(-1).x-bridge.endpointX)<1e-6);
-  assert(Math.abs(path.points.at(-1).y-120)<1e-6);
-  const pathInset=run('titleDayCardRect(0).x===CANVAS.plotLeft?WIDGET_CONTOUR.strokeInset:2');
-  const rightEdge=card.x+card.width-pathInset;
-  assert(path.points.some(p=>Math.abs(p.x-rightEdge)<1e-6 && p.y>card.y),
-    'O topo encontra a lateral por um arco suave.');
-  assert(path.points.some(p=>p.x<rightEdge && p.y>card.y && p.y<card.y+run('TODAY_CARD_SOFT_CORNER_RADIUS')),
-    'O canto superior possui raio, em vez de uma aresta perpendicular.');
-}
-for(const text of texts) assert(text.p.y+text.size*1.15<=last.y+last.height,
-  'As duas linhas cabem na altura original.');
-assert(source.includes('rainTopMarkerTopY(markerHeight, entry.storm),'),
-  'Gotas usam seu centro visual sobre a linha solar.');
-console.log('OK: canto interno suave, títulos centralizados, ponte sem cruzamento e gotas sobre a linha solar.');
-
-// Posições fixas em todos os dias, inclusive na semana que cruza o ano.
-for (const name of ['drawDatePanel','currentDayFrameMetrics',
-  'currentDayUnifiedShape','currentDayUnifiedPolygon','insideCurrentDayUnifiedShape',
-  'drawCurrentDayBottomLineUnderlay','currentDayFrameHorizontalDirection',
-  'currentDayBottomBridgeMetrics']) load(name);
-c.shortWeekday=d=>['DOM','SEG','TER','QUA','QUI','SEX','SAB'][d.getDay()];
-c.titleDayMonthLabel=d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
-c.timeToX=()=>400;
-c.hourGridLineColor=()=>({});
-c.dayBoundaryMoonBorderTopY=()=>run('CANVAS.timelineTop+scaleVertical(8)');
-for(let day=0;day<7;day++) {
-  c.windowStart=new Date(2026,11,27+day,10);
-  texts.length=0; icons.length=0;
-  c.drawDatePanel(textCtx,new Set());
-  const metrics=c.currentDayFrameMetrics();
-  const current=c.titleDayCardRect(day);
-  assert.equal(metrics.todayCard.x,current.x,'A moldura seleciona a coluna de hoje.');
-  const expectedDays=['DOM','SEG','TER','QUA','QUI','SEX','SAB'];
-  for(let i=0;i<7;i++) {
-    const card=c.titleDayCardRect(i);
-    const entries=texts.slice(i*7,(i+1)*7);
-    assert.equal(entries.length,7);
-    assert.equal(entries.slice(0,3).map(t=>t.t).join(''),expectedDays[i]);
-    assert.equal(entries.slice(3,5).map(t=>t.t).join(''),['27','28','29','30','31','01','02'][i]);
-    assert(entries[0].p.y<entries[5].p.y, 'Título e clima usam duas linhas.');
-    assert(entries.every(t=>t.p.x>=card.x && t.p.x+t.t.length*t.size*0.62<=card.x+card.width+1));
-    assert(entries.every(t=>t.p.y+t.size*1.15<=card.y+card.height));
-    const titleCenter=(entries[0].p.x+entries[4].p.x+font*0.60)/2;
-    const bounds=c.titleCardContentBounds(c.addDays(c.titleWeekStart(),i),card,
-      layout.titleY+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO'),
-      font*(1.15-run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO')));
-    const weatherLeft=entries[5].p.x;
-    const weatherRight=entries[6].p.x+entries[6].t.length*entries[6].size*0.62;
-    if(i===0) assert(Math.abs(entries[0].p.x+layout.titleWidth-weatherRight)<1e-6,
-      'Domingo alinha a borda direita do grupo dia/data ao clima completo.');
-    else if(i===6) assert(Math.abs(entries[0].p.x-weatherLeft)<1e-6,
-      'Sábado alinha a borda esquerda do grupo dia/data ao clima completo.');
-    else assert(Math.abs(titleCenter-bounds.center)<1e-6,
-      'Os demais dias preservam o centro disponível.');
-    const weatherCenter=(entries[5].p.x+entries[6].p.x+entries[6].t.length*entries[6].size*0.62)/2;
-    assert(Math.abs(weatherCenter-(card.x+card.width/2))<1e-6,
-      'A segunda linha usa o centro retangular, inclusive ao lado da curva.');
-    assert.equal(entries[5].size,texts[5].size,
-      'A curva não reduz a fonte da segunda linha.');
-    assert.equal(entries[5].p.y,texts[5].p.y,
-      'A segunda linha mantém a mesma altura nos sete dias.');
-    const visualTop=entries[0].p.y+font*run('TITLE_CARD_TEXT_VISIBLE_TOP_RATIO');
-    const visualBottom=icons[i].y+icons[i].size/2;
-    const expectedCenter=run('WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2+TITLE_CARD_HEIGHT/2+10');
-    assert(Math.abs((visualTop+visualBottom)/2-expectedCenter)<1e-6,
-      'As duas linhas ficam juntas 10 px abaixo do centro da caixa sem moldura.');
-  }
-  assert.equal(new Set(texts.filter(t=>t.t==='D'||t.t==='S'||t.t==='T'||t.t==='Q').map(t=>t.p.y)).size,1,
-    'Hoje mantém o alinhamento vertical dos quadros comuns.');
-  c.currentDayUnifiedPolygon.points=null;
-  for(let i=0;i<7;i++) {
-    const card=c.titleDayCardRect(i);
-    assert.equal(c.insideCurrentDayUnifiedShape(card.x+card.width/2,card.y+card.height/2),i===day,
-      'O fundo integrado da moldura cobre somente o quadro selecionado.');
-  }
-  paths.length=0;
-  c.drawCurrentDayBottomLineUnderlay(ctx);
-  if(day>0) assert(paths.every(path=>path.points.every(p=>p.y>=metrics.bridgeY)),
-    'A moldura da timeline não seleciona domingo quando hoje está em outra coluna.');
-  const {path}=c.buildCurrentDayUpperPath(null,current,metrics.bridgeY,metrics.lineWidth,{},'right',400,
-    metrics.frameRadius,new Path(),metrics.lineWidth/2,metrics.frameRadius);
-  assert(path.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
-  assert(path.points.every(p=>p.x<=1092 && p.x>=0));
-}
-console.log('OK: sete colunas fixas, duas linhas, seleção diária e semana na virada do ano.');
-
-// Temperaturas com larguras diferentes e dados ausentes; datas fora do exemplo.
-for(const daily of [{minimum:23,maximum:35},{minimum:7,maximum:105},
-  {minimum:-12,maximum:8},{minimum:null,maximum:null}]) {
-  c.titleDailyTemperatureForDay=()=>daily;
-  for(const date of [new Date(2026,9,4),new Date(2026,9,10)]) {
-    for(const selected of [false,true]) {
-      texts.length=0; icons.length=0;
-      const index=date.getDay();
-      c.windowStart=selected?date:new Date(2026,9,7);
-      c.drawTitleDayCard(textCtx,date,c.titleDayCardRect(index),selected,index===6);
-      const left=texts[5].p.x;
-      const right=texts[6].p.x+texts[6].t.length*texts[6].size*0.62;
-      const actual=index===0?texts[0].p.x+c.titleCardTypography().titleWidth:texts[0].p.x;
-      assert(Math.abs(actual-(index===0?right:left))<1e-6);
-      assert(Math.abs(texts[3].p.x-texts[0].p.x-1.72*texts[0].size)<1e-6,
-        'O espaço entre dia e data permanece igual.');
-    }
-  }
-}
-console.log('OK: alinhamento dos grupos completos com temperaturas variáveis, ausentes e hoje.');
-
-
-for(const name of ['currentDayLeftBridgeMetrics','drawCurrentDayFrame','drawCurrentDayRoundedTopRightFrame']) load(name);
-for(let day=1;day<7;day++) {
-  c.windowStart=new Date(2026,11,27+day,10);
-  let previousLeftCurve = null;
-  for(const boundary of [1,400,1092]) {
-    c.timeToX=()=>boundary;
-    paths.length=0;
-    c.drawCurrentDayFrame(ctx);
-    assert.equal(paths.length,2);
-    const leftCurve=paths[0].points.slice(-66,-1);
-    assert.equal(leftCurve.length,65);
-    if(previousLeftCurve) assert.deepEqual(leftCurve,previousLeftCurve,
-      'A curva esquerda não depende da posição da próxima meia-noite.');
-    for(let i=1;i<leftCurve.length;i++) {
-      assert(leftCurve[i].x<=leftCurve[i-1].x+1e-6, 'A curva esquerda sempre aponta para a esquerda.');
-      assert(leftCurve[i].y>=leftCurve[i-1].y-1e-6);
-    }
-    previousLeftCurve = leftCurve;
-
-  }
-}
-console.log('OK: curva esquerda fixa mesmo quando a curva direita muda de direção.');
+for(const name of ['currentDayFrameMetrics','weatherIconSize','currentDayFrameHorizontalDirection']) load(name);
+console.log('OK: contorno, margens, espaçamento, altura do cabeçalho e encaixe inferior preservados.');
 
 let shiftLayer;
 c.DrawContext=class {

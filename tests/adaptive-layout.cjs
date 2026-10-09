@@ -30,6 +30,7 @@ for(const name of ['dayBoundaryLineWidth','titleCardGap','titleDayCardRect',
   'timelineBackgroundColorForDate','drawTimelineBackground']) load(name);
 const run=expr=>vm.runInContext(expr,c);
 assert.equal(run('TITLE_CARD_HEIGHT_REDUCTION'),13,'A altura aprovada do cabeçalho permanece fixa.');
+c.timeToX=()=>400;
 assert(run('titleHeaderFontSize()')>30,'A fonte do cabeçalho deve ser maior que a revisão anterior.');
 let clear=[],fills=[],currentColor;
 c.restoreWidgetBackgroundSpan=(_,x,y,width)=>clear.push({x,y,width});
@@ -39,10 +40,10 @@ for(const boundary of [100,400,1092]) {
   c.timeToX=()=>boundary;
   clear=[];fills=[];
   const left=c.titleDayCardRect(2);
-  c.drawAdjacentTitleCardCurve(ctx,new Date(2026,8,29),left,{},{});
-  if(fixedLeft) assert.deepEqual(clear,fixedLeft,'O recorte do vizinho esquerdo deve manter sua curva.');
-  fixedLeft=clear.slice();
-  assert(clear.some(span=>span.width>5),'A curva deve recortar a geometria do quadro, além da moldura.');
+  if(left.x>=0) c.drawAdjacentTitleCardCurve(ctx,new Date(2026,8,29),left,{},{});
+  if(fixedLeft && clear.length) assert.notDeepEqual(clear,fixedLeft,'O recorte acompanha o cartão em movimento.');
+  if(clear.length) fixedLeft=clear.slice();
+  assert(clear.every(span=>Number.isFinite(span.x)&&span.width>=0),'Recorte finito durante movimento e parada.');
   const right=c.titleDayCardRect(4);
   c.drawAdjacentTitleCardCurve(ctx,new Date(2026,9,1),right,{},{});
   assert(fills.every(({rect})=>Number.isFinite(rect.x)&&rect.width>=0&&rect.x>=0&&rect.x+rect.width<=1092));

@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.08.7";
+const WIDGET_BUILD_VERSION = "2026.10.09.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -1066,7 +1066,7 @@ function weatherDataRequiredStart() {
 
 function weatherDataRequiredEnd() {
   const titleCardsEnd = addDays(
-    titleWeekStart(),
+    startOfDay(windowStart),
     TITLE_CARD_COUNT
   );
   return new Date(
@@ -1467,7 +1467,7 @@ async function loadOpenMeteoWeather(location) {
     "hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,weather_code,is_day",
     "daily=temperature_2m_min,temperature_2m_max,weather_code",
     `forecast_days=${forecastDays}`,
-    `past_days=${titleTodayCardIndex()}`,
+    `past_days=${TITLE_CARD_COUNT - 1}`,
     "temperature_unit=celsius",
     "precipitation_unit=mm",
     `timezone=${encodeURIComponent(timezone)}`,
@@ -2157,7 +2157,7 @@ async function loadAutomaticHolidays(location) {
   if (!SETTINGS.automaticHolidays) return dates;
 
   const titleCardsEnd = addDays(
-    titleWeekStart(),
+    startOfDay(windowStart),
     TITLE_CARD_COUNT
   );
   const coveredEnd = new Date(
@@ -3624,20 +3624,6 @@ async function renderWidget(items, loadError) {
   // O contorno da timeline fica abaixo da moldura branca do dia atual.
   drawTimelineOuterBorder(contentCtx);
 
-  const currentDayFrame = currentDayFrameMetrics();
-  if (titleTodayCardIndex() === 0) {
-    restoreRoundedSideCorners(
-      contentCtx,
-      currentDayFrame.todayCard,
-      currentDayFrame.frameRadius,
-      currentDayFrameHorizontalDirection(
-        currentDayFrame.todayCard,
-        currentDayFrame.boundaryX
-      ),
-      currentDayFrame.lineWidth / 2
-    );
-  }
-
   // A linha inferior é prolongamento da curva lateral e é desenhada
   // no mesmo Path, em primeiro plano.
   drawCurrentDayFrameOverlay(contentCtx, items);
@@ -4154,20 +4140,17 @@ function currentDayUnifiedShape(path = new Path()) {
   path.addLine(new Point(m.boundaryX, m.bridgeY));
   path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
   const points = widgetLeftContourPoints();
-  for (const p of points.slice().reverse().filter(p => c.x === CANVAS.plotLeft || p.y >= m.bridgeY)) path.addLine(p);
-  if (c.x !== CANVAS.plotLeft) {
+  for (const p of points.slice().reverse().filter(p => p.y >= m.bridgeY)) path.addLine(p);
+  {
     path.addLine(new Point(WIDGET_CONTOUR.strokeInset, m.bridgeY));
     const left = c.x + m.lineWidth / 2;
-    const lowerRadius = r;
-    const lowerDirection = -1;
+    const lowerRadius = c.x === CANVAS.plotLeft ? Math.min(r, TODAY_CARD_SOFT_CORNER_RADIUS) : r;
+    const lowerDirection = c.x === CANVAS.plotLeft ? 1 : -1;
     const centerX = left + lowerDirection * lowerRadius;
     path.addLine(new Point(centerX, m.bridgeY));
     appendContourArc(path, centerX, m.bridgeY - lowerRadius,
       lowerRadius, lowerRadius, Math.PI / 2, lowerDirection > 0 ? Math.PI : 0);
-    const softRadius = TODAY_CARD_SOFT_CORNER_RADIUS;
-    path.addLine(new Point(left, c.y + softRadius));
-    appendContourArc(path, left + softRadius, c.y + softRadius,
-      softRadius, softRadius, Math.PI, Math.PI * 1.5);
+    path.addLine(new Point(left, c.y));
   }
   return path;
 }
@@ -4386,52 +4369,38 @@ function titleCardGap() {
 }
 
 function titleDayCardRect(index) {
-  const cardCount = TITLE_CARD_COUNT;
-  const cardGap = titleCardGap();
   const cardsLeft = CANVAS.marginX;
   const cardsRight = CANVAS.width - CANVAS.marginX;
-  const cardWidth =
-    (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
-    cardCount;
-
-  // A linha superior do dia atual é um traço centrado na borda,
-  // então os demais quadros sobem metade da espessura para alinhar
-  // seus limites visuais superiores.
-  const titleCardTop =
-    index === titleTodayCardIndex()
-      ? WIDGET_CONTOUR.strokeInset
-      : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
-  // O cartão atual termina na mesma altura dos demais. Seu topo lógico
-  // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
-  // altura preserva o alinhamento externo superior sem encurtar o vão.
-  const titleCardHeight =
-    index === titleTodayCardIndex()
-      ? Math.max(
-          1,
-          TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2
-        )
-      : TITLE_CARD_HEIGHT;
-
-  return new Rect(
-    cardsLeft + index * (cardWidth + cardGap),
-    titleCardTop,
-    cardWidth,
-    titleCardHeight
-  );
+  const step = (cardsRight - cardsLeft) / TITLE_CARD_COUNT;
+  const todayIndex = titleTodayCardIndex();
+  // A mesma transformação da régua: o limite direito aponta à meia-noite.
+  // O cabeçalho para na primeira célula inteira; a régua segue seu movimento.
+  const boundary = CANVAS.plotLeft + timeToX(addDays(startOfDay(windowStart), 1));
+  const todayLeft = Math.max(cardsLeft, Math.min(cardsRight - step, boundary - step));
+  const offset = index - todayIndex;
+  const cardGap = titleCardGap();
+  const selected = offset === 0;
+  const x = todayLeft + offset * step + (offset > 0 ? cardGap : 0);
+  const titleCardTop = selected ? WIDGET_CONTOUR.strokeInset
+    : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
+  const height = selected ? Math.max(1, TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2)
+    : TITLE_CARD_HEIGHT;
+  return new Rect(x, titleCardTop, selected ? step : step - cardGap, height);
 }
 
 function drawDatePanel(ctx, holidayDates) {
-  // A área do título agora é uma faixa compacta de previsão. O restante
-  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
-  const cardCount = TITLE_CARD_COUNT;
-  const firstDay = titleWeekStart();
-
-  // Os recortes dos fundos antecedem todos os textos dos cartões.
+  const today = startOfDay(windowStart);
+  const todayIndex = titleTodayCardIndex();
+  // Datas consecutivas dos dois lados de hoje, inclusive entre semanas/anos.
+  // Quadros parciais nas extremidades ficam sem texto: nunca cortar dia/data.
   for (const backgroundOnly of [true, false]) {
-    for (let index = 0; index < cardCount; index++) {
-      const date = addDays(firstDay, index);
-      drawTitleDayCard(ctx, date, titleDayCardRect(index),
-        index === titleTodayCardIndex(), index === cardCount - 1,
+    for (let offset = -6; offset <= 6; offset++) {
+      const card = titleDayCardRect(todayIndex + offset);
+      if (card.x < CANVAS.marginX - 0.01 ||
+          card.x + card.width > CANVAS.width - CANVAS.marginX + 0.01) continue;
+      const date = addDays(today, offset);
+      drawTitleDayCard(ctx, date, card, offset === 0,
+        card.x + card.width >= CANVAS.width - CANVAS.marginX - 1,
         backgroundOnly, !backgroundOnly);
     }
   }
@@ -4565,7 +4534,7 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
   } = currentDayFrameMetrics();
 
   const todayCard = new Rect(CANVAS.plotLeft,
-    titleTodayCardIndex() === 0 ? selectedCard.y : bridgeY,
+    bridgeY,
     selectedCard.width, selectedCard.height);
   const direction =
     currentDayFrameHorizontalDirection(
@@ -4590,7 +4559,7 @@ function drawCurrentDayBottomLineUnderlay(ctx) {
     lineWidth,
     lineColor,
     direction === "right" ? "left" : "right",
-    titleTodayCardIndex() === 0 ? framePathRadius : 0,
+    0,
     bottomBridge.pathRadius,
     boundaryX
   );
@@ -4888,12 +4857,13 @@ function currentDayBridgeMetrics(
 
 function currentDayLeftBridgeMetrics(card, bridgeY, radius, inset = 0) {
   const bridgeRadius = Math.min(Math.max(0, radius),
+    card.x === CANVAS.plotLeft ? TODAY_CARD_SOFT_CORNER_RADIUS : radius,
     Math.max(0, bridgeY - card.y - TODAY_CARD_SOFT_CORNER_RADIUS));
   return {
     edgeX: card.x + inset,
     bridgeRadius,
     distance: bridgeRadius,
-    curveDirectionSign: -1,
+    curveDirectionSign: card.x === CANVAS.plotLeft ? 1 : -1,
     startY: bridgeY - bridgeRadius,
   };
 }
@@ -4943,8 +4913,9 @@ function titleCardContentBounds(date, card, y, height) {
   const outer = widgetVisibleContentBounds(y, height);
   let left = Math.max(card.x + 2, outer.left);
   let right = Math.min(card.x + card.width - 2, outer.right);
-  const index = date.getDay(), todayIndex = titleTodayCardIndex();
-  if (Math.abs(index - todayIndex) === 1) {
+  const todayIndex = titleTodayCardIndex();
+  const index = todayIndex + Math.round((startOfDay(date) - startOfDay(windowStart)) / 86400000);
+  if (index === todayIndex - 1) {
     const m = currentDayFrameMetrics();
     const onLeft = index < todayIndex;
     const bridge = onLeft
@@ -4965,8 +4936,9 @@ function titleCardContentBounds(date, card, y, height) {
 }
 
 function drawAdjacentTitleCardCurve(ctx, date, card, color, borderColor) {
-  const index = date.getDay(), todayIndex = titleTodayCardIndex();
-  if (Math.abs(index - todayIndex) !== 1) return;
+  const todayIndex = titleTodayCardIndex();
+  const index = todayIndex + Math.round((startOfDay(date) - startOfDay(windowStart)) / 86400000);
+  if (index !== todayIndex - 1) return;
   const m = currentDayFrameMetrics();
   const side = index < todayIndex ? "left" : "right";
   const bridge = side === "left"
@@ -5005,51 +4977,16 @@ function buildCurrentDayUpperPath(
   ctx, card, bridgeY, lineWidth, color, horizontalDirection,
   boundaryX, radius, path = new Path(), pathInset = 0, outerRadius = radius
 ) {
-  const direction = horizontalDirection === "left" ? "left" : "right";
-  const isRightEdge = card.x + card.width >= CANVAS.width - CANVAS.marginX - 1;
-  const inset = card.x === CANVAS.plotLeft || isRightEdge
-    ? WIDGET_CONTOUR.strokeInset
-    : Math.max(0, Math.min(Number(pathInset) || 0, card.width / 2));
-  const left = card.x + inset, right = card.x + card.width - inset;
-  // Somente os cartões das extremidades seguem o contorno externo.
-  const rx = card.x === CANVAS.plotLeft ? Math.min(WIDGET_CONTOUR.extentX - WIDGET_CONTOUR.strokeInset,
-    (right - left) / 2) : 0;
-  const ry = card.x === CANVAS.plotLeft || isRightEdge ? Math.min(WIDGET_CONTOUR.extentY - WIDGET_CONTOUR.strokeInset,
-    Math.max(0, bridgeY - card.y)) : 0;
-  const bridgeEdgeX = direction === "right" ? right : left;
-  const outwardSign = direction === "right" ? 1 : -1;
-  const concave = (boundaryX - bridgeEdgeX) * outwardSign >= 0;
-  const bridgeRadius = Math.min(
-    Math.max(0, outerRadius + (concave ? inset : -inset)),
-    Math.max(0, bridgeY - card.y - ry));
-  const bridge = currentDayBridgeMetrics(card, boundaryX, bridgeY,
-    bridgeRadius, direction, inset);
-  if (direction === "right") {
-    path.move(new Point(card.x === CANVAS.plotLeft ? WIDGET_CONTOUR.extentX
-      : left + TODAY_CARD_SOFT_CORNER_RADIUS, card.y));
-    // Os cantos internos recebem apenas um raio suave; os externos
-    // continuam seguindo o contorno já calibrado do widget.
-    if (isRightEdge) {
-      const edgeRadiusX = WIDGET_CONTOUR.extentX - inset;
-      path.addLine(new Point(right - edgeRadiusX, card.y));
-      appendContourArc(path, right - edgeRadiusX, card.y + ry,
-        edgeRadiusX, ry, -Math.PI / 2, 0);
-    } else {
-      const softRadius = Math.min(TODAY_CARD_SOFT_CORNER_RADIUS,
-        (right - left) / 2, Math.max(0, bridge.startY - card.y));
-      path.addLine(new Point(right - softRadius, card.y));
-      appendContourArc(path, right - softRadius, card.y + softRadius,
-        softRadius, softRadius, -Math.PI / 2, 0);
-    }
-    path.addLine(new Point(right, bridge.startY));
-  } else {
-    path.move(new Point(right - rx, card.y));
-    path.addLine(new Point(left + rx, card.y));
-    appendContourArc(path, left + rx, card.y + ry, rx, ry, -Math.PI/2, -Math.PI);
-    path.addLine(new Point(left, bridge.startY));
-  }
-  appendCurrentDayBridgeCurve(path, bridge, bridgeY, bridgeRadius);
-  return { path, bridge };
+  const right = card.x + card.width;
+  const bridge = {edgeX: right, startY: bridgeY, bridgeRadius: 0,
+    endpointX: right, curveDirectionSign: 1};
+  // Topo e lado direito retos. A única curva do cartão fica embaixo à esquerda.
+  path.move(new Point(card.x + Math.max(0, pathInset), card.y));
+  path.addLine(new Point(right, card.y));
+  path.addLine(new Point(right, bridgeY));
+  // Depois da parada do cabeçalho, esta ligação acompanha a régua abaixo dele.
+  path.addLine(new Point(boundaryX, bridgeY));
+  return {path, bridge};
 }
 
 function drawCurrentDayRoundedTopRightFrame(
@@ -5249,20 +5186,17 @@ function drawCurrentDayFrame(ctx) {
       todayCard,
       boundaryX
     );
-  if (todayCard.x !== CANVAS.plotLeft) {
+  {
     const left = todayCard.x + lineWidth / 2;
     const path = new Path();
-    const softRadius = TODAY_CARD_SOFT_CORNER_RADIUS;
-    path.move(new Point(left + softRadius, todayCard.y));
-    appendContourArc(path, left + softRadius, todayCard.y + softRadius,
-      softRadius, softRadius, -Math.PI / 2, -Math.PI);
+    path.move(new Point(left, todayCard.y));
     // A curva esquerda mantém seu raio e sua direção, independentemente da virada.
     const bridge = currentDayLeftBridgeMetrics(todayCard, bridgeY, framePathRadius, lineWidth / 2);
     path.addLine(new Point(left, bridge.startY));
     appendCurrentDayBridgeCurve(path, {
       ...bridge,
       edgeX: left,
-      curveDirectionSign: -1,
+      curveDirectionSign: bridge.curveDirectionSign,
     }, bridgeY, bridge.bridgeRadius);
     path.addLine(new Point(WIDGET_CONTOUR.strokeInset, bridgeY));
     ctx.setStrokeColor(lineColor);

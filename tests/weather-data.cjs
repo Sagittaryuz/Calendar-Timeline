@@ -56,7 +56,7 @@ const hour = 60 * 60 * 1000;
 const requiredStart = context.floorToHour(context.windowStart).getTime();
 const requiredEnd = Math.max(
   context.windowEnd.getTime(),
-  context.addDays(context.titleWeekStart(), 7).getTime()
+  context.addDays(context.startOfDay(context.windowStart), 7).getTime()
 );
 
 assert.equal(
@@ -341,7 +341,7 @@ console.log('OK: história diária preserva extremos e ícones, e cache incomple
     }; }
   };
   const weather=await context.loadOpenMeteoWeather({latitude:-23,longitude:-46});
-  assert(requestedURL.includes(`past_days=${context.windowStart.getDay()}`));
+  assert(requestedURL.includes(`past_days=${context.TITLE_CARD_COUNT - 1}`));
   assert(requestedURL.includes('daily=temperature_2m_min,temperature_2m_max,weather_code'));
   assert.equal(weather.daily[sundayKey].symbol,'d3',
     'A resposta diária da API fornece a condição mesmo sem amostras horárias.');
