@@ -282,3 +282,27 @@ reais de desenho e dados fictícios. Sem teste físico em iPhone/Scriptable.
 A suíte `event-arrival-guide.cjs` já falhava na revisão base `5f45eb4`,
 na assertion da linha 730; o mesmo erro permanece e não foi alterado neste
 escopo. Não há workflow de GitHub Actions versionado no repositório.
+
+A revisão `v2026.10.09.2` permite recortar normalmente os quadros não
+atuais nas duas extremidades. Suas posições e seus textos acompanham
+exatamente o deslocamento da coordenada temporal da meia-noite, inclusive
+depois da parada de HOJE. Só HOJE recebe clamp; os outros passam por baixo
+de sua camada sem empurrar ou travar os próximos dias. O quadro parcial do
+sétimo dia futuro também entra à direita. As datas continuam depois de
+domingo, inclusive segunda-feira, cruzando semanas, meses e anos.
+
+Open-Meteo solicita no mínimo oito dias de previsão (hoje e sete seguintes),
+com seis dias anteriores e fuso do dispositivo. O cache fresco exige resumos
+diários futuros válidos, com condição e timestamps de atualização próprios;
+uma série horária completa não basta para ocultar um resumo ausente ou antigo.
+Dados ausentes continuam sem temperaturas/ícone inventados. A documentação
+permite até 16 dias: https://open-meteo.com/en/docs . Uma consulta pública
+de teste em America/Sao_Paulo retornou 03–16/10/2026, incluindo segunda-feira
+12/10; o parser e o renderizador foram verificados com esse retorno real.
+
+Validação: 160 composições do cabeçalho; recortes parciais nas duas bordas;
+progressão por minuto antes/depois do clamp, inclusive janelas 1/12/24/48/96h;
+resumos diários, ausência/freshness e viradas de datas. Prévia sintética
+inspecionada. A imagem do relato não pôde ser materializada: o helper oficial
+da Library retornou HTTP 403; não foi alegada sua inspeção. A falha antiga de
+`event-arrival-guide.cjs` continua registrada. Sem teste físico em iPhone.

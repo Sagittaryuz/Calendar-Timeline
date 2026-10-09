@@ -56,7 +56,7 @@ const hour = 60 * 60 * 1000;
 const requiredStart = context.floorToHour(context.windowStart).getTime();
 const requiredEnd = Math.max(
   context.windowEnd.getTime(),
-  context.addDays(context.startOfDay(context.windowStart), 7).getTime()
+  context.addDays(context.startOfDay(context.windowStart), 8).getTime()
 );
 
 assert.equal(

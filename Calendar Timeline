@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.09.1";
+const WIDGET_BUILD_VERSION = "2026.10.09.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -1067,7 +1067,7 @@ function weatherDataRequiredStart() {
 function weatherDataRequiredEnd() {
   const titleCardsEnd = addDays(
     startOfDay(windowStart),
-    TITLE_CARD_COUNT
+    TITLE_CARD_COUNT + 1
   );
   return new Date(
     Math.max(windowEnd.getTime(), titleCardsEnd.getTime())
@@ -1151,6 +1151,20 @@ function weatherCacheCoversPreviousWeekDays(payload) {
     const start = day.getTime(), end = addDays(day, 1).getTime();
     if (!(payload?.hours ?? []).some(hour =>
       hour.timestamp >= start && hour.timestamp < end && weatherSymbolGroup(hour) !== null)) return false;
+  }
+  return true;
+}
+
+function weatherCacheCoversFutureHeaderDays(payload, cacheAge, fallbackFetchedAt) {
+  const cutoff = Date.now() - Math.max(0, Number(cacheAge) || 0);
+  for (let offset = 0; offset <= TITLE_CARD_COUNT; offset++) {
+    const day = addDays(startOfDay(windowStart), offset);
+    const daily = payload?.daily?.[dateKey(day)];
+    const minimum = finiteWeatherNumber(daily?.minimum);
+    const maximum = finiteWeatherNumber(daily?.maximum);
+    const fetchedAt = finiteWeatherNumber(daily?.fetchedAt ?? fallbackFetchedAt);
+    if (minimum === null || maximum === null || minimum > maximum ||
+        weatherSymbolGroup(daily) === null || fetchedAt === null || fetchedAt < cutoff) return false;
   }
   return true;
 }
@@ -1259,7 +1273,8 @@ async function loadHourlyWeather(location) {
     Boolean(cached.sources?.rainbowEnabled) === Boolean(rainbowKey) &&
     Array.isArray(cached.hours) &&
     weatherCacheHasFreshSamples(cached.hours, cacheAge, fetchedAt) &&
-    weatherCacheCoversPreviousWeekDays(cached)
+    weatherCacheCoversPreviousWeekDays(cached) &&
+    weatherCacheCoversFutureHeaderDays(cached, cacheAge, fetchedAt)
   ) {
     return buildHourlyWeather(cached.hours, cached.daily);
   }
@@ -1455,7 +1470,7 @@ async function loadOpenMeteoWeather(location) {
     Intl.DateTimeFormat().resolvedOptions().timeZone ||
     "America/Sao_Paulo";
   const forecastDays = Math.max(
-    TITLE_CARD_COUNT,
+    TITLE_CARD_COUNT + 1,
     Math.min(
       16,
       Number(SETTINGS.openMeteoForecastDays) || 5
@@ -1867,7 +1882,7 @@ function mergeHourlyWeatherHours(...hourSets) {
   // Mantém o dia anterior para preservar extremos que ainda possam aparecer
   // na semana corrente e limita o cache ao período necessário para os sete
   // cartões e para a janela máxima de 96 horas.
-  const retentionStart = addDays(titleWeekStart(), -1).getTime();
+  const retentionStart = addDays(startOfDay(windowStart), -TITLE_CARD_COUNT).getTime();
   const retentionEnd = new Date(
     weatherDataRequiredEnd().getTime() + 2 * 24 * 60 * 60 * 1000
   ).getTime();
@@ -4380,7 +4395,8 @@ function titleDayCardRect(index) {
   const offset = index - todayIndex;
   const cardGap = titleCardGap();
   const selected = offset === 0;
-  const x = todayLeft + offset * step + (offset > 0 ? cardGap : 0);
+  const temporalLeft = boundary - step;
+  const x = (selected ? todayLeft : temporalLeft + offset * step) + (offset > 0 ? cardGap : 0);
   const titleCardTop = selected ? WIDGET_CONTOUR.strokeInset
     : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   const height = selected ? Math.max(1, TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2)
@@ -4391,19 +4407,25 @@ function titleDayCardRect(index) {
 function drawDatePanel(ctx, holidayDates) {
   const today = startOfDay(windowStart);
   const todayIndex = titleTodayCardIndex();
-  // Datas consecutivas dos dois lados de hoje, inclusive entre semanas/anos.
-  // Quadros parciais nas extremidades ficam sem texto: nunca cortar dia/data.
+  // Só HOJE para. Os outros mantêm a transformação real, inclusive parciais.
   for (const backgroundOnly of [true, false]) {
-    for (let offset = -6; offset <= 6; offset++) {
+    for (let offset = -6; offset <= 7; offset++) {
+      if (offset === 0) continue;
       const card = titleDayCardRect(todayIndex + offset);
-      if (card.x < CANVAS.marginX - 0.01 ||
-          card.x + card.width > CANVAS.width - CANVAS.marginX + 0.01) continue;
-      const date = addDays(today, offset);
-      drawTitleDayCard(ctx, date, card, offset === 0,
-        card.x + card.width >= CANVAS.width - CANVAS.marginX - 1,
+      if (card.x + card.width <= CANVAS.marginX ||
+          card.x >= CANVAS.width - CANVAS.marginX) continue;
+      drawTitleDayCard(ctx, addDays(today, offset), card, false,
+        Math.abs(card.x + card.width - (CANVAS.width - CANVAS.marginX)) < 1,
         backgroundOnly, !backgroundOnly);
     }
   }
+  const card = titleDayCardRect(todayIndex);
+  // A camada de HOJE cobre a parte dos quadros que passa por baixo durante
+  // a parada; suas coordenadas continuam livres e não recebem deslocamento.
+  for (let y = Math.floor(card.y); y < Math.ceil(card.y + card.height); y++) {
+    restoreWidgetBackgroundSpan(ctx, card.x, y, card.width);
+  }
+  drawTitleDayCard(ctx, today, card, true, false, false, true);
 }
 
 
@@ -4910,7 +4932,9 @@ function titleBridgeXAtY(points, y) {
 }
 
 function titleCardContentBounds(date, card, y, height) {
-  const outer = widgetVisibleContentBounds(y, height);
+  const outer = dateKey(date) === dateKey(windowStart)
+    ? widgetVisibleContentBounds(y, height)
+    : {left: card.x, right: card.x + card.width};
   let left = Math.max(card.x + 2, outer.left);
   let right = Math.min(card.x + card.width - 2, outer.right);
   const todayIndex = titleTodayCardIndex();
@@ -5259,7 +5283,7 @@ function drawTitleDayCard(
   const rightCornerRadius = isLast
     ? TITLE_CARD_OUTER_CORNER_RADIUS
     : 0;
-  const leftCornerRadius = card.x <= CANVAS.marginX + 1
+  const leftCornerRadius = Math.abs(card.x - CANVAS.marginX) <= 1
     ? TITLE_CARD_OUTER_CORNER_RADIUS
     : 0;
   const cornerRadii = {
@@ -5383,7 +5407,7 @@ function titleScheduleCountsForDay(date) {
 
 function fillTitleCardShape(ctx, rect, radii, color) {
   const right = rect.x + rect.width, bottom = rect.y + rect.height;
-  const outerRight = right >= CANVAS.width - 4 && rect.y <= 6;
+  const outerRight = right >= CANVAS.width - 4 && right <= CANVAS.width + 0.01 && rect.y <= 6;
   const inset = outerRight ? Math.max(0, CANVAS.width - right) : 0;
   const rx = WIDGET_CONTOUR.extentX - inset;
   const ry = WIDGET_CONTOUR.extentY - inset;
