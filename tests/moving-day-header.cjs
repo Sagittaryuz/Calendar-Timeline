@@ -13,7 +13,7 @@ const run=s=>vm.runInContext(s,c);let texts=[],paths=[],font=0,color,selectedPat
 const ctx={setFont(s){font=s;},setTextColor(v){color=v;},setFillColor(v){color=v;},setStrokeColor(v){color=v;},setLineWidth(){},setTextAlignedLeft(){},drawText(t,p){texts.push({t,p,size:font});ops.push({text:{t,p,size:font}});},fillRect(r){const last=ops.at(-1);if(last?.rect&&last.color?.hex===color?.hex&&last.rect.y===r.y&&last.rect.height===r.height&&Math.abs(last.rect.x+last.rect.width-r.x)<1e-8)last.rect.width+=r.width;else ops.push({rect:{...r},color});},addPath(p){selectedPath=p;},fillPath(){paths.push({path:selectedPath,color});ops.push({path:selectedPath,color});},strokePath(){paths.push({path:selectedPath,color,stroke:true});ops.push({path:selectedPath,color,stroke:true});}};
 c.drawTitleWeatherIcon=(_,forecast,x,y,size)=>icons.push({x,y,size});
 let count=0;const snapshots=[];
-for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31],[2026,11,31],[2027,0,1]])for(const hour of [0,6,12,18,20.5,24*6/7-0.0001,24*6/7,21,23,23.999]){
+for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31],[2026,9,11],[2026,11,31],[2027,0,1]])for(const hour of [0,6,12,18,20.5,24*6/7-0.0001,24*6/7,21,23,23.999]){
   c.windowStart=new Date(date[0],date[1],date[2]);c.windowStart.setTime(+c.windowStart+hour*3600000);c.windowEnd=new Date(+c.windowStart+24*3600000);run(`CANVAS.width=${width};CANVAS.plotRight=${width};`);
   texts=[];paths=[];icons=[];ops=[];c.currentDayUnifiedPolygon.points=null;
   const todayIndex=c.titleTodayCardIndex(),card=c.titleDayCardRect(todayIndex),boundary=c.timeToX(c.addDays(c.startOfDay(c.windowStart),1)),step=width/7;
@@ -43,8 +43,7 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
     assert.equal(entries.slice(3,5).map(t=>t.t).join(''),String(d.getDate()).padStart(2,'0'));
     const weatherLeft=entries[5].p.x,weatherRight=entries[6].p.x+entries[6].t.length*entries[6].size*0.62;
     assert(Math.abs((weatherLeft+weatherRight)/2-r.x-r.width/2)<1e-8,'Weather stays centered in its card');
-    if(d.getDay()===0)assert(Math.abs(entries[0].p.x+c.titleCardTypography().titleWidth-weatherRight)<1e-8,'Sunday right alignment retained');
-    if(d.getDay()===6)assert(Math.abs(entries[0].p.x-weatherLeft)<1e-8,'Saturday left alignment retained');
+    if(d.getDay()===0||d.getDay()===6)assert(Math.abs(entries[0].p.x+c.titleCardTypography().titleWidth/2-(weatherLeft+weatherRight)/2)<1e-8,'SAB/DOM share the weather center');
     if(selected || r.x>=card.x+card.width || r.x+r.width<=card.x) assert.equal(c.insideCurrentDayUnifiedShape(r.x+r.width/2,r.y+r.height/2),selected,'Unified background covers today');
     assert.equal(entries[5].size,texts[5].size,'Uniform temperature font');
     assert.equal(entries[5].p.y,texts[5].p.y,'Uniform second line height');

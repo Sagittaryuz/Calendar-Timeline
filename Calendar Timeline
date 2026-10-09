@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.09.2";
+const WIDGET_BUILD_VERSION = "2026.10.09.3";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -5353,12 +5353,10 @@ function drawTitleDayCard(
   const titleBounds = titleCardContentBounds(date, card,
     layout.titleY + layout.titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO,
     layout.titleFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO));
-  // Alinha o grupo completo dia + data aos limites da linha de clima.
-  const titleStartX = date.getDay() === 0
-    ? weatherX + weatherWidth - layout.titleWidth
-    : date.getDay() === 6
-    ? weatherX
-    : titleBounds.center - layout.titleWidth / 2;
+  // Finais de semana usam o centro do clima; dias úteis preservam .2.
+  const titleCenterX = date.getDay() === 0 || date.getDay() === 6
+    ? weatherCenterX : titleBounds.center;
+  const titleStartX = titleCenterX - layout.titleWidth / 2;
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
   ctx.setTextColor(weekdayColor);

@@ -306,3 +306,16 @@ resumos diários, ausência/freshness e viradas de datas. Prévia sintética
 inspecionada. A imagem do relato não pôde ser materializada: o helper oficial
 da Library retornou HTTP 403; não foi alegada sua inspeção. A falha antiga de
 `event-arrival-guide.cjs` continua registrada. Sem teste físico em iPhone.
+
+A revisão `v2026.10.09.3` centraliza o grupo dia/data de sábado e domingo
+no mesmo centro da segunda linha de clima. Remove os antigos alinhamentos
+pelas bordas do clima. Dias úteis preservam exatamente as posições de .2;
+cores, fontes, temperaturas, movimento, recortes e clamp não mudam.
+
+QA: nove estados comparáveis de .2 e .3, com mesmos dados públicos e canvas,
+incluindo SÁB/DOM inteiros, recortes esquerdo/direito e HOJE útil/sábado/domingo
+antes/depois da parada. Comparação de 7539 operações de desenho: apenas 120
+posições de glifos SÁB/DOM diferem. Rasterização também confirma zero mudanças
+fora das áreas dos títulos de fim de semana. Prévia sintética rasterizada,
+sem teste físico em Scriptable/iPhone. Falha preexistente de conectores na
+linha 730 permanece documentada.
