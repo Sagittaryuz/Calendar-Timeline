@@ -208,9 +208,9 @@ para reduzir o efeito de um valor isolado, registra a amplitude e o desvio
 absoluto mediano (MAD), e calcula uma indicação de concordância entre os
 modelos. Essa análise é local e determinística; não treina nem chama um modelo
 de linguagem. Com uma chave opcional, o nowcast de precipitação do Rainbow.ai
-complementa as primeiras quatro horas. A resposta do Rainbow fica em cache por
-15 minutos (até 96 consultas por dia para uma localização), abaixo da franquia
-gratuita anunciada pelo serviço para um único widget.
+complementa as primeiras quatro horas. A última resposta válida do Rainbow é preservada para recuperação offline.
+A atualização automática solicita 15 minutos; cada toque ou execução manual
+pode consultar novamente, portanto não há um teto diário imposto pelo cache.
 Os intervalos do nowcast mantêm a resolução de 15 minutos: trechos secos
 cobertos pelo radar não herdam a coluna horária dos modelos, e as barras
 chuvosas aparecem no horário previsto pelo radar.
