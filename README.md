@@ -251,6 +251,7 @@ node tests/timeline-title-clip.cjs
 node tests/event-arrival-guide.cjs
 node tests/all-day-event-start.cjs
 node tests/reminder-day-end.cjs
+node tests/overflow-day-projection.cjs
 node --input-type=module --check < 'Calendar Timeline'
 git diff --check
 ```
@@ -319,3 +320,27 @@ posições de glifos SÁB/DOM diferem. Rasterização também confirma zero muda
 fora das áreas dos títulos de fim de semana. Prévia sintética rasterizada,
 sem teste físico em Scriptable/iPhone. Falha preexistente de conectores na
 linha 730 permanece documentada.
+
+A revisão `v2026.10.10.1` finaliza o badge e seu recorte de título ao terminar
+a seleção de cada dia, antes de reservar linhas no dia seguinte. Antes, um
+título longo de hoje podia reservar uma linha de amanhã mesmo quando seus
+pixels já seriam ocultados pelo `+N`, produzindo um excedente artificial sem
+barra de apoio. Com oito tarefas hoje e sete amanhã, a fixture anterior
+mostra `+2`/`+2`; a corrigida mostra `+2`/`+1`. Com seis amanhã, o segundo
+badge desaparece. Oito em cada dia continuam mostrando dois `+2` legítimos.
+
+O indicador segue a projeção temporal do próprio dia e o contorno visível;
+se não houver espaço para seus 62 px completos, ele não migra para outro dia.
+Eventos que atravessam a meia-noite conservam suas reservas reais. Prioridade,
+títulos fonte, cabeçalho móvel/sticky, clima e consultas permanecem preservados.
+Os mocks de consultas verificam cópias repetidas e ocorrências com o mesmo
+identificador em datas distintas.
+
+QA: 27 arquivos de teste locais aprovados; regressão nova com 107 cenários
+mais janelas 1/12/24/48/96h e grades 6→5, também em UTC, America/Sao_Paulo,
+America/New_York e Pacific/Auckland. Inclui zero/múltiplos ocultos, movimento,
+virada de dia/mês/ano, DST, extremos e eventos multi-dia. Captura original
+v2026.10.09.3 materializada pela Library e inspecionada localmente; imagem
+antes/depois produzida com dados fictícios e geometrias do motor real.
+Essa simulação não confirma os registros pessoais da captura nem substitui
+validação física no Scriptable/iPhone.

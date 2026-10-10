@@ -638,7 +638,8 @@ for (const count of [4, 6, 7, 9]) {
   c.normalizedReminderDayStart=r=>r.dueDate?c.startOfDay(r.dueDate):null;
   const pending=Array.from({length:7},(_,i)=>({identifier:`p${i}`,title:`Pendente ${i}`,
     dueDate:at(0),dueDateIncludesTime:false,calendar:{title:'Tarefas'},isCompleted:false}));
-  const raw=[...pending,{...pending[0],identifier:'completed',isCompleted:true},
+  const raw=[...pending,...pending.map(r=>({...r})),
+    {...pending[0],identifier:'completed',isCompleted:true},
     {...pending[0],identifier:'excluded',calendar:{title:'Excluído'}},
     {...pending[0],identifier:'tomorrow',dueDate:at(0,1)}];
   c.CalendarEvent={between:async()=>[],today:async()=>[]};
@@ -655,6 +656,12 @@ for (const count of [4, 6, 7, 9]) {
   const selected=c.chooseItems(result.items,at(8),6);
   assert.equal(selected.filter(i=>!i.isOverflow).length,6);
   assert.equal(selected.find(i=>i.isOverflow).title,'+1');
+  c.windowEnd=at(8,1);
+  raw.push({...pending[0],dueDate:at(0,1)});
+  const twoDays=await c.loadWindow();
+  assert.equal(twoDays.items.length,9,'Consultas duplicadas preservam sete ocorrências hoje e duas amanhã.');
+  assert.equal(twoDays.items.filter(i=>i.identifier==='p0').length,2,
+    'Mesmo identificador em datas diferentes é uma ocorrência legítima, não duplicata.');
   console.log('OK: tarefas 4/6/7/9, títulos longos, +X diário, dias independentes, render no contorno e consultas deduplicadas.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 

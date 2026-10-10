@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.09.3";
+const WIDGET_BUILD_VERSION = "2026.10.10.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -2932,6 +2932,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
 
   const placed = [];
   const hidden = [];
+  const overflowMarkers = [];
   const orderedDayGroups = [...byDay.entries()]
     .sort(([firstDay], [secondDay]) =>
       firstDay.localeCompare(secondDay)
@@ -3173,19 +3174,18 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
         placed.push(positioned);
       }
     }
-  }
 
-  // Excedentes são agrupados somente com itens ocultos do mesmo dia.
-  const overflowByDay = new Map();
-  for (const item of hidden) {
-    const key = displayDayKey(item);
-    if (!overflowByDay.has(key)) overflowByDay.set(key, []);
-    overflowByDay.get(key).push(item);
-  }
-
-  const overflowMarkers = [];
-  for (const [hiddenDayKey, dayHiddenItems] of overflowByDay) {
-    const dayLimit = rowCounts?.[hiddenDayKey] ?? limit;
+    // Finalize o recorte pelo badge antes de reservar títulos no próximo dia.
+    // A reserva deve usar a geometria que realmente será desenhada, não o
+    // título integral que depois desaparece sob o +N.
+    const hiddenDayKey = dayKey;
+    const dayHiddenItems = hidden.filter(item => displayDayKey(item) === dayKey);
+    if (!dayHiddenItems.length) continue;
+    const markerWidth = 62;
+    const badgeDayLeft = Math.max(0, timeToX(dayStart) + timelineDayBoundaryGap());
+    const badgeDayRight = Math.min(timelineWidth(), timeToX(dayEnd) - timelineDayBoundaryGap());
+    // Um dia quase fora da janela não empresta pixels ao dia vizinho.
+    if (badgeDayRight - badgeDayLeft < markerWidth) continue;
     // Um badge diário conta todos os itens realmente omitidos, mesmo quando
     // seus intervalos não se sobrepõem. Não depende da contagem de conflitos.
     const group = {
@@ -3201,6 +3201,8 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
         start: group.start,
         end: group.end,
         isOverflow: true,
+        overflowDayStart: dayStart,
+        overflowDayEnd: dayEnd,
         layoutRows: dayLimit,
         color: SETTINGS.overflowColor,
       };
@@ -3230,7 +3232,6 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
           (timelineItemVisualFootprint(first).barRight -
             timelineItemVisualFootprint(first).left)
         );
-      const markerWidth = 62;
       let overlayAnchor = null;
       let overlayX = 0;
       for (const candidate of anchors) {
@@ -3241,7 +3242,8 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
         const badgeRight = markerX + markerWidth;
         if (
           bounds.barRight <= markerX ||
-          badgeRight > timelineWidth()
+          markerX < badgeDayLeft ||
+          badgeRight > badgeDayRight
         ) continue;
 
         const reserved = timelineItemVisualFootprint({
@@ -12036,6 +12038,13 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
   if (item.isOverflow) {
     const markerWidth = 62;
     const visibleBounds = timelineVisibleContentBounds(barY, barHeight);
+    if (item.overflowDayStart instanceof Date && item.overflowDayEnd instanceof Date) {
+      visibleBounds.left = Math.max(visibleBounds.left,
+        timeToX(item.overflowDayStart) + timelineDayBoundaryGap());
+      visibleBounds.right = Math.min(visibleBounds.right,
+        timeToX(item.overflowDayEnd) - timelineDayBoundaryGap());
+      if (visibleBounds.right - visibleBounds.left < markerWidth) return;
+    }
     const requestedMarkerX = Number.isFinite(item.markerX)
       ? item.markerX
       : Math.max(
