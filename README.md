@@ -252,6 +252,8 @@ node tests/event-arrival-guide.cjs
 node tests/all-day-event-start.cjs
 node tests/reminder-day-end.cjs
 node tests/overflow-day-projection.cjs
+node tests/refresh-safety.cjs
+node tests/widget-tap-target.cjs
 node --input-type=module --check < 'Calendar Timeline'
 git diff --check
 ```
@@ -344,3 +346,43 @@ v2026.10.09.3 materializada pela Library e inspecionada localmente; imagem
 antes/depois produzida com dados fictícios e geometrias do motor real.
 Essa simulação não confirma os registros pessoais da captura nem substitui
 validação física no Scriptable/iPhone.
+
+A revisão `v2026.10.10.2` muda o toque principal para executar novamente o
+carregador pelo nome atual de `Script.name()`, com `refresh=1` e a janela de
+horas preservada. Cada execução lê Calendário e Lembretes locais e tenta
+novas previsões antes de recorrer ao cache, inclusive quando a cópia ainda
+é recente. Não modifica eventos ou lembretes reais. O resultado do toque
+mostra data/frescor de cada fonte e oferece “Abrir Calendário” separadamente.
+
+Os snapshots de Calendário e Lembretes são separados e ficam somente no
+`FileManager.local()` do aparelho. Uma fonte incompleta, negada, inválida ou
+com timeout não substitui seu snapshot válido. Uma resposta local vazia
+válida substitui corretamente os dados antigos. O clima conserva amostras
+antigas para preencher lacunas, com datas originais por amostra; dados mistos
+são identificados como parcial/cache. HTTP de erro, JSON inválido e falhas de
+rede não renovam sua idade. Escritas são verificadas em arquivo temporário,
+mantêm uma cópia anterior e recuperam essa cópia quando a atual está ausente
+ou corrompida. Filtros de calendários/listas são conferidos ao recuperar dados.
+Localização sem resposta válida também não recebe uma nova data artificial.
+
+O rodapé mostra C/L/T com data da última resposta válida e indicação de cache
+quando necessário. Cópias antigas podem conter registros que foram alterados
+desde sua coleta; mantêm suas datas e só aparecem nos intervalos conhecidos.
+Sem uma coleta válida anterior, não há dados a recuperar. Clima fora do seu
+horizonte continua ausente, sem inventar previsão.
+
+`refreshAfterDate` solicita nova execução **a partir de 15 minutos**; não é um
+timer garantido. A frequência e a atualização da tela inicial são decididas
+pelo iOS conforme energia e uso, como descreve a
+[documentação do Scriptable](https://docs.scriptable.app/listwidget/#refreshafterdate).
+Toques manuais podem realizar consultas adicionais, inclusive ao Rainbow.
+O carregador precisa continuar encaminhando `args` e executando o código
+baixado; o link usa seu nome real, sem instalar outro script.
+
+Validação: 28 arquivos de teste locais aprovados, incluindo execução do ramo
+de toque/Widget/Siri/prévia, preservação de nome e horas do carregador, cliques
+repetidos, offline→online, permissões e respostas locais inválidas, cache
+faltante/corrompido e recuperação por fonte. Também cobre HTTP/JSON/timeout,
+lista vazia válida e conclusão de execuções fora de ordem. São doubles
+Scriptable em Node; sem teste físico no iPhone nem promessa de sincronização
+imediata dos serviços iCloud ou de redesenho da tela inicial pelo iOS.

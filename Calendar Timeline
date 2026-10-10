@@ -13,7 +13,7 @@ const SETTINGS = {
   maxItems: 6,
   defaultWindowHours: 24,
   maximumWindowHours: 96, // Limite absoluto de quatro dias.
-  refreshSeconds: 60,
+  refreshSeconds: 15 * 60, // Pedido mínimo; o iOS decide quando executar.
   minimumChartWidth: 34,
   compactMinimumChartWidth: 18,
   currentEventColor: "#FFFFFF",
@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.10.1";
+const WIDGET_BUILD_VERSION = "2026.10.10.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -499,9 +499,8 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// URL explícita tem precedência sobre a configuração de toque do widget.
-// A abertura do Calendário não altera sua atualização periódica.
-widget.url = nativeCalendarURL();
+// Reexecuta o nome do carregador atual, preservando a janela escolhida.
+widget.url = refreshWidgetURL();
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -517,7 +516,7 @@ if (config.runsInWidget || config.runsWithSiri) {
 
   if (refreshRequested) {
     Script.setWidget(widget);
-    Safari.open(nativeCalendarURL());
+    await showRefreshResult(loadResult, hourlyWeather);
   } else {
     await widget.presentMedium();
   }
@@ -526,6 +525,12 @@ if (config.runsInWidget || config.runsWithSiri) {
 Script.complete();
 
 async function loadWindow() {
+  const attemptAt = Date.now();
+  const live = await loadLiveWindow();
+  return recoverLocalSchedule(live, attemptAt);
+}
+
+async function loadLiveWindow() {
   try {
     const todayStart = startOfDay(now);
     // No primeiro uso dentro do app, estas consultas exibem os pedidos
@@ -563,7 +568,14 @@ async function loadWindow() {
       SETTINGS.showOverdueReminders
         ? Reminder.scheduled()
         : Promise.resolve([]),
-    ]);
+    ].map(boundedLocalRead));
+    // Respostas inesperadas não equivalem a uma agenda vazia válida.
+    for (let index = 0; index < queryResults.length; index++) {
+      const result = queryResults[index];
+      if (result.status === "fulfilled" && !Array.isArray(result.value)) {
+        queryResults[index] = {status: "rejected", reason: "Resposta local inválida"};
+      }
+    }
     const queryArray = (result) =>
       result?.status === "fulfilled" && Array.isArray(result.value)
         ? result.value
@@ -953,6 +965,11 @@ async function loadWindow() {
           ? sourceErrors.join("\n")
           : null,
       partialErrors: sourceErrors,
+      sourceStatus: {
+        event: [eventsResult, todayEventsResult].every(result => result.status === "fulfilled"),
+        reminder: [remindersResult, todayRemindersResult, scheduledRemindersResult]
+          .every(result => result.status === "fulfilled"),
+      },
     };
   } catch (error) {
     return {
@@ -964,9 +981,122 @@ async function loadWindow() {
       todayFreeMinutes: 24 * 60,
       holidayDates: new Set(),
       error: String(error),
-      partialErrors: [],
+      partialErrors: [String(error)],
+      sourceStatus: {event: false, reminder: false},
     };
   }
+}
+
+function scheduleSnapshotScope() {
+  return JSON.stringify({selected: SETTINGS.selectedCalendarIdentifiers ?? [],
+    excluded: SETTINGS.excludedCalendars ?? [], overdue: SETTINGS.showOverdueReminders});
+}
+
+async function boundedLocalRead(read) {
+  if (typeof Timer === "undefined") return read;
+  let timer;
+  try {
+    return await Promise.race([read, new Promise((_, reject) => {
+      timer = Timer.schedule(12000, false, () => reject(new Error("Tempo de consulta local excedido")));
+    })]);
+  } finally { timer?.invalidate(); }
+}
+
+function validScheduleSnapshot(snapshot) {
+  return snapshot?.schemaVersion === 1 && snapshot.scope === scheduleSnapshotScope() &&
+    Number.isFinite(snapshot.fetchedAt) && snapshot.fetchedAt > 0 &&
+    Array.isArray(snapshot.items) && snapshot.items.every(item =>
+      ["event", "reminder"].includes(item?.kind) && typeof item.title === "string" &&
+      (typeof item.start === "string" || item.start instanceof Date) &&
+      (typeof item.end === "string" || item.end instanceof Date) &&
+      Number.isFinite(new Date(item.start).getTime()) &&
+      Number.isFinite(new Date(item.end).getTime()) && new Date(item.end) > new Date(item.start)) &&
+    snapshot.scheduleCountsByDay && typeof snapshot.scheduleCountsByDay === "object" &&
+    Object.values(snapshot.scheduleCountsByDay).every(counts =>
+      Number.isFinite(counts?.events) && counts.events >= 0 &&
+      Number.isFinite(counts?.reminders) && counts.reminders >= 0) &&
+    Array.isArray(snapshot.holidayDates) && snapshot.holidayDates.every(day => typeof day === "string");
+}
+
+function readSafeSnapshot(fm, path, validate) {
+  for (const candidate of [path, path + ".backup"]) {
+    try {
+      if (!fm.fileExists(candidate)) continue;
+      const value = JSON.parse(fm.readString(candidate));
+      if (validate(value)) return value;
+    } catch (_) {}
+  }
+  return null;
+}
+
+function writeSafeSnapshot(fm, path, payload, validate) {
+  try {
+    const encoded = JSON.stringify(payload);
+    if (!validate(JSON.parse(encoded))) return false;
+    const previous = readSafeSnapshot(fm, path, validate);
+    // Uma execução antiga que terminou depois não substitui a mais recente.
+    if (previous?.fetchedAt > payload.fetchedAt) return false;
+    const temporary = path + "." + UUID.string() + ".tmp";
+    fm.writeString(temporary, encoded);
+    if (!validate(JSON.parse(fm.readString(temporary)))) return false;
+    if (previous) fm.writeString(path + ".backup", JSON.stringify(previous));
+    if (fm.fileExists(path)) fm.remove(path);
+    fm.move(temporary, path);
+    return true;
+  } catch (_) { return false; }
+}
+
+function recoverLocalSchedule(live, attemptAt) {
+  const freshness = {};
+  live.sourceStatus ??= {event: false, reminder: false};
+  live.items = live.items.filter(item => {
+    const valid = ["event", "reminder"].includes(item?.kind) &&
+      typeof item.title === "string" && item.start instanceof Date && item.end instanceof Date &&
+      Number.isFinite(+item.start) && Number.isFinite(+item.end) && item.end > item.start;
+    if (!valid) live.sourceStatus[item?.kind] = false;
+    return valid;
+  });
+  let fm;
+  try { fm = FileManager.local(); } catch (_) {}
+  for (const kind of ["event", "reminder"]) {
+    const path = fm?.joinPath(fm.documentsDirectory(), `Calendar-Timeline-${kind}-snapshot-v1.json`);
+    const cached = fm ? readSafeSnapshot(fm, path, validScheduleSnapshot) : null;
+    const freshItems = live.items.filter(item => item.kind === kind);
+    const complete = live.sourceStatus?.[kind] === true && freshItems.every(item =>
+      item.start instanceof Date && item.end instanceof Date &&
+      typeof item.title === "string" && Number.isFinite(+item.start) &&
+      Number.isFinite(+item.end) && item.end > item.start);
+    if (complete) {
+      const snapshot = {schemaVersion: 1, scope: scheduleSnapshotScope(), fetchedAt: attemptAt,
+        items: freshItems, scheduleCountsByDay: live.scheduleCountsByDay,
+        todayEventCount: live.todayEventCount, todayReminderCount: live.todayReminderCount,
+        todayBusyMinutes: live.todayBusyMinutes, todayFreeMinutes: live.todayFreeMinutes,
+        holidayDates: [...live.holidayDates]};
+      if (fm) writeSafeSnapshot(fm, path, snapshot, validScheduleSnapshot);
+      freshness[kind] = {source: "live", fetchedAt: attemptAt};
+      continue;
+    }
+    freshness[kind] = {source: cached ? "cache" : "missing", fetchedAt: cached?.fetchedAt ?? null};
+    if (!cached) continue;
+    const key = item => `${item.identifier ?? item.title}::${+item.start}::${+item.end}`;
+    const seen = new Set(freshItems.map(key));
+    for (const item of cached.items) {
+      const restored = {...item, start: new Date(item.start), end: new Date(item.end), isCached: true};
+      if (restored.kind !== kind || seen.has(key(restored))) continue;
+      if (restored.end > windowStart && restored.start < windowEnd) live.items.push(restored);
+    }
+    for (const [day, counts] of Object.entries(cached.scheduleCountsByDay)) {
+      live.scheduleCountsByDay[day] ??= {events: 0, reminders: 0};
+      const field = kind === "event" ? "events" : "reminders";
+      live.scheduleCountsByDay[day][field] = counts[field] ?? 0;
+    }
+    const todayCounts = cached.scheduleCountsByDay[dateKey(startOfDay(now))];
+    if (kind === "event") {
+      live.todayEventCount = todayCounts?.events ?? 0;
+      cached.holidayDates?.forEach(day => live.holidayDates.add(day));
+    } else live.todayReminderCount = todayCounts?.reminders ?? 0;
+  }
+  return {...live, freshness, lastAttemptAt: attemptAt};
 }
 
 async function loadAstronomy() {
@@ -984,6 +1114,7 @@ async function loadAstronomy() {
       cachedLocation = JSON.parse(Keychain.get(cacheKey));
       const maximumAge = SETTINGS.locationCacheHours * 60 * 60 * 1000;
       if (
+        !refreshRequested &&
         Number.isFinite(cachedLocation.latitude) &&
         Number.isFinite(cachedLocation.longitude) &&
         Date.now() - cachedLocation.updatedAt < maximumAge
@@ -1003,20 +1134,14 @@ async function loadAstronomy() {
       longitude: currentLocation.longitude,
       updatedAt: Date.now(),
     };
-    Keychain.set(cacheKey, JSON.stringify(location));
+    if (!Number.isFinite(location.latitude) || !Number.isFinite(location.longitude) ||
+      Math.abs(location.latitude) > 90 || Math.abs(location.longitude) > 180)
+      throw new Error("Localização inválida");
+    try { Keychain.set(cacheKey, JSON.stringify(location)); } catch (_) {}
     return location;
   } catch (_) {
-    // Mesmo quando a localização falhar, aguarda seis horas antes de tentar
-    // novamente. Isso impede novas consultas a cada refresh de um minuto.
-    const offlineLocation = {
-      latitude: cachedLocation?.latitude ?? fallback.latitude,
-      longitude: cachedLocation?.longitude ?? fallback.longitude,
-      updatedAt: Date.now(),
-    };
-    try {
-      Keychain.set(cacheKey, JSON.stringify(offlineLocation));
-    } catch (_) {}
-    return offlineLocation;
+    return cachedLocation && Number.isFinite(cachedLocation.latitude) &&
+      Number.isFinite(cachedLocation.longitude) ? cachedLocation : fallback;
   }
 }
 
@@ -1058,6 +1183,26 @@ function hasUsableWeatherPayload(payload) {
           finiteWeatherNumber(values.maximum)
     );
   return Boolean(hasHours || hasDaily);
+}
+
+function validWeatherSnapshot(payload) {
+  return Boolean(payload && Number.isFinite(payload.latitude) && Number.isFinite(payload.longitude) &&
+    Number.isFinite(payload.fetchedAt ?? payload.updatedAt) &&
+    Array.isArray(payload.hours) && payload.hours.every(hour =>
+      Number.isFinite(hour?.timestamp) &&
+      (hour.temperature === null || finiteWeatherNumber(hour.temperature) !== null)) &&
+    hasUsableWeatherPayload(payload));
+}
+
+function weatherSnapshotFreshness(payload, source, lastAttemptAt) {
+  if (source === "missing") return {source, fetchedAt: null, lastAttemptAt};
+  const dates = [payload?.fetchedAt ?? payload?.updatedAt,
+    ...(payload?.hours ?? []).map(hour => hour.fetchedAt),
+    ...Object.values(payload?.daily ?? {}).map(day => day?.fetchedAt)]
+    .filter(value => Number.isFinite(value) && value > 0);
+  const fetchedAt = dates.length ? Math.min(...dates) : null;
+  return {source: source === "live" && fetchedAt < payload.fetchedAt ? "mixed" : source,
+    fetchedAt, lastAttemptAt};
 }
 
 function weatherDataRequiredStart() {
@@ -1210,7 +1355,7 @@ async function configureRainbowKey() {
   alert.title = "Conectar Rainbow.ai";
   alert.message =
     "Cole a chave da API. Ela ficará apenas no Keychain deste iPhone. " +
-    "O nowcast será consultado no máximo uma vez a cada 15 minutos.";
+    "Cada execução busca dados novos. A atualização automática pede 15 minutos; toques fazem consultas adicionais.";
   alert.addSecureTextField("Chave Rainbow.ai", "");
   alert.addAction("Salvar chave");
   alert.addDestructiveAction("Remover chave");
@@ -1240,19 +1385,16 @@ async function loadHourlyWeather(location) {
   let cached = null;
 
   for (const candidatePath of cachePaths) {
-    if (!fm.fileExists(candidatePath)) continue;
+    if (!fm.fileExists(candidatePath) && !fm.fileExists(candidatePath + ".backup")) continue;
     try {
-      cached = JSON.parse(fm.readString(candidatePath));
-      break;
+      cached = readSafeSnapshot(fm, candidatePath, validWeatherSnapshot);
+      if (cached) break;
     } catch (_) {
       cached = null;
     }
   }
 
   const rainbowKey = loadRainbowKey();
-  const cacheAge = (rainbowKey
-    ? SETTINGS.rainbowCacheMinutes
-    : SETTINGS.weatherCacheMinutes) * 60 * 1000;
   const sameLocation =
     cached &&
     finiteWeatherNumber(cached.latitude) !== null &&
@@ -1262,41 +1404,15 @@ async function loadHourlyWeather(location) {
   const fetchedAt = finiteWeatherNumber(
     cached?.fetchedAt ?? cached?.updatedAt
   );
-  const cacheFresh =
-    sameLocation &&
-    fetchedAt !== null &&
-    Date.now() - fetchedAt < cacheAge;
-
-  if (
-    cacheFresh &&
-    cached.schemaVersion === 6 &&
-    Boolean(cached.sources?.rainbowEnabled) === Boolean(rainbowKey) &&
-    Array.isArray(cached.hours) &&
-    weatherCacheHasFreshSamples(cached.hours, cacheAge, fetchedAt) &&
-    weatherCacheCoversPreviousWeekDays(cached) &&
-    weatherCacheCoversFutureHeaderDays(cached, cacheAge, fetchedAt)
-  ) {
-    return buildHourlyWeather(cached.hours, cached.daily);
-  }
-
   const storedCredentials = loadStoredForecaCredentials();
   const lastAttemptAt = Date.now();
-  const rainbowCacheFresh = Boolean(
-    rainbowKey &&
-    sameLocation &&
-    Array.isArray(cached?.rainbowHours) &&
-    finiteWeatherNumber(cached?.rainbowFetchedAt) !== null &&
-    Date.now() - Number(cached.rainbowFetchedAt) < cacheAge
-  );
   const [openMeteo, foreca, metNorway, fetchedRainbow] = await Promise.all([
     loadOpenMeteoWeather(location).catch(() => null),
     storedCredentials
       ? loadForecaForecast(location, storedCredentials).catch(() => null)
       : Promise.resolve(null),
     loadMetNorwayWeather(location).catch(() => null),
-    rainbowCacheFresh
-      ? Promise.resolve({ hours: cached.rainbowHours })
-      : rainbowKey
+    rainbowKey
       ? loadRainbowNowcast(location, rainbowKey).catch(() => null)
       : Promise.resolve(null),
   ]);
@@ -1330,9 +1446,10 @@ async function loadHourlyWeather(location) {
   ) || Boolean(rainbow?.hours?.length);
 
   if (!hasFreshProviderData) {
-    return sameLocation && Array.isArray(cached?.hours)
-      ? buildHourlyWeather(cached.hours, cached.daily)
-      : emptyHourlyWeather();
+    const fallback = sameLocation && hasUsableWeatherPayload(cached)
+      ? buildHourlyWeather(cached.hours, cached.daily) : emptyHourlyWeather();
+    return {...fallback, freshness: weatherSnapshotFreshness(cached,
+      sameLocation && hasUsableWeatherPayload(cached) ? "cache" : "missing", lastAttemptAt)};
   }
 
   if (
@@ -1348,14 +1465,12 @@ async function loadHourlyWeather(location) {
     longitude: location.longitude,
     // fetchedAt só avança quando ao menos um provedor entrega dados
     // aproveitáveis. Uma tentativa sem resposta não rejuvenesce o cache.
-    fetchedAt: Date.now(),
+    fetchedAt: lastAttemptAt,
     lastAttemptAt,
     hours: mergedHours,
     daily: mergedDaily,
     rainbowHours: rainbow?.hours ?? cached?.rainbowHours ?? [],
-    rainbowFetchedAt: rainbowCacheFresh
-      ? cached.rainbowFetchedAt
-      : rainbow?.hours?.length
+    rainbowFetchedAt: rainbow?.hours?.length
         ? providerFetchedAt
         : cached?.rainbowFetchedAt ?? null,
     sources: {
@@ -1368,16 +1483,14 @@ async function loadHourlyWeather(location) {
     },
   };
   try {
-    fm.writeString(
-      fm.joinPath(
+    writeSafeSnapshot(fm, fm.joinPath(
         fm.documentsDirectory(),
         "Calendar-Timeline-weather-v3.json"
-      ),
-      JSON.stringify(stored)
-    );
+      ), stored, validWeatherSnapshot);
   } catch (_) {}
 
-  return buildHourlyWeather(mergedHours, mergedDaily);
+  return {...buildHourlyWeather(mergedHours, mergedDaily),
+    freshness: weatherSnapshotFreshness(stored, "live", lastAttemptAt)};
 }
 
 async function loadForecaForecast(location, credentials) {
@@ -1404,6 +1517,7 @@ async function loadForecaForecast(location, credentials) {
     Authorization: `Bearer ${token}`,
   };
   const response = await request.loadJSON();
+  if (request.response?.statusCode >= 400) throw new Error(`HTTP ${request.response.statusCode}`);
   const hours = [];
 
   for (const forecast of response?.forecast ?? []) {
@@ -1492,6 +1606,7 @@ async function loadOpenMeteoWeather(location) {
   );
   request.timeoutInterval = 12;
   const response = await request.loadJSON();
+  if (request.response?.statusCode >= 400) throw new Error(`HTTP ${request.response.statusCode}`);
   const hourly = response?.hourly ?? {};
   const times = Array.isArray(hourly.time) ? hourly.time : [];
   const hours = [];
@@ -1584,6 +1699,7 @@ async function loadMetNorwayWeather(location) {
     "User-Agent": "Calendar-Timeline/1.0 https://github.com/Sagittaryuz/Calendar-Timeline",
   };
   const response = await request.loadJSON();
+  if (request.response?.statusCode >= 400) throw new Error(`HTTP ${request.response.statusCode}`);
   const series = response?.properties?.timeseries ?? [];
   const hours = [];
   for (let index = 0; index < series.length; index++) {
@@ -1621,7 +1737,9 @@ async function loadRainbowNowcast(location, key) {
   );
   request.timeoutInterval = 12;
   request.headers = { "Ocp-Apim-Subscription-Key": key };
-  return { hours: rainbowNowcastHours(await request.loadJSON()) };
+  const response = await request.loadJSON();
+  if (request.response?.statusCode >= 400) throw new Error(`HTTP ${request.response.statusCode}`);
+  return { hours: rainbowNowcastHours(response) };
 }
 
 function rainbowNowcastHours(response) {
@@ -1985,6 +2103,7 @@ async function loadForecaToken(credentials) {
   request.headers = { "Content-Type": "application/json" };
   request.body = JSON.stringify(credentials);
   const response = await request.loadJSON();
+  if (request.response?.statusCode >= 400) throw new Error(`HTTP ${request.response.statusCode}`);
   const accessToken = response?.access_token;
   if (!accessToken) {
     throw new Error("A Foreca não forneceu um token de acesso.");
@@ -2209,7 +2328,7 @@ async function resolveBrazilianRegion(location) {
       const nearby =
         Math.abs(cached.latitude - location.latitude) < 0.25 &&
         Math.abs(cached.longitude - location.longitude) < 0.25;
-      if (nearby && Date.now() - cached.updatedAt < maximumAge) {
+      if (!refreshRequested && nearby && Date.now() - cached.updatedAt < maximumAge) {
         return cached;
       }
     }
@@ -2294,7 +2413,8 @@ async function loadRegionalHolidayDates(year, region) {
     if (fm.fileExists(cachePath)) {
       const cached = JSON.parse(fm.readString(cachePath));
       cachedDates = new Set(cached.dates ?? []);
-      if (Date.now() < (cached.expiresAt ?? cached.updatedAt + maximumAge)) {
+      if ((typeof refreshRequested === "undefined" || !refreshRequested) &&
+        Date.now() < (cached.expiresAt ?? cached.updatedAt + maximumAge)) {
         return cachedDates;
       }
     }
@@ -2326,6 +2446,8 @@ async function loadRegionalHolidayDates(year, region) {
       const request = new Request(`${source.url}?v=${year}`);
       request.timeoutInterval = 18;
       const holidays = await request.loadJSON();
+      if (request.response?.statusCode >= 400 || !Array.isArray(holidays))
+        throw new Error("Resposta de feriados inválida");
       holidays
         .filter(source.matches)
         .map((holiday) => holidayDateKey(holiday.data))
@@ -3676,6 +3798,17 @@ function drawWidgetBuildVersion(ctx) {
   ctx.setTextColor(new Color("#FFFFFF", 1));
   ctx.setTextAlignedCenter();
   ctx.drawTextInRect(`v${WIDGET_BUILD_VERSION}`, rect);
+  // Data original da última resposta válida, sem rejuvenescer a cópia offline.
+  if (typeof loadResult !== "undefined" && typeof hourlyWeather !== "undefined") {
+    const status = [sourceFreshnessText("C", loadResult.freshness?.event),
+      sourceFreshnessText("L", loadResult.freshness?.reminder),
+      sourceFreshnessText("T", hourlyWeather.freshness)].join(" · ");
+    const freshnessRect = new Rect(Math.max(0, rect.x + rect.width - 560), y - 18, 560, 18);
+    ctx.setFillColor(new Color("#000000", 0.85));
+    ctx.fillRect(freshnessRect);
+    ctx.setFont(Font.boldSystemFont(12));
+    ctx.drawTextInRect(status, freshnessRect);
+  }
 }
 
 function shiftWidgetImage(image) {
@@ -12729,6 +12862,34 @@ function nativeCalendarURL() {
   // Apenas abre o app Calendário. Não envia data, identificador ou assinatura.
   // calshow é um esquema do iOS sem contrato público de navegação por data.
   return "calshow://";
+}
+
+function refreshWidgetURL() {
+  let url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}`;
+  url = addURLParameter(url, "refresh", "1");
+  return addURLParameter(url, "hours", windowHours);
+}
+
+function sourceFreshnessText(label, status) {
+  if (status?.source === "missing" || !status?.fetchedAt) return `${label}: sem cópia válida`;
+  const date = new Date(status.fetchedAt);
+  const stamp = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth()+1).padStart(2, "0")} ` +
+    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const state = status.source === "live" ? "consultado" : status.source === "mixed" ? "parcial/cache" : "cache";
+  return `${label}: ${state} ${stamp}`;
+}
+
+async function showRefreshResult(result, weather) {
+  const alert = new Alert();
+  alert.title = "Calendar Timeline";
+  alert.message = [sourceFreshnessText("Calendário", result.freshness?.event),
+    sourceFreshnessText("Lembretes", result.freshness?.reminder),
+    sourceFreshnessText("Clima", weather.freshness),
+    "A atualização foi entregue ao Scriptable; o iOS controla quando a tela inicial é redesenhada."]
+    .join("\n");
+  alert.addAction("Abrir Calendário");
+  alert.addCancelAction("Fechar");
+  if (await alert.presentAlert() === 0) Safari.open(nativeCalendarURL());
 }
 
 function addURLParameter(url, name, value) {

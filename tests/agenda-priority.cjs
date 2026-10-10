@@ -662,6 +662,13 @@ for (const count of [4, 6, 7, 9]) {
   assert.equal(twoDays.items.length,9,'Consultas duplicadas preservam sete ocorrências hoje e duas amanhã.');
   assert.equal(twoDays.items.filter(i=>i.identifier==='p0').length,2,
     'Mesmo identificador em datas diferentes é uma ocorrência legítima, não duplicata.');
+  c.Reminder.incompleteDueBetween=async()=>({error:'resposta inválida'});
+  c.Reminder.incompleteDueToday=async()=>{throw Error('permissão');};
+  c.Reminder.scheduled=async()=>{throw Error('timeout');};
+  const denied=await c.loadWindow();
+  assert.equal(denied.freshness.reminder.source,'missing',
+    'Resposta inválida e falhas locais não se tornam uma lista vazia autoritativa.');
+  assert.equal(denied.freshness.event.source,'live','Calendário continua independente.');
   console.log('OK: tarefas 4/6/7/9, títulos longos, +X diário, dias independentes, render no contorno e consultas deduplicadas.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 
