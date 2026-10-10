@@ -5,8 +5,11 @@ tempo e uma timeline contínua de até 96 horas.
 
 ## Instalação
 
-1. Crie um script no Scriptable com o carregador do widget.
-2. Faça o carregador buscar o arquivo distribuído em `main`:
+1. No Scriptable, cole o conteúdo de
+   [Calendar Timeline Loader](https://raw.githubusercontent.com/Sagittaryuz/Calendar-Timeline/main/Calendar%20Timeline%20Loader)
+   no **script carregador existente**, mantendo seu nome. Para uma instalação
+   nova, crie esse script e selecione-o no widget.
+2. O carregador continua buscando o arquivo distribuído no mesmo destino:
 
    `https://raw.githubusercontent.com/Sagittaryuz/Calendar-Timeline/main/Calendar%20Timeline`
 
@@ -254,6 +257,7 @@ node tests/reminder-day-end.cjs
 node tests/overflow-day-projection.cjs
 node tests/refresh-safety.cjs
 node tests/widget-tap-target.cjs
+node tests/loader-offline.cjs
 node --input-type=module --check < 'Calendar Timeline'
 git diff --check
 ```
@@ -386,3 +390,47 @@ faltante/corrompido e recuperação por fonte. Também cobre HTTP/JSON/timeout,
 lista vazia válida e conclusão de execuções fora de ordem. São doubles
 Scriptable em Node; sem teste físico no iPhone nem promessa de sincronização
 imediata dos serviços iCloud ou de redesenho da tela inicial pelo iOS.
+
+O **Calendar Timeline Loader v2026.10.10.1** fecha a inicialização offline.
+O carregador externo que já estava no iPhone não foi localizado nos arquivos
+acessíveis, nos 585 commits das três branches do projeto (`main`,
+`codex/seven-day-week-cards`, `feature/diagonal-date-label`) nem nas buscas de
+código disponíveis. Portanto não há evidência de que ele guardava código
+local, e a atualização remota do widget não consegue corrigir esse script
+externo quando seu próprio download falha antes da execução do programa.
+
+A versão pronta acima conserva o destino, encaminha as mesmas referências de
+`args`/`config` e mantém `Script.name()`. Antes do cache, tenta código novo com
+timeout de oito segundos e pedido `Cache-Control: no-cache`. HTTP de erro,
+HTML/JSON/vazio/truncamento, sintaxe inválida e execução quebrada não promovem
+o candidato ao cache. O código só é gravado após concluir sua execução. A
+finalização nativa `Script.complete()` é encaminhada depois da persistência;
+`Script.setWidget()` mantém sua entrega imediata, antes do diálogo ao toque.
+Cache, backup e metadados de versão/data ficam no `FileManager.local()`, com
+checksum contra corrupção acidental e escrita temporária verificada.
+
+Mesmo sem qualquer cache anterior, o carregador inclui o programa completo
+`v2026.10.10.2`, SHA-256
+`6b73e29a077166c35994b3866f398f1e14858db719d1cdd84d1f56af09cec448`, para
+iniciar offline. A versão obtida e executada com sucesso online tem preferência
+nas próximas recuperações; se as cópias locais falharem, usa o programa
+incluído. Isso fornece código executável, sem inventar clima ou dados de
+fontes que nunca foram coletadas. A data do código não muda em tentativas
+offline. Se nem o programa incluído conseguir executar, apresenta um estado
+de indisponibilidade com nova tentativa, em vez de simular uma agenda vazia.
+
+Teste adicional `loader-offline.cjs`: compila o programa completo, verifica
+que o bundle coincide byte a byte com o arquivo distribuído e executa sua
+entrada principal com doubles de coleta/desenho. Cobre inicialização offline
+sem cache, offline→online, parâmetros/nome/toque/prévia/Siri, checksum/backup,
+HTTP/HTML/JSON/sintaxe/runtime e escrita interrompida. Não confirma execução
+física no iPhone ou alteração do carregador que já está instalado. É preciso
+substituir seu conteúdo pelo arquivo pronto, conservando nome e configuração.
+
+Ao publicar uma nova versão do programa, mantenha o bootstrap atualizado:
+
+```sh
+node tools/update-loader-bundle.cjs
+node tests/loader-offline.cjs
+node --input-type=module --check < 'Calendar Timeline Loader'
+```
