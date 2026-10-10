@@ -7,11 +7,14 @@ const source = fs.readFileSync(
   'utf8'
 );
 
-assert.match(source, /widget\.url\s*=\s*refreshWidgetURL\(\);/);
+assert.match(source, /widget\.url\s*=\s*nativeCalendarURL\(\);/);
 assert.match(source, /widget\.refreshAfterDate\s*=\s*new Date\(/);
 assert.match(source, /function nativeCalendarURL\(\)[\s\S]*?return "calshow:\/\/";/);
 assert.doesNotMatch(source, /across/i);
 assert.match(source, /refreshSeconds: 15 \* 60/);
+assert.doesNotMatch(source, /drawWidgetBuildVersion|sourceFreshnessText|showRefreshResult|refreshWidgetURL/);
+assert.deepEqual(Array.from(source.matchAll(/\b(\w+)\.url\s*=/g),match=>match[1]),['widget'],
+  'Nenhuma URL em elemento filho sobrepõe o Calendário.');
 // Run the production completion branch with Scriptable API doubles.
 // This verifies dispatch/order, not native iOS URL handling.
 const vm = require('node:vm');
@@ -22,7 +25,7 @@ function declaration(name) {
  const end=source.slice(start+1).search(/\n(?:async )?function /);
  return source.slice(start,start+end+1);
 }
-const launch=['nativeCalendarURL','refreshWidgetURL','addURLParameter'].map(declaration).join('\n');
+const launch=declaration('nativeCalendarURL');
 (async () => {
   let cases = 0;
   for (const runsInWidget of [false, true]) {
@@ -38,7 +41,7 @@ const launch=['nativeCalendarURL','refreshWidgetURL','addURLParameter'].map(decl
             Keychain: {contains:()=>{assert.fail('Destino não deve ler ou apagar preferências salvas.');}},
             loadResult: { error }, widget,
             showPermissionHelp: async () => calls.push('permission'),
-            showRefreshResult:async()=>calls.push('freshness/calendar-choice'),
+            showRefreshResult:async()=>assert.fail('Não deve abrir alerta de atualização.'),
             hourlyWeather:{},
             Script: { name:()=> 'Calendário + Timeline', setWidget: value => { assert.equal(value, widget); calls.push('widget'); }, complete: () => calls.push('complete') },
             Safari: { open: url => calls.push(url) }
@@ -46,13 +49,13 @@ const launch=['nativeCalendarURL','refreshWidgetURL','addURLParameter'].map(decl
           await vm.runInNewContext(`(async () => {${launch}${widgetURL}${branch}})()`, context);
           const expected = runsInWidget || runsWithSiri
             ? ['widget', 'complete']
-            : [...(error ? ['permission'] : []), ...(refreshRequested ? ['widget', 'freshness/calendar-choice'] : ['preview']), 'complete'];
+            : [...(error && !refreshRequested ? ['permission'] : []), ...(refreshRequested ? ['widget', 'calshow://'] : ['preview']), 'complete'];
           assert.deepEqual(calls, expected);
-          assert.equal(widget.url,'scriptable:///run?scriptName=Calend%C3%A1rio%20%2B%20Timeline&refresh=1&hours=48', 'O nome atual do carregador e a janela são preservados.');
+          assert.equal(widget.url,'calshow://', 'O toque abre o Calendário diretamente sem Scriptable.');
           cases++;
         }
       }
     }
   }
-  console.log(`OK: ${cases} tap/background/Siri/preview/permission variants; toque executa o carregador com refresh e janela preservada; Calendário separado no resultado.`);
+  console.log(`OK: ${cases} variantes; toque direto no Calendário, links antigos sem alerta/prévia, nenhuma URL filha e nenhum texto visual de versão/frescor.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

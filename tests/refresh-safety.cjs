@@ -19,7 +19,7 @@ vm.createContext(c);
 vm.runInContext(source.slice(source.indexOf('async function loadWindow('),source.indexOf('async function loadAstronomy(')),c);
 vm.runInContext(source.slice(source.indexOf('function finiteWeatherNumber('),source.indexOf('async function showForecaConnectionError(')),c);
 function load(name){const start=source.indexOf('function '+name+'(');const next=source.slice(start+1).search(/\n(?:async )?function /);vm.runInContext(source.slice(start,start+next+1),c);}
-load('sourceFreshnessText');load('emptyHourlyWeather');
+load('emptyHourlyWeather');
 const item=(kind,title)=>({kind,title,identifier:title,start:new Date(+now+60000),end,color:'#0088ff'});
 const live=(event=true,reminder=true)=>({items:[...(event?[item('event','Evento')]:[]),...(reminder?[item('reminder','Tarefa')]:[])],
  scheduleCountsByDay:{'2026-10-10':{events:event?1:0,reminders:reminder?1:0}},holidayDates:new Set(),
@@ -35,7 +35,7 @@ const weatherPath='/data/Calendar-Timeline-weather-v3.json';
  const offline=await c.loadWindow();assert.equal(offline.items.length,2);
  assert(offline.items.every(i=>i.isCached&&i.start instanceof Date));
  assert.equal(offline.freshness.event.fetchedAt,saved);assert.equal(writes,before);
- assert.match(c.sourceFreshnessText('C',offline.freshness.event),/cache/);
+ assert.equal(offline.freshness.event.source,'cache');
  state=live(false,true);state.items[0].title='Tarefa atual';
  const partial=await c.loadWindow();assert(partial.items.some(i=>i.title==='Tarefa atual'));
  assert(partial.items.some(i=>i.title==='Evento'&&i.isCached));assert.equal(files.get(eventPath),valid);

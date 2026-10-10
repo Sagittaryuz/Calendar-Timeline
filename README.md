@@ -3,6 +3,9 @@
 Widget médio para Scriptable que combina Calendário, Lembretes, previsão do
 tempo e uma timeline contínua de até 96 horas.
 
+O toque abre diretamente o Calendário nativo do iOS. Versão e datas de
+consulta/cache ficam somente nos metadados internos, sem rodapé ou alerta.
+
 ## Instalação
 
 1. No Scriptable, cole o conteúdo de
@@ -21,8 +24,8 @@ O arquivo servido no `main` é autocontido e deve ser executado pelo Scriptable;
 os arquivos em `tests/` são testes Node e não fazem consultas ao calendário
 pessoal.
 
-O canto inferior direito mostra a versão gravada no script executado, acima do
-blur. A revisão `v2026.09.30.13` centraliza a segunda linha pelo retângulo de
+A versão gravada no script é mantida internamente, sem etiqueta visual.
+A revisão `v2026.09.30.13` centraliza a segunda linha pelo retângulo de
 cada quadro, com tamanho e altura comuns aos sete dias, sem compensar
 as curvas. A revisão `v2026.10.02.1` desenha os títulos da timeline por inteiro,
 com a fonte original, e recorta somente os pixels no contorno externo do widget.
@@ -37,8 +40,8 @@ das duas linhas mantém o deslocamento de 10 px para baixo e os títulos alinham
 a borda direita ao clima no domingo e a borda esquerda no sábado. A curva
 esquerda mantém direção e raio; os quadros adjacentes acompanham os traços
 com o espaçamento existente. Dias úteis sob blur usam cinzas mais claros.
-A altura do cabeçalho e o encaixe inferior aprovado permanecem fixos. Se a versão não
-aparecer, confira se o carregador está buscando o arquivo de `main`, em vez de
+A altura do cabeçalho e o encaixe inferior aprovado permanecem fixos. Se a instalação
+estiver desatualizada, confira se o carregador está buscando o arquivo de `main`, em vez de
 executar uma cópia antiga em cache.
 
 
@@ -434,3 +437,30 @@ node tools/update-loader-bundle.cjs
 node tests/loader-offline.cjs
 node --input-type=module --check < 'Calendar Timeline Loader'
 ```
+
+A revisão **widget `v2026.10.10.3` / loader `v2026.10.10.2`** restaura
+`widget.url = "calshow://"` como destino principal. O toque não executa o
+Scriptable e não abre menus, prévia ou aviso de atualização. Links antigos
+com `refresh=1` ainda recalculam silenciosamente e abrem o Calendário, sem
+o modal de consulta nem o aviso de permissões desse caminho legado. A
+configuração manual continua com a prévia e pedidos de permissão necessários.
+
+O desenho do rodapé de versão/data/cache e o modal de atualização foram
+removidos. Datas dos dias, textos reais dos eventos/lembretes e clima ficam
+preservados. Consultas novas, snapshots de segurança, timestamps internos e
+`refreshAfterDate` de 15 minutos permanecem funcionando; o iOS decide a
+frequência efetiva. Não há URLs em elementos filhos sobrepondo esse destino.
+
+O loader inclui integralmente `.3` para a primeira inicialização offline e
+rejeita código anterior a `.3` na rede e nas cópias locais, impedindo que a
+recuperação de código antigo reintroduza o modal/rodapé. O estado excepcional
+de indisponibilidade do loader também usa `calshow://`. Os caches de dados
+continuam compatíveis. Para essa proteção também offline, substitua o
+carregador pelo arquivo atualizado mantendo o nome usado no aparelho.
+
+A captura do modal foi materializada da Library e inspecionada localmente.
+O texto `Clima: parcial/cache 09/10 23:43` é uma observação da captura; não
+representa um novo diagnóstico de erro do clima. Validação com mocks:
+16 variantes de toque/background/Siri/prévia/permissão, ausência de URL filha
+e de etiquetas, recuperação offline com código antigo rejeitado, consultas
+e snapshots preservados. Sem teste físico da abertura do Calendário no iPhone.

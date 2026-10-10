@@ -170,8 +170,8 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // toda a altura disponível, sem margens externas superior ou inferior. A
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
-// Identifica o código carregado; atualizar este número em cada revisão publicada.
-const WIDGET_BUILD_VERSION = "2026.10.10.2";
+// Identifica o código internamente; a versão não é desenhada no widget.
+const WIDGET_BUILD_VERSION = "2026.10.10.3";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -499,8 +499,8 @@ const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
-// Reexecuta o nome do carregador atual, preservando a janela escolhida.
-widget.url = refreshWidgetURL();
+// URL explícita abre diretamente o Calendário, sem executar o carregador.
+widget.url = nativeCalendarURL();
 widget.refreshAfterDate = new Date(
   Date.now() + SETTINGS.refreshSeconds * 1000
 );
@@ -510,13 +510,13 @@ if (config.runsInWidget || config.runsWithSiri) {
   // silenciosamente, sem abrir a prévia do Scriptable.
   Script.setWidget(widget);
 } else {
-  if (loadResult.error) {
+  if (loadResult.error && !refreshRequested) {
     await showPermissionHelp(loadResult.error);
   }
 
   if (refreshRequested) {
     Script.setWidget(widget);
-    await showRefreshResult(loadResult, hourlyWeather);
+    Safari.open(nativeCalendarURL());
   } else {
     await widget.presentMedium();
   }
@@ -3778,37 +3778,7 @@ async function renderWidget(items, loadError) {
   // Última camada: a cápsula prevalece inclusive sobre os charts.
   await drawDayEndCapsules(contentCtx);
 
-  drawWidgetBuildVersion(contentCtx);
   return shiftWidgetImage(contentCtx.getImage());
-}
-
-function drawWidgetBuildVersion(ctx) {
-  // Primeiro plano: a identificação permanece legível sobre o blur.
-  const height = 24;
-  const width = 184;
-  const y = CANVAS.height - 38;
-  const rightInset = Math.max(
-    widgetContourInsetAtY(y, WIDGET_CONTOUR.strokeInset),
-    widgetContourInsetAtY(y + height, WIDGET_CONTOUR.strokeInset)
-  ) + 8;
-  const rect = new Rect(CANVAS.width - rightInset - width, y, width, height);
-  ctx.setFillColor(new Color("#000000", 0.85));
-  ctx.fillRect(rect);
-  ctx.setFont(Font.boldSystemFont(17));
-  ctx.setTextColor(new Color("#FFFFFF", 1));
-  ctx.setTextAlignedCenter();
-  ctx.drawTextInRect(`v${WIDGET_BUILD_VERSION}`, rect);
-  // Data original da última resposta válida, sem rejuvenescer a cópia offline.
-  if (typeof loadResult !== "undefined" && typeof hourlyWeather !== "undefined") {
-    const status = [sourceFreshnessText("C", loadResult.freshness?.event),
-      sourceFreshnessText("L", loadResult.freshness?.reminder),
-      sourceFreshnessText("T", hourlyWeather.freshness)].join(" · ");
-    const freshnessRect = new Rect(Math.max(0, rect.x + rect.width - 560), y - 18, 560, 18);
-    ctx.setFillColor(new Color("#000000", 0.85));
-    ctx.fillRect(freshnessRect);
-    ctx.setFont(Font.boldSystemFont(12));
-    ctx.drawTextInRect(status, freshnessRect);
-  }
 }
 
 function shiftWidgetImage(image) {
@@ -12862,42 +12832,6 @@ function nativeCalendarURL() {
   // Apenas abre o app Calendário. Não envia data, identificador ou assinatura.
   // calshow é um esquema do iOS sem contrato público de navegação por data.
   return "calshow://";
-}
-
-function refreshWidgetURL() {
-  let url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}`;
-  url = addURLParameter(url, "refresh", "1");
-  return addURLParameter(url, "hours", windowHours);
-}
-
-function sourceFreshnessText(label, status) {
-  if (status?.source === "missing" || !status?.fetchedAt) return `${label}: sem cópia válida`;
-  const date = new Date(status.fetchedAt);
-  const stamp = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth()+1).padStart(2, "0")} ` +
-    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  const state = status.source === "live" ? "consultado" : status.source === "mixed" ? "parcial/cache" : "cache";
-  return `${label}: ${state} ${stamp}`;
-}
-
-async function showRefreshResult(result, weather) {
-  const alert = new Alert();
-  alert.title = "Calendar Timeline";
-  alert.message = [sourceFreshnessText("Calendário", result.freshness?.event),
-    sourceFreshnessText("Lembretes", result.freshness?.reminder),
-    sourceFreshnessText("Clima", weather.freshness),
-    "A atualização foi entregue ao Scriptable; o iOS controla quando a tela inicial é redesenhada."]
-    .join("\n");
-  alert.addAction("Abrir Calendário");
-  alert.addCancelAction("Fechar");
-  if (await alert.presentAlert() === 0) Safari.open(nativeCalendarURL());
-}
-
-function addURLParameter(url, name, value) {
-  const separator = url.includes("?") ? "&" : "?";
-  return (
-    `${url}${separator}` +
-    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
-  );
 }
 
 function isHolidayEvent(event) {
