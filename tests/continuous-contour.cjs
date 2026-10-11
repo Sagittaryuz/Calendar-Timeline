@@ -51,10 +51,11 @@ assert(Math.abs((borderCenter-run('TIMELINE_OUTER_BORDER_WIDTH/2'))-
 assert(Math.abs(c.titleCardGap()-expectedGap)<1e-9,
   'Vão horizontal entre cartões mantém 1,2287 px.');
 assert(Math.abs(adjustment-(expectedGap-originalClearGap))<1e-9);
-for(let i=0;i<3;i++) {
-  const current=c.titleDayCardRect(i), next=c.titleDayCardRect(i+1);
+for(let offset=1;offset<6;offset++) {
+  const today=c.windowStart.getDay();
+  const current=c.titleDayCardRect(today+offset), next=c.titleDayCardRect(today+offset+1);
   assert(Math.abs(next.x-(current.x+current.width)-expectedGap)<1e-9,
-    'Vãos horizontais dos cartões são iguais.');
+    'Vãos horizontais dos seis cartões futuros fixos são iguais.');
 }
 assert(Math.abs(run('CANVAS.timelineTop+weatherIconCenterY()')-
   (originalTimelineTop+run('ASTRO_CENTER_TARGET_24H')))<1e-9,

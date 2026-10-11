@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.10.3";
+const WIDGET_BUILD_VERSION = "2026.10.11.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -4270,7 +4270,10 @@ function currentDayUnifiedShape(path = new Path()) {
     path.addLine(new Point(centerX, m.bridgeY));
     appendContourArc(path, centerX, m.bridgeY - lowerRadius,
       lowerRadius, lowerRadius, Math.PI / 2, lowerDirection > 0 ? Math.PI : 0);
-    path.addLine(new Point(left, c.y));
+    if (c.x === CANVAS.marginX) {
+      // Fecha pelo mesmo arco externo usado no traço branco da moldura.
+      for (const point of widgetLeftContourPoints().slice(0, 65).reverse()) path.addLine(point);
+    } else path.addLine(new Point(left, c.y));
   }
   return path;
 }
@@ -4500,8 +4503,8 @@ function titleDayCardRect(index) {
   const offset = index - todayIndex;
   const cardGap = titleCardGap();
   const selected = offset === 0;
-  const temporalLeft = boundary - step;
-  const x = (selected ? todayLeft : temporalLeft + offset * step) + (offset > 0 ? cardGap : 0);
+  // Os seis próximos dias têm posições fixas; só HOJE usa a régua temporal.
+  const x = selected ? todayLeft : cardsLeft + offset * step + (offset > 0 ? cardGap : 0);
   const titleCardTop = selected ? WIDGET_CONTOUR.strokeInset
     : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   const height = selected ? Math.max(1, TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2)
@@ -4512,10 +4515,9 @@ function titleDayCardRect(index) {
 function drawDatePanel(ctx, holidayDates) {
   const today = startOfDay(windowStart);
   const todayIndex = titleTodayCardIndex();
-  // Só HOJE para. Os outros mantêm a transformação real, inclusive parciais.
+  // Seis próximos dias fixos, desenhados antes de HOJE, que passa por cima.
   for (const backgroundOnly of [true, false]) {
-    for (let offset = -6; offset <= 7; offset++) {
-      if (offset === 0) continue;
+    for (let offset = 1; offset < TITLE_CARD_COUNT; offset++) {
       const card = titleDayCardRect(todayIndex + offset);
       if (card.x + card.width <= CANVAS.marginX ||
           card.x >= CANVAS.width - CANVAS.marginX) continue;
@@ -4525,8 +4527,8 @@ function drawDatePanel(ctx, holidayDates) {
     }
   }
   const card = titleDayCardRect(todayIndex);
-  // A camada de HOJE cobre a parte dos quadros que passa por baixo durante
-  // a parada; suas coordenadas continuam livres e não recebem deslocamento.
+  // A camada de HOJE cobre os quadros fixos enquanto desliza. Na parada,
+  // ocupa integralmente a primeira posição, liberando todos os próximos dias.
   for (let y = Math.floor(card.y); y < Math.ceil(card.y + card.height); y++) {
     restoreWidgetBackgroundSpan(ctx, card.x, y, card.width);
   }
@@ -5109,8 +5111,11 @@ function buildCurrentDayUpperPath(
   const right = card.x + card.width;
   const bridge = {edgeX: right, startY: bridgeY, bridgeRadius: 0,
     endpointX: right, curveDirectionSign: 1};
-  // Topo e lado direito retos. A única curva do cartão fica embaixo à esquerda.
-  path.move(new Point(card.x + Math.max(0, pathInset), card.y));
+  // O topo direito continua reto. Na primeira posição, o topo começa no
+  // arco externo já calibrado, sem uma reta escondida atrás do recorte.
+  const topLeft = card.x === CANVAS.marginX
+    ? widgetLeftContourPoints()[0] : new Point(card.x + Math.max(0, pathInset), card.y);
+  path.move(topLeft);
   path.addLine(new Point(right, card.y));
   path.addLine(new Point(right, bridgeY));
   // Depois da parada do cabeçalho, esta ligação acompanha a régua abaixo dele.
@@ -5318,7 +5323,11 @@ function drawCurrentDayFrame(ctx) {
   {
     const left = todayCard.x + lineWidth / 2;
     const path = new Path();
-    path.move(new Point(left, todayCard.y));
+    if (todayCard.x === CANVAS.marginX) {
+      const corner = widgetLeftContourPoints().slice(0, 65);
+      path.move(corner[0]);
+      for (const point of corner.slice(1)) path.addLine(point);
+    } else path.move(new Point(left, todayCard.y));
     // A curva esquerda mantém seu raio e sua direção, independentemente da virada.
     const bridge = currentDayLeftBridgeMetrics(todayCard, bridgeY, framePathRadius, lineWidth / 2);
     path.addLine(new Point(left, bridge.startY));

@@ -28,14 +28,14 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
     if(!ordered[i].selected&&!ordered[i-1].selected)assert(ordered[i].r.x>=ordered[i-1].r.x+ordered[i-1].r.width-1e-8,'Moving cards do not overlap');
     assert.equal(+c.addDays(ordered[i-1].d,1),+ordered[i].d,'Consecutive dates across year/month/week');
   }
-  if(hour===12){assert(ordered[0].r.x<0,'Partial left card is drawn');assert(ordered.at(-1).r.x+ordered.at(-1).r.width>width,'Partial right card is drawn');}
+  assert.equal(drawn.length,7,'Hoje e seis próximos dias, sem novos cartões parciais nas bordas.');
   const tomorrow=c.titleDayCardRect(todayIndex+1);
-  assert(Math.abs(tomorrow.x-(boundary+c.titleCardGap()))<1e-8,'Tomorrow keeps real position even when HOJE is frozen');
+  assert(Math.abs(tomorrow.x-(step+c.titleCardGap()))<1e-8,'Amanhã conserva a segunda posição fixa.');
   const previousTime=new Date(+c.windowStart-60000),start=c.windowStart,end=c.windowEnd;
   c.windowStart=previousTime;c.windowEnd=new Date(+previousTime+86400000);
   const previousTomorrow=c.titleDayCardRect(c.titleTodayCardIndex()+1);
   c.windowStart=start;c.windowEnd=end;
-  if(hour>0)assert(Math.abs((tomorrow.x-previousTomorrow.x)+width/1440)<1e-8,'Exact same minute displacement as the day boundary');
+  if(hour>0)assert.equal(tomorrow.x,previousTomorrow.x,'A régua se desloca, mas amanhã não.');
   assert.equal(texts.length,drawn.length*7,'Full weekday, full date and both temperatures');
   for(let i=0;i<drawn.length;i++){
     const {d,r,selected}=drawn[i],entries=texts.slice(i*7,i*7+7);
@@ -50,7 +50,12 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
   }
   const leftPath=paths.at(-2).path.points;
   assert(leftPath.length>60,'The lower left corner retains its measured curve');
-  assert(leftPath.every(p=>p.y>=card.y),'No top left arc');
+  assert(leftPath.every(p=>p.y>=card.y),'A moldura permanece dentro da altura do canvas.');
+  if(card.x===0) {
+    const contour=c.widgetLeftContourPoints().slice(0,65);
+    assert.deepEqual(leftPath.slice(0,65).map(p=>[p.x,p.y]),Array.from(contour,p=>[p.x,p.y]),'Canto superior esquerdo parado usa o contorno externo calibrado, ponto a ponto.');
+    assert.equal(leftPath[0].x,run('WIDGET_CONTOUR.extentX'));
+  } else assert.equal(leftPath[0].x,card.x+2,'Em movimento o canto superior esquerdo continua reto.');
   for(let i=0;i<drawn.length;i++)for(const t of texts.slice(i*7,i*7+7)){const r=drawn[i].r;assert(t.p.x>=r.x-0.1&&t.p.x+t.t.length*t.size*0.62<=r.x+r.width+0.1,'Full text stays inside its own card');assert(t.p.y+t.size*1.15<=r.y+r.height+0.1);}
   const m=c.currentDayFrameMetrics();const upper=c.buildCurrentDayUpperPath(null,card,m.bridgeY,m.lineWidth,{},'right',boundary,m.frameRadius,new Path(),2,m.frameRadius).path;
   assert.equal(upper.points[1].x,card.x+card.width);assert.equal(upper.points[1].y,card.y);assert.equal(upper.points[2].x,card.x+card.width);assert.equal(upper.points[2].y,m.bridgeY,'Straight right edge');
@@ -65,7 +70,7 @@ for(const hours of [1,12,24,48,96]){c.windowStart=new Date(2026,9,9,12);c.window
  const next=c.titleDayCardRect(c.titleTodayCardIndex()+1);const start=c.windowStart;
  c.windowStart=new Date(+start+60000);c.windowEnd=new Date(+c.windowStart+hours*3600000);
  const moved=c.titleDayCardRect(c.titleTodayCardIndex()+1);
- assert(Math.abs((moved.x-next.x)+run('timelineWidth()')/(hours*60))<1e-8,'Moving days use existing window speed before and after clamp');
+ assert.equal(moved.x,next.x,'Os demais dias ficam parados também em janelas de 1–96h.');
 }
 if(process.env.HEADER_SVG){
  const escape=t=>String(t).replaceAll('&','&amp;').replaceAll('<','&lt;');
@@ -75,6 +80,6 @@ if(process.env.HEADER_SVG){
  const rows=snapshots.map((s,i)=>'<g transform="translate(0 '+(i*180)+')"><text x="8" y="18" fill="white">'+s.hour.toFixed(3)+'h — meia-noite '+s.boundary.toFixed(1)+'</text><svg x="0" y="30" width="1092" height="150" viewBox="0 0 1092 150">'+s.ops.map(paint).join('')+'<line x1="'+s.boundary+'" x2="'+s.boundary+'" y1="100" y2="140" stroke="#f88"/></svg></g>').join('');
  fs.writeFileSync(process.env.HEADER_SVG,'<svg xmlns="http://www.w3.org/2000/svg" width="1092" height="720"><rect width="1092" height="720" fill="#111"/>'+rows+'</svg>');
 }
-console.log(`OK: ${count} moving headers, 4 widths, dates/month/year, midnight, 1/7 clamp, full texts, straight corners and unchanged event coordinates.`);
+console.log(`OK: ${count} headers com seis próximos dias fixos, 4 widths, dates/month/year, midnight, 1/7 clamp, full texts, straight corners and unchanged event coordinates.`);
 
 

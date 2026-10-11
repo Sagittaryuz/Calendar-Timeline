@@ -6,6 +6,17 @@ tempo e uma timeline contínua de até 96 horas.
 O toque abre diretamente o Calendário nativo do iOS. Versão e datas de
 consulta/cache ficam somente nos metadados internos, sem rodapé ou alerta.
 
+## Cabeçalho — versão 2026.10.11.1
+
+Os seis próximos dias ocupam posições fixas. Apenas HOJE acompanha o movimento
+temporal, sobre os demais quadros, mantendo a parada na primeira posição. Nessa
+parada, somente seu canto superior esquerdo reutiliza o contorno externo
+calibrado do widget; os demais cantos e a timeline permanecem como antes.
+Atualize também o carregador para receber esse comportamento no fallback offline.
+
+A comparação em `tools/preview-fixed-day-header.cjs` usa as funções reais de
+desenho com dados fictícios e fontes/ícones simulados; não é captura do iPhone.
+
 ## Instalação
 
 1. No Scriptable, cole o conteúdo de
