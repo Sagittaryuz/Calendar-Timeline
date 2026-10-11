@@ -6,23 +6,25 @@ tempo e uma timeline contínua de até 96 horas.
 O toque abre diretamente o Calendário nativo do iOS. Versão e datas de
 consulta/cache ficam somente nos metadados internos, sem rodapé ou alerta.
 
-## Cabeçalho — versão 2026.10.11.4
+## Cabeçalho — versão 2026.10.11.5
 
-As células dos demais quadros permanecem fixas. Suas datas seguem a posição
-real de HOJE: anteriores à esquerda, próximas à direita. Com DOM11 à direita,
-vêm SAB10, SEX09 e os dias anteriores à sua esquerda; SEG12 aparece apenas
-após DOM11. A primeira célula não fica reservada vazia. Durante a passagem
-podem aparecer parcelas de dois vizinhos; HOJE conserva seu movimento, sua
-parada e o canto superior esquerdo calibrado nessa parada.
+Todos os quadros compartilham a mesma translação da régua temporal, mantendo
+as datas em ordem: anteriores à esquerda de HOJE, posteriores à direita.
+Os dias nas extremidades podem aparecer parcialmente; HOJE permanece inteiro.
+Somente quando HOJE chega à primeira posição, o cabeçalho completo para,
+enquanto o corpo da timeline continua passando. Na janela padrão de 24 horas,
+essa parada corresponde ao trecho final de 24h/7 (aproximadamente 3h25m43s),
+a partir de 20h34m17s em um dia de 24 horas.
 
-Somente nas extremidades estáticas, dia/data alinham com a linha do clima:
-à direita no primeiro quadro e à esquerda no último. Móveis e intermediários
-ficam centralizados. Cada data usa apenas seu clima correspondente; histórico
-indisponível aparece como `--º`, sem ícone inventado. Atualize também o
-carregador para incorporar a correção ao fallback offline.
+Apenas nesse modo estático, dia/data alinham com a linha do clima à direita
+no primeiro quadro e à esquerda no último. Durante o movimento, todos ficam
+centralizados. O canto superior esquerdo calibrado de HOJE também aparece
+somente na parada. O clima segue a data de cada quadro; histórico ausente
+mostra `--º` sem ícone inventado. Atualize também o carregador para incorporar
+a correção ao fallback offline.
 
-`tools/preview-chronological-header.cjs` compara as funções reais de desenho
-com clima fictício por data e fontes/ícones simulados; não é captura do iPhone.
+`tools/preview-shared-header-motion.cjs` compara o desenho real com dados
+fictícios e fontes/ícones simulados; não é captura do iPhone.
 
 ## Instalação
 

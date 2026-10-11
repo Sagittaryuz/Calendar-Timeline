@@ -28,11 +28,11 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
     assert.equal(+c.addDays(ordered[i-1].d,1),+ordered[i].d,'Datas em ordem cronológica na tela, inclusive os vizinhos parcialmente recortados.');
   }
   assert.equal(new Set(drawn.map(v=>c.dateKey(v.d))).size,drawn.length,'Sem datas duplicadas.');
-  assert(ordered[0].r.x<0.001,'Primeira posição preenchida, sem reserva vazia.');
+  assert(ordered[0].r.x<=c.titleCardGap()+0.001,'Sem reserva vazia: só o vão nominal ou recorte normal na borda.');
   for(const v of drawn.filter(v=>!v.selected)) {
-    const slot=Math.round(v.r.x/step);
-    const expected=slot*step+(slot>0?c.titleCardGap():0);
-    assert(Math.abs(v.r.x-expected)<1e-8,'Os quadros permanecem na grade fixa; só suas datas são selecionadas pelo lado de HOJE.');
+    const offset=Math.round((Date.parse(c.dateKey(v.d))-Date.parse(c.dateKey(c.windowStart)))/86400000);
+    const expected=card.x+offset*step+(offset>0?c.titleCardGap():0);
+    assert(Math.abs(v.r.x-expected)<1e-8,'Todos os quadros usam a mesma translação contínua de HOJE.');
     assert((v.r.x<card.x)===(v.d<c.startOfDay(c.windowStart)),'Passado à esquerda, futuro à direita.');
   }
   assert([7,8].includes(drawn.length),'Sete células; na transição podem aparecer dois vizinhos parciais de HOJE.');
@@ -44,7 +44,7 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
     const weatherLeft=entries[5].p.x,weatherRight=entries[6].p.x+entries[6].t.length*entries[6].size*0.62;
     assert(Math.abs((weatherLeft+weatherRight)/2-r.x-r.width/2)<1e-8,'Weather stays centered in its card');
     const atLeft=Math.abs(r.x)<0.001,atRight=Math.abs(r.x+r.width-width)<0.001;
-    const staticCard=!selected||atLeft;
+    const staticCard=card.x===0;
     const expectedTitleX=staticCard&&atLeft?weatherRight-c.titleCardTypography().titleWidth:staticCard&&atRight?weatherLeft:(weatherLeft+weatherRight-c.titleCardTypography().titleWidth)/2;
     assert(Math.abs(entries[0].p.x-expectedTitleX)<1e-8,'Somente extremos estáticos alinham as duas linhas; móveis e interiores ficam centrados.');
     if(selected || r.x>=card.x+card.width || r.x+r.width<=card.x) assert.equal(c.insideCurrentDayUnifiedShape(r.x+r.width/2,r.y+r.height/2),selected,'Unified background covers today');
@@ -73,7 +73,8 @@ for(const hours of [1,12,24,48,96]){c.windowStart=new Date(2026,9,9,12);c.window
  const next=c.titleDayCardRect(c.titleTodayCardIndex()+1);const start=c.windowStart;
  c.windowStart=new Date(+start+60000);c.windowEnd=new Date(+c.windowStart+hours*3600000);
  const moved=c.titleDayCardRect(c.titleTodayCardIndex()+1);
- assert.equal(moved.x,next.x,'Os demais dias ficam parados também em janelas de 1–96h.');
+ const movedToday=c.titleDayCardRect(c.titleTodayCardIndex());
+ assert(Math.abs((moved.x-next.x)-(movedToday.x-r.x))<1e-8,'Todos os dias compartilham o movimento ou a parada, inclusive em janelas de 1–96h.');
 }
 if(process.env.HEADER_SVG){
  const escape=t=>String(t).replaceAll('&','&amp;').replaceAll('<','&lt;');
@@ -83,6 +84,6 @@ if(process.env.HEADER_SVG){
  const rows=snapshots.map((s,i)=>'<g transform="translate(0 '+(i*180)+')"><text x="8" y="18" fill="white">'+s.hour.toFixed(3)+'h — meia-noite '+s.boundary.toFixed(1)+'</text><svg x="0" y="30" width="1092" height="150" viewBox="0 0 1092 150">'+s.ops.map(paint).join('')+'<line x1="'+s.boundary+'" x2="'+s.boundary+'" y1="100" y2="140" stroke="#f88"/></svg></g>').join('');
  fs.writeFileSync(process.env.HEADER_SVG,'<svg xmlns="http://www.w3.org/2000/svg" width="1092" height="720"><rect width="1092" height="720" fill="#111"/>'+rows+'</svg>');
 }
-console.log(`OK: ${count} headers cronológicos em células fixas, 4 widths, dates/month/year, midnight, 1/7 clamp, full texts, straight corners and unchanged event coordinates.`);
+console.log(`OK: ${count} headers cronológicos com movimento comum e clamp final, 4 widths, dates/month/year, midnight, 1/7 clamp, full texts, straight corners and unchanged event coordinates.`);
 
 

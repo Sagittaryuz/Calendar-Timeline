@@ -1,4 +1,4 @@
-// Exercise visual order and fixed cells near every crossing, local midnight and DST.
+// Exercise visual order and common translation near every crossing, local midnight and DST.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const directory=__dirname,harness=fs.readFileSync(path.join(directory,'moving-day-header.cjs'),'utf8').split('let count=0;const snapshots=[];')[0];
 vm.runInNewContext(harness+`
@@ -16,10 +16,11 @@ for(const width of [960,1092,1200])for(const hours of [1,12,24,48,96])for(const 
   const cards=[];const original=c.drawTitleDayCard;c.drawTitleDayCard=(_,d,r,selected,last,bg,txt)=>{if(txt)cards.push({d,r,selected});};
   ops=[];c.drawDatePanel(ctx,new Set());c.drawTitleDayCard=original;
   const ordered=cards.slice().sort((a,b)=>a.r.x-b.r.x),today=cards.find(v=>v.selected),step=width/7;
-  assert.equal(cards.filter(v=>v.selected).length,1);assert(ordered[0].r.x<0.001);assert.equal(new Set(cards.map(v=>c.dateKey(v.d))).size,cards.length);
+  assert.equal(cards.filter(v=>v.selected).length,1);assert(ordered[0].r.x<=c.titleCardGap()+0.001);assert.equal(new Set(cards.map(v=>c.dateKey(v.d))).size,cards.length);
   for(let i=1;i<ordered.length;i++)assert.equal(+c.addDays(ordered[i-1].d,1),+ordered[i].d,'Datas locais consecutivas na tela: '+JSON.stringify({width,hours,minute,ordered:ordered.map(v=>[c.dateKey(v.d),v.r.x])}));
   for(const v of cards.filter(v=>!v.selected)) {
-   const slot=Math.round(v.r.x/step);assert(Math.abs(v.r.x-(slot*step+(slot>0?c.titleCardGap():0)))<1e-7,'Células fixas em toda a transição.');
+   const offset=Math.round((Date.parse(c.dateKey(v.d))-Date.parse(c.dateKey(today.d)))/86400000);
+   assert(Math.abs(v.r.x-(today.r.x+offset*step+(offset>0?c.titleCardGap():0)))<1e-7,'Uma única translação, sem saltos por floor de índice.');
    assert((v.r.x<today.r.x)===(v.d<today.d));
   }
   if(c.dateKey(c.windowStart)==='2026-10-11'&&hours===24&&minute===20) {

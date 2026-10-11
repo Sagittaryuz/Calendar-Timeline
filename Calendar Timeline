@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.11.4";
+const WIDGET_BUILD_VERSION = "2026.10.11.5";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -4491,7 +4491,7 @@ function titleCardGap() {
   return TITLE_CARD_SPACING;
 }
 
-function titleDayCardRect(index, staticSlot = null) {
+function titleDayCardRect(index) {
   const cardsLeft = CANVAS.marginX;
   const cardsRight = CANVAS.width - CANVAS.marginX;
   const step = (cardsRight - cardsLeft) / TITLE_CARD_COUNT;
@@ -4502,10 +4502,10 @@ function titleDayCardRect(index, staticSlot = null) {
   const todayLeft = Math.max(cardsLeft, Math.min(cardsRight - step, boundary - step));
   const offset = index - todayIndex;
   const cardGap = titleCardGap();
-  const selected = staticSlot === null && offset === 0;
-  // As células ficam fixas; a data nelas depende do lado real de HOJE.
-  const slot = staticSlot === null ? offset : staticSlot;
-  const x = selected ? todayLeft : cardsLeft + slot * step + (slot > 0 ? cardGap : 0);
+  const selected = offset === 0;
+  // Uma única translação para todos os dias. Só trava quando HOJE chega
+  // à primeira posição; depois disso a régua temporal continua passando.
+  const x = todayLeft + offset * step + (offset > 0 ? cardGap : 0);
   const titleCardTop = selected ? WIDGET_CONTOUR.strokeInset
     : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   const height = selected ? Math.max(1, TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2)
@@ -4517,24 +4517,17 @@ function drawDatePanel(ctx, holidayDates) {
   const today = startOfDay(windowStart);
   const todayIndex = titleTodayCardIndex();
   const card = titleDayCardRect(todayIndex);
-  // A grade não se desloca. Só as células com parcela visível participam
-  // da sequência: o vizinho esquerdo é ontem, o direito é amanhã.
-  const neighbors = [];
-  for (let slot = 0; slot < TITLE_CARD_COUNT; slot++) {
-    const rect = titleDayCardRect(todayIndex + 1, slot);
-    const before = rect.x < card.x - 0.001;
-    const after = rect.x + rect.width > card.x + card.width + 0.001;
-    if (before || after) neighbors.push({rect, slot, before});
-  }
-  let previousOffset = -neighbors.filter(neighbor => neighbor.before).length;
-  let nextOffset = 1;
-  for (const neighbor of neighbors) {
-    neighbor.offset = neighbor.before ? previousOffset++ : nextOffset++;
-  }
+  // Datas e posições compartilham o mesmo offset, sem troca por índice de
+  // célula. Os outros dias podem aparecer parcialmente nas extremidades.
   for (const backgroundOnly of [true, false]) {
-    for (const neighbor of neighbors) {
-      drawTitleDayCard(ctx, addDays(today, neighbor.offset), neighbor.rect, false,
-        neighbor.slot === TITLE_CARD_COUNT - 1, backgroundOnly, !backgroundOnly);
+    for (let offset = -TITLE_CARD_COUNT + 1; offset < TITLE_CARD_COUNT; offset++) {
+      if (offset === 0) continue;
+      const neighbor = titleDayCardRect(todayIndex + offset);
+      if (neighbor.x + neighbor.width <= CANVAS.marginX ||
+          neighbor.x >= CANVAS.width - CANVAS.marginX) continue;
+      drawTitleDayCard(ctx, addDays(today, offset), neighbor, false,
+        Math.abs(neighbor.x + neighbor.width - (CANVAS.width - CANVAS.marginX)) < 1,
+        backgroundOnly, !backgroundOnly);
     }
   }
   // HOJE permanece na frente, com a mesma geometria e projeção temporal.
@@ -5477,7 +5470,7 @@ function drawTitleDayCard(
   // A posição, e não o dia da semana, identifica a extremidade real.
   const atLeftEdge = Math.abs(card.x - CANVAS.marginX) < 0.001;
   const atRightEdge = Math.abs(card.x + card.width - (CANVAS.width - CANVAS.marginX)) < 0.001;
-  const isStatic = !isSelected || atLeftEdge;
+  const isStatic = titleDayCardRect(titleTodayCardIndex()).x === CANVAS.marginX;
   const titleStartX = isStatic && atLeftEdge
     ? weatherX + weatherWidth - layout.titleWidth
     : isStatic && atRightEdge
