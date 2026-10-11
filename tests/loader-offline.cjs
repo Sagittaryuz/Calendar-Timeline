@@ -45,50 +45,51 @@ const checkDelivery=()=>{
 };
 (async()=>{
  // Primeira inicialização offline funciona mesmo sem cache de código anterior.
- await c.runCalendarLoader();checkDelivery();assert.equal(delivered.at(-1).version,'2026.10.11.1');
+ await c.runCalendarLoader();checkDelivery();assert.equal(delivered.at(-1).version,'2026.10.11.2');
  assert.equal(completed,1);assert.equal(requests,1);
  const first=files.get(cachePath),firstStamp=JSON.parse(first).fetchedAt;
  // Um cache antigo não pode reintroduzir o modal de refresh ou o rodapé.
- const obsoleteCode=production.replace('"2026.10.11.1"','"2026.10.10.3"');
+ const obsoleteCode=production.replace('"2026.10.11.2"','"2026.10.10.3"');
  assert.throws(()=>c.compileCalendarCode(obsoleteCode),/anterior aos quadros fixos/);
+ assert.throws(()=>c.compileCalendarCode(production.replace('"2026.10.11.2"','"2026.10.11.1"')),/anterior aos quadros fixos/,'Fallback anterior ao alinhamento também é recusado.');
  const obsolete={...JSON.parse(first),code:obsoleteCode,version:'2026.10.10.3',
    checksum:c.calendarCodeChecksum(obsoleteCode),fetchedAt:Date.now()};
  files.set(cachePath,JSON.stringify(obsolete));
- await c.runCalendarLoader();checkDelivery();assert.equal(delivered.at(-1).version,'2026.10.11.1');
+ await c.runCalendarLoader();checkDelivery();assert.equal(delivered.at(-1).version,'2026.10.11.2');
  assert.equal(JSON.parse(files.get(cachePath)).fetchedAt,firstStamp);
  const before=writes;await c.runCalendarLoader();assert.equal(files.get(cachePath),first);
  assert.equal(writes,before,'Offline repetido não rejuvenesce nem troca o código bom.');
  assert.equal(requests,3,'Ainda tenta a fonte nova a cada execução.');
  assert.equal(JSON.parse(first).fetchedAt,firstStamp);
  // Online atualiza uma revisão nova; próxima execução offline usa essa revisão.
- mode='online';remote=production.replace('"2026.10.11.1"','"2026.10.11.2"');
- await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.2');
+ mode='online';remote=production.replace('"2026.10.11.2"','"2026.10.11.3"');
+ await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.3');
  const latest=files.get(cachePath);assert(files.has(cachePath+'.backup'));
- mode='offline';await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.2');assert.equal(files.get(cachePath),latest);
+ mode='offline';await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.3');assert.equal(files.get(cachePath),latest);
  // Respostas HTTP/HTML/JSON/vazias/truncadas/sintaticamente inválidas mantêm o último programa bom.
  for(const [body,http] of [[production,500],['<html>offline</html>',200],['{"error":"bad"}',200],['',200],
    [production.slice(0,3000),200],[production+'\nconst invalid = ;',200]]) {
   mode='online';remote=body;status=http;
-  await c.runCalendarLoader();assert.equal(files.get(cachePath),latest);assert.equal(delivered.at(-1).version,'2026.10.11.2');
+  await c.runCalendarLoader();assert.equal(files.get(cachePath),latest);assert.equal(delivered.at(-1).version,'2026.10.11.3');
  }
  // Sintaxe válida, mas execução quebrada após setWidget: restaura o widget anterior e não promove código ruim.
- status=200;remote=production.replace('"2026.10.11.1"','"2026.10.11.9"');
+ status=200;remote=production.replace('"2026.10.11.2"','"2026.10.11.9"');
  config.runsInWidget=false;probe.failVersion='2026.10.11.9';
  const deliveredBefore=delivered.length;await c.runCalendarLoader();
- assert.equal(delivered.length,deliveredBefore+2);assert.equal(delivered.at(-1).version,'2026.10.11.2');
+ assert.equal(delivered.length,deliveredBefore+2);assert.equal(delivered.at(-1).version,'2026.10.11.3');
  assert.equal(files.get(cachePath),latest);delete probe.failVersion;config.runsInWidget=true;
  // Corrupção ou ausência do arquivo principal recupera o backup; ambos inválidos usam o bundle.
- mode='offline';files.set(cachePath,'{corrupt');await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.1');
- files.delete(cachePath);await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.1');
+ mode='offline';files.set(cachePath,'{corrupt');await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.2');
+ files.delete(cachePath);await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.2');
  files.set(cachePath,latest);const tampered=JSON.parse(latest);tampered.code+='\n// corrupção';
  files.set(cachePath,JSON.stringify(tampered));files.set(cachePath+'.backup','invalid');
- await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.1');
+ await c.runCalendarLoader();assert.equal(delivered.at(-1).version,'2026.10.11.2');
  // Arquivo temporário corrompido e falha na instalação nunca perdem a cópia anterior.
  files.set(cachePath,latest);files.set(cachePath+'.backup',first);
  const candidate=c.calendarCodeSnapshot(production,JSON.parse(latest).fetchedAt+1);
  const move=fm.move;fm.move=()=>{throw Error('disk failure');};
  assert.equal(c.persistCalendarCode(fm,cachePath,candidate),false);fm.move=move;
- assert.equal(c.readCalendarCodeSnapshots(fm,cachePath)[0].version,'2026.10.11.2');
+ assert.equal(c.readCalendarCodeSnapshots(fm,cachePath)[0].version,'2026.10.11.3');
  assert(![...files.keys()].some(p=>p.endsWith('.tmp')));
  assert.equal(c.persistCalendarCode(fm,cachePath,c.calendarCodeSnapshot(production,1)),false);
  // Nome, queryParameters, parâmetro do widget e Atalhos atravessam o carregador sem mutação.
