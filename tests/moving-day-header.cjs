@@ -23,19 +23,19 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
   const drawn=[];const original=c.drawTitleDayCard;c.drawTitleDayCard=(ctx,d,r,selected,last,bg,txt)=>{if(txt)drawn.push({d,r,selected});return original(ctx,d,r,selected,last,bg,txt);};
   c.drawDatePanel(ctx,new Set());c.drawTitleDayCard=original;c.drawCurrentDayFrame(ctx);
   assert.equal(drawn.filter(v=>v.selected).length,1);
-  const ordered=drawn.slice().sort((a,b)=>a.d-b.d);
-  for(let i=1;i<ordered.length;i++){
-    if(!ordered[i].selected&&!ordered[i-1].selected)assert(ordered[i].r.x>=ordered[i-1].r.x+ordered[i-1].r.width-1e-8,'Moving cards do not overlap');
-    assert.equal(+c.addDays(ordered[i-1].d,1),+ordered[i].d,'Consecutive dates across year/month/week');
+  const ordered=drawn.slice().sort((a,b)=>a.r.x-b.r.x);
+  for(let i=1;i<ordered.length;i++) {
+    assert.equal(+c.addDays(ordered[i-1].d,1),+ordered[i].d,'Datas em ordem cronológica na tela, inclusive os vizinhos parcialmente recortados.');
   }
-  assert.equal(drawn.length,7,'Hoje e seis próximos dias, sem novos cartões parciais nas bordas.');
-  const tomorrow=c.titleDayCardRect(todayIndex+1);
-  assert(Math.abs(tomorrow.x-(step+c.titleCardGap()))<1e-8,'Amanhã conserva a segunda posição fixa.');
-  const previousTime=new Date(+c.windowStart-60000),start=c.windowStart,end=c.windowEnd;
-  c.windowStart=previousTime;c.windowEnd=new Date(+previousTime+86400000);
-  const previousTomorrow=c.titleDayCardRect(c.titleTodayCardIndex()+1);
-  c.windowStart=start;c.windowEnd=end;
-  if(hour>0)assert.equal(tomorrow.x,previousTomorrow.x,'A régua se desloca, mas amanhã não.');
+  assert.equal(new Set(drawn.map(v=>c.dateKey(v.d))).size,drawn.length,'Sem datas duplicadas.');
+  assert(ordered[0].r.x<0.001,'Primeira posição preenchida, sem reserva vazia.');
+  for(const v of drawn.filter(v=>!v.selected)) {
+    const slot=Math.round(v.r.x/step);
+    const expected=slot*step+(slot>0?c.titleCardGap():0);
+    assert(Math.abs(v.r.x-expected)<1e-8,'Os quadros permanecem na grade fixa; só suas datas são selecionadas pelo lado de HOJE.');
+    assert((v.r.x<card.x)===(v.d<c.startOfDay(c.windowStart)),'Passado à esquerda, futuro à direita.');
+  }
+  assert([7,8].includes(drawn.length),'Sete células; na transição podem aparecer dois vizinhos parciais de HOJE.');
   assert.equal(texts.length,drawn.length*7,'Full weekday, full date and both temperatures');
   for(let i=0;i<drawn.length;i++){
     const {d,r,selected}=drawn[i],entries=texts.slice(i*7,i*7+7);
@@ -83,6 +83,6 @@ if(process.env.HEADER_SVG){
  const rows=snapshots.map((s,i)=>'<g transform="translate(0 '+(i*180)+')"><text x="8" y="18" fill="white">'+s.hour.toFixed(3)+'h — meia-noite '+s.boundary.toFixed(1)+'</text><svg x="0" y="30" width="1092" height="150" viewBox="0 0 1092 150">'+s.ops.map(paint).join('')+'<line x1="'+s.boundary+'" x2="'+s.boundary+'" y1="100" y2="140" stroke="#f88"/></svg></g>').join('');
  fs.writeFileSync(process.env.HEADER_SVG,'<svg xmlns="http://www.w3.org/2000/svg" width="1092" height="720"><rect width="1092" height="720" fill="#111"/>'+rows+'</svg>');
 }
-console.log(`OK: ${count} headers com seis próximos dias fixos, 4 widths, dates/month/year, midnight, 1/7 clamp, full texts, straight corners and unchanged event coordinates.`);
+console.log(`OK: ${count} headers cronológicos em células fixas, 4 widths, dates/month/year, midnight, 1/7 clamp, full texts, straight corners and unchanged event coordinates.`);
 
 

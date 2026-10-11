@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.11.3";
+const WIDGET_BUILD_VERSION = "2026.10.11.4";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -4491,7 +4491,7 @@ function titleCardGap() {
   return TITLE_CARD_SPACING;
 }
 
-function titleDayCardRect(index) {
+function titleDayCardRect(index, staticSlot = null) {
   const cardsLeft = CANVAS.marginX;
   const cardsRight = CANVAS.width - CANVAS.marginX;
   const step = (cardsRight - cardsLeft) / TITLE_CARD_COUNT;
@@ -4502,9 +4502,10 @@ function titleDayCardRect(index) {
   const todayLeft = Math.max(cardsLeft, Math.min(cardsRight - step, boundary - step));
   const offset = index - todayIndex;
   const cardGap = titleCardGap();
-  const selected = offset === 0;
-  // Os seis próximos dias têm posições fixas; só HOJE usa a régua temporal.
-  const x = selected ? todayLeft : cardsLeft + offset * step + (offset > 0 ? cardGap : 0);
+  const selected = staticSlot === null && offset === 0;
+  // As células ficam fixas; a data nelas depende do lado real de HOJE.
+  const slot = staticSlot === null ? offset : staticSlot;
+  const x = selected ? todayLeft : cardsLeft + slot * step + (slot > 0 ? cardGap : 0);
   const titleCardTop = selected ? WIDGET_CONTOUR.strokeInset
     : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
   const height = selected ? Math.max(1, TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2)
@@ -4515,20 +4516,28 @@ function titleDayCardRect(index) {
 function drawDatePanel(ctx, holidayDates) {
   const today = startOfDay(windowStart);
   const todayIndex = titleTodayCardIndex();
-  // Seis próximos dias fixos, desenhados antes de HOJE, que passa por cima.
+  const card = titleDayCardRect(todayIndex);
+  // A grade não se desloca. Só as células com parcela visível participam
+  // da sequência: o vizinho esquerdo é ontem, o direito é amanhã.
+  const neighbors = [];
+  for (let slot = 0; slot < TITLE_CARD_COUNT; slot++) {
+    const rect = titleDayCardRect(todayIndex + 1, slot);
+    const before = rect.x < card.x - 0.001;
+    const after = rect.x + rect.width > card.x + card.width + 0.001;
+    if (before || after) neighbors.push({rect, slot, before});
+  }
+  let previousOffset = -neighbors.filter(neighbor => neighbor.before).length;
+  let nextOffset = 1;
+  for (const neighbor of neighbors) {
+    neighbor.offset = neighbor.before ? previousOffset++ : nextOffset++;
+  }
   for (const backgroundOnly of [true, false]) {
-    for (let offset = 1; offset < TITLE_CARD_COUNT; offset++) {
-      const card = titleDayCardRect(todayIndex + offset);
-      if (card.x + card.width <= CANVAS.marginX ||
-          card.x >= CANVAS.width - CANVAS.marginX) continue;
-      drawTitleDayCard(ctx, addDays(today, offset), card, false,
-        Math.abs(card.x + card.width - (CANVAS.width - CANVAS.marginX)) < 1,
-        backgroundOnly, !backgroundOnly);
+    for (const neighbor of neighbors) {
+      drawTitleDayCard(ctx, addDays(today, neighbor.offset), neighbor.rect, false,
+        neighbor.slot === TITLE_CARD_COUNT - 1, backgroundOnly, !backgroundOnly);
     }
   }
-  const card = titleDayCardRect(todayIndex);
-  // A camada de HOJE cobre os quadros fixos enquanto desliza. Na parada,
-  // ocupa integralmente a primeira posição, liberando todos os próximos dias.
+  // HOJE permanece na frente, com a mesma geometria e projeção temporal.
   for (let y = Math.floor(card.y); y < Math.ceil(card.y + card.height); y++) {
     restoreWidgetBackgroundSpan(ctx, card.x, y, card.width);
   }
@@ -5500,8 +5509,8 @@ function titleDailyTemperatureForDay(date) {
   const daily = titleDailyWeatherForDay(date);
   if (
     daily &&
-    Number.isFinite(Number(daily.minimum)) &&
-    Number.isFinite(Number(daily.maximum))
+    finiteWeatherNumber(daily.minimum) !== null &&
+    finiteWeatherNumber(daily.maximum) !== null
   ) {
     return daily;
   }
@@ -6194,8 +6203,8 @@ function dailyTemperatureExtremes(sourceHours) {
 
   for (const hour of sourceHours) {
     const timestamp = Number(hour.timestamp);
-    const temperature = Number(hour.temperature);
-    if (!Number.isFinite(timestamp) || !Number.isFinite(temperature)) {
+    const temperature = finiteWeatherNumber(hour.temperature);
+    if (!Number.isFinite(timestamp) || temperature === null) {
       continue;
     }
 

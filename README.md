@@ -6,19 +6,23 @@ tempo e uma timeline contínua de até 96 horas.
 O toque abre diretamente o Calendário nativo do iOS. Versão e datas de
 consulta/cache ficam somente nos metadados internos, sem rodapé ou alerta.
 
-## Cabeçalho — versão 2026.10.11.3
+## Cabeçalho — versão 2026.10.11.4
 
-Os seis próximos dias ocupam posições fixas. Apenas HOJE acompanha o movimento
-temporal, sobre os demais quadros, mantendo a parada na primeira posição. Nessa
-parada, somente seu canto superior esquerdo reutiliza o contorno externo
-calibrado do widget; os demais cantos e a timeline permanecem como antes.
+As células dos demais quadros permanecem fixas. Suas datas seguem a posição
+real de HOJE: anteriores à esquerda, próximas à direita. Com DOM11 à direita,
+vêm SAB10, SEX09 e os dias anteriores à sua esquerda; SEG12 aparece apenas
+após DOM11. A primeira célula não fica reservada vazia. Durante a passagem
+podem aparecer parcelas de dois vizinhos; HOJE conserva seu movimento, sua
+parada e o canto superior esquerdo calibrado nessa parada.
+
 Somente nas extremidades estáticas, dia/data alinham com a linha do clima:
-à direita no primeiro quadro e à esquerda no último. Quadros móveis e
-intermediários mantêm o conjunto centralizado, independentemente do dia da semana.
-Atualize também o carregador para receber esse comportamento no fallback offline.
+à direita no primeiro quadro e à esquerda no último. Móveis e intermediários
+ficam centralizados. Cada data usa apenas seu clima correspondente; histórico
+indisponível aparece como `--º`, sem ícone inventado. Atualize também o
+carregador para incorporar a correção ao fallback offline.
 
-A comparação em `tools/preview-fixed-day-header.cjs` usa as funções reais de
-desenho com dados fictícios e fontes/ícones simulados; não é captura do iPhone.
+`tools/preview-chronological-header.cjs` compara as funções reais de desenho
+com clima fictício por data e fontes/ícones simulados; não é captura do iPhone.
 
 ## Instalação
 
