@@ -45,7 +45,7 @@ for(const width of [960,1014,1092,1200])for(const date of [[2026,9,9],[2026,9,31
     assert(Math.abs((weatherLeft+weatherRight)/2-r.x-r.width/2)<1e-8,'Weather stays centered in its card');
     const atLeft=Math.abs(r.x)<0.001,atRight=Math.abs(r.x+r.width-width)<0.001;
     const staticCard=!selected||atLeft;
-    const expectedTitleX=staticCard&&atLeft?weatherLeft:staticCard&&atRight?weatherRight-c.titleCardTypography().titleWidth:(weatherLeft+weatherRight-c.titleCardTypography().titleWidth)/2;
+    const expectedTitleX=staticCard&&atLeft?weatherRight-c.titleCardTypography().titleWidth:staticCard&&atRight?weatherLeft:(weatherLeft+weatherRight-c.titleCardTypography().titleWidth)/2;
     assert(Math.abs(entries[0].p.x-expectedTitleX)<1e-8,'Somente extremos estáticos alinham as duas linhas; móveis e interiores ficam centrados.');
     if(selected || r.x>=card.x+card.width || r.x+r.width<=card.x) assert.equal(c.insideCurrentDayUnifiedShape(r.x+r.width/2,r.y+r.height/2),selected,'Unified background covers today');
     assert.equal(entries[5].size,texts[5].size,'Uniform temperature font');

@@ -171,7 +171,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.11.2";
+const WIDGET_BUILD_VERSION = "2026.10.11.3";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -5470,9 +5470,9 @@ function drawTitleDayCard(
   const atRightEdge = Math.abs(card.x + card.width - (CANVAS.width - CANVAS.marginX)) < 0.001;
   const isStatic = !isSelected || atLeftEdge;
   const titleStartX = isStatic && atLeftEdge
-    ? weatherX
+    ? weatherX + weatherWidth - layout.titleWidth
     : isStatic && atRightEdge
-      ? weatherX + weatherWidth - layout.titleWidth
+      ? weatherX
       : weatherCenterX - layout.titleWidth / 2;
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
