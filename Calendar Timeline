@@ -44,6 +44,8 @@ const SETTINGS = {
   // Régua fixa da altura das barras: 10 mm/h alcança o teto visual.
   // O maior valor visível da janela não altera essa escala.
   rainBarReferenceMMPerHour: 10,
+  // Conta apenas o próximo episódio cuja primeira barra ocupa >=30% da régua.
+  rainCountdownMinBarFraction: 0.30,
   rainEvidenceMinChance: 55,
   rainEvidenceMinCloudiness: 40,
   rainSymbolMinChance: 35,
@@ -171,7 +173,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.11.5";
+const WIDGET_BUILD_VERSION = "2026.10.11.6";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -5959,111 +5961,7 @@ function drawRainTopMarker(ctx, x, top, height, width, storm, color) {
 
 function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
   const quarterHourMilliseconds = WEATHER_QUARTER_MS;
-  const visibleStart = windowStart.getTime() - quarterHourMilliseconds;
-  const visibleEnd = windowEnd.getTime();
-  const rainByQuarter = new Map();
-  const radarByQuarter = new Map();
-
-  for (const hour of sourceHours) {
-    for (const interval of hour.rainIntervals ?? []) {
-      const timestamp = finiteWeatherNumber(interval?.timestamp);
-      const coveredMinutes = finiteWeatherNumber(interval?.coveredMinutes);
-      if (timestamp === null || coveredMinutes === null) continue;
-      const existing = radarByQuarter.get(timestamp);
-      radarByQuarter.set(timestamp, {
-        timestamp,
-        rainMM:
-          (existing?.rainMM ?? 0) +
-          Math.max(0, finiteWeatherNumber(interval?.rainMM) ?? 0),
-        rainRate: Math.max(
-          existing?.rainRate ?? 0,
-          finiteWeatherNumber(interval?.rainRate) ?? 0
-        ),
-        coveredMinutes: (existing?.coveredMinutes ?? 0) + coveredMinutes,
-        hasRain: Boolean(existing?.hasRain || interval?.hasRain === true),
-        storm: Boolean(existing?.storm || interval?.storm === true),
-      });
-    }
-  }
-
-  // A Foreca fornece a previsão em intervalos de uma hora. Cada intervalo
-  // é dividido em quatro posições. Quando o radar cobriu uma posição, ele
-  // prevalece nessa janela para preservar o horário localizado da chuva.
-  for (const hour of sourceHours) {
-    const intervalEnd = Number(hour.timestamp);
-    if (!Number.isFinite(intervalEnd)) continue;
-
-    const declaredStart = Number(hour.rainStartTimestamp);
-    const intervalStart =
-      Number.isFinite(declaredStart) && declaredStart < intervalEnd
-        ? declaredStart
-        : intervalEnd - 60 * 60 * 1000;
-    const evidence = rainEvidenceForForecast(hour);
-    const amount = rainMillimetersForHour(hour);
-    const storm =
-      weatherSymbolGroup(hour) === 6 ||
-      /thunder|storm/i.test(String(hour.symbol ?? ""));
-
-    if (
-      (!evidence.hasRain && !storm) ||
-      (amount < SETTINGS.rainEvidenceMinMM && !storm) ||
-      intervalEnd <= intervalStart
-    ) {
-      continue;
-    }
-
-    for (
-      let timestamp = intervalStart;
-      timestamp < intervalEnd;
-      timestamp += quarterHourMilliseconds
-    ) {
-      if (
-        timestamp < visibleStart ||
-        timestamp > visibleEnd
-      ) {
-        continue;
-      }
-      if (
-        (radarByQuarter.get(timestamp)?.coveredMinutes ?? 0) >= 7.5
-      ) {
-        continue;
-      }
-
-      const existing = rainByQuarter.get(timestamp);
-      if (!existing || amount > existing.amount) {
-        rainByQuarter.set(timestamp, {
-          amount,
-          timestamp,
-          storm,
-        });
-      } else if (storm) {
-        existing.storm = true;
-      }
-    }
-  }
-
-  for (const interval of radarByQuarter.values()) {
-    if (
-      interval.timestamp < visibleStart ||
-      interval.timestamp > visibleEnd ||
-      interval.coveredMinutes < 7.5
-    ) {
-      continue;
-    }
-    if (!interval.hasRain || interval.rainRate <= 0) {
-      rainByQuarter.delete(interval.timestamp);
-      continue;
-    }
-    rainByQuarter.set(interval.timestamp, {
-      timestamp: interval.timestamp,
-      amount: Math.max(0, interval.rainMM),
-      storm: interval.storm,
-    });
-  }
-
-  const rainEntries = [...rainByQuarter.values()]
-    .sort((first, second) => first.timestamp - second.timestamp);
-
+  const rainEntries = thermalRainEntries(sourceHours);
   if (!rainEntries.length) return;
 
   const maximumBarHeight = Math.max(
@@ -6134,6 +6032,267 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom) {
         entry.storm, new Color(SETTINGS.rainLineColor, opacity));
     }
   }
+}
+
+function thermalRainEntries(sourceHours) {
+  const quarterHourMilliseconds = WEATHER_QUARTER_MS;
+  const visibleStart = windowStart.getTime() - quarterHourMilliseconds;
+  const visibleEnd = windowEnd.getTime();
+  const rainByQuarter = new Map();
+  const radarByQuarter = new Map();
+  const radarSamples = new Set();
+
+  for (const hour of sourceHours) {
+    for (const interval of Array.isArray(hour.rainIntervals) ? hour.rainIntervals : []) {
+      const timestamp = finiteWeatherNumber(interval?.timestamp);
+      const coveredMinutes = finiteWeatherNumber(interval?.coveredMinutes);
+      if (timestamp === null || coveredMinutes === null) continue;
+      const sampleKey = JSON.stringify([timestamp, coveredMinutes,
+        finiteWeatherNumber(interval.rainMM), finiteWeatherNumber(interval.rainRate),
+        interval.hasRain === true, interval.storm === true]);
+      if (radarSamples.has(sampleKey)) continue;
+      radarSamples.add(sampleKey);
+      const existing = radarByQuarter.get(timestamp);
+      radarByQuarter.set(timestamp, {
+        timestamp,
+        rainMM:
+          (existing?.rainMM ?? 0) +
+          Math.max(0, finiteWeatherNumber(interval?.rainMM) ?? 0),
+        rainRate: Math.max(
+          existing?.rainRate ?? 0,
+          finiteWeatherNumber(interval?.rainRate) ?? 0
+        ),
+        coveredMinutes: (existing?.coveredMinutes ?? 0) + coveredMinutes,
+        hasRain: Boolean(existing?.hasRain || interval?.hasRain === true),
+        storm: Boolean(existing?.storm || interval?.storm === true),
+      });
+    }
+  }
+
+  // A Foreca fornece a previsão em intervalos de uma hora. Cada intervalo
+  // é dividido em quatro posições. Quando o radar cobriu uma posição, ele
+  // prevalece nessa janela para preservar o horário localizado da chuva.
+  for (const hour of sourceHours) {
+    const intervalEnd = Number(hour.timestamp);
+    if (!Number.isFinite(intervalEnd)) continue;
+
+    const declaredStart = finiteWeatherNumber(hour.rainStartTimestamp);
+    const intervalStart =
+      declaredStart !== null && declaredStart < intervalEnd
+        ? declaredStart
+        : intervalEnd - 60 * 60 * 1000;
+    const evidence = rainEvidenceForForecast(hour);
+    const amount = rainMillimetersForHour(hour);
+    const storm =
+      weatherSymbolGroup(hour) === 6 ||
+      /thunder|storm/i.test(String(hour.symbol ?? ""));
+
+    if (
+      (!evidence.hasRain && !storm) ||
+      (amount < SETTINGS.rainEvidenceMinMM && !storm) ||
+      intervalEnd <= intervalStart
+    ) {
+      continue;
+    }
+
+    for (
+      let timestamp = intervalStart;
+      timestamp < intervalEnd;
+      timestamp += quarterHourMilliseconds
+    ) {
+      if (
+        timestamp < visibleStart ||
+        timestamp > visibleEnd
+      ) {
+        continue;
+      }
+      if (
+        (radarByQuarter.get(timestamp)?.coveredMinutes ?? 0) >= 7.5
+      ) {
+        continue;
+      }
+
+      const existing = rainByQuarter.get(timestamp);
+      if (!existing || amount > existing.amount) {
+        rainByQuarter.set(timestamp, {
+          amount,
+          timestamp,
+          storm,
+        });
+      } else if (storm) {
+        existing.storm = true;
+      }
+    }
+  }
+
+  for (const interval of radarByQuarter.values()) {
+    if (
+      interval.timestamp < visibleStart ||
+      interval.timestamp > visibleEnd ||
+      interval.coveredMinutes < 7.5
+    ) {
+      continue;
+    }
+    if (!interval.hasRain || interval.rainRate <= 0) {
+      rainByQuarter.delete(interval.timestamp);
+      continue;
+    }
+    rainByQuarter.set(interval.timestamp, {
+      timestamp: interval.timestamp,
+      amount: Math.max(0, interval.rainMM),
+      storm: interval.storm,
+    });
+  }
+
+  const rainEntries = [...rainByQuarter.values()]
+    .sort((first, second) => first.timestamp - second.timestamp);
+
+  return rainEntries;
+}
+
+function rainQuarterKnownDry(sourceHours, timestamp) {
+  for (const hour of sourceHours) {
+    const intervals = Array.isArray(hour.rainIntervals) ? hour.rainIntervals : [];
+    const radar = intervals.find(interval => finiteWeatherNumber(interval.timestamp) === timestamp &&
+      finiteWeatherNumber(interval.coveredMinutes) >= 7.5);
+    if (radar) return radar.hasRain === false && finiteWeatherNumber(radar.rainRate) === 0;
+  }
+  return sourceHours.some(hour => {
+    const end = finiteWeatherNumber(hour.timestamp), declared = finiteWeatherNumber(hour.rainStartTimestamp);
+    const start = declared !== null && declared < end ? declared : end - WEATHER_HOUR_MS;
+    const amount = finiteWeatherNumber(hour.rainMM);
+    return end !== null && timestamp >= start && timestamp < end && amount !== null &&
+      amount < SETTINGS.rainEvidenceMinMM;
+  });
+}
+
+function nextSignificantRainEntry(sourceHours) {
+  const reference = Math.max(0.1, Number(SETTINGS.rainBarReferenceMMPerHour) || 10);
+  const threshold = reference * (Number(SETTINGS.rainCountdownMinBarFraction) || 0.30);
+  const entries = thermalRainEntries(sourceHours)
+    .filter(entry => entry.amount >= SETTINGS.rainEvidenceMinMM);
+  if (entries.some(entry => entry.timestamp <= windowStart.getTime() &&
+      entry.timestamp + WEATHER_QUARTER_MS > windowStart.getTime())) return null;
+  let previous = null;
+  for (const entry of entries) {
+    const beginsEpisode = !previous || entry.timestamp - previous.timestamp > WEATHER_QUARTER_MS;
+    previous = entry;
+    // Um episódio fraco que já começou não vira uma nova chegada ao intensificar.
+    if (beginsEpisode && entry.timestamp > windowStart.getTime() &&
+        entry.timestamp < windowEnd.getTime() && entry.amount >= threshold &&
+        rainQuarterKnownDry(sourceHours, entry.timestamp - WEATHER_QUARTER_MS)) return entry;
+  }
+  return null;
+}
+
+function rainCountdownText(timestamp) {
+  const minutes = Math.ceil((timestamp - windowStart.getTime()) / 60000);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return "Chuva em " + (hours ? hours + "h" : "") +
+    (rest ? (hours ? String(rest).padStart(2, "0") : String(rest)) + "m" : "");
+}
+
+function rainRectsOverlap(a, b, margin = 0) {
+  return a.x < b.x + b.width + margin && a.x + a.width + margin > b.x &&
+    a.y < b.y + b.height + margin && a.y + a.height + margin > b.y;
+}
+
+function temperatureRectAboveRain(rect, reserved) {
+  if (!reserved || !rainRectsOverlap(rect, reserved, scaleVertical(2))) return rect;
+  const y = reserved.y - rect.height - scaleVertical(3);
+  return y >= thermalTemperatureLabelTopY()
+    ? new Rect(rect.x, y, rect.width, rect.height) : null;
+}
+
+function rainCountdownLayout(weather, items = []) {
+  const sourceHours = timelineRainSourceHours(weather);
+  const entry = nextSignificantRainEntry(sourceHours);
+  if (!entry) return null;
+  const label = rainCountdownText(entry.timestamp);
+  const values = sourceHours.filter(hour => hour.timestamp >= +windowStart &&
+    hour.timestamp <= +windowEnd).map(hour => finiteWeatherNumber(hour.temperature))
+    .filter(value => value !== null);
+  if (!label || !values.length) return null;
+  const minimum = Math.min(...values), maximum = Math.max(...values);
+  const top = thermalBandTopY(), bottom = thermalBandBottomY();
+  const fontSize = scaleFontSize(isCompactMode() ? 12 : 16);
+  const height = fontSize + scaleVertical(4);
+  if (bottom - top < height + scaleVertical(8)) return null;
+  const points = smoothThermalCurve(buildThermalSamples(sourceHours)
+    .map(sample => ({x: timeToX(new Date(sample.timestamp)),
+      y: thermalTemperatureY(sample.temperature, minimum, maximum, top, bottom)}))
+    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y)));
+  const centerX = timelineWidth() / 2;
+  const right = points.findIndex(point => point.x >= centerX);
+  if (right < 0 || !points.length) return null;
+  const a = points[Math.max(0, right - 1)], b = points[right];
+  const curveY = b.x === a.x ? b.y : a.y + (b.y - a.y) * (centerX - a.x) / (b.x - a.x);
+  const width = Math.ceil(estimatedTextWidth(label, fontSize)) + scaleVertical(12);
+  const y = Math.min(bottom - height,
+    Math.max(top + scaleVertical(9), curveY - height / 2));
+  const rect = new Rect(centerX - width / 2, y, width, height);
+  if (rect.x < 0 || rect.x + rect.width > timelineWidth()) return null;
+  const targetX = timeToX(new Date(entry.timestamp));
+  const obstacles = [];
+  // A legenda não cobre barras, divisões de dia, círculos ou linhas de eventos.
+  for (const rain of thermalRainEntries(sourceHours)) {
+    if (rain.amount < SETTINGS.rainEvidenceMinMM) continue;
+    const normalized = Math.min(1, rain.amount / Math.max(0.1,
+      Number(SETTINGS.rainBarReferenceMMPerHour) || 10));
+    const barTop = bottom - Math.max(scaleVertical(2),
+      (bottom - weatherStripBottomY() - TITLE_TIMELINE_GAP_ADJUSTMENT - scaleVertical(2)) * normalized);
+    const bar = new Rect(timeToX(new Date(rain.timestamp)) - 4, barTop, 8, bottom - barTop);
+    if (rainRectsOverlap(rect, bar, scaleVertical(2))) return null;
+  }
+  for (let day = addDays(startOfDay(windowStart), 1); day < windowEnd; day = addDays(day, 1)) {
+    const obstacle = new Rect(timeToX(day) - 6, top, 12, bottom - top);
+    if (rainRectsOverlap(rect, obstacle)) return null;
+    obstacles.push(obstacle);
+  }
+  for (const item of timelineStartLineItems(items)) {
+    const obstacle = new Rect(timeToX(item.start) - 4, top, 8, bottom - top);
+    if (rainRectsOverlap(rect, obstacle)) return null;
+    obstacles.push(obstacle);
+  }
+  const temperatureRects = [];
+  drawVisibleDailyExtremes({setTextAlignedCenter(){}, setFont(){}, setTextColor(){},
+    drawTextInRect(_, textRect){temperatureRects.push(textRect);}},
+    sourceHours, minimum, maximum, top, bottom, rect);
+  if (temperatureRects.some(textRect => rainRectsOverlap(rect, textRect, scaleVertical(1)))) return null;
+  const targetY = bottom - scaleVertical(2);
+  const visible = timelineVisibleContentBounds(targetY, scaleVertical(2), 4);
+  if (targetX <= visible.left || targetX >= visible.right) return null;
+  return {label, rect, fontSize, targetX, targetY,
+    obstacles: [...obstacles, ...temperatureRects], timestamp: entry.timestamp};
+}
+
+function drawRainCountdown(ctx, layout) {
+  if (!layout) return;
+  const {rect, targetX, targetY, obstacles} = layout;
+  const fromX = targetX < rect.x ? rect.x - scaleVertical(3) : rect.x + rect.width + scaleVertical(3);
+  const fromY = rect.y + rect.height / 2;
+  const points = [new Point(fromX, fromY), new Point(fromX, targetY), new Point(targetX, targetY)];
+  ctx.setFillColor(new Color(SETTINGS.rainLineColor, 1));
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1], b = points[index], length = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let distance = 0; distance < length; distance += scaleVertical(10)) {
+      const end = Math.min(length, distance + scaleVertical(6));
+      const x1 = a.x + (b.x - a.x) * distance / length;
+      const y1 = a.y + (b.y - a.y) * distance / length;
+      const x2 = a.x + (b.x - a.x) * end / length;
+      const y2 = a.y + (b.y - a.y) * end / length;
+      const dash = new Rect(Math.min(x1, x2) - 1, Math.min(y1, y2) - 1,
+        Math.max(2, Math.abs(x2 - x1)), Math.max(2, Math.abs(y2 - y1)));
+      if (!obstacles.some(obstacle => rainRectsOverlap(dash, obstacle, 2))) ctx.fillRect(dash);
+    }
+  }
+  ctx.setFillColor(new Color("#070C11", 0.94));
+  ctx.fillRect(rect);
+  ctx.setTextAlignedCenter();
+  ctx.setFont(Font.blackMonospacedSystemFont(layout.fontSize));
+  ctx.setTextColor(new Color(SETTINGS.rainLineColor, 1));
+  ctx.drawTextInRect(layout.label, rect);
 }
 
 function drawRainBar(ctx, rect, fillColor) {
@@ -8661,12 +8820,9 @@ function drawHourlyRainColumn(
 }
 
 function timelineRainSourceHours(weather) {
-  return [...(weather?.hours ?? [])]
-    .filter(
-      (hour) =>
-        Number.isFinite(Number(hour.timestamp)) &&
-        Number.isFinite(Number(hour.temperature))
-    )
+  const hours = Array.isArray(weather?.hours) ? weather.hours : [];
+  return hours.filter(hour => finiteWeatherNumber(hour?.timestamp) !== null &&
+      finiteWeatherNumber(hour?.temperature) !== null)
     .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
 }
 
@@ -8682,7 +8838,7 @@ function drawTimelineRainOverlay(ctx, weather) {
   );
 }
 
-function drawCompactThermalBand(ctx, weather) {
+function drawCompactThermalBand(ctx, weather, reservedRainLabel = null) {
   const sourceHours = timelineRainSourceHours(weather);
   const visibleHours = sourceHours.filter(
     (hour) =>
@@ -8739,7 +8895,8 @@ function drawCompactThermalBand(ctx, weather) {
     minimum,
     maximum,
     graphTop,
-    graphBottom
+    graphBottom,
+    reservedRainLabel
   );
 }
 
@@ -8749,7 +8906,8 @@ function drawVisibleDailyExtremes(
   minimum,
   maximum,
   graphTop,
-  graphBottom
+  graphBottom,
+  reservedRainLabel = null
 ) {
   const daily = dailyTemperatureExtremes(sourceHours);
   const visibleStart = windowStart.getTime();
@@ -8835,12 +8993,8 @@ function drawVisibleDailyExtremes(
     outlineColor,
     strongOutline
   ) => {
-    const rect = new Rect(
-      x - 34,
-      y,
-      68,
-      fontSize + scaleVertical(8)
-    );
+    const initialRect = new Rect(x - 34, y, 68, fontSize + scaleVertical(8));
+    const rect = temperatureRectAboveRain(initialRect, reservedRainLabel) ?? initialRect;
     ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
 
@@ -8947,6 +9101,7 @@ async function renderTimelinePanel(items, loadError) {
   // Primeira camada do painel: o background dos dias.
   drawTimelineBackground(baseCtx, true);
 
+  const rainCountdown = rainCountdownLayout(hourlyWeather, items);
   // Weathergraph: clima em uma faixa estreita, agenda no centro,
   // curva térmica compacta e horas na base.
   drawWeatherConditionStrip(baseCtx, hourlyWeather);
@@ -8957,7 +9112,7 @@ async function renderTimelinePanel(items, loadError) {
     drawFixedDaylightGlow(baseCtx, hourlyWeather);
   }
   // A curva térmica permanece na base; a chuva será composta sobre os charts.
-  drawCompactThermalBand(baseCtx, hourlyWeather);
+  drawCompactThermalBand(baseCtx, hourlyWeather, rainCountdown?.rect);
 
   // Os eventos, charts e lembretes que começam amanhã fazem parte da
   // imagem-base e serão suavizados junto com o restante do futuro.
@@ -9028,6 +9183,7 @@ async function renderTimelinePanel(items, loadError) {
   drawTimelineDayBoundariesOnTop(ctx);
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
+  drawRainCountdown(ctx, rainCountdown);
   return ctx.getImage();
 }
 

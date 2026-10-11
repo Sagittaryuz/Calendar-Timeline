@@ -26,6 +26,30 @@ a correção ao fallback offline.
 `tools/preview-shared-header-motion.cjs` compara o desenho real com dados
 fictícios e fontes/ícones simulados; não é captura do iPhone.
 
+## Indicação de chuva — versão 2026.10.11.6
+
+A curva térmica mostra, centralizado, `Chuva em 3h` (ou horas/minutos),
+com uma linha tracejada até a base da primeira barra do próximo episódio.
+A indicação aparece somente quando essa barra ocupa pelo menos 30% da
+régua fixa de precipitação: 3 mm com a referência atual de 10. O critério
+usa o mesmo volume que desenha a barra; na previsão horária ele representa
+mm/h, e no radar corresponde ao volume do intervalo de 15 minutos.
+Probabilidade isolada e barras pequenas continuam sem indicação.
+
+Há no máximo uma contagem. Não aparece durante chuva já iniciada, nem
+trata sua intensificação como um novo início. Exige um intervalo anterior
+seco conhecido: lacunas de dados não viram horários inventados. Cache usa
+os timestamps originais e o instante atual como referência.
+
+A legenda mantém as temperaturas; se necessário, desloca apenas seus textos
+vizinhos para cima dentro da faixa existente. O tracejado evita esses textos
+e as divisões/linhas de eventos. Quando não há espaço livre ou a curva está
+indisponível, a indicação é omitida, preservando barras e demais elementos.
+O cabeçalho e seu travamento final seguem as regras da versão 2026.10.11.5.
+
+`tools/preview-rain-countdown.cjs` gera comparações com dados fictícios e
+funções reais de desenho; as fontes são simuladas, sem teste físico no iPhone.
+
 ## Instalação
 
 1. No Scriptable, cole o conteúdo de

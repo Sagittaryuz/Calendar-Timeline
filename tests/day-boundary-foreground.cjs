@@ -43,6 +43,7 @@ Object.assign(c, {
   drawTimelineRainOverlay: ctx => {
     ctx.setFillColor('rain'); ctx.fillRect(new Rect(0,130,1092,200));
   },
+  rainCountdownLayout: () => null, drawRainCountdown: () => {},
   drawFixedDaylightGlow: record('solar'), drawCompactThermalBand: record('thermal'),
   drawBottomHourLegend: record('legend'), drawEventStartLines: record('event-start'),
   drawDiagonalWeekdayLabels: async ctx => ctx.events.push('weekday-labels'),
