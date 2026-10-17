@@ -17,6 +17,8 @@ public final class MainActivity extends Activity {
   private LinearLayout content;
   private ImageView preview;
   private TextView status;
+  private ScrollView scroll;
+  private TextView weatherHeading;
   private EditText hours, latitude, longitude;
   private Switch demo, weather;
   private Spinner theme;
@@ -34,7 +36,7 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
     preferences = getSharedPreferences("settings", 0);
-    ScrollView scroll = new ScrollView(this);
+    scroll = new ScrollView(this);
     scroll.setFillViewport(true);
     content = new LinearLayout(this);
     content.setOrientation(LinearLayout.VERTICAL);
@@ -58,21 +60,40 @@ public final class MainActivity extends Activity {
     content.addView(preview, imageParams);
     android.graphics.Bitmap cached = RefreshCoordinator.cached(this);
     if (cached != null) preview.setImageBitmap(cached);
-    status = label("Preparando timeline…", 12, false);
+    String initialStatus =
+        preferences.getBoolean("demo", false)
+            ? "Demonstração · agenda e clima fictícios"
+            : preferences.getBoolean("weather", false)
+                ? preferences.getString("weatherStatus", "Buscando clima…")
+                : "Clima desativado · toque em Configurar clima";
+    status = label(initialStatus, 12, false);
     button("Adicionar widget à tela inicial", () -> pinWidget());
     button(
         "Atualizar agora",
         () -> {
-          if (saveSettings()) refresh();
+          if (saveSettings()) {
+            ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                .hideSoftInputFromWindow(content.getWindowToken(), 0);
+            scroll.smoothScrollTo(0, 0);
+            refresh(true);
+          }
         });
     demo = new Switch(this);
-    demo.setText("Demonstração com dados fictícios");
+    demo.setText("Demonstração · agenda e clima fictícios");
     demo.setChecked(preferences.getBoolean("demo", false));
     content.addView(demo);
     demo.setOnCheckedChangeListener(
         (v, checked) -> {
           preferences.edit().putBoolean("demo", checked).apply();
           refresh();
+        });
+    button(
+        "Configurar clima",
+        () -> {
+          ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+              .hideSoftInputFromWindow(content.getWindowToken(), 0);
+          weatherHeading.requestFocus();
+          scroll.smoothScrollTo(0, weatherHeading.getTop());
         });
     label("Fontes", 19, true);
     button(
@@ -95,15 +116,18 @@ public final class MainActivity extends Activity {
     theme.setSelection("dark".equals(preferences.getString("theme", "black")) ? 1 : 0);
     content.addView(theme);
     label("Fuso: " + ZoneId.systemDefault().toString() + " · segue o aparelho", 12, false);
+    weatherHeading = label("Clima · localização manual", 19, true);
     weather = new Switch(this);
-    weather.setText("Clima do Open-Meteo");
+    weather.setText("Ativar previsão real do Open-Meteo");
     weather.setChecked(preferences.getBoolean("weather", false));
     content.addView(weather);
     label(
         "Ao ativar e salvar, envia somente as coordenadas abaixo ao Open-Meteo para buscar a"
-            + " previsão. Nenhum evento é enviado. Não solicita GPS.",
+            + " previsão. Nenhum evento é enviado. Não solicita GPS. Salvar com clima real desliga"
+            + " a demonstração.",
         12,
         false);
+    label("Latitude · de -90 a 90", 14, false);
     latitude =
         field(
             "Latitude",
@@ -111,6 +135,7 @@ public final class MainActivity extends Activity {
             InputType.TYPE_CLASS_NUMBER
                 | InputType.TYPE_NUMBER_FLAG_DECIMAL
                 | InputType.TYPE_NUMBER_FLAG_SIGNED);
+    label("Longitude · de -180 a 180", 14, false);
     longitude =
         field(
             "Longitude",
@@ -118,10 +143,22 @@ public final class MainActivity extends Activity {
             InputType.TYPE_CLASS_NUMBER
                 | InputType.TYPE_NUMBER_FLAG_DECIMAL
                 | InputType.TYPE_NUMBER_FLAG_SIGNED);
+    weather.setOnCheckedChangeListener(
+        (v, checked) -> {
+          latitude.setEnabled(checked);
+          longitude.setEnabled(checked);
+        });
+    latitude.setEnabled(weather.isChecked());
+    longitude.setEnabled(weather.isChecked());
     button(
         "Salvar configuração",
         () -> {
-          if (saveSettings()) refresh();
+          if (saveSettings()) {
+            ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                .hideSoftInputFromWindow(content.getWindowToken(), 0);
+            scroll.smoothScrollTo(0, 0);
+            refresh(true);
+          }
         });
     label(
         "Clima: Open-Meteo · CC BY 4.0. Fonte: sans-serif do Android. Atualizações em segundo plano"
@@ -175,8 +212,8 @@ public final class MainActivity extends Activity {
               .putString("theme", theme.getSelectedItemPosition() == 0 ? "black" : "dark")
               .putBoolean("weather", weather.isChecked());
       if (weather.isChecked()) {
-        double lat = Double.parseDouble(latitude.getText().toString().replace(',', '.')),
-            lon = Double.parseDouble(longitude.getText().toString().replace(',', '.'));
+        double lat = WeatherRepository.coordinate(latitude.getText().toString(), 90),
+            lon = WeatherRepository.coordinate(longitude.getText().toString(), 180);
         if (!Double.isFinite(lat)
             || !Double.isFinite(lon)
             || Math.abs(lat) > 90
@@ -184,6 +221,10 @@ public final class MainActivity extends Activity {
         editor
             .putString("latitude", String.valueOf(lat))
             .putString("longitude", String.valueOf(lon));
+      }
+      if (weather.isChecked() && demo.isChecked()) {
+        demo.setChecked(false);
+        editor.putBoolean("demo", false);
       }
       editor.apply();
       return true;
@@ -211,14 +252,19 @@ public final class MainActivity extends Activity {
   }
 
   private void refresh() {
-    status.setText("Atualizando…");
+    refresh(false);
+  }
+
+  private void refresh(boolean forceWeather) {
+    if (forceWeather || RefreshCoordinator.cached(this) == null) status.setText("Atualizando…");
     RefreshCoordinator.refresh(
         this,
         (image, message) -> {
           if (isDestroyed()) return;
           if (image != null) preview.setImageBitmap(image);
           status.setText(message);
-        });
+        },
+        forceWeather);
   }
 
   private void showReminders() {

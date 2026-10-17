@@ -17,7 +17,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. É assinado somente com a chav
 
 - Agenda: `CalendarContract.Instances`, somente leitura, calendários visíveis, recorrências expandidas pelo Android. Contas sincronizadas no próprio Android aparecem conforme o provedor local. O app não cria contas, OAuth ou credenciais, nem conecta diretamente ao iCloud.
 - Lembretes: lista local, criada/concluída pelo app. Não existe API Android equivalente ao EventKit Reminders; não há sincronização com Lembretes Apple, Google Tasks ou outros apps.
-- Clima: Open-Meteo opcional, desativado por padrão. Ative, informe latitude/longitude e salve para autorizar a consulta. Envia apenas coordenadas e fuso, nunca títulos da agenda. Sem GPS. Resumos e amostras usam o parser original; lacunas não recebem previsão inventada. Atribuição Open-Meteo, CC BY 4.0. Foreca, MET Norway e Rainbow do Scriptable não foram conectados no Android; nenhum segredo foi embutido.
+- Clima: Open-Meteo opcional, desativado por padrão. Use “Configurar clima” junto à prévia, ative, informe latitude/longitude e salve para autorizar a consulta. Salvar com clima real desliga a demonstração. “Atualizar agora” força uma consulta mesmo dentro dos 30 minutos de cache; o status informa fonte, horário e falhas de configuração, rede, HTTPS ou serviço. Envia apenas coordenadas e fuso, nunca títulos da agenda. Sem GPS. Resumos e amostras usam o parser original; lacunas não recebem previsão inventada. Atribuição Open-Meteo, CC BY 4.0. Foreca, MET Norway e Rainbow do Scriptable não foram conectados no Android; nenhum segredo foi embutido.
 - Cache: agenda/clima e imagem ficam no armazenamento privado do app, sem backup Android. Resposta de agenda vazia válida substitui a anterior; erro preserva um snapshot compatível com fuso/horizonte. Permissão negada remove o cache da agenda. Clima mantém timestamp da resposta original, usa no máximo 24 h de cache e descarta escopos de coordenadas/fuso diferentes. Falha de rede não renova idade. Desativar o clima impede novas consultas.
 - Demonstração: explícita e separada das fontes pessoais. Eventos e clima fictícios, data fixa 17/10/2026 12:10. Desative para usar dados reais.
 
@@ -36,9 +36,17 @@ A suíte Node existente em `../tests` verifica o Scriptable. Para os testes de d
 ```sh
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w com.sagittaryuz.calendartimeline.test/android.test.InstrumentationTestRunner
+adb shell am instrument -w -e class com.sagittaryuz.calendartimeline.TimelineTest,com.sagittaryuz.calendartimeline.WeatherTest com.sagittaryuz.calendartimeline.test/android.test.InstrumentationTestRunner
+```
+
+A consulta real é uma verificação separada e explícita, somente em emulador descartável: usa coordenadas públicas fixas de Jataí, altera a configuração de testes e exige internet. Não consulta localização do aparelho.
+
+```sh
+adb shell am instrument -w -e liveWeather true -e class com.sagittaryuz.calendartimeline.LiveWeatherTest#testLiveForecastAndWidget com.sagittaryuz.calendartimeline.test/android.test.InstrumentationTestRunner
+# Após desligar Wi-Fi e dados móveis do emulador:
+adb shell am instrument -w -e offlineWeather true -e class com.sagittaryuz.calendartimeline.LiveWeatherTest#testOfflineCachedForecastAndWidget com.sagittaryuz.calendartimeline.test/android.test.InstrumentationTestRunner
 ```
 
 Testes de dispositivo usam o WebView real, dimensões e transparência do canvas, atualização RemoteViews em três larguras quando existe widget vinculado, e cache privado. Fotos e resultados da validação desta entrega são descritos em `../docs/ANDROID-VALIDACAO.md`. As capturas de referência com dados pessoais nunca entram no repositório.
 
-A verificação adicional `node ../tools/test-android-renderer.cjs` requer `playwright-core` e um Chromium disponível (`CHROMIUM_PATH` opcional). Ela executa 48 cenários de canvas e estados sem fontes; é teste em navegador, sem alegar validação Android.
+A verificação adicional `node ../tools/test-android-renderer.cjs` requer `playwright-core` e um Chromium disponível (`CHROMIUM_PATH` opcional). Ela executa 48 cenários de canvas, estados sem fontes e respostas Open-Meteo em três fusos; é teste em navegador, sem alegar validação Android.

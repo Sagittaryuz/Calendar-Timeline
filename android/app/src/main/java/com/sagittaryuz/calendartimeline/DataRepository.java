@@ -28,6 +28,10 @@ final class DataRepository {
   }
 
   JSONObject input() throws Exception {
+    return input(false);
+  }
+
+  JSONObject input(boolean forceWeather) throws Exception {
     JSONObject input = new JSONObject();
     long now = System.currentTimeMillis();
     input
@@ -145,65 +149,9 @@ final class DataRepository {
     input
         .put("events", events)
         .put("reminders", new JSONArray(preferences.getString("reminders", "[]")));
-    if (preferences.getBoolean("weather", false)) {
-      double lat = Double.parseDouble(preferences.getString("latitude", "0")),
-          lon = Double.parseDouble(preferences.getString("longitude", "0"));
-      if (!Double.isFinite(lat)
-          || !Double.isFinite(lon)
-          || Math.abs(lat) > 90
-          || Math.abs(lon) > 180) throw new IllegalArgumentException("Coordenadas inválidas");
-      input.put("latitude", lat).put("longitude", lon);
-      String scope = lat + "," + lon + "," + ZoneId.systemDefault();
-      JSONObject cache = read("weather.json");
-      if (cache == null || !scope.equals(cache.optString("scope"))) cache = null;
-      if (cache == null || now - cache.optLong("fetchedAt") > 30 * 60000L) {
-        try {
-          String query =
-              "latitude="
-                  + lat
-                  + "&longitude="
-                  + lon
-                  + "&hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max,weather_code&forecast_days=8&past_days=6&timezone="
-                  + URLEncoder.encode(ZoneId.systemDefault().toString(), "UTF-8");
-          HttpURLConnection connection =
-              (HttpURLConnection)
-                  new URL("https://api.open-meteo.com/v1/forecast?" + query).openConnection();
-          connection.setConnectTimeout(6000);
-          connection.setReadTimeout(6000);
-          connection.setInstanceFollowRedirects(false);
-          JSONObject response;
-          try {
-            if (connection.getResponseCode() != 200) throw new IOException("Weather HTTP error");
-            try (InputStream in = connection.getInputStream()) {
-              response = new JSONObject(readLimited(in, 2000000));
-            }
-          } finally {
-            connection.disconnect();
-          }
-          if (response.optJSONObject("hourly") == null
-              || response.getJSONObject("hourly").getJSONArray("time").length() == 0
-              || response.optJSONObject("daily") == null) throw new IOException("Invalid forecast");
-          // Validate before replacing a valid offline snapshot.
-          JSONArray temperatures = response.getJSONObject("hourly").getJSONArray("temperature_2m");
-          boolean valid = false;
-          for (int i = 0; i < temperatures.length(); i++)
-            if (!temperatures.isNull(i) && Double.isFinite(temperatures.optDouble(i))) {
-              valid = true;
-              break;
-            }
-          if (!valid) throw new IOException("No temperatures");
-          cache =
-              new JSONObject().put("response", response).put("scope", scope).put("fetchedAt", now);
-          save("weather.json", cache);
-        } catch (Exception ex) {
-          status += " · clima offline";
-        }
-      }
-      if (cache != null && now - cache.optLong("fetchedAt") < 24 * 3600000L) {
-        input.put("weatherResponse", cache.getJSONObject("response"));
-        status += " · clima " + stamp(cache.optLong("fetchedAt"));
-      } else status += " · clima indisponível";
-    } else status += " · clima desativado";
+    WeatherRepository weather = new WeatherRepository(this, now);
+    weather.addTo(input, forceWeather);
+    status += "\n" + weather.status;
     return input;
   }
 

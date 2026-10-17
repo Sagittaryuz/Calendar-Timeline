@@ -19,9 +19,15 @@ execFileSync(process.execPath,[path.join(__dirname,'build-android-renderer.cjs')
   assert.equal(layers.length,2,'Diagonal weekday and midnight capsule are rasterized');
   assert(layers.every(count=>count>100),'Raster layers survive their temporary document closing');
   const empty=await page.evaluate(async()=>{const labels=[],original=DrawContext.prototype.text;DrawContext.prototype.text=function(text,...args){labels.push(text);return original.call(this,text,...args);};const result=await draw({now:Date.now(),hours:24,events:[],reminders:[]});DrawContext.prototype.text=original;return {...result,temperatures:labels.filter(t=>/\d+[º°]/.test(t))};});assert.equal(empty.count,0);assert.deepEqual(empty.temperatures,[],'Missing weather never fabricates temperatures');
+  const forecast=await page.evaluate(async()=>{
+   const data=demoInput(),time=data.weather.hours.map(h=>{const d=new Date(h.timestamp);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:00`;});
+   const days=Object.keys(data.weather.daily),weatherResponse={hourly:{time,temperature_2m:data.weather.hours.map(h=>h.temperature),weather_code:time.map(()=>0),is_day:time.map(()=>1)},daily:{time:days,temperature_2m_min:days.map(()=>18),temperature_2m_max:days.map(()=>27),weather_code:days.map(()=>0)}};
+   delete data.weather;data.weatherResponse=weatherResponse;return draw(data);
+  });
+  assert.equal(forecast.weatherHours,360,'Open-Meteo hourly response parsed');assert.equal(forecast.weatherDays,15,'Daily min/max parsed');assert(forecast.temperatureLabels>10,'Real response path draws temperatures');
   const injection=await page.evaluate(async()=>{const data=demoInput();data.events[0].title='</script><script>window.__probe=1</script>';await draw(data);return window.__probe||null;});assert.equal(injection,null,'Calendar titles remain data');
   await page.close();
  }
- console.log(`PASS: ${count} canvas scenarios; 3 timezones, 4 horizons, midnight/midday/clamp/day-end, missing sources, text isolation.`);
+ console.log(`PASS: ${count} canvas scenarios; 3 timezones, 4 horizons, midnight/midday/clamp/day-end, missing sources, Open-Meteo response, text isolation.`);
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

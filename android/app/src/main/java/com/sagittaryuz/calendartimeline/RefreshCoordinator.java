@@ -18,14 +18,19 @@ final class RefreshCoordinator {
   private static final ExecutorService IO = Executors.newSingleThreadExecutor();
   private static final List<Listener> listeners = new ArrayList<>();
   private static final List<Listener> pendingListeners = new ArrayList<>();
-  private static boolean busy, pendingRefresh;
+  private static boolean busy, pendingRefresh, pendingForceWeather;
 
   static void refresh(Context c, Listener listener) {
+    refresh(c, listener, false);
+  }
+
+  static void refresh(Context c, Listener listener, boolean forceWeather) {
     MAIN.post(
         () -> {
           if (busy) {
             if (listener != null) pendingListeners.add(listener);
             pendingRefresh = true;
+            pendingForceWeather |= forceWeather;
             return;
           }
           if (listener != null) listeners.add(listener);
@@ -35,7 +40,7 @@ final class RefreshCoordinator {
               () -> {
                 DataRepository repository = new DataRepository(context);
                 try {
-                  JSONObject input = repository.input();
+                  JSONObject input = repository.input(forceWeather);
                   String status =
                       input.optBoolean("demo")
                           ? "Demonstração · eventos e clima fictícios · 17/10/2026 12:10"
@@ -102,7 +107,9 @@ final class RefreshCoordinator {
       pendingRefresh = false;
       listeners.addAll(pendingListeners);
       pendingListeners.clear();
-      refresh(context, null);
+      boolean force = pendingForceWeather;
+      pendingForceWeather = false;
+      refresh(context, null, force);
     }
   }
 

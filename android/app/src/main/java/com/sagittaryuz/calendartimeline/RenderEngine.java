@@ -10,6 +10,8 @@ import org.json.JSONObject;
 
 /** An offscreen local Canvas produces the bitmap; the home widget itself is RemoteViews. */
 final class RenderEngine {
+  static volatile JSONObject lastDiagnostics;
+
   interface Callback {
     void done(Bitmap bitmap, String error);
   }
@@ -49,6 +51,7 @@ final class RenderEngine {
             main.post(
                 () -> {
                   try {
+                    lastDiagnostics = new JSONObject(count);
                     byte[] bytes = Base64.decode(png, Base64.DEFAULT);
                     Bitmap image = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                     if (image == null) throw new IOException();

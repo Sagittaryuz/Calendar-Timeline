@@ -25,7 +25,7 @@ const preparedItems = prepareTimelineItems(loadResult.items, now);
 const timelineRowCounts = prepareTimelineRowCounts(preparedItems);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems, timelineRowCounts);
 const image = await renderWidget(selectedItems, null);
-return {image, count:loadResult.items.length, version:WIDGET_BUILD_VERSION};
+return {image, count:loadResult.items.length, version:WIDGET_BUILD_VERSION, weatherHours:weather.hours.length, weatherDays:Object.keys(weather.daily).length};
 `;
 let compatibleSource = source.slice(end);
 // Android 11's bundled WebView 83 understands ES2020, before logical assignment.

@@ -1,6 +1,7 @@
 /* Scriptable drawing API implemented with the local Android System WebView Canvas.
  * No remote scripts, fonts, analytics, or network requests are used by this renderer. */
 const rasterImages = new Map();
+let temperatureLabels = 0;
 class Point { constructor(x,y){this.x=x;this.y=y;} }
 class Size { constructor(width,height){this.width=width;this.height=height;} }
 class Rect { constructor(x,y,width,height){Object.assign(this,{x,y,width,height});} }
@@ -26,7 +27,7 @@ class DrawContext {
  drawImageAtPoint(img,p){if(img)this.g.drawImage(img,p.x,p.y);} drawImageInRect(img,r){if(img&&r.width>0&&r.height>0)this.g.drawImage(img,r.x,r.y,r.width,r.height);}
  drawText(text,p){this.text(text,new Rect(p.x,p.y,0,0),false);}
  drawTextInRect(text,r){this.text(text,r,true);}
- text(text,r,rect){const g=this.g,f=this.font;g.save();g.font=`${f.weight} ${f.size}px ${f.family}`;g.textBaseline='alphabetic';g.textAlign=this.align;g.fillStyle=this.textColor||'#fff';
+ text(text,r,rect){if(/[0-9][º°]/.test(String(text)))temperatureLabels++;const g=this.g,f=this.font;g.save();g.font=`${f.weight} ${f.size}px ${f.family}`;g.textBaseline='alphabetic';g.textAlign=this.align;g.fillStyle=this.textColor||'#fff';
   if(rect){g.beginPath();g.rect(r.x,r.y,Math.max(0,r.width),Math.max(0,r.height));g.clip();}
   const x=r.x+(rect&&this.align==='center'?r.width/2:0);g.fillText(String(text),x,r.y+f.size*.95);g.restore();}
  getImage(){const c=document.createElement('canvas');c.width=this.canvas.width;c.height=this.canvas.height;c.getContext('2d').drawImage(this.canvas,0,0);return c;}
@@ -47,13 +48,14 @@ const CalendarEvent={between:async()=>platformInput.events.map(reviveEvent),toda
 const Reminder={incompleteDueBetween:async()=> (platformInput.reminders||[]).map(reviveReminder),incompleteDueToday:async()=>[],scheduled:async()=> (platformInput.reminders||[]).map(reviveReminder)};
 class Request {constructor(url){this.url=url;this.response={statusCode:200};}async loadJSON(){return platformInput.weatherResponse;}}
 async function draw(input){
- platformInput={events:[],...input};rasterImages.clear();
+ platformInput={events:[],...input};rasterImages.clear();temperatureLabels=0;
  try {const result=await renderTimeline(platformInput);const canvas=document.getElementById('timeline');canvas.width=1092;canvas.height=510;
  const g=canvas.getContext('2d');g.clearRect(0,0,1092,510);g.save();
  // Match the measured outer superellipse. Android launchers do not supply iOS clipping.
  const p=new Path2D(),rx=102,ry=101,n=2/2.45;const corners=[[rx,ry,Math.PI,1.5*Math.PI],[1092-rx,ry,1.5*Math.PI,2*Math.PI],[1092-rx,510-ry,0,.5*Math.PI],[rx,510-ry,.5*Math.PI,Math.PI]];
  corners.forEach(([x,y,a,b],i)=>{for(let j=0;j<=64;j++){const t=a+(b-a)*j/64,c=Math.cos(t),s=Math.sin(t),px=x+rx*Math.sign(c)*Math.abs(c)**n,py=y+ry*Math.sign(s)*Math.abs(s)**n;if(!i&&!j)p.moveTo(px,py);else p.lineTo(px,py);}});p.closePath();g.clip(p);g.drawImage(result.image,0,0);g.restore();
- if(window.Android)Android.rendered(canvas.toDataURL('image/png').split(',')[1],String(result.count));
- window.lastRender={count:result.count,version:result.version};return window.lastRender;
+ window.lastRender={count:result.count,version:result.version,weatherHours:result.weatherHours,weatherDays:result.weatherDays,temperatureLabels};
+ if(window.Android)Android.rendered(canvas.toDataURL('image/png').split(',')[1],JSON.stringify(window.lastRender));
+ return window.lastRender;
  }catch(e){document.getElementById('error').textContent='Não foi possível desenhar a timeline.';if(window.Android)Android.failed(String(e));throw e;}
 }
