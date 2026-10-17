@@ -1,0 +1,27 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.sagittaryuz.calendartimeline'
+    compileSdk 35
+    useLibrary 'android.test.runner'
+    useLibrary 'android.test.base'
+    useLibrary 'android.test.mock'
+    defaultConfig {
+        applicationId 'com.sagittaryuz.calendartimeline'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0-debug'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { release { signingConfig null } }
+}
+tasks.register('syncScriptableRenderer', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'node', 'tools/build-android-renderer.cjs'
+    inputs.file rootProject.file('../Calendar Timeline')
+    inputs.file rootProject.file('../tools/build-android-renderer.cjs')
+    inputs.dir rootProject.file('renderer')
+    outputs.dir project.file('src/main/assets')
+}
+preBuild.dependsOn 'syncScriptableRenderer'
