@@ -16,7 +16,9 @@ import org.json.*;
 public final class MainActivity extends Activity {
   private LinearLayout content;
   private ImageView preview;
-  private TextView status;
+  private TextView status, updateNotice;
+  private boolean bindingSettings;
+  private long restoredAt;
   private ScrollView scroll;
   private TextView weatherHeading;
   private EditText hours, latitude, longitude;
@@ -36,6 +38,7 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
     preferences = getSharedPreferences("settings", 0);
+    restoredAt = preferences.getLong("restoredAt", 0);
     scroll = new ScrollView(this);
     scroll.setFillViewport(true);
     content = new LinearLayout(this);
@@ -67,6 +70,10 @@ public final class MainActivity extends Activity {
                 ? preferences.getString("weatherStatus", "Buscando clima…")
                 : "Clima desativado · toque em Configurar clima";
     status = label(initialStatus, 12, false);
+    updateNotice = label("", 13, false);
+    updateNotice.setVisibility(View.GONE);
+    updateNotice.setOnClickListener(
+        v -> startActivity(new Intent(this, MaintenanceActivity.class)));
     button("Adicionar widget à tela inicial", () -> pinWidget());
     button(
         "Atualizar agora",
@@ -84,6 +91,7 @@ public final class MainActivity extends Activity {
     content.addView(demo);
     demo.setOnCheckedChangeListener(
         (v, checked) -> {
+          if (bindingSettings) return;
           preferences.edit().putBoolean("demo", checked).apply();
           refresh();
         });
@@ -95,6 +103,8 @@ public final class MainActivity extends Activity {
           weatherHeading.requestFocus();
           scroll.smoothScrollTo(0, weatherHeading.getTop());
         });
+    button(
+        "Backup e atualizações", () -> startActivity(new Intent(this, MaintenanceActivity.class)));
     label("Fontes", 19, true);
     button(
         "Permitir leitura da agenda",
@@ -382,6 +392,30 @@ public final class MainActivity extends Activity {
   @Override
   protected void onResume() {
     super.onResume();
+    if (hours != null && restoredAt != preferences.getLong("restoredAt", 0)) {
+      bindingSettings = true;
+      hours.setText(String.valueOf(preferences.getInt("hours", 24)));
+      theme.setSelection("dark".equals(preferences.getString("theme", "black")) ? 1 : 0);
+      demo.setChecked(preferences.getBoolean("demo", false));
+      weather.setChecked(preferences.getBoolean("weather", false));
+      latitude.setText(preferences.getString("latitude", ""));
+      longitude.setText(preferences.getString("longitude", ""));
+      bindingSettings = false;
+      restoredAt = preferences.getLong("restoredAt", 0);
+      refresh();
+    }
+    if (preferences.getBoolean("checkUpdates", true)) {
+      UpdateRepository.checkAsync(
+          this,
+          false,
+          result -> {
+            if (isDestroyed()) return;
+            if (result.state == UpdateRepository.State.AVAILABLE) {
+              updateNotice.setText(result.message() + " · toque para abrir");
+              updateNotice.setVisibility(View.VISIBLE);
+            } else updateNotice.setVisibility(View.GONE);
+          });
+    } else updateNotice.setVisibility(View.GONE);
     handler.postDelayed(tick, 60000);
   }
 

@@ -50,3 +50,9 @@ adb shell am instrument -w -e offlineWeather true -e class com.sagittaryuz.calen
 Testes de dispositivo usam o WebView real, dimensões e transparência do canvas, atualização RemoteViews em três larguras quando existe widget vinculado, e cache privado. Fotos e resultados da validação desta entrega são descritos em `../docs/ANDROID-VALIDACAO.md`. As capturas de referência com dados pessoais nunca entram no repositório.
 
 A verificação adicional `node ../tools/test-android-renderer.cjs` requer `playwright-core` e um Chromium disponível (`CHROMIUM_PATH` opcional). Ela executa 48 cenários de canvas, estados sem fontes e respostas Open-Meteo em três fusos; é teste em navegador, sem alegar validação Android.
+
+## Backup e atualizações
+
+Abra **Backup e atualizações** para exportar/importar configurações salvas e lembretes locais pelo seletor de documentos do Android. A importação valida o arquivo e pede confirmação antes de substituir dados. Agenda, permissões e caches não fazem parte do backup. O JSON pode conter dados pessoais e não é criptografado.
+
+O aviso de atualização consulta apenas Releases Android publicados com manifesto de versão testada, até uma vez por dia ao abrir o app (opcional), ou por consulta manual. Downloads abrem no navegador e a instalação exige a confirmação normal do Android. Não há token no APK, publicação por commit ou assinatura definitiva criada. As regras e o gerador de metadados estão em [ANDROID-RELEASES.md](../docs/ANDROID-RELEASES.md).
