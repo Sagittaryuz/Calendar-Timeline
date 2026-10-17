@@ -143,6 +143,8 @@ public final class MainActivity extends Activity {
             InputType.TYPE_CLASS_NUMBER
                 | InputType.TYPE_NUMBER_FLAG_DECIMAL
                 | InputType.TYPE_NUMBER_FLAG_SIGNED);
+    configureCoordinateField(latitude);
+    configureCoordinateField(longitude);
     weather.setOnCheckedChangeListener(
         (v, checked) -> {
           latitude.setEnabled(checked);
@@ -191,6 +193,16 @@ public final class MainActivity extends Activity {
     view.setText(text);
     content.addView(view, new LinearLayout.LayoutParams(-1, dp(50)));
     return view;
+  }
+
+  // Preserve pasted decimal separators and Unicode minus for validation on Save.
+  // A locale-specific DigitsKeyListener can silently remove these characters.
+  static void configureCoordinateField(EditText field) {
+    field.setKeyListener(android.text.method.TextKeyListener.getInstance());
+    field.setRawInputType(
+        InputType.TYPE_CLASS_NUMBER
+            | InputType.TYPE_NUMBER_FLAG_DECIMAL
+            | InputType.TYPE_NUMBER_FLAG_SIGNED);
   }
 
   private void button(String title, Runnable action) {

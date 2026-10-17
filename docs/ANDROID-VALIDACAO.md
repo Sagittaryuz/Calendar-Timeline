@@ -56,3 +56,12 @@ O teste offline separado passou no APK final (1/1, 31,021 s), com Wi-Fi e dados 
 O emulador cloud exige o proxy de saída do ambiente. A CA já confiável no host foi adicionada somente à sessão descartável do AVD; nenhuma CA, endereço de proxy ou exceção TLS entra no APK. A primeira tentativa sem essa configuração falhou por rede; não foi tratada como sucesso de consulta. Validação em telefone físico continua pendente.
 
 APK 0.1.1-debug SHA-256: `f8f03b7ebe2f789992ef92c7d1f619c6d67a83ac8cc455c00e1f61957862d731`.
+
+
+## Entrada de coordenadas — 0.1.2-debug
+
+Vírgula decimal e sinal negativo `-` já eram normalizados. Esta atualização também aceita o sinal menos Unicode `−` copiado de mensagens e impede que o filtro numérico do Android remova silenciosamente a vírgula ou esse sinal antes da validação. O teclado continua numérico; valores inválidos ou fora dos limites continuam rejeitados. Nenhuma permissão ou solicitação de GPS foi adicionada.
+
+Verificados em Android 11 os valores `-17,88`, `−17,88`, `-51,71` e `−51,71`, com colagem nos contextos PT-BR e inglês. A suíte de clima aprovou 7/7 testes no APK final (7,403 s), incluindo separadores, ambos os sinais negativos, preservação de colagem e os cinco testes de cache/ativação. Build e lint aprovados; APK debug atualiza a instalação anterior com a mesma assinatura. As capturas de clima real anteriores continuam representando o renderer, que não foi alterado.
+
+APK 0.1.2-debug (versionCode 3), SHA-256: `397d3a01bcc42e6a03685ab625c202b0786634d811bb6191478ce0a2b2df37da`.

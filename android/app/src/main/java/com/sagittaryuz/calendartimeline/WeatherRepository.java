@@ -92,7 +92,8 @@ final class WeatherRepository {
 
   static double coordinate(String text, int limit) {
     try {
-      double n = Double.parseDouble(text.trim().replace(',', '.'));
+      String normalized = text.trim().replace('\u2212', '-').replace(',', '.');
+      double n = Double.parseDouble(normalized);
       if (!Double.isFinite(n) || Math.abs(n) > limit) throw new IllegalArgumentException();
       return n;
     } catch (Exception ex) {

@@ -92,6 +92,59 @@ public final class WeatherTest extends InstrumentationTestCase {
     assertEquals(-17.8814, WeatherRepository.coordinate("-17,8814", 90), 0.00001);
   }
 
+  public void testCoordinateDecimalCommaAndBothNegativeSigns() {
+    for (String raw : new String[] {"-17,88", "-17.88", "−17,88", "  −17.88  "})
+      assertEquals(raw, -17.88, WeatherRepository.coordinate(raw, 90), 0.000001);
+    for (String raw : new String[] {"-51,71", "-51.71", "−51,71", "−51.71"})
+      assertEquals(raw, -51.71, WeatherRepository.coordinate(raw, 180), 0.000001);
+    for (String invalid :
+        new String[] {
+          "-17,88.0", "--17,88", "−-17,88", "17e1", "NaN", "Infinity", "-91", "- 17,88", ""
+        }) {
+      try {
+        WeatherRepository.coordinate(invalid, 90);
+        fail("Accepted invalid coordinate: " + invalid);
+      } catch (IllegalArgumentException expected) {
+      }
+    }
+    assertEquals(90.0, WeatherRepository.coordinate("90", 90), 0.0);
+    assertEquals(-180.0, WeatherRepository.coordinate("−180", 180), 0.0);
+  }
+
+  public void testCoordinatePastePreservesCommaAndMinusInPtBrAndEnglish() {
+    java.util.List<String> results = new java.util.ArrayList<>();
+    String[] values = {"-17,88", "−17,88", "-51.71", "−51,71", "-17,88.0"};
+    getInstrumentation()
+        .runOnMainSync(
+            () -> {
+              for (java.util.Locale locale :
+                  new java.util.Locale[] {
+                    java.util.Locale.forLanguageTag("pt-BR"), java.util.Locale.US
+                  }) {
+                android.content.res.Configuration config =
+                    new android.content.res.Configuration(
+                        store.context.getResources().getConfiguration());
+                config.setLocale(locale);
+                android.widget.EditText field =
+                    new android.widget.EditText(store.context.createConfigurationContext(config));
+                field.setInputType(
+                    android.text.InputType.TYPE_CLASS_NUMBER
+                        | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                        | android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);
+                MainActivity.configureCoordinateField(field);
+                for (String value : values) {
+                  field.getText().replace(0, field.length(), value);
+                  results.add(field.getText().toString());
+                }
+              }
+            });
+    for (int i = 0; i < results.size(); i++)
+      assertEquals(
+          "Paste must reach validation unchanged", values[i % values.length], results.get(i));
+    assertEquals(-17.88, WeatherRepository.coordinate(results.get(1), 90), 0.000001);
+    assertEquals(-51.71, WeatherRepository.coordinate(results.get(3), 180), 0.000001);
+  }
+
   public void testOptOutNeverFetches() throws Exception {
     store.preferences.edit().putBoolean("weather", false).commit();
     WeatherRepository w =
