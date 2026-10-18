@@ -9,12 +9,21 @@ android {
         applicationId 'com.sagittaryuz.calendartimeline'
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName '0.5.0-debug'
+        versionCode 8
+        versionName '0.6.0-providers-preview'
+        buildConfigField 'boolean', 'GOOGLE_TASKS_CONFIGURED', providers.gradleProperty('calendarGoogleOAuthConfigured').getOrElse('false') == 'true' ? 'true' : 'false'
+        def microsoftId = providers.gradleProperty('calendarMicrosoftClientId').getOrElse('')
+        if (microsoftId && !(microsoftId ==~ /[a-fA-F0-9-]{36}/)) throw new GradleException('Invalid Microsoft public client ID')
+        buildConfigField 'String', 'MICROSOFT_CLIENT_ID', '"' + microsoftId + '"'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { release { signingConfig null } }
+    buildFeatures { buildConfig true }
+}
+dependencies {
+    implementation 'com.google.android.gms:play-services-auth:22.0.0'
+    implementation 'com.microsoft.identity.client:msal:8.5.0'
 }
 tasks.register('syncScriptableRenderer', Exec) {
     workingDir rootProject.projectDir.parentFile

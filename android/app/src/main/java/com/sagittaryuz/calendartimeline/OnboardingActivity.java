@@ -70,8 +70,8 @@ public final class OnboardingActivity extends Activity {
     if (Build.VERSION.SDK_INT < 33 || ReminderAlerts.allowed(this)) notifications.setEnabled(false);
     ui.note(
         body,
-        "Lembretes locais ficam neste app, inclusive offline. Lembretes do iCloud, Google Tasks e"
-            + " outros apps não são sincronizados nesta versão.");
+        "Lembretes locais ficam neste app, inclusive offline. Fontes externas são opcionais e"
+            + " permanecem desconectadas até configuração e consentimento em Fontes de lembretes.");
     status = ui.text("Nenhuma permissão será concedida silenciosamente.", 14, ui.muted);
     status.setPadding(ui.dp(22), ui.dp(12), ui.dp(22), ui.dp(12));
     body.addView(status);

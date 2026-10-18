@@ -129,12 +129,13 @@ public final class MainActivity extends Activity {
         "Permitir leitura da agenda",
         () -> requestPermissions(new String[] {Manifest.permission.READ_CALENDAR}, 10));
     label(
-        "Eventos: agendas disponíveis no Android. Lembretes: somente os criados neste app. iCloud"
-            + " Reminders e Google Tasks não possuem integração nesta versão.",
+        "Eventos: agendas disponíveis no Android. Lembretes locais e fontes externas em Fontes de"
+            + " lembretes. Contas externas dependem de configuração e consentimento próprios.",
         12,
         false);
     label(reminderStatus(), 13, false);
     button("Lembretes locais", () -> showReminders());
+    button("Fontes de lembretes", () -> startActivity(new Intent(this, TaskSourcesActivity.class)));
     label("Janela da timeline · 1 a 96 horas", 14, false);
     hours =
         field(
