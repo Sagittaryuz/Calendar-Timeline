@@ -122,6 +122,16 @@ public final class CalendarActivity extends Activity {
       scrollToDay();
     }
     load();
+    TaskSync.refresh(
+        this,
+        () ->
+            main.post(
+                () -> {
+                  if (!isDestroyed() && resumed) {
+                    load();
+                    refreshWidget(false);
+                  }
+                }));
     if (store.readable())
       getContentResolver()
           .registerContentObserver(
@@ -273,8 +283,10 @@ public final class CalendarActivity extends Activity {
             error = "Agenda indisponível. Toque para tentar novamente.";
           }
           try {
-            if (prefs.getBoolean("showReminders", true))
+            if (prefs.getBoolean("showReminders", true)) {
               loaded.addAll(new ReminderStore(this).visible(from, to, completed));
+              loaded.addAll(new ExternalTaskStore(this).visible(from, to, completed));
+            }
           } catch (Exception ex) {
             error = "Não foi possível ler os lembretes locais.";
           }
@@ -515,7 +527,13 @@ public final class CalendarActivity extends Activity {
         new CalendarTimeline(this, 1, selected);
         break;
       case "REMINDERS":
-        ui.note(body, "Lembretes locais deste app · não sincroniza com iCloud ou Google Tasks");
+        ui.note(
+            body,
+            "Lembretes locais e fontes conectadas. Tarefas sem data ficam em Fontes de lembretes.");
+        body.addView(
+            ui.action(
+                "Fontes de lembretes",
+                () -> startActivity(new Intent(this, TaskSourcesActivity.class))));
         agenda(body, null, false);
         break;
       case "LIST":
@@ -746,7 +764,10 @@ public final class CalendarActivity extends Activity {
               io.execute(
                   () -> {
                     try {
-                      new ReminderStore(this).toggle(x);
+                      if (x.localId.startsWith("external:"))
+                        TaskSync.complete(
+                            this, new ExternalTaskStore(this).task(x.localId), !x.completed);
+                      else new ReminderStore(this).toggle(x);
                       main.post(
                           () -> {
                             load();
@@ -807,6 +828,10 @@ public final class CalendarActivity extends Activity {
   }
 
   void openEditor(CalendarStore.Item x) {
+    if (x != null && x.localId.startsWith("external:")) {
+      details(x);
+      return;
+    }
     Intent i = new Intent(this, EventEditorActivity.class);
     if (x == null) x = newItem(mode.equals("REMINDERS"));
     i.putExtra("draft", EventEditorActivity.serialize(x));
@@ -814,6 +839,11 @@ public final class CalendarActivity extends Activity {
   }
 
   void details(CalendarStore.Item instance) {
+    if (instance.localId.startsWith("external:")) {
+      startActivity(
+          new Intent(this, TaskSourcesActivity.class).putExtra("taskKey", instance.localId));
+      return;
+    }
     io.execute(
         () -> {
           try {
@@ -862,6 +892,10 @@ public final class CalendarActivity extends Activity {
   }
 
   void confirmTimeChange(CalendarStore.Item before, CalendarStore.Item changed) {
+    if (before.localId.startsWith("external:")) {
+      ui.error(new IllegalArgumentException("Altere a data desta tarefa no aplicativo de origem"));
+      return;
+    }
     io.execute(
         () -> {
           try {

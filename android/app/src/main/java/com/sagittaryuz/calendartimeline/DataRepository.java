@@ -164,6 +164,15 @@ final class DataRepository {
             preferences.getBoolean("showReminders", true)
                 ? new ReminderStore(context).forWidget()
                 : new JSONArray());
+    if (preferences.getBoolean("showReminders", true)) {
+      try {
+        JSONArray external = new ExternalTaskStore(context).widget();
+        for (int i = 0; i < external.length(); i++)
+          input.getJSONArray("reminders").put(external.getJSONObject(i));
+      } catch (Exception e) {
+        status += "\nTarefas externas indisponíveis; cache preservado";
+      }
+    }
     WeatherRepository weather = new WeatherRepository(this, now);
     weather.addTo(input, forceWeather);
     status += "\n" + weather.status;

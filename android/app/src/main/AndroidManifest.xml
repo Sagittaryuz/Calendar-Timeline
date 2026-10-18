@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.NFC" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -7,6 +8,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.APP_CALENDAR"/></intent></queries>
     <application android:theme="@style/AppTheme" android:label="Calendar Timeline" android:icon="@drawable/ic_calendar" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:supportsRtl="true">
+        <activity android:name=".TaskSourcesActivity" android:exported="false" android:theme="@style/CalendarTheme" />
+        <activity android:name="com.microsoft.identity.client.BrowserTabActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="msauth" android:host="com.sagittaryuz.calendartimeline" android:path="/nZa0l+1MIBcU9O25MRlmaceZNOo="/></intent-filter>
+        </activity>
         <activity android:name=".CalendarActivity" android:exported="true" android:theme="@style/CalendarTheme">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
