@@ -75,14 +75,17 @@ public final class MaintenanceUiTest extends InstrumentationTestCase {
         UpdateRepository.RELEASES + "/download/android-v9.0-test/Calendar-Timeline-test.apk";
     offer(url);
     assertEquals(0, opened.size());
-    AccessibilityNodeInfo root = getInstrumentation().getUiAutomation().getRootInActiveWindow();
-    assertNotNull(root);
     boolean clicked = false;
-    for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("Abrir download")) {
-      if (node.isClickable()) {
-        clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        if (clicked) break;
-      }
+    for (int attempt = 0; attempt < 100 && !clicked; attempt++) {
+      AccessibilityNodeInfo root = getInstrumentation().getUiAutomation().getRootInActiveWindow();
+      if (root != null)
+        for (AccessibilityNodeInfo node : root.findAccessibilityNodeInfosByText("Abrir download")) {
+          if (node.isVisibleToUser() && node.isClickable()) {
+            clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            if (clicked) break;
+          }
+        }
+      if (!clicked) Thread.sleep(400);
     }
     assertTrue("Confirmation button not found", clicked);
     getInstrumentation().waitForIdleSync();

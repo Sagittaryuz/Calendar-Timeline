@@ -11,8 +11,10 @@ final class BackupStore {
   static final int MAX_BYTES = 1024 * 1024;
   static final String APP_ID = "com.sagittaryuz.calendartimeline";
   private final SharedPreferences preferences;
+  private final Context context;
 
   BackupStore(Context context) {
+    this.context = context;
     preferences = context.getSharedPreferences("settings", 0);
   }
 
@@ -45,7 +47,7 @@ final class BackupStore {
     JSONObject document =
         new JSONObject()
             .put("format", "calendar-timeline-backup")
-            .put("schemaVersion", 1)
+            .put("schemaVersion", 2)
             .put("applicationId", APP_ID)
             .put("appVersion", appVersion)
             .put("exportedAt", System.currentTimeMillis())
@@ -72,7 +74,7 @@ final class BackupStore {
       throw new JSONException("JSON inválido");
     JSONObject root = (JSONObject) value;
     if (!"calendar-timeline-backup".equals(root.optString("format"))
-        || number(root, "schemaVersion", 1, 1) != 1
+        || number(root, "schemaVersion", 1, 2) < 1
         || !APP_ID.equals(root.optString("applicationId")))
       throw new JSONException("Formato de backup incompatível");
     JSONObject raw = root.getJSONObject("settings"), clean = new JSONObject();
@@ -106,7 +108,7 @@ final class BackupStore {
       long due = number(item, "dueDate", -62135596800000L, 253402300799999L);
       boolean timed = bool(item, "dueDateIncludesTime");
       int priority = item.has("priority") ? (int) number(item, "priority", 0, 9) : 0;
-      items.put(
+      JSONObject reminder =
           new JSONObject()
               .put("identifier", id)
               .put("title", title)
@@ -118,7 +120,31 @@ final class BackupStore {
                   new JSONObject()
                       .put("title", "Lembretes locais")
                       .put("identifier", "local")
-                      .put("color", new JSONObject().put("hex", "FF9F0A"))));
+                      .put("color", new JSONObject().put("hex", "FF9F0A")));
+      if (root.getInt("schemaVersion") >= 2) {
+        String notes = item.has("notes") ? string(item, "notes", 16000) : "";
+        String repeat = item.has("repeat") ? string(item, "repeat", 20) : "";
+        if (!Arrays.asList("", "DAILY", "WEEKLY", "MONTHLY", "YEARLY").contains(repeat))
+          throw new JSONException("Repetição inválida");
+        String timezone =
+            item.has("timezone")
+                ? string(item, "timezone", 100)
+                : java.time.ZoneId.systemDefault().getId();
+        try {
+          java.time.ZoneId.of(timezone);
+        } catch (Exception ex) {
+          throw new JSONException("Fuso inválido");
+        }
+        reminder
+            .put("notes", notes)
+            .put("repeat", repeat)
+            .put("timezone", timezone)
+            .put("completed", item.has("completed") ? bool(item, "completed") : false)
+            .put(
+                "alertMinutes",
+                item.has("alertMinutes") ? number(item, "alertMinutes", -1, 40320) : -1);
+      }
+      items.put(reminder);
     }
     return new Payload(clean, items);
   }
@@ -129,7 +155,7 @@ final class BackupStore {
         parse(
             new JSONObject()
                 .put("format", "calendar-timeline-backup")
-                .put("schemaVersion", 1)
+                .put("schemaVersion", 2)
                 .put("applicationId", APP_ID)
                 .put("settings", payload.settings)
                 .put("reminders", payload.reminders)
@@ -154,6 +180,7 @@ final class BackupStore {
           .putString("longitude", s.getString("longitude"));
     else editor.remove("latitude").remove("longitude");
     if (!editor.commit()) throw new IOException("Não foi possível salvar a importação");
+    ReminderAlerts.schedule(context);
   }
 
   static String string(JSONObject o, String key, int max) throws JSONException {

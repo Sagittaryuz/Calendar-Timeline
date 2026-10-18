@@ -74,6 +74,9 @@ final class DataRepository {
                     CalendarContract.Instances.BEGIN + " ASC")) {
           if (cursor == null) throw new IOException("Calendar query unavailable");
           while (cursor.moveToNext()) {
+            if (preferences
+                .getStringSet("hiddenCalendars", Collections.emptySet())
+                .contains(cursor.getString(5))) continue;
             long begin = cursor.getLong(2), end = cursor.getLong(3);
             boolean allDay = cursor.getInt(4) != 0;
             // CalendarContract represents all-day civil dates as UTC midnight.
@@ -146,9 +149,21 @@ final class DataRepository {
       delete("calendar.json");
       status = "Agenda sem acesso · permita a leitura para exibir eventos";
     }
+    // Re-apply private visibility to cached data as well as fresh provider results.
+    Set<String> hidden = preferences.getStringSet("hiddenCalendars", Collections.emptySet());
+    JSONArray visible = new JSONArray();
+    for (int i = 0; i < events.length(); i++) {
+      JSONObject event = events.getJSONObject(i);
+      if (!hidden.contains(event.getJSONObject("calendar").optString("identifier")))
+        visible.put(event);
+    }
     input
-        .put("events", events)
-        .put("reminders", new JSONArray(preferences.getString("reminders", "[]")));
+        .put("events", visible)
+        .put(
+            "reminders",
+            preferences.getBoolean("showReminders", true)
+                ? new ReminderStore(context).forWidget()
+                : new JSONArray());
     WeatherRepository weather = new WeatherRepository(this, now);
     weather.addTo(input, forceWeather);
     status += "\n" + weather.status;

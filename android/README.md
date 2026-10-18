@@ -1,3 +1,5 @@
+O calendário nativo 0.3.0 de teste inclui mês/ano/dia/lista e operações reais de eventos e lembretes. Consulte [funções, permissões e limites](../docs/ANDROID-CALENDARIO.md). O widget, o clima e os ajustes anteriores continuam disponíveis.
+
 # Calendar Timeline para Android
 
 App Android nativo (Java, API 26+, Android System WebView atualizado) com widget de tela inicial 4 × 2. O widget é um `AppWidgetProvider` com `RemoteViews/ImageView`: permanece na tela inicial independentemente da abertura do app. Um canvas local, em Android System WebView, rasteriza as mesmas funções do Scriptable; nenhum site externo é carregado. O aplicativo oferece prévia, configuração e atualização manual.

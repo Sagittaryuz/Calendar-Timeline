@@ -108,7 +108,7 @@ public final class BackupTest extends InstrumentationTestCase {
       JSONObject f = fixture(), s = f.getJSONObject("settings");
       switch (i) {
         case 0:
-          f.put("schemaVersion", 2);
+          f.put("schemaVersion", 3);
           break;
         case 1:
           s.put("hours", 97);
@@ -176,6 +176,36 @@ public final class BackupTest extends InstrumentationTestCase {
     assertFalse(preferences.contains("READ_CALENDAR"));
     assertFalse(preferences.contains("updateUrl"));
     assertEquals("keep", preferences.getString("untouched", ""));
+  }
+
+  public void testSchemaTwoRejectsInvalidReminderDetailsBeforeMutation() throws Exception {
+    Map<String, ?> original = new HashMap<>(preferences.getAll());
+    for (int i = 0; i < 5; i++) {
+      JSONObject f = fixture().put("schemaVersion", 2),
+          r = f.getJSONArray("reminders").getJSONObject(0);
+      switch (i) {
+        case 0:
+          r.put("completed", "true");
+          break;
+        case 1:
+          r.put("repeat", "UNSUPPORTED");
+          break;
+        case 2:
+          r.put("timezone", "invalid/zone");
+          break;
+        case 3:
+          r.put("alertMinutes", -2);
+          break;
+        default:
+          r.put("notes", new String(new char[16001]).replace('\0', 'x'));
+      }
+      try {
+        new BackupStore(context).restore(BackupStore.parse(f.toString()));
+        fail("Accepted invalid schema 2 reminder");
+      } catch (JSONException expected) {
+      }
+      assertEquals(original, preferences.getAll());
+    }
   }
 
   public void testWeatherOffWithoutCoordinatesAndEmptyRemindersSupported() throws Exception {
