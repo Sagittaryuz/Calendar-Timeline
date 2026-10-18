@@ -130,7 +130,7 @@ public final class CalendarInteractionsTest extends CalendarUiTest {
     Set<String> hidden = new HashSet<>();
     for (CalendarStore.Agenda agenda : store.calendars())
       if (agenda.id != calendar) hidden.add(Long.toString(agenda.id));
-    p.edit().putString("reminders", "[]").putStringSet("hiddenCalendars", hidden).commit();
+    p.edit().putBoolean("onboardingV5", true).putString("reminders", "[]").putStringSet("hiddenCalendars", hidden).commit();
     try {
       CalendarStore.Item x = fixture("Reunião sintética", 9);
       x.id = store.save(x);
@@ -204,8 +204,8 @@ public final class CalendarInteractionsTest extends CalendarUiTest {
       click("Mês");
       waitFor("Calendários");
       capture("qa-v04-month-details.png");
-      click("Alterar visualização");
-      click("Preferências");
+      click("Configurações");
+      click("Preferências do calendário");
       waitFor("Preferências");
       capture("qa-v04-preferences.png");
       click("Início da semana: Domingo");
@@ -216,6 +216,7 @@ public final class CalendarInteractionsTest extends CalendarUiTest {
       assertEquals(30, p.getInt("eventMinutes", -1));
       click("Visualização mensal: Detalhes");
       click("Compacto");
+      click("‹ Configurações");
       click("‹ Calendário");
       waitFor("Calendários");
       for (int n = 0; n < 80 && find("Projeto 1") != null; n++) Thread.sleep(250);

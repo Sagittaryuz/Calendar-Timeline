@@ -55,6 +55,19 @@ public final class TimelineWidget extends AppWidgetProvider {
   static void publish(Context c, AppWidgetManager manager, int id) {
     RemoteViews views = new RemoteViews(c.getPackageName(), R.layout.timeline_widget);
     Bitmap image = RefreshCoordinator.cached(c);
+    android.content.SharedPreferences p = c.getSharedPreferences("settings", 0);
+    try {
+      org.json.JSONObject diagnostics =
+          new org.json.JSONObject(p.getString("renderDiagnostics", "{}"));
+      views.setContentDescription(
+          R.id.timeline,
+          "Calendar Timeline · "
+              + diagnostics.optInt("eventItems")
+              + " eventos · "
+              + diagnostics.optInt("reminderItems")
+              + " lembretes · toque para abrir e atualizar");
+    } catch (org.json.JSONException ignored) {
+    }
     if (image != null) {
       Bundle options = manager.getAppWidgetOptions(id);
       int dp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 360);
@@ -65,7 +78,10 @@ public final class TimelineWidget extends AppWidgetProvider {
       views.setImageViewBitmap(R.id.timeline, scaled);
       views.setViewVisibility(R.id.empty, View.GONE);
     }
-    Intent tap = new Intent(c, image == null ? MainActivity.class : CalendarActivity.class);
+    Intent tap =
+        new Intent(c, CalendarActivity.class)
+            .putExtra("widgetTap", true)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     PendingIntent pending =
         PendingIntent.getActivity(
             c, id, tap, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

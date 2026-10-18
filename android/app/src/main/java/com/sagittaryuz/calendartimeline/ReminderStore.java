@@ -145,4 +145,14 @@ final class ReminderStore {
     for (CalendarStore.Item x : all()) if (!x.completed) a.put(encode(x));
     return a;
   }
+
+  /** Keep overdue tasks discoverable even when their date is outside the visible month. */
+  List<CalendarStore.Item> visible(long from, long to, boolean completed) throws JSONException {
+    List<CalendarStore.Item> result = new ArrayList<>();
+    for (CalendarStore.Item x : all())
+      if ((completed || !x.completed)
+          && ((x.start >= from && x.start < to)
+              || (!x.completed && x.start < System.currentTimeMillis()))) result.add(x);
+    return result;
+  }
 }

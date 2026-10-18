@@ -14,11 +14,15 @@ import java.time.format.*;
 import org.json.*;
 
 public final class MainActivity extends Activity {
+  private CalendarUi ui;
+  private ForegroundLocation location;
+  private TextView locationState;
+  private Switch automatic;
   private LinearLayout content;
   private ImageView preview;
   private TextView status, updateNotice;
   private boolean bindingSettings;
-  private long restoredAt;
+  private long restoredAt, locatedAt;
   private ScrollView scroll;
   private TextView weatherHeading;
   private EditText hours, latitude, longitude;
@@ -38,21 +42,40 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle state) {
     super.onCreate(state);
     preferences = getSharedPreferences("settings", 0);
+    ui = new CalendarUi(this);
+    location = new ForegroundLocation(this);
     restoredAt = preferences.getLong("restoredAt", 0);
+    locatedAt = preferences.getLong("locatedAt", 0);
     scroll = new ScrollView(this);
     scroll.setFillViewport(true);
+    scroll.setFocusableInTouchMode(true);
+    scroll.requestFocus();
     content = new LinearLayout(this);
     content.setOrientation(LinearLayout.VERTICAL);
     content.setPadding(dp(20), dp(12), dp(20), dp(28));
     scroll.addView(content);
+    content.setBackground(ui.backdrop());
     setContentView(scroll);
     scroll.setOnApplyWindowInsetsListener(
         (v, insets) -> {
           v.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
           return insets;
         });
-    label("Calendar Timeline", 28, true);
-    label("Sua agenda, ao longo do dia.", 15, false);
+    button("‹ Calendário", this::finish);
+    label("Configurações", 28, true);
+    button(
+        "Preferências do calendário",
+        () -> startActivity(new Intent(this, CalendarPreferencesActivity.class)));
+    button(
+        "Permissões e primeiros passos",
+        () -> startActivity(new Intent(this, OnboardingActivity.class)));
+    button(
+        "Permissões no Android",
+        () ->
+            startActivity(
+                new Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:" + getPackageName()))));
     preview = new ImageView(this);
     preview.setContentDescription("Prévia do Calendar Timeline");
     preview.setAdjustViewBounds(true);
@@ -63,12 +86,7 @@ public final class MainActivity extends Activity {
     content.addView(preview, imageParams);
     android.graphics.Bitmap cached = RefreshCoordinator.cached(this);
     if (cached != null) preview.setImageBitmap(cached);
-    String initialStatus =
-        preferences.getBoolean("demo", false)
-            ? "Demonstração · agenda e clima fictícios"
-            : preferences.getBoolean("weather", false)
-                ? preferences.getString("weatherStatus", "Buscando clima…")
-                : "Clima desativado · toque em Configurar clima";
+    String initialStatus = WeatherRepository.summary(new DataRepository(this));
     status = label(initialStatus, 12, false);
     updateNotice = label("", 13, false);
     updateNotice.setVisibility(View.GONE);
@@ -87,6 +105,7 @@ public final class MainActivity extends Activity {
         });
     demo = new Switch(this);
     demo.setText("Demonstração · agenda e clima fictícios");
+    demo.setTextColor(ui.ink);
     demo.setChecked(preferences.getBoolean("demo", false));
     content.addView(demo);
     demo.setOnCheckedChangeListener(
@@ -109,7 +128,12 @@ public final class MainActivity extends Activity {
     button(
         "Permitir leitura da agenda",
         () -> requestPermissions(new String[] {Manifest.permission.READ_CALENDAR}, 10));
-    label("Somente leitura. A agenda e os lembretes ficam neste aparelho.", 12, false);
+    label(
+        "Eventos: agendas disponíveis no Android. Lembretes: somente os criados neste app. iCloud"
+            + " Reminders e Google Tasks não possuem integração nesta versão.",
+        12,
+        false);
+    label(reminderStatus(), 13, false);
     button("Lembretes locais", () -> showReminders());
     label("Janela da timeline · 1 a 96 horas", 14, false);
     hours =
@@ -126,15 +150,37 @@ public final class MainActivity extends Activity {
     theme.setSelection("dark".equals(preferences.getString("theme", "black")) ? 1 : 0);
     content.addView(theme);
     label("Fuso: " + ZoneId.systemDefault().toString() + " · segue o aparelho", 12, false);
-    weatherHeading = label("Clima · localização manual", 19, true);
+    weatherHeading = label("Clima · Open-Meteo", 19, true);
+    automatic = new Switch(this);
+    automatic.setText("Atualizar localização ao abrir o calendário");
+    automatic.setTextColor(ui.ink);
+    automatic.setChecked(preferences.getBoolean("weatherAuto", false));
+    automatic.setOnCheckedChangeListener(
+        (v, checked) -> {
+          if (bindingSettings) return;
+          android.content.SharedPreferences.Editor edit =
+              preferences.edit().putBoolean("weatherAuto", checked);
+          if (!checked) edit.putBoolean("weatherPendingLocation", false);
+          edit.apply();
+        });
+    content.addView(automatic);
+    button("Usar localização automática", this::useLocation);
+    locationState =
+        label(
+            preferences.getString(
+                "locationStatus", "Localização aproximada somente com o app aberto"),
+            13,
+            false);
     weather = new Switch(this);
     weather.setText("Ativar previsão real do Open-Meteo");
+    weather.setTextColor(ui.ink);
     weather.setChecked(preferences.getBoolean("weather", false));
     content.addView(weather);
     label(
         "Ao ativar e salvar, envia somente as coordenadas abaixo ao Open-Meteo para buscar a"
-            + " previsão. Nenhum evento é enviado. Não solicita GPS. Salvar com clima real desliga"
-            + " a demonstração.",
+            + " previsão. Nenhum evento ou lembrete é enviado. Localização aproximada é opcional;"
+            + " as coordenadas manuais também funcionam. Salvar com clima real desliga a"
+            + " demonstração.",
         12,
         false);
     label("Latitude · de -90 a 90", 14, false);
@@ -185,7 +231,7 @@ public final class MainActivity extends Activity {
     TextView view = new TextView(this);
     view.setText(text);
     view.setTextSize(size);
-    view.setTextColor(bold ? Color.WHITE : Color.rgb(172, 180, 194));
+    view.setTextColor(bold ? ui.ink : ui.muted);
     if (bold) view.setTypeface(null, Typeface.BOLD);
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.topMargin = dp(bold ? 18 : 6);
@@ -200,6 +246,8 @@ public final class MainActivity extends Activity {
     view.setContentDescription(hint);
     view.setSingleLine(true);
     view.setInputType(input);
+    view.setTextColor(ui.ink);
+    view.setHintTextColor(ui.muted);
     view.setText(text);
     content.addView(view, new LinearLayout.LayoutParams(-1, dp(50)));
     return view;
@@ -216,11 +264,10 @@ public final class MainActivity extends Activity {
   }
 
   private void button(String title, Runnable action) {
-    Button b = new Button(this);
-    b.setText(title);
-    b.setAllCaps(false);
-    b.setOnClickListener(v -> action.run());
-    content.addView(b, new LinearLayout.LayoutParams(-1, dp(52)));
+    TextView b = ui.action(title, action);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+    params.setMargins(0, dp(5), 0, dp(5));
+    content.addView(b, params);
   }
 
   private boolean saveSettings() {
@@ -233,6 +280,7 @@ public final class MainActivity extends Activity {
               .putInt("hours", h)
               .putString("theme", theme.getSelectedItemPosition() == 0 ? "black" : "dark")
               .putBoolean("weather", weather.isChecked());
+      editor.putBoolean("weatherPendingLocation", false);
       if (weather.isChecked()) {
         double lat = WeatherRepository.coordinate(latitude.getText().toString(), 90),
             lon = WeatherRepository.coordinate(longitude.getText().toString(), 180);
@@ -243,6 +291,12 @@ public final class MainActivity extends Activity {
         editor
             .putString("latitude", String.valueOf(lat))
             .putString("longitude", String.valueOf(lon));
+        // Manual edits select a fixed location; do not silently replace them on resume.
+        if (!String.valueOf(lat).equals(preferences.getString("latitude", ""))
+            || !String.valueOf(lon).equals(preferences.getString("longitude", ""))) {
+          editor.putBoolean("weatherAuto", false);
+          automatic.setChecked(false);
+        }
       }
       if (weather.isChecked() && demo.isChecked()) {
         demo.setChecked(false);
@@ -290,19 +344,85 @@ public final class MainActivity extends Activity {
   }
 
   private void showReminders() {
-    startActivity(new Intent(this, CalendarActivity.class));
+    startActivity(
+        new Intent(this, CalendarActivity.class)
+            .putExtra("remindersView", true)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
   }
 
   @Override
   public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
     super.onRequestPermissionsResult(request, permissions, grants);
+    if (request == 12) {
+      if (ForegroundLocation.allowed(this)) acquireLocation();
+      else locationState.setText("Localização recusada · informe coordenadas manualmente");
+    }
     refresh();
+  }
+
+  String reminderStatus() {
+    try {
+      long count = new ReminderStore(this).all().stream().filter(x -> !x.completed).count();
+      return "Lembretes locais pendentes: "
+          + count
+          + (preferences.getBoolean("showReminders", true)
+              ? " · visíveis"
+              : " · ocultos em Calendários");
+    } catch (Exception e) {
+      return "Não foi possível ler os lembretes locais; os dados foram preservados.";
+    }
+  }
+
+  void useLocation() {
+    if (ForegroundLocation.allowed(this)) acquireLocation();
+    else
+      new AlertDialog.Builder(this)
+          .setTitle("Clima na sua região")
+          .setMessage(
+              "Permita localização aproximada para consultar a previsão Open-Meteo. Usa somente com"
+                  + " o app aberto, sem rastrear em segundo plano. Você pode recusar e informar"
+                  + " coordenadas.")
+          .setNegativeButton("Agora não", null)
+          .setPositiveButton(
+              "Continuar",
+              (d, w) ->
+                  requestPermissions(new String[] {Manifest.permission.ACCESS_COARSE_LOCATION}, 12))
+          .show();
+  }
+
+  void acquireLocation() {
+    preferences
+        .edit()
+        .putBoolean("weatherAuto", true)
+        .putBoolean("weatherPendingLocation", true)
+        .apply();
+    automatic.setChecked(true);
+    locationState.setText("Buscando localização aproximada…");
+    location.start(
+        true,
+        () -> {
+          if (isDestroyed()) return;
+          bindingSettings = true;
+          latitude.setText(preferences.getString("latitude", ""));
+          longitude.setText(preferences.getString("longitude", ""));
+          weather.setChecked(preferences.getBoolean("weather", false));
+          demo.setChecked(preferences.getBoolean("demo", false));
+          bindingSettings = false;
+          locationState.setText(preferences.getString("locationStatus", ""));
+          refresh(true);
+        });
   }
 
   @Override
   protected void onResume() {
     super.onResume();
-    if (hours != null && restoredAt != preferences.getLong("restoredAt", 0)) {
+    if (locationState != null)
+      locationState.setText(
+          preferences.getString(
+              "locationStatus", "Localização aproximada somente com o app aberto"));
+    if (hours != null
+        && (restoredAt != preferences.getLong("restoredAt", 0)
+            || locatedAt != preferences.getLong("locatedAt", 0))) {
       bindingSettings = true;
       hours.setText(String.valueOf(preferences.getInt("hours", 24)));
       theme.setSelection("dark".equals(preferences.getString("theme", "black")) ? 1 : 0);
@@ -312,6 +432,8 @@ public final class MainActivity extends Activity {
       longitude.setText(preferences.getString("longitude", ""));
       bindingSettings = false;
       restoredAt = preferences.getLong("restoredAt", 0);
+      locatedAt = preferences.getLong("locatedAt", 0);
+      automatic.setChecked(preferences.getBoolean("weatherAuto", false));
       refresh();
     }
     if (preferences.getBoolean("checkUpdates", true)) {
@@ -326,12 +448,19 @@ public final class MainActivity extends Activity {
             } else updateNotice.setVisibility(View.GONE);
           });
     } else updateNotice.setVisibility(View.GONE);
+    // Onboarding can change these choices even when no location fix was obtained.
+    bindingSettings = true;
+    demo.setChecked(preferences.getBoolean("demo", false));
+    automatic.setChecked(preferences.getBoolean("weatherAuto", false));
+    bindingSettings = false;
+    refresh();
     handler.postDelayed(tick, 60000);
   }
 
   @Override
   protected void onPause() {
     handler.removeCallbacks(tick);
+    location.cancel();
     super.onPause();
   }
 

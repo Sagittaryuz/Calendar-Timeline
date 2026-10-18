@@ -59,6 +59,8 @@ public final class LiveWeatherTest extends InstrumentationTestCase {
         .edit()
         .putBoolean("demo", false)
         .putBoolean("weather", true)
+        .putBoolean("weatherAuto", false)
+        .putBoolean("weatherPendingLocation", false)
         .putString("latitude", "-17.8814")
         .putString("longitude", "-51.7144")
         .putInt("hours", 24)

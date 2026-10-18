@@ -73,6 +73,11 @@ final class RefreshCoordinator {
                                               .getSharedPreferences("settings", 0)
                                               .edit()
                                               .putLong("renderedAt", System.currentTimeMillis())
+                                              .putString(
+                                                  "renderDiagnostics",
+                                                  RenderEngine.lastDiagnostics == null
+                                                      ? "{}"
+                                                      : RenderEngine.lastDiagnostics.toString())
                                               .apply();
                                         } catch (Exception ex) {
                                           message = "Não foi possível salvar o widget";

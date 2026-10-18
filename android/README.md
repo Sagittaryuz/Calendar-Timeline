@@ -1,8 +1,10 @@
+O marco de teste atual é **0.5.0**, com [diagnóstico, fontes e permissões](../docs/ANDROID-MARCO-0.5.md). O calendário é a tela inicial; Configurações reúne as opções.
+
 O calendário nativo 0.4.0 de teste inclui mês/ano/dia/semana/lista, semana automática em paisagem, reagendamento e duração por arraste confirmado, escopos de recorrência e preferências locais. Consulte o [marco 0.4.0](../docs/ANDROID-MARCO-0.4.md). Consulte [funções, permissões e limites](../docs/ANDROID-CALENDARIO.md). O widget, o clima e os ajustes anteriores continuam disponíveis.
 
 # Calendar Timeline para Android
 
-App Android nativo (Java, API 26+, Android System WebView atualizado) com widget de tela inicial 4 × 2. O widget é um `AppWidgetProvider` com `RemoteViews/ImageView`: permanece na tela inicial independentemente da abertura do app. Um canvas local, em Android System WebView, rasteriza as mesmas funções do Scriptable; nenhum site externo é carregado. O aplicativo oferece prévia, configuração e atualização manual.
+App Android nativo (Java, API 26+, Android System WebView atualizado) com widget de tela inicial 4 × 2. O widget é um `AppWidgetProvider` com `RemoteViews/ImageView`: permanece na tela inicial independentemente da abertura do app. Um canvas local, em Android System WebView, rasteriza as mesmas funções do Scriptable; nenhum site externo é carregado. O aplicativo abre no calendário nativo e oferece prévia/configuração do widget em Configurações.
 
 ## Compilar e instalar manualmente
 
@@ -13,13 +15,13 @@ cd android
 ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
 ```
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`. É assinado somente com a chave debug local padrão do Android, sem chave release ou publicação. Instale manualmente e abra o aplicativo. Permita a leitura da agenda se desejar. Use “Adicionar widget à tela inicial” e confirme no launcher. Alternativamente, abra a lista de widgets do launcher e escolha Calendar Timeline. Redimensione mantendo a proporção próxima de 1092:510; alturas extras ficam transparentes, sem deformar o desenho.
+APK: `app/build/outputs/apk/debug/app-debug.apk`. É assinado somente com a chave debug local padrão do Android, sem chave release ou publicação. Instale manualmente e abra o aplicativo. Escolha os acessos opcionais no onboarding; os prompts são do Android. A escrita da agenda só é solicitada ao salvar eventos locais. Use “Adicionar widget à tela inicial” e confirme no launcher. Alternativamente, abra a lista de widgets do launcher e escolha Calendar Timeline. Redimensione mantendo a proporção próxima de 1092:510; alturas extras ficam transparentes, sem deformar o desenho.
 
 ## Dados e privacidade
 
 - Agenda: `CalendarContract.Instances`, calendários visíveis e recorrências expandidas pelo Android. Contas ficam somente em leitura; a escrita de eventos é local. As agendas locais criadas pelo app suportam exceções individuais e divisão das futuras para regras simples. Contas sincronizadas no próprio Android aparecem conforme o provedor local. O app não cria contas, OAuth ou credenciais, nem conecta diretamente ao iCloud.
-- Lembretes: lista local, criada/concluída pelo app. Não existe API Android equivalente ao EventKit Reminders; não há sincronização com Lembretes Apple, Google Tasks ou outros apps.
-- Clima: Open-Meteo opcional, desativado por padrão. Use “Configurar clima” junto à prévia, ative, informe latitude/longitude e salve para autorizar a consulta. Aceita vírgula ou ponto decimal e sinal negativo digitado (`-`) ou copiado (`−`), por exemplo `−17,88` e `−51,71`. A colagem preserva os caracteres para validar o valor completo. Salvar com clima real desliga a demonstração. “Atualizar agora” força uma consulta mesmo dentro dos 30 minutos de cache; o status informa fonte, horário e falhas de configuração, rede, HTTPS ou serviço. Envia apenas coordenadas e fuso, nunca títulos da agenda. Sem GPS. Resumos e amostras usam o parser original; lacunas não recebem previsão inventada. Atribuição Open-Meteo, CC BY 4.0. Foreca, MET Norway e Rainbow do Scriptable não foram conectados no Android; nenhum segredo foi embutido.
+- Lembretes: lista local, criada/concluída pelo app, com pendências vencidas e visualização da coleção completa no calendário. Não existe API Android equivalente ao EventKit Reminders; não há sincronização com Lembretes Apple, Google Tasks ou outros apps.
+- Clima: Open-Meteo, a mesma API pública já usada pelo Scriptable, sem credencial. O onboarding oferece localização aproximada em primeiro plano e os prompts reais do Android. Recusar mantém coordenadas manuais disponíveis; uma posição indisponível não vira previsão inventada. A consulta é limitada a 15 s e cancelada ao sair. Não há localização precisa ou em background. Apenas coordenadas/fuso são enviados à API. Configurações permite desligar o clima/atualização da localização e fornece status de configuração, localização, rede, HTTPS e serviço. Cache de 30 min; atualização manual/toque no widget força consulta. Atribuição Open-Meteo, CC BY 4.0. Foreca/Rainbow não são conectados sem credenciais explicitamente autorizadas.
 - Cache: agenda/clima e imagem ficam no armazenamento privado do app, sem backup Android. Resposta de agenda vazia válida substitui a anterior; erro preserva um snapshot compatível com fuso/horizonte. Permissão negada remove o cache da agenda. Clima mantém timestamp da resposta original, usa no máximo 24 h de cache e descarta escopos de coordenadas/fuso diferentes. Falha de rede não renova idade. Desativar o clima impede novas consultas.
 - Demonstração: explícita e separada das fontes pessoais. Eventos e clima fictícios, data fixa 17/10/2026 12:10. Desative para usar dados reais.
 
@@ -29,7 +31,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. É assinado somente com a chav
 
 Não distribui fontes San Francisco/SF Symbols da Apple. Usa sans-serif e monospace licenciadas do sistema Android; o original desenha astros por geometria. Métricas tipográficas, WebView, densidade, launcher e espaço disponível causam diferenças. Não há promessa de igualdade pixel a pixel em todos os celulares. Temas preto/escuro e janelas de 1–96 h seguem o renderer; fuso e horário seguem o aparelho.
 
-`JobScheduler` solicita atualizações a cada 15 min, com `AppWidgetProvider` também a cada 30 min; Android e economia de bateria decidem o momento efetivo. Atualização manual no app; redesenho em mudança de tamanho, fuso, data, hora e reinício. Enquanto o app está aberto, atualiza a cada minuto. O toque no widget abre o calendário nativo por Intent; se não houver um instalado, avisa e abre a configuração.
+`JobScheduler` solicita atualizações a cada 15 min, com `AppWidgetProvider` também a cada 30 min; Android e economia de bateria decidem o momento efetivo. Atualização manual no app; redesenho em mudança de tamanho, fuso, data, hora e reinício. Enquanto o app está aberto, atualiza a cada minuto. Todo toque no widget abre o calendário interno e atualiza dados/renderização, mesmo sem imagem pronta. A volta ao app, alterações no Calendar Provider enquanto visível e o ciclo por minuto também atualizam o widget, sem passar pelas configurações.
 
 ## Testes
 

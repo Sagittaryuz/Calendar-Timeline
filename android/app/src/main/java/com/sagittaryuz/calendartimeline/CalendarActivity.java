@@ -33,6 +33,46 @@ public final class CalendarActivity extends Activity {
   String updateMessage = "";
   Runnable permissionAction;
   boolean requesting;
+  ForegroundLocation location;
+  TextView weatherSummary;
+  String syncStatus = "";
+  boolean resumed, widgetRenderPending, forceWidgetWeather;
+  final Runnable widgetRender =
+      () -> {
+        if (!resumed || root == null || !root.hasWindowFocus() || !widgetRenderPending) return;
+        widgetRenderPending = false;
+        boolean force = forceWidgetWeather;
+        forceWidgetWeather = false;
+        RefreshCoordinator.refresh(
+            this,
+            (image, message) -> {
+              if (isDestroyed()) return;
+              syncStatus = message;
+              if (weatherSummary != null)
+                weatherSummary.setText(WeatherRepository.summary(new DataRepository(this)));
+            },
+            force);
+      };
+  final Runnable widgetTick =
+      new Runnable() {
+        public void run() {
+          refreshWidget(false);
+          main.postDelayed(this, 60000);
+        }
+      };
+  final android.database.ContentObserver providerChanges =
+      new android.database.ContentObserver(main) {
+        @Override
+        public void onChange(boolean selfChange) {
+          main.removeCallbacks(providerReload);
+          main.postDelayed(providerReload, 400);
+        }
+      };
+  final Runnable providerReload =
+      () -> {
+        load();
+        refreshWidget(false);
+      };
   int visiblePreferences = -1;
 
   @Override
@@ -41,6 +81,7 @@ public final class CalendarActivity extends Activity {
     ui = new CalendarUi(this);
     store = new CalendarStore(this);
     prefs = getSharedPreferences("settings", 0);
+    location = new ForegroundLocation(this);
     if (saved != null) {
       selected = LocalDate.parse(saved.getString("date", selected.toString()));
       mode = saved.getString("mode", "MONTH");
@@ -54,7 +95,10 @@ public final class CalendarActivity extends Activity {
               .toLocalDate();
       mode = "DAY";
     }
+    if (getIntent().getBooleanExtra("remindersView", false)) mode = "REMINDERS";
     render();
+    if (saved == null && !prefs.getBoolean("onboardingV5", false))
+      startActivity(new Intent(this, OnboardingActivity.class));
   }
 
   @Override
@@ -70,11 +114,28 @@ public final class CalendarActivity extends Activity {
   @Override
   protected void onResume() {
     super.onResume();
+    resumed = true;
+    // Keep the first permission flow responsive; collect/render after its choices are complete.
+    if (!prefs.getBoolean("onboardingV5", false)) return;
     if (visiblePreferences != visualPreferences()) {
       renderBody();
       scrollToDay();
     }
     load();
+    if (store.readable())
+      getContentResolver()
+          .registerContentObserver(
+              android.provider.CalendarContract.CONTENT_URI, true, providerChanges);
+    refreshWidget(getIntent().getBooleanExtra("widgetTap", false));
+    getIntent().removeExtra("widgetTap");
+    if (prefs.getBoolean("onboardingV5", false)
+        && prefs.getBoolean("weatherAuto", false)
+        && (prefs.getBoolean("weather", false) || prefs.getBoolean("weatherPendingLocation", false))
+        && ForegroundLocation.allowed(this)
+        && System.currentTimeMillis() - prefs.getLong("locatedAt", 0) >= 30 * 60000L)
+      location.start(prefs.getBoolean("weatherPendingLocation", false), () -> refreshWidget(false));
+    main.removeCallbacks(widgetTick);
+    main.postDelayed(widgetTick, 60000);
     io.execute(() -> ReminderAlerts.schedule(this));
     if (prefs.getBoolean("checkUpdates", true))
       UpdateRepository.checkAsync(
@@ -89,6 +150,54 @@ public final class CalendarActivity extends Activity {
               render();
             }
           });
+  }
+
+  @Override
+  protected void onPause() {
+    resumed = false;
+    main.removeCallbacks(widgetRender);
+    main.removeCallbacks(widgetTick);
+    main.removeCallbacks(providerReload);
+    getContentResolver().unregisterContentObserver(providerChanges);
+    location.cancel();
+    super.onPause();
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    if (intent.getBooleanExtra("remindersView", false)) {
+      mode = "REMINDERS";
+      render();
+    }
+    if (intent.hasExtra("date")) {
+      selected =
+          Instant.ofEpochMilli(intent.getLongExtra("date", System.currentTimeMillis()))
+              .atZone(ZoneId.systemDefault())
+              .toLocalDate();
+      mode = "DAY";
+      render();
+    }
+    load();
+    refreshWidget(intent.getBooleanExtra("widgetTap", false));
+    intent.removeExtra("widgetTap");
+  }
+
+  void refreshWidget(boolean forceWeather) {
+    widgetRenderPending = true;
+    forceWidgetWeather |= forceWeather;
+    main.removeCallbacks(widgetRender);
+    if (resumed && root != null && root.hasWindowFocus()) main.postDelayed(widgetRender, 600);
+  }
+
+  @Override
+  public void onWindowFocusChanged(boolean focused) {
+    super.onWindowFocusChanged(focused);
+    if (focused && resumed && widgetRenderPending) {
+      main.removeCallbacks(widgetRender);
+      main.postDelayed(widgetRender, 600);
+    }
   }
 
   @Override
@@ -132,6 +241,7 @@ public final class CalendarActivity extends Activity {
 
   void load() {
     final int g = ++generation;
+    final boolean remindersOnly = mode.equals("REMINDERS");
     LocalDate first =
         mode.equals("YEAR")
             ? LocalDate.of(selected.getYear(), 1, 1)
@@ -142,6 +252,10 @@ public final class CalendarActivity extends Activity {
             : mode.equals("LIST")
                 ? selected.plusDays(91)
                 : selected.withDayOfMonth(1).plusMonths(1).plusDays(7);
+    if (mode.equals("REMINDERS")) {
+      first = LocalDate.of(1, 1, 1);
+      end = LocalDate.of(9999, 12, 31);
+    }
     if (search) {
       first = selected.minusYears(1);
       end = selected.plusYears(1);
@@ -154,14 +268,13 @@ public final class CalendarActivity extends Activity {
           List<CalendarStore.Item> loaded = new ArrayList<>();
           String error = "";
           try {
-            loaded.addAll(store.instances(from, to, hidden, null));
+            if (!remindersOnly) loaded.addAll(store.instances(from, to, hidden, null));
           } catch (Exception ex) {
             error = "Agenda indisponível. Toque para tentar novamente.";
           }
           try {
             if (prefs.getBoolean("showReminders", true))
-              for (CalendarStore.Item r : new ReminderStore(this).all())
-                if ((completed || !r.completed) && r.start >= from && r.start < to) loaded.add(r);
+              loaded.addAll(new ReminderStore(this).visible(from, to, completed));
           } catch (Exception ex) {
             error = "Não foi possível ler os lembretes locais.";
           }
@@ -211,7 +324,7 @@ public final class CalendarActivity extends Activity {
 
   void render() {
     root = ui.column();
-    root.setBackgroundColor(ui.bg);
+    root.setBackground(ui.backdrop());
     root.setFitsSystemWindows(true);
     setContentView(root);
     LinearLayout toolbar = ui.row();
@@ -235,7 +348,7 @@ public final class CalendarActivity extends Activity {
     toolbar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1));
     toolbar.addView(ui.icon("list", "Alterar visualização", this::viewMenu));
     LinearLayout quick = ui.row();
-    quick.setBackground(ui.round(ui.card, 25));
+    ui.frost(quick, 25);
     quick.addView(
         ui.icon(
             "search",
@@ -309,8 +422,9 @@ public final class CalendarActivity extends Activity {
     bottom.addView(
         ui.icon(
             "settings",
-            "Ajustes do widget, clima e backup",
+            "Configurações",
             () -> startActivity(new Intent(this, MainActivity.class))));
+    ui.frost(bottom, 26);
     root.addView(bottom);
     scrollToDay();
   }
@@ -351,11 +465,14 @@ public final class CalendarActivity extends Activity {
     LinearLayout heading = ui.row();
     TextView title =
         ui.text(
-            mode.equals("YEAR")
-                ? Integer.toString(selected.getYear())
-                : cap(
-                    selected.format(
-                        DateTimeFormatter.ofPattern(timelineView() ? "MMMM uuuu" : "MMMM", PT))),
+            mode.equals("REMINDERS")
+                ? "Lembretes"
+                : mode.equals("YEAR")
+                    ? Integer.toString(selected.getYear())
+                    : cap(
+                        selected.format(
+                            DateTimeFormatter.ofPattern(
+                                timelineView() ? "MMMM uuuu" : "MMMM", PT))),
             timelineView() ? 23 : 30,
             ui.ink);
     title.setTypeface(null, Typeface.BOLD);
@@ -371,12 +488,21 @@ public final class CalendarActivity extends Activity {
       TextView error = ui.action(loadError, this::load);
       body.addView(error);
     }
-    if (!store.readable()) {
+    if (!store.readable() && !mode.equals("REMINDERS")) {
       LinearLayout card = ui.group(body);
       ui.fieldRow(
           card, "Agendas do Android", "Permitir acesso", () -> permission(false, this::load));
       ui.note(body, "Seus lembretes locais funcionam sem acesso à agenda.");
     }
+    if (!compactLandscape()) {
+      LinearLayout weatherCard = ui.group(body);
+      weatherSummary = ui.text(WeatherRepository.summary(new DataRepository(this)), 13, ui.muted);
+      weatherSummary.setPadding(ui.dp(2), ui.dp(8), ui.dp(2), ui.dp(8));
+      weatherSummary.setContentDescription("Estado do clima");
+      weatherCard.addView(weatherSummary);
+      weatherCard.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
+      showOverdue(body);
+    } else weatherSummary = null;
     if (weekView()) {
       new CalendarTimeline(this, 7, weekFirst());
       return;
@@ -388,13 +514,38 @@ public final class CalendarActivity extends Activity {
       case "DAY":
         new CalendarTimeline(this, 1, selected);
         break;
+      case "REMINDERS":
+        ui.note(body, "Lembretes locais deste app · não sincroniza com iCloud ou Google Tasks");
+        agenda(body, null, false);
+        break;
       case "LIST":
         ui.note(body, "Próximos 90 dias · " + ZoneId.systemDefault().getId());
         agenda(body, null, false);
         break;
       default:
         month(body, YearMonth.from(selected), false);
+        TextView dateHeading =
+            ui.text(
+                cap(selected.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", PT))), 18, ui.ink);
+        dateHeading.setPadding(ui.dp(20), ui.dp(16), ui.dp(20), ui.dp(4));
+        body.addView(dateHeading);
+        agenda(body, selected, false);
     }
+  }
+
+  void showOverdue(LinearLayout parent) {
+    List<CalendarStore.Item> overdue = new ArrayList<>();
+    long today = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    for (CalendarStore.Item x : items)
+      if (x.reminder && !x.completed && x.start < today) overdue.add(x);
+    if (overdue.isEmpty() || mode.equals("REMINDERS")) return;
+    LinearLayout card = ui.group(parent);
+    TextView title = ui.text("Lembretes pendentes · " + overdue.size(), 16, ui.ink);
+    title.setPadding(0, ui.dp(6), 0, ui.dp(6));
+    card.addView(title);
+    title.setMinHeight(ui.dp(40));
+    title.setContentDescription("Lembretes pendentes · " + overdue.size());
+    card.setOnClickListener(v -> change("REMINDERS"));
   }
 
   static String cap(String s) {
@@ -552,8 +703,10 @@ public final class CalendarActivity extends Activity {
     LocalDate previous = null;
     for (CalendarStore.Item x : items) {
       if (date != null && !on(date).contains(x)) continue;
+      if (mode.equals("REMINDERS") && !x.reminder) continue;
       if (date == null
           && !search
+          && !mode.equals("REMINDERS")
           && x.start < selected.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
         continue;
       String needle = query.toLowerCase(PT);
@@ -655,7 +808,7 @@ public final class CalendarActivity extends Activity {
 
   void openEditor(CalendarStore.Item x) {
     Intent i = new Intent(this, EventEditorActivity.class);
-    if (x == null) x = newItem(false);
+    if (x == null) x = newItem(mode.equals("REMINDERS"));
     i.putExtra("draft", EventEditorActivity.serialize(x));
     startActivity(i);
   }
@@ -691,19 +844,19 @@ public final class CalendarActivity extends Activity {
       "Dia",
       "Semana",
       "Lista · próximos 90 dias",
-      completed ? "Ocultar lembretes concluídos" : "Mostrar lembretes concluídos",
-      "Preferências"
+      "Lembretes locais",
+      completed ? "Ocultar lembretes concluídos" : "Mostrar lembretes concluídos"
     };
     new AlertDialog.Builder(this)
         .setTitle("Visualização")
         .setItems(
             labels,
             (d, w) -> {
-              if (w == 5) {
+              if (w == 5) change("REMINDERS");
+              else if (w == 6) {
                 completed = !completed;
                 load();
-              } else if (w == 6) startActivity(new Intent(this, CalendarPreferencesActivity.class));
-              else change(new String[] {"YEAR", "MONTH", "DAY", "WEEK", "LIST"}[w]);
+              } else change(new String[] {"YEAR", "MONTH", "DAY", "WEEK", "LIST"}[w]);
             })
         .show();
   }

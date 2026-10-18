@@ -54,7 +54,7 @@ async function draw(input){
  // Match the measured outer superellipse. Android launchers do not supply iOS clipping.
  const p=new Path2D(),rx=102,ry=101,n=2/2.45;const corners=[[rx,ry,Math.PI,1.5*Math.PI],[1092-rx,ry,1.5*Math.PI,2*Math.PI],[1092-rx,510-ry,0,.5*Math.PI],[rx,510-ry,.5*Math.PI,Math.PI]];
  corners.forEach(([x,y,a,b],i)=>{for(let j=0;j<=64;j++){const t=a+(b-a)*j/64,c=Math.cos(t),s=Math.sin(t),px=x+rx*Math.sign(c)*Math.abs(c)**n,py=y+ry*Math.sign(s)*Math.abs(s)**n;if(!i&&!j)p.moveTo(px,py);else p.lineTo(px,py);}});p.closePath();g.clip(p);g.drawImage(result.image,0,0);g.restore();
- window.lastRender={count:result.count,version:result.version,weatherHours:result.weatherHours,weatherDays:result.weatherDays,temperatureLabels};
+ window.lastRender={count:result.count,eventItems:result.eventItems,reminderItems:result.reminderItems,version:result.version,weatherHours:result.weatherHours,weatherDays:result.weatherDays,temperatureLabels};
  if(window.Android)Android.rendered(canvas.toDataURL('image/png').split(',')[1],JSON.stringify(window.lastRender));
  return window.lastRender;
  }catch(e){document.getElementById('error').textContent='Não foi possível desenhar a timeline.';if(window.Android)Android.failed(String(e));throw e;}

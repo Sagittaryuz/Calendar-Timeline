@@ -180,6 +180,9 @@ final class BackupStore {
     SharedPreferences.Editor editor =
         preferences
             .edit()
+            // Restored coordinates are fixed; permission/automatic tracking are never imported.
+            .putBoolean("weatherAuto", false)
+            .putBoolean("weatherPendingLocation", false)
             .putInt("hours", s.getInt("hours"))
             .putString("theme", s.getString("theme"))
             .putBoolean("demo", s.getBoolean("demo"))

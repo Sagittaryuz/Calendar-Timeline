@@ -1,9 +1,11 @@
 package com.sagittaryuz.calendartimeline;
 
 import android.app.*;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.*;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.view.*;
 import android.widget.*;
 
@@ -11,7 +13,7 @@ import android.widget.*;
 final class CalendarUi {
   final Activity a;
   final boolean dark;
-  final int bg, card, ink, muted, line, soft, red = 0xffff3b30;
+  final int bg, card, ink, muted, line, soft, red;
 
   CalendarUi(Activity a) {
     this.a = a;
@@ -21,9 +23,10 @@ final class CalendarUi {
     bg = dark ? 0xff101012 : 0xfff9f9fb;
     card = dark ? 0xff202023 : 0xffffffff;
     ink = dark ? 0xfff5f5f7 : 0xff151517;
-    muted = dark ? 0xffa2a2a9 : 0xff787880;
+    muted = dark ? 0xffa2a2a9 : 0xff666670;
     line = dark ? 0xff343437 : 0xffe4e4e8;
     soft = dark ? 0xff303034 : 0xffeeeef0;
+    red = dark ? 0xffff6961 : 0xffc52e26;
     a.getWindow().setStatusBarColor(bg);
     a.getWindow().setNavigationBarColor(bg);
     a.getWindow()
@@ -58,6 +61,31 @@ final class CalendarUi {
     return g;
   }
 
+  GradientDrawable backdrop() {
+    return new GradientDrawable(
+        GradientDrawable.Orientation.TL_BR,
+        dark ? new int[] {0xff151b26, bg, 0xff20191c} : new int[] {0xffeef4ff, bg, 0xfffff2ee});
+  }
+
+  /** Layered frosted surfaces; opaque enough for text even without platform blur. */
+  android.graphics.drawable.Drawable glass(float radius) {
+    GradientDrawable g =
+        new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            dark
+                ? new int[] {0xf2414652, 0xf2222630, 0xf2343038}
+                : new int[] {0xfaffffff, 0xf2eef2fa, 0xfafaf3f1});
+    g.setCornerRadius(dp(radius));
+    g.setStroke(dp(1), dark ? 0xff626774 : 0xffffffff);
+    return new RippleDrawable(ColorStateList.valueOf(dark ? 0x334f91ff : 0x224979bb), g, null);
+  }
+
+  void frost(View view, float radius) {
+    view.setBackground(glass(radius));
+    view.setElevation(dp(3));
+    view.setClipToOutline(true);
+  }
+
   TextView text(String s, float size, int color) {
     TextView v = new TextView(a);
     v.setText(s);
@@ -72,7 +100,7 @@ final class CalendarUi {
     v.setPadding(dp(14), dp(10), dp(14), dp(10));
     v.setMinHeight(dp(48));
     v.setGravity(Gravity.CENTER);
-    v.setBackground(round(card, 24));
+    frost(v, 24);
     v.setOnClickListener(w -> run.run());
     return v;
   }
@@ -114,6 +142,18 @@ final class CalendarUi {
             } else if (type.equals("next")) {
               c.drawLine(-4, -8, 4, 0, p);
               c.drawLine(4, 0, -4, 8, p);
+            } else if (type.equals("settings")) {
+              c.drawCircle(0, 0, 7, p);
+              c.drawCircle(0, 0, 2.5f, p);
+              for (int i = 0; i < 8; i++) {
+                double angle = i * Math.PI / 4;
+                c.drawLine(
+                    (float) Math.cos(angle) * 7,
+                    (float) Math.sin(angle) * 7,
+                    (float) Math.cos(angle) * 10,
+                    (float) Math.sin(angle) * 10,
+                    p);
+              }
             } else {
               c.drawCircle(0, 0, 8, p);
               c.drawCircle(0, 0, 2, p);
@@ -122,7 +162,7 @@ final class CalendarUi {
           }
         };
     v.setContentDescription(description);
-    v.setBackground(round(card, 25));
+    frost(v, 25);
     v.setLayoutParams(new LinearLayout.LayoutParams(dp(48), dp(48)));
     v.setOnClickListener(w -> run.run());
     return v;
@@ -137,7 +177,7 @@ final class CalendarUi {
   LinearLayout group(LinearLayout parent) {
     LinearLayout g = column();
     g.setPadding(dp(16), dp(4), dp(16), dp(4));
-    g.setBackground(round(card, 22));
+    frost(g, 22);
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
     lp.setMargins(dp(16), dp(10), dp(16), dp(6));
     parent.addView(g, lp);
@@ -179,7 +219,7 @@ final class CalendarUi {
         .setMessage(
             e instanceof SecurityException
                 ? "A permissão de agenda não está disponível. Você pode continuar com lembretes"
-                      + " locais."
+                    + " locais."
                 : e instanceof IllegalArgumentException
                     ? e.getMessage()
                     : "Os dados foram preservados. Tente novamente.")

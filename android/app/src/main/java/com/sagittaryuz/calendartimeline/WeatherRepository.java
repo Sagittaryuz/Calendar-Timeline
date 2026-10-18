@@ -5,7 +5,7 @@ import java.net.*;
 import java.time.*;
 import org.json.*;
 
-/** Optional forecast data. Coordinates are never inferred or requested without opt-in. */
+/** Open-Meteo is also the original Scriptable's public provider. No account or key. */
 final class WeatherRepository {
   interface Client {
     JSONObject get(String url) throws Exception;
@@ -28,7 +28,12 @@ final class WeatherRepository {
 
   void addTo(JSONObject input, boolean force) throws JSONException {
     if (!store.preferences.getBoolean("weather", false)) {
-      finish("Clima desativado · toque em Configurar clima");
+      finish(
+          store.preferences.getBoolean("weatherPendingLocation", false)
+              ? "Clima aguardando localização · "
+                  + store.preferences.getString(
+                      "locationStatus", "tente novamente em Configurações")
+              : "Clima desativado · ative em Configurações");
       return;
     }
     double lat, lon;
@@ -36,7 +41,7 @@ final class WeatherRepository {
       lat = coordinate(store.preferences.getString("latitude", ""), 90);
       lon = coordinate(store.preferences.getString("longitude", ""), 180);
     } catch (IllegalArgumentException ex) {
-      finish("Clima sem localização · configure latitude e longitude");
+      finish("Clima sem localização · permita localização ou informe coordenadas em Configurações");
       return;
     }
     input.put("latitude", lat).put("longitude", lon);
@@ -88,6 +93,41 @@ final class WeatherRepository {
   private void finish(String message) {
     status = message;
     store.preferences.edit().putString("weatherStatus", message).apply();
+  }
+
+  static String summary(DataRepository store) {
+    if (store.preferences.getBoolean("demo", false))
+      return "Demonstração · eventos e clima fictícios no widget";
+    if (!store.preferences.getBoolean("weather", false))
+      return store.preferences.getBoolean("weatherPendingLocation", false)
+          ? store.preferences.getString(
+              "locationStatus", "Clima aguardando localização · Configurações")
+          : "Clima desativado · Configurações";
+    String status = store.preferences.getString("weatherStatus", "Clima · aguardando atualização");
+    try {
+      double lat = coordinate(store.preferences.getString("latitude", ""), 90);
+      double lon = coordinate(store.preferences.getString("longitude", ""), 180);
+      JSONObject cache = store.read("weather.json");
+      long now = System.currentTimeMillis();
+      String scope = lat + "," + lon + "," + ZoneId.systemDefault();
+      if (cache == null
+          || !scope.equals(cache.optString("scope"))
+          || now < cache.optLong("fetchedAt")
+          || now - cache.optLong("fetchedAt") >= 24 * 3600000L) return status;
+      JSONObject response = cache.getJSONObject("response"), h = response.getJSONObject("hourly");
+      JSONArray times = h.getJSONArray("time"), temperatures = h.getJSONArray("temperature_2m");
+      for (int i = 0; i < times.length() && i < temperatures.length(); i++) {
+        long t =
+            LocalDateTime.parse(times.getString(i))
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        if (t <= now && now < t + 3600000L && !temperatures.isNull(i))
+          return Math.round(temperatures.getDouble(i)) + "° · " + status;
+      }
+    } catch (Exception ignored) {
+    }
+    return status;
   }
 
   static double coordinate(String text, int limit) {

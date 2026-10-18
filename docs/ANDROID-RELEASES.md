@@ -31,7 +31,7 @@ Depois das verificações, a publicação pode ser feita de forma deliberada, co
 
 O app compara `versionCode`, pacote, SDK mínimo e certificado público instalado. Assinatura diferente apresenta orientação para exportar dados e planejar migração; não oferece essa instalação como atualização compatível. Links aceitos são HTTPS no caminho exato de Releases deste repositório, sem usuário, porta, query ou fragmento. A leitura do manifesto aceita somente redirecionamentos HTTPS para os hosts de assets do GitHub e tem limites de tamanho, tempo e quantidade de redirecionamentos.
 
-O download do APK abre no navegador após confirmação no app. O navegador/instalador do Android decide as autorizações e confirmações de instalação. O app não solicita `REQUEST_INSTALL_PACKAGES`, armazenamento amplo, notificações ou GPS. O instalador Android valida a assinatura real do APK; a consulta do app valida os metadados, sem baixar o APK para calcular seu hash.
+O download do APK abre no navegador após confirmação no app. O navegador/instalador do Android decide as autorizações e confirmações de instalação. O atualizador não solicita `REQUEST_INSTALL_PACKAGES` nem armazenamento amplo. O app oferece separadamente localização aproximada em primeiro plano para clima e notificações opcionais para alertas locais. O instalador Android valida a assinatura real do APK; a consulta do app valida os metadados, sem baixar o APK para calcular seu hash.
 
 Ausência de Release, versão igual/mais antiga, metadados inválidos, incompatibilidade e falha de conexão têm estados distintos. Uma versão compatível já consultada pode permanecer como informação em cache por até sete dias; uma falha de rede não renova o horário da consulta.
 

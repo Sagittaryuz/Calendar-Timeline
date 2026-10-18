@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.APP_CALENDAR"/></intent></queries>
@@ -10,8 +11,9 @@
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
         <activity android:name=".CalendarPreferencesActivity" android:exported="false" android:theme="@style/CalendarTheme"/>
+        <activity android:name=".OnboardingActivity" android:exported="false" android:theme="@style/CalendarTheme"/>
         <activity android:name=".MaintenanceActivity" android:exported="false" android:configChanges="orientation|screenSize"/>
-        <activity android:name=".MainActivity" android:exported="false"/>
+        <activity android:name=".MainActivity" android:exported="false" android:theme="@style/CalendarTheme"/>
         <activity android:name=".EventEditorActivity" android:exported="false" android:theme="@style/CalendarTheme" android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".EventDetailsActivity" android:exported="false" android:theme="@style/CalendarTheme"/>
         <receiver android:name=".ReminderAlerts" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/><action android:name="android.intent.action.TIME_SET"/><action android:name="android.intent.action.TIMEZONE_CHANGED"/></intent-filter></receiver>

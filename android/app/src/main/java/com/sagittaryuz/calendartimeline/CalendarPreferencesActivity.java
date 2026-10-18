@@ -33,10 +33,10 @@ public final class CalendarPreferencesActivity extends Activity {
 
   void render() {
     LinearLayout root = ui.column();
-    root.setBackgroundColor(ui.bg);
+    root.setBackground(ui.backdrop());
     root.setFitsSystemWindows(true);
     setContentView(root);
-    root.addView(ui.action("‹ Calendário", this::finish));
+    root.addView(ui.action("‹ Configurações", this::finish));
     ScrollView scroll = new ScrollView(this);
     root.addView(scroll);
     LinearLayout body = ui.column();
@@ -86,12 +86,6 @@ public final class CalendarPreferencesActivity extends Activity {
                 "defaultAlert",
                 EventEditorActivity.ALERT_LABELS,
                 EventEditorActivity.ALERTS));
-    LinearLayout more = ui.group(body);
-    ui.fieldRow(
-        more,
-        "Widget, clima e backup",
-        "Abrir ajustes",
-        () -> startActivity(new Intent(this, MainActivity.class)));
     ui.note(
         body,
         "As preferências se aplicam a novos eventos locais. Eventos existentes mantêm seus horários"

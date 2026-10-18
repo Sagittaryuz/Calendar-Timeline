@@ -35,7 +35,9 @@ final class RenderEngine {
         android.view.View.MeasureSpec.makeMeasureSpec(1092, android.view.View.MeasureSpec.EXACTLY),
         android.view.View.MeasureSpec.makeMeasureSpec(510, android.view.View.MeasureSpec.EXACTLY));
     web.layout(0, 0, 1092, 510);
-    web.onResume();
+    // Only canvas pixels are consumed. Keep visual frame/animation work paused; JavaScript
+    // and evaluateJavascript still run (WebView.onPause contract), without painting a hidden view.
+    web.onPause();
     web.setWebChromeClient(
         new WebChromeClient() {
           @Override

@@ -44,6 +44,19 @@ public class CalendarUiTest extends InstrumentationTestCase {
     for (int i = 0; i < 100; i++) {
       AccessibilityNodeInfo n = find(value);
       if (n != null) return n;
+      if (i == 8) {
+        AccessibilityNodeInfo root = getInstrumentation().getUiAutomation().getRootInActiveWindow();
+        ArrayDeque<AccessibilityNodeInfo> nodes = new ArrayDeque<>();
+        if (root != null) nodes.add(root);
+        while (!nodes.isEmpty()) {
+          AccessibilityNodeInfo candidate = nodes.remove();
+          if (candidate.isVisibleToUser()
+              && candidate.isScrollable()
+              && candidate.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) break;
+          for (int c = 0; c < candidate.getChildCount(); c++)
+            if (candidate.getChild(c) != null) nodes.add(candidate.getChild(c));
+        }
+      }
       Thread.sleep(400);
     }
     fail("UI absent: " + value);
@@ -105,6 +118,7 @@ public class CalendarUiTest extends InstrumentationTestCase {
 
   void capture(String name) throws Exception {
     android.util.Log.i("TimelineCalendarQa", "Capture: " + name);
+    getInstrumentation().waitForIdleSync();
     Thread.sleep(1200);
     Bitmap b = getInstrumentation().getUiAutomation().takeScreenshot();
     assertNotNull(b);
@@ -125,6 +139,7 @@ public class CalendarUiTest extends InstrumentationTestCase {
   }
 
   void launchHome() throws Exception {
+    context.getSharedPreferences("settings", 0).edit().putBoolean("onboardingV5", true).commit();
     CalendarActivity home =
         (CalendarActivity)
             getInstrumentation()

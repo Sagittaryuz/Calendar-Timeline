@@ -9,7 +9,7 @@ import org.json.*;
 /** Forecast/cache regressions with synthetic temperatures and public city coordinates only. */
 public final class WeatherTest extends InstrumentationTestCase {
   DataRepository store;
-  String savedPreferences;
+  java.util.Map<String, ?> savedPreferences;
   JSONObject savedCache;
   long now;
 
@@ -17,7 +17,7 @@ public final class WeatherTest extends InstrumentationTestCase {
   protected void setUp() throws Exception {
     super.setUp();
     store = new DataRepository(getInstrumentation().getTargetContext());
-    savedPreferences = new JSONObject(store.preferences.getAll()).toString();
+    savedPreferences = new java.util.HashMap<>(store.preferences.getAll());
     savedCache = store.read("weather.json");
     now = System.currentTimeMillis();
     store.delete("weather.json");
@@ -36,14 +36,15 @@ public final class WeatherTest extends InstrumentationTestCase {
     store.delete("weather.json");
     if (savedCache != null) store.save("weather.json", savedCache);
     SharedPreferences.Editor e = store.preferences.edit().clear();
-    JSONObject p = new JSONObject(savedPreferences);
-    for (java.util.Iterator<String> keys = p.keys(); keys.hasNext(); ) {
-      String k = keys.next();
-      Object v = p.get(k);
+    for (java.util.Map.Entry<String, ?> entry : savedPreferences.entrySet()) {
+      String k = entry.getKey();
+      Object v = entry.getValue();
       if (v instanceof Boolean) e.putBoolean(k, (Boolean) v);
       else if (v instanceof Integer) e.putInt(k, (Integer) v);
-      else if (v instanceof Number) e.putLong(k, ((Number) v).longValue());
-      else e.putString(k, String.valueOf(v));
+      else if (v instanceof Long) e.putLong(k, (Long) v);
+      else if (v instanceof Float) e.putFloat(k, (Float) v);
+      else if (v instanceof java.util.Set) e.putStringSet(k, (java.util.Set<String>) v);
+      else e.putString(k, (String) v);
     }
     e.commit();
     super.tearDown();
@@ -72,8 +73,39 @@ public final class WeatherTest extends InstrumentationTestCase {
                 .put("temperature_2m_max", new JSONArray().put(29)));
   }
 
+  public void testCalendarSummaryUsesSameFreshCacheAndRejectsWrongLocation() throws Exception {
+    JSONObject input = new JSONObject();
+    new WeatherRepository(store, now, url -> forecast()).addTo(input, true);
+    assertTrue(WeatherRepository.summary(store), WeatherRepository.summary(store).contains("°"));
+    store.preferences.edit().putString("longitude", "-40.0").commit();
+    assertFalse(WeatherRepository.summary(store).contains("°"));
+    store.preferences.edit().putBoolean("weather", false).commit();
+    assertTrue(WeatherRepository.summary(store).contains("desativado"));
+  }
+
   WeatherRepository service(WeatherRepository.Client c) {
     return new WeatherRepository(store, now, c);
+  }
+
+  public void testPendingLocationReportsProviderReasonWithoutNetwork() throws Exception {
+    store
+        .preferences
+        .edit()
+        .putBoolean("weather", false)
+        .putBoolean("weatherPendingLocation", true)
+        .putString("locationStatus", "Sem localização recente")
+        .commit();
+    WeatherRepository weather =
+        service(
+            url -> {
+              fail("No forecast request before a location fix");
+              return null;
+            });
+    JSONObject input = new JSONObject();
+    weather.addTo(input, true);
+    assertTrue(weather.status, weather.status.contains("Sem localização recente"));
+    assertFalse(input.has("weatherResponse"));
+    assertEquals("Sem localização recente", WeatherRepository.summary(store));
   }
 
   public void testMissingLocationDoesNotFetchOrBreakCalendar() throws Exception {
