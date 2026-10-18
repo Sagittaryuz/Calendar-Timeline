@@ -1,0 +1,47 @@
+name: Publish validated Android 0.5
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publication:
+        description: Publish the verified Android 0.5 APK and manifest
+        required: true
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: android-v0.5.0-debug-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Sagittaryuz/Calendar-Timeline' && github.ref == 'refs/heads/main' && inputs.confirm_publication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch the reviewed public commit without storing credentials
+        shell: bash
+        env:
+          REVIEWED_SHA: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init reviewed
+          git -C reviewed remote add origin https://github.com/Sagittaryuz/Calendar-Timeline.git
+          git -C reviewed fetch --no-tags --depth=1 origin "$REVIEWED_SHA"
+          git -C reviewed checkout --detach FETCH_HEAD
+
+      - name: Verify the exact previously tested bytes
+        working-directory: reviewed
+        run: python3 tools/publish-validated-android.py release-inputs/android/0.5.0-debug --verify-only
+
+      - name: Upload, verify and publish only the fixed draft release
+        working-directory: reviewed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publish-validated-android.py release-inputs/android/0.5.0-debug

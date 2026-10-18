@@ -1,0 +1,14 @@
+{
+  "format": "calendar-timeline-android-release",
+  "schemaVersion": 1,
+  "tested": true,
+  "applicationId": "com.sagittaryuz.calendartimeline",
+  "versionCode": 7,
+  "versionName": "0.5.0-debug",
+  "minSdk": 26,
+  "signingCertificateSha256": "78a17f3f0779bbc15ff3c6ffdb711075d769565e8a79a3d273536bc73633bb6d",
+  "buildType": "debug",
+  "channel": "test",
+  "apk": "Calendar-Timeline-Android-debug.apk",
+  "sha256": "181daf8f321726dcad2dcc52153f431ebacd30bc650f7b789f878f6441dce28e"
+}
