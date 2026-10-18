@@ -50,7 +50,7 @@ public final class EventDetailsActivity extends Activity {
                 main.post(this::finish);
                 return;
               }
-            } else item = new CalendarStore(this).event(item.id);
+            } else item = new CalendarStore(this).occurrence(item.id, item.start, item.end);
             main.post(
                 () -> {
                   if (!isDestroyed()) render();
@@ -81,9 +81,10 @@ public final class EventDetailsActivity extends Activity {
           ui.action(
               "Editar",
               () ->
-                  startActivity(
+                  startActivityForResult(
                       new Intent(this, EventEditorActivity.class)
-                          .putExtra("draft", EventEditorActivity.serialize(item)))));
+                          .putExtra("draft", EventEditorActivity.serialize(item)),
+                      21)));
     root.addView(bar);
     ScrollView scroll = new ScrollView(this);
     LinearLayout body = ui.column();
@@ -91,12 +92,7 @@ public final class EventDetailsActivity extends Activity {
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
     ui.title(body, item.title);
     LinearLayout card = ui.group(body);
-    long start = getIntent().getLongExtra("instanceStart", item.start),
-        end = getIntent().getLongExtra("instanceEnd", item.end);
-    if (item.rule.isEmpty()) {
-      start = item.start;
-      end = item.end;
-    }
+    long start = item.start, end = item.end;
     ZoneId zone = item.allDay ? ZoneId.systemDefault() : ZoneId.of(item.zone);
     DateTimeFormatter fmt =
         DateTimeFormatter.ofPattern(
@@ -150,19 +146,35 @@ public final class EventDetailsActivity extends Activity {
           ui.action(item.reminder ? "Apagar lembrete" : "Apagar evento", this::confirmDelete));
   }
 
+  @Override
+  protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    if (request == 21 && result == RESULT_OK && data != null && !item.reminder) {
+      item.id = data.getLongExtra("id", item.id);
+      item.start = data.getLongExtra("start", item.start);
+      item.end = data.getLongExtra("end", item.end);
+    }
+  }
+
   void confirmDelete() {
+    if (!item.seriesRule.isEmpty() && item.occurrenceStart != 0)
+      OccurrenceScope.choose(this, "Apagar evento recorrente", this::confirmDeleteScope);
+    else confirmDeleteScope(CalendarStore.Scope.SINGLE);
+  }
+
+  void confirmDeleteScope(CalendarStore.Scope scope) {
+    String subject =
+        scope == CalendarStore.Scope.SERIES
+            ? "a série inteira"
+            : scope == CalendarStore.Scope.FUTURE
+                ? "esta e as futuras ocorrências"
+                : "esta ocorrência";
     new AlertDialog.Builder(this)
         .setTitle(
             item.reminder
                 ? "Apagar lembrete?"
-                : item.rule.isEmpty() ? "Apagar evento?" : "Apagar a série inteira?")
-        .setMessage(
-            item.reminder
-                ? "O lembrete será removido deste aparelho."
-                : item.rule.isEmpty()
-                    ? "Este evento será removido da agenda local."
-                    : "Todas as ocorrências desta série serão removidas. Esta ação não apaga apenas"
-                        + " o dia selecionado.")
+                : item.seriesRule.isEmpty() ? "Apagar evento?" : "Apagar " + subject + "?")
+        .setMessage("A exclusão será aplicada somente ao escopo escolhido neste aparelho.")
         .setNegativeButton("Cancelar", null)
         .setPositiveButton(
             "Apagar",
@@ -171,7 +183,7 @@ public final class EventDetailsActivity extends Activity {
                     () -> {
                       try {
                         if (item.reminder) new ReminderStore(this).delete(item.localId);
-                        else new CalendarStore(this).delete(item.id);
+                        else new CalendarStore(this).deleteScoped(item, scope);
                         main.post(
                             () -> {
                               RefreshCoordinator.refresh(this, null);

@@ -48,7 +48,8 @@ final class CalendarStore {
   }
 
   static final class Item {
-    long id, calendarId, start, end;
+    long id, calendarId, start, end, occurrenceStart, occurrenceEnd, originalId;
+    String seriesRule = "";
     String title = "", location = "", notes = "", zone = ZoneId.systemDefault().getId(), rule = "";
     boolean allDay, reminder, completed, editable;
     int color = 0xff007aff, alert = -1, priority;
@@ -58,6 +59,10 @@ final class CalendarStore {
       Item x = new Item();
       x.id = id;
       x.calendarId = calendarId;
+      x.occurrenceStart = occurrenceStart;
+      x.occurrenceEnd = occurrenceEnd;
+      x.originalId = originalId;
+      x.seriesRule = seriesRule;
       x.start = start;
       x.end = end;
       x.title = title;
@@ -223,7 +228,10 @@ final class CalendarStore {
               "eventLocation",
               "description",
               "rdate",
-              "original_id"
+              "original_id",
+              "originalInstanceTime",
+              "exrule",
+              "exdate"
             },
             null,
             null,
@@ -248,7 +256,9 @@ final class CalendarStore {
           x.editable = a.editable();
         }
       // Preserve unsupported recurring exceptions by making them read-only, never silently flatten.
-      if (!c.isNull(11) || !c.isNull(12)) x.editable = false;
+      if (!c.isNull(11) || !c.isNull(14) || !c.isNull(15)) x.editable = false;
+      x.originalId = c.isNull(12) ? 0 : c.getLong(12);
+      x.occurrenceStart = c.isNull(13) ? 0 : c.getLong(13);
       if (x.allDay) {
         x.start = civilToDevice(x.start);
         x.end = civilToDevice(x.end);
@@ -309,34 +319,13 @@ final class CalendarStore {
     Item previous = x.id > 0 ? event(x.id) : null;
     if (previous != null && !previous.editable)
       throw new SecurityException("Este evento está disponível somente para leitura");
+    if (previous != null && previous.originalId > 0 && previous.calendarId != x.calendarId)
+      throw new IllegalArgumentException(
+          "Uma ocorrência modificada deve permanecer na agenda da série original.");
     // Editing a title/date must preserve additional system alerts unless the alert is changed.
     boolean replaceAlerts = previous == null || previous.alert != x.alert;
-    ContentValues v = new ContentValues();
-    v.put("calendar_id", x.calendarId);
-    v.put("title", x.title.trim());
-    v.put("eventLocation", x.location);
-    v.put("description", x.notes);
-    v.put("allDay", x.allDay ? 1 : 0);
-    v.put("eventTimezone", x.allDay ? "UTC" : x.zone);
-    v.put("dtstart", x.allDay ? deviceToCivil(x.start) : x.start);
-    if (replaceAlerts) v.put("hasAlarm", x.alert >= 0 ? 1 : 0);
-    if (x.rule.isEmpty()) {
-      v.put("dtend", x.allDay ? deviceToCivil(x.end) : x.end);
-      v.putNull("duration");
-      v.putNull("rrule");
-    } else {
-      v.putNull("dtend");
-      v.put(
-          "duration",
-          x.allDay
-              ? "P"
-                  + java.time.temporal.ChronoUnit.DAYS.between(
-                      x.date(),
-                      Instant.ofEpochMilli(x.end).atZone(ZoneId.systemDefault()).toLocalDate())
-                  + "D"
-              : "PT" + ((x.end - x.start) / 1000) + "S");
-      v.put("rrule", x.rule);
-    }
+    ContentValues v = values(x);
+    if (!replaceAlerts) v.remove("hasAlarm");
     ArrayList<ContentProviderOperation> ops = new ArrayList<>();
     if (x.id == 0)
       ops.add(
@@ -364,6 +353,7 @@ final class CalendarStore {
       else r.withValue("event_id", x.id);
       ops.add(r.build());
     }
+    if (previous != null && previous.originalId > 0) refreshSeries(ops, event(previous.originalId));
     ContentProviderResult[] result = resolver.applyBatch(CalendarContract.AUTHORITY, ops);
     return x.id == 0 ? ContentUris.parseId(result[0].uri) : x.id;
   }
@@ -374,5 +364,324 @@ final class CalendarStore {
     if (resolver.delete(
             ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null)
         != 1) throw new IllegalStateException("Evento não encontrado");
+  }
+
+  enum Scope {
+    SINGLE,
+    FUTURE,
+    SERIES
+  }
+
+  Item occurrence(long id, long start, long end) {
+    Item x = event(id);
+    if (!x.rule.isEmpty()) {
+      x.seriesRule = x.rule;
+      x.occurrenceStart = start;
+      x.occurrenceEnd = end;
+      x.start = start;
+      x.end = end;
+    }
+    return x;
+  }
+
+  static ContentValues values(Item x) {
+    ContentValues v = new ContentValues();
+    v.put("calendar_id", x.calendarId);
+    v.put("title", x.title.trim());
+    v.put("eventLocation", x.location);
+    v.put("description", x.notes);
+    v.put("allDay", x.allDay ? 1 : 0);
+    v.put("eventTimezone", x.allDay ? "UTC" : x.zone);
+    v.put("dtstart", x.allDay ? deviceToCivil(x.start) : x.start);
+    v.put("hasAlarm", x.alert >= 0 ? 1 : 0);
+    if (x.originalId > 0) {
+      v.put("original_id", x.originalId);
+      v.put("originalInstanceTime", x.occurrenceStart);
+    }
+    if (x.rule.isEmpty()) {
+      v.put("dtend", x.allDay ? deviceToCivil(x.end) : x.end);
+      v.putNull("duration");
+      v.putNull("rrule");
+    } else {
+      v.putNull("dtend");
+      v.put(
+          "duration",
+          x.allDay
+              ? "P"
+                  + java.time.temporal.ChronoUnit.DAYS.between(
+                      x.date(),
+                      Instant.ofEpochMilli(x.end).atZone(ZoneId.systemDefault()).toLocalDate())
+                  + "D"
+              : "PT" + ((x.end - x.start) / 1000) + "S");
+      v.put("rrule", x.rule);
+    }
+    return v;
+  }
+
+  Uri ownedLocalUri() {
+    return CalendarContract.Events.CONTENT_URI
+        .buildUpon()
+        .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+        .appendQueryParameter("account_name", BackupStore.APP_ID)
+        .appendQueryParameter("account_type", LOCAL)
+        .build();
+  }
+
+  String ensureLocalIdentity(Item master) {
+    boolean owned = false;
+    for (Agenda a : calendars())
+      if (a.id == master.calendarId)
+        owned = LOCAL.equals(a.type) && BackupStore.APP_ID.equals(a.account);
+    if (!owned)
+      throw new IllegalArgumentException(
+          "Exceções são editáveis nas agendas locais criadas por este app.");
+    try (Cursor c =
+        resolver.query(
+            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, master.id),
+            new String[] {"_sync_id"},
+            null,
+            null,
+            null)) {
+      if (c == null || !c.moveToFirst()) throw new IllegalArgumentException("Série não encontrada");
+      String uid = c.getString(0);
+      if (uid != null && !uid.isEmpty()) return uid;
+    }
+    // AOSP's recurrence expansion matches exceptions through original_sync_id, even in
+    // a LOCAL account. This UUID is only a local relation key; no sync service exists.
+    String uid = UUID.randomUUID().toString();
+    ContentValues v = new ContentValues();
+    v.put("_sync_id", uid);
+    v.put("dirty", 1);
+    if (resolver.update(ContentUris.withAppendedId(ownedLocalUri(), master.id), v, null, null) != 1)
+      throw new IllegalStateException("Não foi possível preparar a série local");
+    return uid;
+  }
+
+  void refreshSeries(ArrayList<ContentProviderOperation> ops, Item master) {
+    // AOSP 11 skips instance rebuilding for partial updates and expands only the exception
+    // after an exception insert. A full master update rebuilds the entire local recurrence.
+    ops.add(
+        ContentProviderOperation.newUpdate(
+                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, master.id))
+            .withValues(values(master))
+            .withExpectedCount(1)
+            .build());
+  }
+
+  List<int[]> alerts(long event) {
+    List<int[]> out = new ArrayList<>();
+    try (Cursor c =
+        resolver.query(
+            CalendarContract.Reminders.CONTENT_URI,
+            new String[] {"minutes", "method"},
+            "event_id=?",
+            new String[] {Long.toString(event)},
+            null)) {
+      if (c == null) throw new IllegalStateException("Alertas indisponíveis");
+      while (c.moveToNext()) out.add(new int[] {c.getInt(0), c.getInt(1)});
+    }
+    return out;
+  }
+
+  void copyAlerts(ArrayList<ContentProviderOperation> ops, Item master, Item edit, int ref) {
+    List<int[]> list = master.alert == edit.alert ? alerts(master.id) : new ArrayList<>();
+    if (master.alert != edit.alert && edit.alert >= 0) list.add(new int[] {edit.alert, 1});
+    for (int[] a : list)
+      ops.add(
+          ContentProviderOperation.newInsert(CalendarContract.Reminders.CONTENT_URI)
+              .withValueBackReference("event_id", ref)
+              .withValue("minutes", a[0])
+              .withValue("method", a[1])
+              .build());
+  }
+
+  Item checkedMaster(Item x) {
+    if (!writable()) throw new SecurityException("Permita editar a agenda");
+    Item master = event(x.id);
+    if (!master.editable || master.calendarId != x.calendarId)
+      throw new IllegalArgumentException("Mantenha esta ocorrência na agenda local original.");
+    return master;
+  }
+
+  long saveScoped(Item x, Scope scope) throws Exception {
+    validate(x);
+    if (x.id == 0 || x.occurrenceStart == 0 || x.seriesRule.isEmpty()) return save(x);
+    Item master = checkedMaster(x);
+    if (!master.rule.equals(x.seriesRule))
+      throw new IllegalArgumentException("A série mudou. Abra o evento novamente.");
+    if (scope == Scope.SERIES) {
+      Item whole = x.copy();
+      ZoneId zone = ZoneId.of(master.zone);
+      LocalDateTime before = Instant.ofEpochMilli(x.occurrenceStart).atZone(zone).toLocalDateTime();
+      LocalDateTime after = Instant.ofEpochMilli(x.start).atZone(zone).toLocalDateTime();
+      whole.start =
+          Instant.ofEpochMilli(master.start)
+              .atZone(zone)
+              .toLocalDateTime()
+              .plus(Duration.between(before, after))
+              .atZone(zone)
+              .toInstant()
+              .toEpochMilli();
+      whole.end = whole.start + (x.end - x.start);
+      if (x.allDay)
+        whole.end =
+            whole
+                .date()
+                .plusDays(
+                    java.time.temporal.ChronoUnit.DAYS.between(
+                        x.date(),
+                        Instant.ofEpochMilli(x.end).atZone(ZoneId.systemDefault()).toLocalDate()))
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+      return save(whole);
+    }
+    ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+    long pivot = master.allDay ? deviceToCivil(x.occurrenceStart) : x.occurrenceStart;
+    if (scope == Scope.SINGLE) {
+      String localUid = ensureLocalIdentity(master);
+      Item one = x.copy();
+      one.rule = "";
+      ContentValues v = values(one);
+      v.put("original_id", master.id);
+      v.put("original_sync_id", localUid);
+      v.put("originalInstanceTime", pivot);
+      v.put("originalAllDay", master.allDay ? 1 : 0);
+      v.put("eventStatus", CalendarContract.Events.STATUS_CONFIRMED);
+      try (Cursor c =
+          resolver.query(
+              CalendarContract.Events.CONTENT_URI,
+              new String[] {"_id"},
+              "original_id=? AND originalInstanceTime=?",
+              new String[] {Long.toString(master.id), Long.toString(pivot)},
+              null)) {
+        if (c == null) throw new IllegalStateException("Exceções indisponíveis");
+        if (c.moveToFirst())
+          throw new IllegalArgumentException("A ocorrência mudou. Abra-a novamente.");
+      }
+      ops.add(
+          ContentProviderOperation.newInsert(CalendarContract.Events.CONTENT_URI)
+              .withValues(v)
+              .build());
+      copyAlerts(ops, master, one, 0);
+      refreshSeries(ops, master);
+      return ContentUris.parseId(resolver.applyBatch(CalendarContract.AUTHORITY, ops)[0].uri);
+    }
+    RecurrenceRule rule = new RecurrenceRule(master.rule);
+    int before =
+        rule.before(
+            master.allDay ? deviceToCivil(master.start) : master.start,
+            pivot,
+            master.allDay ? ZoneOffset.UTC : ZoneId.of(master.zone));
+    List<Long> futureExceptions = new ArrayList<>();
+    try (Cursor c =
+        resolver.query(
+            CalendarContract.Events.CONTENT_URI,
+            new String[] {"_id"},
+            "original_id=? AND originalInstanceTime>=?",
+            new String[] {Long.toString(master.id), Long.toString(pivot)},
+            null)) {
+      if (c == null) throw new IllegalStateException("Exceções indisponíveis");
+      while (c.moveToNext()) futureExceptions.add(c.getLong(0));
+    }
+    if (!futureExceptions.isEmpty()
+        && (x.start != x.occurrenceStart
+            || x.allDay != master.allDay
+            || !x.zone.equals(master.zone)
+            || !x.rule.equals(master.rule)))
+      throw new IllegalArgumentException(
+          "Há exceções futuras. Mantenha início, fuso e repetição ou edite cada ocorrência; nada"
+              + " foi alterado.");
+    if (before == 0) return save(x);
+    Item next = x.copy();
+    if (next.rule.equals(master.rule)) next.rule = rule.remaining(before);
+    ensureLocalIdentity(master);
+    String nextUid = UUID.randomUUID().toString();
+    ContentValues nextValues = values(next);
+    nextValues.put("_sync_id", nextUid);
+    nextValues.put("dirty", 1);
+    ops.add(ContentProviderOperation.newInsert(ownedLocalUri()).withValues(nextValues).build());
+    copyAlerts(ops, master, next, 0);
+    // Reparent explicit exceptions before truncating, preserving their custom dates and alerts.
+    for (long id : futureExceptions)
+      ops.add(
+          ContentProviderOperation.newUpdate(
+                  ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id))
+              .withValueBackReference("original_id", 0)
+              .withValue("original_sync_id", nextUid)
+              .withExpectedCount(1)
+              .build());
+    Item past = master.copy();
+    past.rule = rule.through(pivot, master.allDay);
+    refreshSeries(ops, past);
+    ops.add(
+        ContentProviderOperation.newUpdate(CalendarContract.Events.CONTENT_URI)
+            .withSelection("_id=?", new String[] {"0"})
+            .withSelectionBackReference(0, 0)
+            .withValues(values(next))
+            .withExpectedCount(1)
+            .build());
+    return ContentUris.parseId(resolver.applyBatch(CalendarContract.AUTHORITY, ops)[0].uri);
+  }
+
+  void deleteScoped(Item x, Scope scope) throws Exception {
+    Item master = checkedMaster(x);
+    if (master.originalId > 0) {
+      ContentValues v = values(master);
+      v.put("eventStatus", CalendarContract.Events.STATUS_CANCELED);
+      ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+      ops.add(
+          ContentProviderOperation.newUpdate(
+                  ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, x.id))
+              .withValues(v)
+              .build());
+      refreshSeries(ops, event(master.originalId));
+      resolver.applyBatch(CalendarContract.AUTHORITY, ops);
+      return;
+    }
+    if (master.rule.isEmpty() || scope == Scope.SERIES) {
+      delete(x.id);
+      return;
+    }
+    if (x.occurrenceStart == 0) throw new IllegalArgumentException("Selecione uma ocorrência.");
+    long pivot = master.allDay ? deviceToCivil(x.occurrenceStart) : x.occurrenceStart;
+    ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+    if (scope == Scope.SINGLE) {
+      String localUid = ensureLocalIdentity(master);
+      Item cancelled = x.copy();
+      cancelled.rule = "";
+      cancelled.alert = -1;
+      ContentValues v = values(cancelled);
+      v.put("original_id", master.id);
+      v.put("original_sync_id", localUid);
+      v.put("originalInstanceTime", pivot);
+      v.put("originalAllDay", master.allDay ? 1 : 0);
+      v.put("eventStatus", CalendarContract.Events.STATUS_CANCELED);
+      ops.add(
+          ContentProviderOperation.newInsert(CalendarContract.Events.CONTENT_URI)
+              .withValues(v)
+              .build());
+      refreshSeries(ops, master);
+    } else {
+      RecurrenceRule rule = new RecurrenceRule(master.rule);
+      if (rule.before(
+              master.allDay ? deviceToCivil(master.start) : master.start,
+              pivot,
+              master.allDay ? ZoneOffset.UTC : ZoneId.of(master.zone))
+          == 0) {
+        delete(x.id);
+        return;
+      }
+      ops.add(
+          ContentProviderOperation.newDelete(CalendarContract.Events.CONTENT_URI)
+              .withSelection(
+                  "original_id=? AND originalInstanceTime>=?",
+                  new String[] {Long.toString(master.id), Long.toString(pivot)})
+              .build());
+      Item past = master.copy();
+      past.rule = rule.through(pivot, master.allDay);
+      refreshSeries(ops, past);
+    }
+    resolver.applyBatch(CalendarContract.AUTHORITY, ops);
   }
 }

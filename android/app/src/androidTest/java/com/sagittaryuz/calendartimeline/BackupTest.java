@@ -219,4 +219,36 @@ public final class BackupTest extends InstrumentationTestCase {
     assertFalse(preferences.contains("latitude"));
     assertEquals(0, new JSONArray(preferences.getString("reminders", "[]")).length());
   }
+
+  public void testCalendarPreferencesAndReminderPriorityRoundTripAndRejectInvalid()
+      throws Exception {
+    BackupStore store = new BackupStore(context);
+    store.restore(BackupStore.parse(fixture().toString()));
+    preferences
+        .edit()
+        .putInt("weekStart", 1)
+        .putInt("monthStyle", 0)
+        .putInt("eventMinutes", 30)
+        .putInt("defaultAlert", 15)
+        .commit();
+    BackupStore.Payload copy =
+        BackupStore.read(new ByteArrayInputStream(store.export("0.4.0-debug")));
+    preferences.edit().putInt("weekStart", 0).putInt("eventMinutes", 60).commit();
+    store.restore(copy);
+    assertEquals(1, preferences.getInt("weekStart", -1));
+    assertEquals(0, preferences.getInt("monthStyle", -1));
+    assertEquals(30, preferences.getInt("eventMinutes", -1));
+    assertEquals(15, preferences.getInt("defaultAlert", -1));
+    assertEquals(1, copy.reminders.getJSONObject(0).getInt("priority"));
+    for (String key : new String[] {"weekStart", "monthStyle", "eventMinutes", "defaultAlert"}) {
+      JSONObject invalid = fixture();
+      invalid.getJSONObject("settings").put(key, 9999);
+      try {
+        BackupStore.parse(invalid.toString());
+        fail("Invalid preference " + key);
+      } catch (org.json.JSONException expected) {
+      }
+      assertEquals(30, preferences.getInt("eventMinutes", -1));
+    }
+  }
 }

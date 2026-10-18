@@ -23,7 +23,7 @@ public final class CalendarActivity extends Activity {
   android.content.SharedPreferences prefs;
   LinearLayout root, body, pinnedDay;
   ScrollView agendaScroll;
-  TextView yearLink;
+  TextView yearLink, landscapeMonth;
   LocalDate selected = LocalDate.now();
   String mode = "MONTH", query = "";
   boolean search = false, completed = false;
@@ -33,6 +33,7 @@ public final class CalendarActivity extends Activity {
   String updateMessage = "";
   Runnable permissionAction;
   boolean requesting;
+  int visiblePreferences = -1;
 
   @Override
   public void onCreate(Bundle saved) {
@@ -69,6 +70,10 @@ public final class CalendarActivity extends Activity {
   @Override
   protected void onResume() {
     super.onResume();
+    if (visiblePreferences != visualPreferences()) {
+      renderBody();
+      scrollToDay();
+    }
     load();
     io.execute(() -> ReminderAlerts.schedule(this));
     if (prefs.getBoolean("checkUpdates", true))
@@ -96,6 +101,33 @@ public final class CalendarActivity extends Activity {
 
   Set<String> hidden() {
     return new HashSet<>(prefs.getStringSet("hiddenCalendars", Collections.emptySet()));
+  }
+
+  int visualPreferences() {
+    return prefs.getInt("monthStyle", 2) * 2 + prefs.getInt("weekStart", 0);
+  }
+
+  boolean compactLandscape() {
+    return timelineView()
+        && getResources().getConfiguration().orientation
+            == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+  }
+
+  boolean weekView() {
+    return mode.equals("WEEK")
+        || (!search
+            && (mode.equals("MONTH") || mode.equals("DAY"))
+            && getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE);
+  }
+
+  boolean timelineView() {
+    return weekView() || mode.equals("DAY");
+  }
+
+  LocalDate weekFirst() {
+    int start = prefs.getInt("weekStart", 0);
+    return selected.minusDays(Math.floorMod(selected.getDayOfWeek().getValue() % 7 - start, 7));
   }
 
   void load() {
@@ -140,7 +172,10 @@ public final class CalendarActivity extends Activity {
                 if (isDestroyed() || g != generation) return;
                 items = loaded;
                 loadError = msg;
-                yearLink.setText("‹ " + selected.getYear());
+                yearLink.setText(backLabel());
+                if (landscapeMonth != null)
+                  landscapeMonth.setText(
+                      cap(selected.format(DateTimeFormatter.ofPattern("MMMM", PT))));
                 renderBody();
                 scrollToDay();
               });
@@ -159,12 +194,19 @@ public final class CalendarActivity extends Activity {
     selected =
         mode.equals("YEAR")
             ? selected.plusYears(direction)
-            : mode.equals("DAY")
-                ? selected.plusDays(direction)
+            : timelineView()
+                ? selected.plusDays(direction * (weekView() ? 7 : 1))
                 : mode.equals("LIST")
                     ? selected.plusDays(direction * 30)
                     : selected.plusMonths(direction);
     load();
+  }
+
+  String backLabel() {
+    return "‹ "
+        + (timelineView() && !compactLandscape()
+            ? cap(selected.format(DateTimeFormatter.ofPattern("MMMM", PT)))
+            : selected.getYear());
   }
 
   void render() {
@@ -174,12 +216,27 @@ public final class CalendarActivity extends Activity {
     setContentView(root);
     LinearLayout toolbar = ui.row();
     toolbar.setPadding(ui.dp(14), ui.dp(6), ui.dp(14), ui.dp(4));
-    yearLink = ui.action("‹ " + selected.getYear(), () -> change("YEAR"));
+    yearLink =
+        ui.action(
+            backLabel(),
+            () -> change(compactLandscape() ? "YEAR" : timelineView() ? "MONTH" : "YEAR"));
     toolbar.addView(yearLink);
+    landscapeMonth = null;
+    if (compactLandscape()) {
+      TextView month =
+          landscapeMonth =
+              ui.text(cap(selected.format(DateTimeFormatter.ofPattern("MMMM", PT))), 20, ui.ink);
+      month.setPadding(ui.dp(12), 0, ui.dp(12), 0);
+      toolbar.addView(month);
+      toolbar.addView(ui.icon("back", "Período anterior", () -> shift(-1)));
+      toolbar.addView(ui.icon("next", "Próximo período", () -> shift(1)));
+    }
     View spacer = new View(this);
     toolbar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1));
     toolbar.addView(ui.icon("list", "Alterar visualização", this::viewMenu));
-    toolbar.addView(
+    LinearLayout quick = ui.row();
+    quick.setBackground(ui.round(ui.card, 25));
+    quick.addView(
         ui.icon(
             "search",
             "Buscar eventos e lembretes",
@@ -189,7 +246,10 @@ public final class CalendarActivity extends Activity {
               render();
               load();
             }));
-    toolbar.addView(ui.icon("plus", "Novo evento ou lembrete", () -> openEditor(null)));
+    quick.addView(ui.icon("plus", "Novo evento ou lembrete", () -> openEditor(null)));
+    for (int n = 0; n < quick.getChildCount(); n++)
+      quick.getChildAt(n).setBackgroundColor(android.graphics.Color.TRANSPARENT);
+    toolbar.addView(quick);
     root.addView(toolbar);
     if (!updateMessage.isEmpty())
       root.addView(
@@ -256,7 +316,7 @@ public final class CalendarActivity extends Activity {
   }
 
   void scrollToDay() {
-    if (!search && mode.equals("DAY"))
+    if (!search && timelineView())
       agendaScroll.post(
           () -> {
             int hour = 9;
@@ -265,14 +325,16 @@ public final class CalendarActivity extends Activity {
                 hour =
                     Math.max(
                         0,
-                        Instant.ofEpochMilli(x.start).atZone(ZoneId.systemDefault()).getHour() - 1);
+                        Instant.ofEpochMilli(x.start).atZone(ZoneId.systemDefault()).getHour()
+                            - (weekView() ? 0 : 1));
                 break;
               }
-            agendaScroll.scrollTo(0, ui.dp(hour * 64 + 100));
+            agendaScroll.scrollTo(0, ui.dp(hour * 64));
           });
   }
 
   void renderBody() {
+    visiblePreferences = visualPreferences();
     body.removeAllViews();
     pinnedDay.removeAllViews();
     if (search) {
@@ -293,17 +355,18 @@ public final class CalendarActivity extends Activity {
                 ? Integer.toString(selected.getYear())
                 : cap(
                     selected.format(
-                        DateTimeFormatter.ofPattern(
-                            mode.equals("DAY") ? "EEEE, d MMM" : "MMMM", PT))),
-            mode.equals("DAY") ? 25 : 34,
+                        DateTimeFormatter.ofPattern(timelineView() ? "MMMM uuuu" : "MMMM", PT))),
+            timelineView() ? 23 : 30,
             ui.ink);
     title.setTypeface(null, Typeface.BOLD);
     heading.setPadding(ui.dp(20), ui.dp(12), ui.dp(12), ui.dp(10));
     heading.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
     heading.addView(ui.icon("back", "Período anterior", () -> shift(-1)));
     heading.addView(ui.icon("next", "Próximo período", () -> shift(1)));
-    if (mode.equals("DAY")) pinnedDay.addView(heading);
-    else body.addView(heading);
+    if (!compactLandscape()) {
+      if (timelineView()) pinnedDay.addView(heading);
+      else body.addView(heading);
+    }
     if (!loadError.isEmpty()) {
       TextView error = ui.action(loadError, this::load);
       body.addView(error);
@@ -314,12 +377,16 @@ public final class CalendarActivity extends Activity {
           card, "Agendas do Android", "Permitir acesso", () -> permission(false, this::load));
       ui.note(body, "Seus lembretes locais funcionam sem acesso à agenda.");
     }
+    if (weekView()) {
+      new CalendarTimeline(this, 7, weekFirst());
+      return;
+    }
     switch (mode) {
       case "YEAR":
         year();
         break;
       case "DAY":
-        day();
+        new CalendarTimeline(this, 1, selected);
         break;
       case "LIST":
         ui.note(body, "Próximos 90 dias · " + ZoneId.systemDefault().getId());
@@ -327,15 +394,6 @@ public final class CalendarActivity extends Activity {
         break;
       default:
         month(body, YearMonth.from(selected), false);
-        ui.hairline(body);
-        TextView date =
-            ui.text(
-                cap(selected.format(DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", PT))),
-                17,
-                selected.equals(LocalDate.now()) ? ui.red : ui.ink);
-        date.setPadding(ui.dp(20), ui.dp(16), ui.dp(20), ui.dp(8));
-        body.addView(date);
-        agenda(body, selected, false);
     }
   }
 
@@ -370,13 +428,16 @@ public final class CalendarActivity extends Activity {
     wrap.setPadding(ui.dp(small ? 2 : 10), 0, ui.dp(small ? 2 : 10), 0);
     parent.addView(wrap);
     LinearLayout weekdays = ui.row();
-    for (String name : new String[] {"D", "S", "T", "Q", "Q", "S", "S"}) {
+    int weekStart = prefs.getInt("weekStart", 0);
+    String[] names = {"D", "S", "T", "Q", "Q", "S", "S"};
+    for (int i = 0; i < 7; i++) {
+      String name = names[(i + weekStart) % 7];
       TextView t = ui.text(name, small ? 9 : 11, ui.muted);
       t.setGravity(Gravity.CENTER);
       weekdays.addView(t, new LinearLayout.LayoutParams(0, ui.dp(small ? 18 : 24), 1));
     }
     wrap.addView(weekdays);
-    int offset = month.atDay(1).getDayOfWeek().getValue() % 7;
+    int offset = Math.floorMod(month.atDay(1).getDayOfWeek().getValue() % 7 - weekStart, 7);
     int count = month.lengthOfMonth();
     int rows = (offset + count + 6) / 7;
     for (int row = 0; row < (small ? 6 : rows); row++) {
@@ -386,13 +447,31 @@ public final class CalendarActivity extends Activity {
         int day = row * 7 + col - offset + 1;
         LinearLayout cell = ui.column();
         cell.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(0, ui.dp(small ? 22 : 80), 1);
+        LinearLayout.LayoutParams clp =
+            new LinearLayout.LayoutParams(
+                0,
+                ui.dp(
+                    small
+                        ? 22
+                        : prefs.getInt("monthStyle", 2) == 0
+                            ? 56
+                            : Math.max(
+                                76,
+                                Math.min(
+                                    110,
+                                    (getResources().getDisplayMetrics().heightPixels
+                                                / getResources().getDisplayMetrics().density
+                                            - 280)
+                                        / rows))),
+                1);
         week.addView(cell, clp);
         if (day < 1 || day > count) continue;
         LocalDate date = month.atDay(day);
         TextView number =
             ui.text(
-                Integer.toString(day), small ? 11 : 21, (col == 0 || col == 6) ? ui.muted : ui.ink);
+                Integer.toString(day),
+                small ? 11 : 21,
+                (date.getDayOfWeek().getValue() >= 6) ? ui.muted : ui.ink);
         number.setGravity(Gravity.CENTER);
         if (date.equals(LocalDate.now())) {
           number.setTextColor(0xffffffff);
@@ -408,29 +487,32 @@ public final class CalendarActivity extends Activity {
         cell.setOnClickListener(
             v -> {
               selected = date;
-              if (small) mode = "MONTH";
+              mode = small ? "MONTH" : "DAY";
               render();
               load();
             });
         if (!small) {
           List<CalendarStore.Item> dayItems = on(date);
-          for (int i = 0; i < Math.min(2, dayItems.size()); i++) {
+          int style = prefs.getInt("monthStyle", 2);
+          int limit = style == 0 ? 1 : style == 1 ? 3 : 2;
+          for (int i = 0; i < Math.min(limit, dayItems.size()); i++) {
             CalendarStore.Item x = dayItems.get(i);
             TextView chip =
                 ui.text(
-                    (x.reminder ? "○ " : "") + x.title,
+                    (style == 2 ? (x.reminder ? "○ " : "") + x.title : ""),
                     9,
                     ui.dark ? x.color : (x.color & 0xff7f7f7f) | 0xff000000);
             chip.setSingleLine();
             chip.setEllipsize(TextUtils.TruncateAt.END);
             chip.setPadding(ui.dp(2), 0, ui.dp(1), 0);
             chip.setBackground(ui.round((x.color & 0xffffff) | 0x28000000, 3));
-            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(-1, ui.dp(16));
+            LinearLayout.LayoutParams elp =
+                new LinearLayout.LayoutParams(-1, ui.dp(style == 2 ? 16 : 5));
             elp.setMargins(ui.dp(1), ui.dp(1), ui.dp(1), 0);
             cell.addView(chip, elp);
           }
-          if (dayItems.size() > 2) {
-            TextView more = ui.text("+" + (dayItems.size() - 2), 9, ui.muted);
+          if (style == 2 && dayItems.size() > limit) {
+            TextView more = ui.text("+" + (dayItems.size() - limit), 9, ui.muted);
             more.setGravity(Gravity.CENTER);
             cell.addView(more);
           }
@@ -556,133 +638,12 @@ public final class CalendarActivity extends Activity {
     ui.hairline(parent);
   }
 
-  void day() {
-    LinearLayout week = ui.row();
-    week.setPadding(ui.dp(12), 0, ui.dp(12), ui.dp(8));
-    LocalDate sunday = selected.minusDays(selected.getDayOfWeek().getValue() % 7);
-    for (int i = 0; i < 7; i++) {
-      LocalDate d = sunday.plusDays(i);
-      TextView t =
-          ui.text(
-              d.format(DateTimeFormatter.ofPattern("EE", PT)).substring(0, 1).toUpperCase(PT)
-                  + "\n"
-                  + d.getDayOfMonth(),
-              16,
-              d.equals(selected) ? 0xffffffff : ui.ink);
-      t.setGravity(Gravity.CENTER);
-      if (d.equals(selected)) t.setBackground(ui.round(ui.red, 24));
-      week.addView(t, new LinearLayout.LayoutParams(0, ui.dp(54), 1));
-      t.setOnClickListener(
-          v -> {
-            selected = d;
-            load();
-          });
-    }
-    pinnedDay.addView(week);
-    List<CalendarStore.Item> day = on(selected);
-    LinearLayout all = ui.group(body);
-    ui.fieldRow(all, "Dia inteiro", "", null);
-    boolean any = false;
-    for (CalendarStore.Item x : day)
-      if (x.allDay) {
-        eventRow(all, x);
-        any = true;
-      }
-    if (!any) ui.note(all, "Nenhum compromisso de dia inteiro");
-    FrameLayout timeline = new FrameLayout(this);
-    timeline.setMinimumHeight(ui.dp(24 * 64));
-    body.addView(timeline, new LinearLayout.LayoutParams(-1, ui.dp(24 * 64)));
-    for (int h = 0; h < 24; h++) {
-      final int hour = h;
-      LinearLayout slot = ui.row();
-      slot.setGravity(Gravity.TOP);
-      TextView label = ui.text(String.format(PT, "%02d:00", h), 11, ui.muted);
-      label.setPadding(ui.dp(12), 0, ui.dp(8), 0);
-      slot.addView(label, new LinearLayout.LayoutParams(ui.dp(62), ui.dp(22)));
-      View line = new View(this);
-      line.setBackgroundColor(ui.line);
-      slot.addView(line, new LinearLayout.LayoutParams(-1, ui.dp(0.5f)));
-      FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, ui.dp(64));
-      lp.topMargin = ui.dp(h * 64);
-      timeline.addView(slot, lp);
-      slot.setContentDescription("Adicionar às " + h + " horas");
-      slot.setOnClickListener(
-          v -> {
-            CalendarStore.Item fresh = newItem(false);
-            fresh.start =
-                selected.atTime(hour, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-            fresh.end = fresh.start + 3600000;
-            openEditor(fresh);
-          });
-    }
-    List<CalendarStore.Item> timed = new ArrayList<>();
-    for (CalendarStore.Item x : day) if (!x.allDay) timed.add(x);
-    long dayStart = selected.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        dayEnd =
-            selected.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-    List<Long> laneEnds = new ArrayList<>();
-    List<View> blocks = new ArrayList<>();
-    List<Integer> lanes = new ArrayList<>();
-    for (CalendarStore.Item x : timed) {
-      int lane = 0;
-      while (lane < laneEnds.size() && laneEnds.get(lane) > x.start) lane++;
-      if (lane == laneEnds.size()) laneEnds.add(x.end);
-      else laneEnds.set(lane, x.end);
-      int from =
-          x.start < dayStart
-              ? 0
-              : Instant.ofEpochMilli(x.start).atZone(ZoneId.systemDefault()).getHour() * 60
-                  + Instant.ofEpochMilli(x.start).atZone(ZoneId.systemDefault()).getMinute();
-      int until =
-          x.end >= dayEnd
-              ? 1440
-              : Instant.ofEpochMilli(x.end).atZone(ZoneId.systemDefault()).getHour() * 60
-                  + Instant.ofEpochMilli(x.end).atZone(ZoneId.systemDefault()).getMinute();
-      String label = (x.reminder ? (x.completed ? "● " : "○ ") : "") + x.title;
-      if (!x.reminder)
-        label +=
-            "\n"
-                + Instant.ofEpochMilli(x.start)
-                    .atZone(ZoneId.systemDefault())
-                    .format(DateTimeFormatter.ofPattern("HH:mm"));
-      TextView block = ui.text(label, 13, ui.dark ? ui.ink : (x.color & 0xff6f6f6f) | 0xff000000);
-      block.setGravity(Gravity.TOP);
-      block.setPadding(ui.dp(7), ui.dp(3), ui.dp(4), ui.dp(2));
-      block.setMaxLines(x.reminder ? 1 : 3);
-      block.setEllipsize(TextUtils.TruncateAt.END);
-      block.setBackground(ui.round((x.color & 0xffffff) | 0x40000000, 7));
-      block.setOnClickListener(v -> details(x));
-      block.setContentDescription(x.title);
-      FrameLayout.LayoutParams lp =
-          new FrameLayout.LayoutParams(
-              -1, ui.dp(Math.max(x.reminder ? 30 : 44, (until - from) * 64f / 60 - 2)));
-      lp.topMargin = ui.dp(from * 64f / 60);
-      lp.leftMargin = ui.dp(64);
-      lp.rightMargin = ui.dp(12);
-      timeline.addView(block, lp);
-      blocks.add(block);
-      lanes.add(lane);
-    }
-    timeline.post(
-        () -> {
-          int count = Math.max(1, laneEnds.size());
-          int width = (timeline.getWidth() - ui.dp(78)) / count;
-          for (int i = 0; i < blocks.size(); i++) {
-            FrameLayout.LayoutParams lp =
-                (FrameLayout.LayoutParams) blocks.get(i).getLayoutParams();
-            lp.width = width - ui.dp(3);
-            lp.leftMargin = ui.dp(64) + lanes.get(i) * width;
-            blocks.get(i).setLayoutParams(lp);
-          }
-        });
-    ui.note(body, "Horários em " + ZoneId.systemDefault().getId());
-  }
-
   CalendarStore.Item newItem(boolean reminder) {
     CalendarStore.Item x = new CalendarStore.Item();
     x.reminder = reminder;
     x.start = defaultStart(selected, ZonedDateTime.now()).toInstant().toEpochMilli();
-    x.end = x.start + 3600000;
+    x.end = x.start + prefs.getInt("eventMinutes", 60) * 60000L;
+    x.alert = prefs.getInt("defaultAlert", -1);
     return x;
   }
 
@@ -703,7 +664,10 @@ public final class CalendarActivity extends Activity {
     io.execute(
         () -> {
           try {
-            CalendarStore.Item x = instance.reminder ? instance : store.event(instance.id);
+            CalendarStore.Item x =
+                instance.reminder
+                    ? instance
+                    : store.occurrence(instance.id, instance.start, instance.end);
             main.post(
                 () -> {
                   if (isDestroyed()) return;
@@ -725,20 +689,85 @@ public final class CalendarActivity extends Activity {
       "Ano",
       "Mês",
       "Dia",
+      "Semana",
       "Lista · próximos 90 dias",
-      completed ? "Ocultar lembretes concluídos" : "Mostrar lembretes concluídos"
+      completed ? "Ocultar lembretes concluídos" : "Mostrar lembretes concluídos",
+      "Preferências"
     };
     new AlertDialog.Builder(this)
         .setTitle("Visualização")
         .setItems(
             labels,
             (d, w) -> {
-              if (w == 4) {
+              if (w == 5) {
                 completed = !completed;
                 load();
-              } else change(new String[] {"YEAR", "MONTH", "DAY", "LIST"}[w]);
+              } else if (w == 6) startActivity(new Intent(this, CalendarPreferencesActivity.class));
+              else change(new String[] {"YEAR", "MONTH", "DAY", "WEEK", "LIST"}[w]);
             })
         .show();
+  }
+
+  void confirmTimeChange(CalendarStore.Item before, CalendarStore.Item changed) {
+    io.execute(
+        () -> {
+          try {
+            CalendarStore.Item draft =
+                before.reminder
+                    ? changed.copy()
+                    : store.occurrence(before.id, before.start, before.end);
+            draft.start = changed.start;
+            draft.end = changed.end;
+            main.post(
+                () -> {
+                  if (isDestroyed()) return;
+                  String when =
+                      java.time.format.DateTimeFormatter.ofPattern("EEE d MMM · HH:mm", PT)
+                          .withZone(ZoneId.systemDefault())
+                          .format(Instant.ofEpochMilli(draft.start));
+                  java.util.function.Consumer<CalendarStore.Scope> save =
+                      scope ->
+                          io.execute(
+                              () -> {
+                                try {
+                                  if (draft.reminder) new ReminderStore(this).save(draft);
+                                  else store.saveScoped(draft, scope);
+                                  main.post(
+                                      () -> {
+                                        load();
+                                        RefreshCoordinator.refresh(this, null);
+                                      });
+                                } catch (Exception e) {
+                                  main.post(
+                                      () -> {
+                                        load();
+                                        ui.error(e);
+                                      });
+                                }
+                              });
+                  new AlertDialog.Builder(this)
+                      .setTitle("Confirmar novo horário?")
+                      .setMessage(
+                          draft.title
+                              + "\n"
+                              + when
+                              + "\nDuração: "
+                              + ((draft.end - draft.start) / 60000)
+                              + " min")
+                      .setNegativeButton("Cancelar", null)
+                      .setPositiveButton(
+                          "Salvar",
+                          (d, w) -> {
+                            if (!draft.seriesRule.isEmpty())
+                              OccurrenceScope.choose(this, "Aplicar alteração", save);
+                            else save.accept(CalendarStore.Scope.SINGLE);
+                          })
+                      .show();
+                });
+          } catch (Exception e) {
+            main.post(() -> ui.error(e));
+          }
+        });
   }
 
   void permission(boolean write, Runnable after) {

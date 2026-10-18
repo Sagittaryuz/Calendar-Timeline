@@ -14,7 +14,7 @@ import java.time.format.*;
 import java.util.*;
 
 /** Native UI end-to-end + real screenshots. Explicitly opt in on the isolated AVD. */
-public final class CalendarUiTest extends InstrumentationTestCase {
+public class CalendarUiTest extends InstrumentationTestCase {
   Context context;
   CalendarStore store;
   long calendar;
@@ -235,7 +235,7 @@ public final class CalendarUiTest extends InstrumentationTestCase {
       capture("qa-calendar-year.png");
       click("Alterar visualização");
       click("Dia");
-      waitFor("09:00");
+      waitFor("Abrir " + qaDay);
       capture("qa-calendar-day.png");
       click("Alterar visualização");
       click("Lista · próximos 90 dias");

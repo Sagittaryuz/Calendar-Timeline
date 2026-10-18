@@ -40,6 +40,8 @@ final class BackupStore {
             .put("demo", preferences.getBoolean("demo", false))
             .put("weather", preferences.getBoolean("weather", false))
             .put("checkUpdates", preferences.getBoolean("checkUpdates", true));
+    for (String key : new String[] {"weekStart", "monthStyle", "eventMinutes", "defaultAlert"})
+      if (preferences.contains(key)) settings.put(key, preferences.getInt(key, 0));
     if (preferences.contains("latitude"))
       settings.put("latitude", preferences.getString("latitude", ""));
     if (preferences.contains("longitude"))
@@ -86,6 +88,20 @@ final class BackupStore {
         .put("demo", bool(raw, "demo"))
         .put("weather", bool(raw, "weather"))
         .put("checkUpdates", bool(raw, "checkUpdates"));
+    if (raw.has("weekStart")) clean.put("weekStart", number(raw, "weekStart", 0, 1));
+    if (raw.has("monthStyle")) clean.put("monthStyle", number(raw, "monthStyle", 0, 2));
+    if (raw.has("eventMinutes")) {
+      int duration = (int) number(raw, "eventMinutes", 15, 120);
+      if (!Arrays.asList(15, 30, 60, 90, 120).contains(duration))
+        throw new JSONException("Duração inválida");
+      clean.put("eventMinutes", duration);
+    }
+    if (raw.has("defaultAlert")) {
+      int alert = (int) number(raw, "defaultAlert", -1, 1440);
+      if (!Arrays.asList(-1, 0, 5, 15, 30, 60, 1440).contains(alert))
+        throw new JSONException("Alerta padrão inválido");
+      clean.put("defaultAlert", alert);
+    }
     boolean lat = raw.has("latitude"), lon = raw.has("longitude");
     if (lat != lon || (clean.getBoolean("weather") && !lat))
       throw new JSONException("Coordenadas ausentes");
@@ -174,6 +190,9 @@ final class BackupStore {
             .putLong(
                 "restoredAt",
                 Math.max(System.currentTimeMillis(), preferences.getLong("restoredAt", 0) + 1));
+    for (String key : new String[] {"weekStart", "monthStyle", "eventMinutes", "defaultAlert"})
+      if (s.has(key)) editor.putInt(key, s.getInt(key));
+      else editor.remove(key);
     if (s.has("latitude"))
       editor
           .putString("latitude", s.getString("latitude"))

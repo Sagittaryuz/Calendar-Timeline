@@ -1,4 +1,4 @@
-O calendário nativo 0.3.0 de teste inclui mês/ano/dia/lista e operações reais de eventos e lembretes. Consulte [funções, permissões e limites](../docs/ANDROID-CALENDARIO.md). O widget, o clima e os ajustes anteriores continuam disponíveis.
+O calendário nativo 0.4.0 de teste inclui mês/ano/dia/semana/lista, semana automática em paisagem, reagendamento e duração por arraste confirmado, escopos de recorrência e preferências locais. Consulte o [marco 0.4.0](../docs/ANDROID-MARCO-0.4.md). Consulte [funções, permissões e limites](../docs/ANDROID-CALENDARIO.md). O widget, o clima e os ajustes anteriores continuam disponíveis.
 
 # Calendar Timeline para Android
 
@@ -17,7 +17,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. É assinado somente com a chav
 
 ## Dados e privacidade
 
-- Agenda: `CalendarContract.Instances`, somente leitura, calendários visíveis, recorrências expandidas pelo Android. Contas sincronizadas no próprio Android aparecem conforme o provedor local. O app não cria contas, OAuth ou credenciais, nem conecta diretamente ao iCloud.
+- Agenda: `CalendarContract.Instances`, calendários visíveis e recorrências expandidas pelo Android. Contas ficam somente em leitura; a escrita de eventos é local. As agendas locais criadas pelo app suportam exceções individuais e divisão das futuras para regras simples. Contas sincronizadas no próprio Android aparecem conforme o provedor local. O app não cria contas, OAuth ou credenciais, nem conecta diretamente ao iCloud.
 - Lembretes: lista local, criada/concluída pelo app. Não existe API Android equivalente ao EventKit Reminders; não há sincronização com Lembretes Apple, Google Tasks ou outros apps.
 - Clima: Open-Meteo opcional, desativado por padrão. Use “Configurar clima” junto à prévia, ative, informe latitude/longitude e salve para autorizar a consulta. Aceita vírgula ou ponto decimal e sinal negativo digitado (`-`) ou copiado (`−`), por exemplo `−17,88` e `−51,71`. A colagem preserva os caracteres para validar o valor completo. Salvar com clima real desliga a demonstração. “Atualizar agora” força uma consulta mesmo dentro dos 30 minutos de cache; o status informa fonte, horário e falhas de configuração, rede, HTTPS ou serviço. Envia apenas coordenadas e fuso, nunca títulos da agenda. Sem GPS. Resumos e amostras usam o parser original; lacunas não recebem previsão inventada. Atribuição Open-Meteo, CC BY 4.0. Foreca, MET Norway e Rainbow do Scriptable não foram conectados no Android; nenhum segredo foi embutido.
 - Cache: agenda/clima e imagem ficam no armazenamento privado do app, sem backup Android. Resposta de agenda vazia válida substitui a anterior; erro preserva um snapshot compatível com fuso/horizonte. Permissão negada remove o cache da agenda. Clima mantém timestamp da resposta original, usa no máximo 24 h de cache e descarta escopos de coordenadas/fuso diferentes. Falha de rede não renova idade. Desativar o clima impede novas consultas.

@@ -79,6 +79,10 @@ public final class EventEditorActivity extends Activity {
       return new JSONObject()
           .put("id", x.id)
           .put("calendarId", x.calendarId)
+          .put("occurrenceStart", x.occurrenceStart)
+          .put("occurrenceEnd", x.occurrenceEnd)
+          .put("originalId", x.originalId)
+          .put("seriesRule", x.seriesRule)
           .put("title", x.title)
           .put("location", x.location)
           .put("notes", x.notes)
@@ -106,6 +110,10 @@ public final class EventEditorActivity extends Activity {
     CalendarStore.Item x = new CalendarStore.Item();
     x.id = j.optLong("id");
     x.calendarId = j.optLong("calendarId");
+    x.occurrenceStart = j.optLong("occurrenceStart");
+    x.occurrenceEnd = j.optLong("occurrenceEnd");
+    x.originalId = j.optLong("originalId");
+    x.seriesRule = j.optString("seriesRule");
     x.title = j.optString("title");
     x.location = j.optString("location");
     x.notes = j.optString("notes");
@@ -268,7 +276,7 @@ public final class EventEditorActivity extends Activity {
           });
     }
     ui.hairline(dates);
-    ui.fieldRow(dates, "Repetir", repeatLabel(), this::repeat);
+    if (item.originalId == 0) ui.fieldRow(dates, "Repetir", repeatLabel(), this::repeat);
     if (!item.allDay) ui.fieldRow(dates, "Fuso horário", item.zone, this::timezone);
     LinearLayout options = ui.group(form);
     calendarValue = null;
@@ -283,6 +291,25 @@ public final class EventEditorActivity extends Activity {
     }
     ui.fieldRow(options, "Alerta", alertLabel(item.alert), this::alert);
     if (item.reminder) {
+      ui.hairline(options);
+      ui.fieldRow(
+          options,
+          "Prioridade",
+          priorityLabel(item.priority),
+          () -> {
+            capture();
+            new AlertDialog.Builder(this)
+                .setTitle("Prioridade")
+                .setItems(
+                    new String[] {"Nenhuma", "Alta", "Média", "Baixa"},
+                    (d, w) -> {
+                      item.priority = new int[] {0, 1, 5, 9}[w];
+                      dirty = true;
+                      render();
+                    })
+                .setNegativeButton("Cancelar", null)
+                .show();
+          });
       ui.note(
           form,
           "Lembrete salvo neste aparelho. Alertas podem atrasar com a economia de bateria do"
@@ -308,9 +335,7 @@ public final class EventEditorActivity extends Activity {
             | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
     if (item.id > 0 && !item.rule.isEmpty())
-      ui.note(
-          form,
-          "Você está editando a série inteira. As datas acima são as da primeira ocorrência.");
+      ui.note(form, "Ao salvar, escolha esta ocorrência, esta e as futuras ou a série inteira.");
     if (saving) ui.note(form, "Salvando…");
   }
 
@@ -607,28 +632,35 @@ public final class EventEditorActivity extends Activity {
       chooseCalendar();
       return;
     }
-    if (item.id > 0 && !item.rule.isEmpty()) {
-      new AlertDialog.Builder(this)
-          .setTitle("Salvar a série inteira?")
-          .setMessage("A alteração será aplicada a todas as ocorrências deste evento.")
-          .setNegativeButton("Cancelar", null)
-          .setPositiveButton("Salvar série", (d, w) -> persist())
-          .show();
-    } else persist();
+    if (!item.seriesRule.isEmpty() && item.occurrenceStart != 0)
+      OccurrenceScope.choose(this, "Aplicar alteração", this::persist);
+    else persist(CalendarStore.Scope.SINGLE);
   }
 
-  void persist() {
+  static String priorityLabel(int p) {
+    return p == 0 ? "Nenhuma" : p <= 4 ? "Alta" : p <= 6 ? "Média" : "Baixa";
+  }
+
+  void persist(CalendarStore.Scope scope) {
     saving = true;
     render();
     CalendarStore.Item draft = item.copy();
     io.execute(
         () -> {
           try {
+            long id = draft.id;
             if (draft.reminder) new ReminderStore(this).save(draft);
-            else store.save(draft);
+            else id = store.saveScoped(draft, scope);
+            final long savedId = id;
             main.post(
                 () -> {
                   RefreshCoordinator.refresh(this, null);
+                  setResult(
+                      RESULT_OK,
+                      new Intent()
+                          .putExtra("id", savedId)
+                          .putExtra("start", draft.start)
+                          .putExtra("end", draft.end));
                   Toast.makeText(this, "Salvo", Toast.LENGTH_SHORT).show();
                   finish();
                 });

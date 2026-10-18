@@ -35,13 +35,14 @@ final class MiniMonthView extends View {
     Paint.FontMetrics metrics = paint.getFontMetrics();
     paint.setColor(ui.muted);
     String[] weekdays = {"D", "S", "T", "Q", "Q", "S", "S"};
+    int weekStart = getContext().getSharedPreferences("settings", 0).getInt("weekStart", 0);
     for (int i = 0; i < 7; i++)
       canvas.drawText(
-          weekdays[i],
+          weekdays[(i + weekStart) % 7],
           (i + .5f) * width,
           height * .5f - (metrics.ascent + metrics.descent) / 2,
           paint);
-    int offset = month.atDay(1).getDayOfWeek().getValue() % 7;
+    int offset = Math.floorMod(month.atDay(1).getDayOfWeek().getValue() % 7 - weekStart, 7);
     LocalDate today = LocalDate.now();
     for (int day = 1; day <= month.lengthOfMonth(); day++) {
       int slot = offset + day - 1, column = slot % 7, row = slot / 7 + 1;
@@ -51,7 +52,10 @@ final class MiniMonthView extends View {
         paint.setColor(ui.red);
         canvas.drawCircle(x, y, Math.min(width, height) * .47f, paint);
       }
-      paint.setColor(current ? Color.WHITE : (column == 0 || column == 6) ? ui.muted : ui.ink);
+      paint.setColor(
+          current
+              ? Color.WHITE
+              : month.atDay(day).getDayOfWeek().getValue() >= 6 ? ui.muted : ui.ink);
       canvas.drawText(Integer.toString(day), x, y - (metrics.ascent + metrics.descent) / 2, paint);
     }
   }
