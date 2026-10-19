@@ -6,6 +6,13 @@ tempo e uma timeline contínua de até 96 horas.
 O toque abre diretamente o Calendário nativo do iOS. Versão e datas de
 consulta/cache ficam somente nos metadados internos, sem rodapé ou alerta.
 
+## Android (APK e widget)
+
+A implementação Android está em [android/](android/README.md), com app de
+configuração e widget nativo de tela inicial. Reutiliza as funções de desenho
+Scriptable, mantém dados privados no aparelho e usa clima Open-Meteo opcional.
+Build, testes e limites estão na [validação Android](docs/ANDROID-VALIDACAO.md).
+
 ## Cabeçalho — versão 2026.10.11.5
 
 Todos os quadros compartilham a mesma translação da régua temporal, mantendo
