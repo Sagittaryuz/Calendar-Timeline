@@ -1,4 +1,5 @@
-import { CalendarEvent, Reminder, DateFormatter, Keychain, Location, UIImage, Data, fetch } from 'scripting'
+// Native utilities are runtime globals; importing them from the UI module
+// produces undefined on the installed Scripting host (confirmed on device).
 import * as drawing from './drawing'
 import { encodePNG } from './rect-raster'
 

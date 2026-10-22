@@ -1,4 +1,4 @@
-import { Canvas, ZStack, UIImage } from 'scripting'
+import { Canvas, ZStack } from 'scripting'
 import { replay, segments, childViewport } from './drawing'
 
 const symbols = new Map<string,UIImage|null>()

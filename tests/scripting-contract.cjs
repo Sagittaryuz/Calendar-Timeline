@@ -7,12 +7,22 @@ const storage={get:k=>store.get(k)??null,set:(k,v)=>{store.set(k,v);return true}
 const modules=new Map();let reloads=0,writes=0,denied=false,requests=0;
 const calendar={identifier:'cal',title:'Pessoal',color:'#0088FF'};
 const dueDate=new Date(2026,9,23,9,30);
-const native={
+let encodedBitmap;
+// Utilities exist globally, and deliberately do not exist in the UI module.
+// The old mock incorrectly exported these and hid the device's import failure.
+const globals={
   CalendarEvent:{getAll:async()=>{if(denied)throw Error('Permissão negada');return [{identifier:'event',title:'Teste',startDate:dueDate,endDate:new Date(+dueDate+3600000),isAllDay:false,calendar}]}},
   Reminder:{getIncompletes:async()=>[{identifier:'reminder',title:'Tarefa',dueDateComponents:{date:dueDate,hour:9,minute:30},calendar,isCompleted:false,priority:5}]},
-  AppIntentProtocol:{AppIntent:0},AppIntentManager:{register:spec=>spec},Widget:{reloadAll:()=>reloads++},
+  DateFormatter:class{},Keychain:{},Location:{},
+  Data:{fromUint8Array:bytes=>{encodedBitmap=bytes;return {bytes}}},
+  UIImage:{fromData:data=>({width:1,height:1,bytes:data.bytes})},
   fetch:async()=>{requests++;return {status:200,ok:true,text:async()=>'{"ok":true}'}}
 };
+const native={AppIntentProtocol:{AppIntent:0},AppIntentManager:{register:spec=>spec},Widget:{reloadAll:()=>reloads++}};
+const uiModule=new Proxy(native,{get:(target,key)=>{
+  if(key in globals)throw Error('Native utility incorrectly imported: '+String(key));
+  return target[key];
+}});
 function load(name){
   if(modules.has(name))return modules.get(name);
   const file=['.ts','.tsx','.js'].map(ext=>path.join(dir,name+ext)).find(fs.existsSync);
@@ -20,8 +30,8 @@ function load(name){
   const result=ts.transpileModule(text,{fileName:file,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,jsxFactory:'createElement'},reportDiagnostics:true});
   assert.equal(result.diagnostics.length,0,'Syntax diagnostics: '+name);
   const module={exports:{}};modules.set(name,module.exports);
-  vm.runInNewContext(result.outputText,{module,exports:module.exports,Storage:storage,Date,URL,console,setTimeout,clearTimeout,
-    require:id=>id==='scripting'?native:id==='./drawing'?{DrawContext:class{}}:load(id.replace('./',''))},{filename:file});
+  vm.runInNewContext(result.outputText,{...globals,module,exports:module.exports,Storage:storage,Date,URL,console,setTimeout,clearTimeout,
+    require:id=>id==='scripting'?uiModule:id==='./drawing'?{DrawContext:class{}}:load(id.replace('./',''))},{filename:file});
   modules.set(name,module.exports);return module.exports;
 }
 async function main(){
@@ -39,6 +49,11 @@ async function main(){
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-21'},today)),'2026-10-22');
   for(const bad of ['2026-02-30','2026-13-01','invalid',null,{},'2020-01-01'])assert.throws(()=>select.validateSelection(bad,today));
   const {createHost}=load('host'),host=createHost(today);
+  const bitmap=new host.DrawContext().makeRaster({width:1,height:1,pixels:new Uint8Array([255,0,0,255])});
+  assert.deepEqual([...encodedBitmap.slice(0,8)],[137,80,78,71,13,10,26,10]);
+  assert.equal(bitmap.native.width,1);
+  const graphSource=ts.transpileModule(fs.readFileSync(path.join(dir,'graph-view.tsx'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React}}).outputText;
+  assert(!/scripting_\d+\.UIImage/.test(graphSource),'Graph must use the runtime-global UIImage');
   const events=await host.CalendarEvent.between(today,new Date(+today+86400000));
   assert.equal(events[0].title,'Teste');assert.equal(events[0].calendar.color.hex,'0088FF');
   const reminders=await host.Reminder.incompleteDueToday();assert.equal(reminders[0].dueDate,+dueDate===+reminders[0].dueDate?dueDate:null);assert(reminders[0].dueDateIncludesTime);
@@ -56,6 +71,6 @@ async function main(){
     const result=ts.transpileModule(fs.readFileSync(path.join(dir,filename),'utf8'),{fileName:filename,reportDiagnostics:true,compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});
     assert.equal(result.diagnostics.length,0,filename);
   }
-  console.log('PASS: selection/reset/invalid dates, native data mapping, denied permission, cache move, network allowlist, day intent, source syntax.');
+  console.log('PASS: native globals/module separation, bitmap adapter, diagnostics, selection/reset/invalid dates, native data mapping, denied permission, cache move, network allowlist, day intent, source syntax.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
