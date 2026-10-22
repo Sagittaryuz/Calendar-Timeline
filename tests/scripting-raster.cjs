@@ -4,6 +4,12 @@ async function main(){
  const dir=path.join(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
  const {RectRaster,encodePNG}=await import(pathToFileURL(path.join(dir,'rect-raster.js')).href);
  const drawing=await import(pathToFileURL(path.join(dir,'drawing.js')).href);
+ const nativeColor=new drawing.Color('rgba(255, 0, 0, 1.00)');
+ assert.equal(nativeColor.hex,'ff0000');assert.equal(nativeColor.alpha,1);
+ const translucent=new drawing.Color('rgba(12, 34, 56, 0.5)',0.5);
+ assert.equal(translucent.hex,'0c2238');assert.equal(translucent.alpha,0.25);
+ const nativePaint=new RectRaster(1,1);nativePaint.fill({x:0,y:0,width:1,height:1},nativeColor);
+ assert.deepEqual([...nativePaint.crop().pixels],[255,0,0,255]);
  const warnings=[];const resilient=new RectRaster(2,1,detail=>warnings.push(detail));
  resilient.fill({x:0,y:0,width:1,height:1},new drawing.Color('FFD000',NaN));
  resilient.fill({x:0,y:0,width:1,height:1},{hex:'bad',alpha:1});

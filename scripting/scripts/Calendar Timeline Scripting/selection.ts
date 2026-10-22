@@ -13,14 +13,20 @@ export function resolveFocus(saved: unknown, now = new Date()): Date {
   const record = saved as {date?: unknown; selectedOn?: unknown} | null
   // A choice lasts for the current real day; midnight restores today automatically.
   const chosen = record?.selectedOn === localDay(now) ? parseLocalDay(record.date) : null
-  if (!chosen || localDay(chosen) === localDay(now)) return new Date(now)
+  const week=weekRange(now)
+  if (!chosen || chosen < week.start || chosen >= week.end) return new Date(now.getFullYear(),now.getMonth(),now.getDate())
   return chosen
 }
 
 export function validateSelection(value: unknown, now = new Date()): string {
   const date = parseLocalDay(value)
-  const first = new Date(now.getFullYear(),now.getMonth(),now.getDate()-7)
-  const last = new Date(now.getFullYear(),now.getMonth(),now.getDate()+7)
-  if (!date || date < first || date > last) throw new Error('Data fora do intervalo de navegação.')
+  const {start,end}=weekRange(now)
+  if (!date || date < start || date >= end) throw new Error('Data fora da semana exibida.')
   return localDay(date)
+}
+
+export function weekRange(now=new Date()){
+  const start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay())
+  const end=new Date(start);end.setDate(end.getDate()+7)
+  return {start,end}
 }

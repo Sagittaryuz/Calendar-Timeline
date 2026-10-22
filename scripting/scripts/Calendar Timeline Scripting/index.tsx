@@ -13,7 +13,8 @@ async function main(){
       <Text>Motor original: {model.version}. Dia: {model.focusDate}.</Text>
       <Text>Avisos de desenho: {JSON.stringify(Storage.get('raster-warnings'))}. Se houver avisos, partes do efeito visual foram omitidas; a reprodução visual precisa de conferência.</Text>
       <Text>Calendário: {model.sourceStatus.schedule?.event===false?'acesso não confirmado':'consultado'}. Lembretes: {model.sourceStatus.schedule?.reminder===false?'acesso não confirmado':'consultado'}.</Text>
-      <Text>Adicione o widget médio do Scripting à Tela de Início e selecione este projeto. Toque nos dias do cabeçalho para mudar a timeline.</Text>
+      <Text>Semana fixa de domingo a sábado. Toque em um dia para ver sua agenda das 00h às 24h. A régua não se desloca com o relógio.</Text>
+      <Text>Eventos e lembretes são consultados novamente a cada execução. A atualização automática é solicitada a partir de 15 minutos, sujeita ao iOS.</Text>
       <Text>Não há botão Atualizar. Na virada do dia, a seleção retorna a hoje na próxima execução.</Text>
       <Text>Esta versão ainda exige conferência visual e teste dos toques na Tela de Início.</Text>
       <Text>Último diagnóstico do widget: {Storage.get<any>('widget-diagnostic')?.error??Storage.get<any>('widget-diagnostic')?.phase??'sem registro'}.</Text>

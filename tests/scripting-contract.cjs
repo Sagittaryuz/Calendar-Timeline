@@ -45,6 +45,9 @@ async function main(){
   storage.set=originalSet;
   const select=load('selection'),today=new Date(2026,9,22,12);
   assert.equal(select.localDay(select.resolveFocus(null,today)),'2026-10-22');
+  assert.equal(select.resolveFocus(null,today).getHours(),0,'Today is a fixed full-day overview');
+  for(const day of ['2026-10-18','2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24'])assert.equal(select.validateSelection(day,today),day);
+  for(const day of ['2026-10-17','2026-10-25'])assert.throws(()=>select.validateSelection(day,today));
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-22'},today)),'2026-10-23');
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-21'},today)),'2026-10-22');
   for(const bad of ['2026-02-30','2026-13-01','invalid',null,{},'2020-01-01'])assert.throws(()=>select.validateSelection(bad,today));

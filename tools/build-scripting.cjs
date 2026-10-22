@@ -6,13 +6,27 @@ const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'Calendar Timeline'), 'utf8');
 const dest = path.join(root, 'scripting', 'scripts', 'Calendar Timeline Scripting');
 fs.mkdirSync(dest, {recursive:true});
-let code = source;
+let code = source.replace(/\r\n/g,'\n');
 function replaceOnce(from, to) {
   if (!code.includes(from)) throw new Error('Source contract changed: ' + from.slice(0, 100));
   code = code.replace(from, to);
 }
 replaceOnce('const now = new Date();', 'const now = new Date(options.now ?? Date.now());');
-replaceOnce('const windowStart = new Date(now);', 'const windowStart = new Date(options.focusDate ?? now);');
+replaceOnce('const windowStart = new Date(now);', 'const windowStart = startOfDay(new Date(options.focusDate ?? now));');
+replaceOnce('const windowEnd = new Date(\n  windowStart.getTime() + windowHours * 60 * 60 * 1000\n);', 'const windowEnd = addDays(windowStart, 1);');
+// Historical seven-card geometry and three-line typography, restored without
+// modifying the original Scriptable entry. Keep the week anchored to real now.
+const fixedWeek=fs.readFileSync(path.join(root,'scripting/reference/fixed-week-3bcb13b.js'),'utf8').replace(/\r\n/g,'\n');
+function functionSource(text,name){
+  const start=text.indexOf('function '+name+'('),end=text.indexOf('\n}',start)+2;
+  if(start<0||end<2)throw new Error('Missing function: '+name);
+  return text.slice(start,end);
+}
+for(const name of ['titleHeaderFontSize','titleDayCardRect','drawDatePanel','drawTitleDayCard'])
+  replaceOnce(functionSource(code,name),functionSource(fixedWeek,name));
+replaceOnce('const today = startOfDay(windowStart);\n  return addDays(today, -today.getDay());', 'const today = startOfDay(now);\n  return addDays(today, -today.getDay());');
+replaceOnce(functionSource(code,'drawEventArrivalGuides'),'function drawEventArrivalGuides() {}');
+replaceOnce('await drawDayEndCapsules(contentCtx);','// Daily overview: no end-of-day countdown capsule.');
 replaceOnce('const loadResult = await loadWindow();', 'options.onPhase?.("agenda");\nconst loadResult = options.loadResult ?? await loadWindow();');
 replaceOnce('const astronomy = await loadAstronomy();', 'options.onPhase?.("localização e astronomia");\nconst astronomy = options.astronomy ?? await loadAstronomy();');
 replaceOnce('const hourlyWeather = isAccessoryFamily(widgetFamily)', 'options.onPhase?.("clima");\nconst hourlyWeather = options.hourlyWeather ?? (isAccessoryFamily(widgetFamily)');
@@ -26,15 +40,15 @@ if (finishStart < 0 || finishEnd < finishStart) throw new Error('Missing entry b
 code = code.slice(0, finishStart) + `
 const header = [];
 const focusDay = startOfDay(windowStart);
-for (let offset = -6; offset <= 6; offset++) {
-  const date = addDays(focusDay, offset);
-  const rect = titleDayCardRect(titleTodayCardIndex() + offset);
+for (let index = 0; index < TITLE_CARD_COUNT; index++) {
+  const date = addDays(titleWeekStart(), index);
+  const rect = titleDayCardRect(index);
   const left = Math.max(0, rect.x), right = Math.min(CANVAS.width, rect.x + rect.width);
   if (right > left) header.push({date: dateKey(date), label: shortWeekday(date),
-    x: left, y: rect.y, width: right-left, height: rect.height, selected: offset === 0});
+    x: left, y: rect.y, width: right-left, height: rect.height, selected: dateKey(date) === dateKey(focusDay)});
 }
 return {image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
-  version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart),
+  version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
   sourceStatus: {schedule: loadResult.sourceStatus, partialErrors: loadResult.partialErrors,
     weather: hourlyWeather.freshness}, weatherSnapshot: hourlyWeather, locationSnapshot: astronomy};
 ` + code.slice(finishEnd);

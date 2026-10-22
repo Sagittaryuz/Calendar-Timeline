@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.1.4
+# Calendar Timeline para Scripting — teste 0.2.0
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -6,13 +6,17 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 
 - Widget médio (4×2), com a geometria original de 1092×510.
 - Os dias desenhados no cabeçalho recebem áreas de toque nas mesmas coordenadas. Um App Intent grava somente a seleção local e solicita a atualização do próprio widget.
-- Hoje usa o instante atual; outro dia abre às 00:00 locais. Os estados de evento em andamento/atraso continuam usando o instante real, sem simular que o dia consultado é hoje.
-- Ao tocar na data de hoje, a timeline volta ao instante atual. A escolha expira na próxima virada do dia, sendo aplicada na próxima execução do widget.
+- Sete cartões fixos de domingo a sábado, recuperados do commit `3bcb13b` (geometria e três linhas). A semana se ancora na data real; a seleção destaca um dos sete dias sem transladar o cabeçalho.
+- Qualquer dia, inclusive hoje, mostra de 00h até a próxima meia-noite local. A régua não acompanha o relógio. Estados de evento em andamento/atraso continuam usando o instante real, sem simular que o dia consultado é hoje.
+- A seleção expira na virada do dia e retorna a hoje na próxima execução. Datas fora da semana exibida são rejeitadas.
+- Sem guias/legendas de contagem regressiva dos eventos e sem cápsula de contagem até o fim do dia. A contagem de chuva do motor original permanece.
 - Sem botão Atualizar. Solicitação automática a partir de 15 minutos, sujeita ao iOS. A navegação reutiliza o clima por até 15 minutos, preservando os timestamps das amostras; não atualiza o código.
 - Calendário e Lembretes são apenas lidos. Eventos/lembretes não são criados, editados ou apagados.
 - Cache privado por projeto. Permissões e credenciais do Scriptable não são transferidas para o Scripting.
 
 ## Instalação e teste no aparelho
+
+**0.2.0:** atualização no mesmo vínculo remoto, com semana fixa e seleção por App Intent. A 0.1.4 foi confirmada pelo usuário na Tela de Início. A 0.2.0 passou nos testes locais: sete áreas de toque fixas em todos os dias da semana e em dois horários reais, janela diária completa, ausência das contagens removidas e motor com/sem clima. O comportamento nativo dos toques e o visual da 0.2.0 ainda precisam de reteste. A cor `rgba(255, 0, 0, 1.00)` registrada no aparelho agora é convertida para hexadecimal e alpha; o teste reproduz esse valor. Os arquivos originais do Scriptable ficam preservados.
 
 **Proteção 0.1.4:** a captura do iPhone confirmou `Cor raster inválida` no brilho solar na 0.1.3. A causa numérica exata não foi reproduzida nos testes locais ampliados: 24 cenários, incluindo 15h18, clima vazio e clima sintético com sol/chuva. Cores/alpha inválidos agora são omitidos do bitmap, com contagem e primeiro valor em `raster-warnings`, exibidos no app. Isso evita abortar a agenda por uma pintura inválida; se houver avisos, parte do visual pode faltar. Não equivale a confirmar a causa nem a fidelidade visual. Nenhum dado de agenda entra nesse registro. Com clima sintético, o máximo local foi 1.502 operações e 80 camadas, contra 498 operações nos cenários sem clima. Consumo de memória, tempo e execução na Tela de Início continuam sem medição no aparelho.
 
@@ -22,7 +26,7 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 
 Instale o Scripting pela App Store. Há duas opções:
 
-1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.1.1-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.1.1.
+1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.0-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.0.
 2. **Servidor de desenvolvimento:** no computador, dentro de `scripting/`, execute `npx --yes scripting-cli@1.5.0 start --editor=none --port=4317 --no-auto-open`. Conecte o Scripting ao IP do computador exibido no terminal; ambos precisam estar na mesma rede. Selecione o projeto `Calendar Timeline Scripting` que aparece na lista de projetos do servidor. O CLI usa `scripts/` e recebe os tipos `.d.ts` da versão conectada.
 
 Execute o projeto uma vez no aplicativo e conceda as permissões nativas de Calendário, Lembretes e Localização. Adicione um widget médio do Scripting à Tela de Início e escolha `Calendar Timeline Scripting`. Confira os toques no widget real, pois a prévia não comprova o comportamento do WidgetKit.
@@ -36,7 +40,7 @@ Para atualizar o código, use nova pré-release rastreável do Git ou os arquivo
 - `drawing.js` e `graph-view.tsx`: traduzem DrawContext/Path para Canvas e camadas recortadas do Scripting, mantendo ordem de desenho.
 - `rect-raster.js`: agrupa sequências longas de pequenos retângulos em bitmaps PNG locais, na resolução lógica original. Reduz o tráfego de comandos entre JavaScript e as camadas nativas; textos, caminhos e áreas de toque continuam separados.
 - `host.ts`: adapta APIs de calendário, lembretes, localização, rede, formatação e cache privado.
-- `selection.ts` e `app_intents.tsx`: validam a data e persistem a seleção; entradas fora de ±7 dias são rejeitadas.
+- `selection.ts` e `app_intents.tsx`: validam a data e persistem a seleção dentro da semana exibida; cada toque solicita a execução do widget, que relê agenda e lembretes.
 - `widget.tsx`: entrada WidgetKit; `index.tsx`: inicialização de permissões e informações de instalação.
 
 ## Privacidade e destinos

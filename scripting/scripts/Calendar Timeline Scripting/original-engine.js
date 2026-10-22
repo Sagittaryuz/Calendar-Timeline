@@ -324,7 +324,8 @@ function titleSafeTextY(
 }
 
 function titleHeaderFontSize() {
-  return titleCardTypography().titleFontSize;
+  return Math.min(scaleFontSize(22),
+    Math.floor((titleDayCardRect(0).width - 24) / (8.5 * 0.60)));
 }
 
 function titleCardTypography() {
@@ -370,7 +371,7 @@ const TITLE_CARD_COUNT = 7;
 const TODAY_CARD_SOFT_CORNER_RADIUS = scaleVertical(6);
 
 function titleWeekStart() {
-  const today = startOfDay(windowStart);
+  const today = startOfDay(now);
   return addDays(today, -today.getDay());
 }
 
@@ -487,10 +488,8 @@ const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 const requestedHours =
   (args.queryParameters ?? {}).hours ?? args.widgetParameter;
 const windowHours = parseWindowHours(requestedHours);
-const windowStart = new Date(options.focusDate ?? now);
-const windowEnd = new Date(
-  windowStart.getTime() + windowHours * 60 * 60 * 1000
-);
+const windowStart = startOfDay(new Date(options.focusDate ?? now));
+const windowEnd = addDays(windowStart, 1);
 options.onPhase?.("agenda");
 const loadResult = options.loadResult ?? await loadWindow();
 options.onPhase?.("localização e astronomia");
@@ -519,15 +518,15 @@ const widget = isAccessoryFamily(widgetFamily)
 
 const header = [];
 const focusDay = startOfDay(windowStart);
-for (let offset = -6; offset <= 6; offset++) {
-  const date = addDays(focusDay, offset);
-  const rect = titleDayCardRect(titleTodayCardIndex() + offset);
+for (let index = 0; index < TITLE_CARD_COUNT; index++) {
+  const date = addDays(titleWeekStart(), index);
+  const rect = titleDayCardRect(index);
   const left = Math.max(0, rect.x), right = Math.min(CANVAS.width, rect.x + rect.width);
   if (right > left) header.push({date: dateKey(date), label: shortWeekday(date),
-    x: left, y: rect.y, width: right-left, height: rect.height, selected: offset === 0});
+    x: left, y: rect.y, width: right-left, height: rect.height, selected: dateKey(date) === dateKey(focusDay)});
 }
 return {image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
-  version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart),
+  version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
   sourceStatus: {schedule: loadResult.sourceStatus, partialErrors: loadResult.partialErrors,
     weather: hourlyWeather.freshness}, weatherSnapshot: hourlyWeather, locationSnapshot: astronomy};
 
@@ -3784,7 +3783,7 @@ async function renderWidget(items, loadError) {
   // A borda superior da timeline não pode cobrir seu aro branco.
   drawDayBoundaryMoonBordersOnForeground(contentCtx);
   // Última camada: a cápsula prevalece inclusive sobre os charts.
-  await drawDayEndCapsules(contentCtx);
+  // Daily overview: no end-of-day countdown capsule.
 
   return shiftWidgetImage(contentCtx.getImage());
 }
@@ -4437,49 +4436,56 @@ function titleCardGap() {
 }
 
 function titleDayCardRect(index) {
+  const cardCount = TITLE_CARD_COUNT;
+  const cardGap = titleCardGap();
   const cardsLeft = CANVAS.marginX;
   const cardsRight = CANVAS.width - CANVAS.marginX;
-  const step = (cardsRight - cardsLeft) / TITLE_CARD_COUNT;
-  const todayIndex = titleTodayCardIndex();
-  // A mesma transformação da régua: o limite direito aponta à meia-noite.
-  // O cabeçalho para na primeira célula inteira; a régua segue seu movimento.
-  const boundary = CANVAS.plotLeft + timeToX(addDays(startOfDay(windowStart), 1));
-  const todayLeft = Math.max(cardsLeft, Math.min(cardsRight - step, boundary - step));
-  const offset = index - todayIndex;
-  const cardGap = titleCardGap();
-  const selected = offset === 0;
-  // Uma única translação para todos os dias. Só trava quando HOJE chega
-  // à primeira posição; depois disso a régua temporal continua passando.
-  const x = todayLeft + offset * step + (offset > 0 ? cardGap : 0);
-  const titleCardTop = selected ? WIDGET_CONTOUR.strokeInset
-    : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
-  const height = selected ? Math.max(1, TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2)
-    : TITLE_CARD_HEIGHT;
-  return new Rect(x, titleCardTop, selected ? step : step - cardGap, height);
+  const cardWidth =
+    (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
+    cardCount;
+
+  // A linha superior do dia atual é um traço centrado na borda,
+  // então os demais quadros sobem metade da espessura para alinhar
+  // seus limites visuais superiores.
+  const titleCardTop =
+    index === titleTodayCardIndex()
+      ? WIDGET_CONTOUR.strokeInset
+      : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
+  // O cartão atual termina na mesma altura dos demais. Seu topo lógico
+  // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
+  // altura preserva o alinhamento externo superior sem encurtar o vão.
+  const titleCardHeight =
+    index === titleTodayCardIndex()
+      ? Math.max(
+          1,
+          TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2
+        )
+      : TITLE_CARD_HEIGHT;
+
+  return new Rect(
+    cardsLeft + index * (cardWidth + cardGap),
+    titleCardTop,
+    cardWidth,
+    titleCardHeight
+  );
 }
 
 function drawDatePanel(ctx, holidayDates) {
-  const today = startOfDay(windowStart);
-  const todayIndex = titleTodayCardIndex();
-  const card = titleDayCardRect(todayIndex);
-  // Datas e posições compartilham o mesmo offset, sem troca por índice de
-  // célula. Os outros dias podem aparecer parcialmente nas extremidades.
-  for (const backgroundOnly of [true, false]) {
-    for (let offset = -TITLE_CARD_COUNT + 1; offset < TITLE_CARD_COUNT; offset++) {
-      if (offset === 0) continue;
-      const neighbor = titleDayCardRect(todayIndex + offset);
-      if (neighbor.x + neighbor.width <= CANVAS.marginX ||
-          neighbor.x >= CANVAS.width - CANVAS.marginX) continue;
-      drawTitleDayCard(ctx, addDays(today, offset), neighbor, false,
-        Math.abs(neighbor.x + neighbor.width - (CANVAS.width - CANVAS.marginX)) < 1,
-        backgroundOnly, !backgroundOnly);
-    }
+  // A área do título agora é uma faixa compacta de previsão. O restante
+  // do desenho continua começando no mesmo ponto e não sofre deslocamento.
+  const cardCount = TITLE_CARD_COUNT;
+  const firstDay = titleWeekStart();
+
+  for (let index = 0; index < cardCount; index++) {
+    const date = addDays(firstDay, index);
+    drawTitleDayCard(
+      ctx,
+      date,
+      titleDayCardRect(index),
+      index === titleTodayCardIndex(),
+      index === cardCount - 1
+    );
   }
-  // HOJE permanece na frente, com a mesma geometria e projeção temporal.
-  for (let y = Math.floor(card.y); y < Math.ceil(card.y + card.height); y++) {
-    restoreWidgetBackgroundSpan(ctx, card.x, y, card.width);
-  }
-  drawTitleDayCard(ctx, today, card, true, false, false, true);
 }
 
 
@@ -5310,9 +5316,7 @@ function drawTitleDayCard(
   date,
   card,
   isSelected,
-  isLast,
-  backgroundOnly = false,
-  textOnly = false
+  isLast
 ) {
   const borderColor = new Color("#303136", 0.82);
   const dayBackgroundColor = timelineBackgroundColorForDate(date);
@@ -5334,7 +5338,7 @@ function drawTitleDayCard(
       : isSpecialDay
       ? dayBackgroundColor
       : blurEnabled
-        ? (SETTINGS.blurredWeekdayCardColor ?? "#323236")
+        ? "#232327"
         : SETTINGS.nonBlurredFutureCardColor,
     1.0
   );
@@ -5344,7 +5348,7 @@ function drawTitleDayCard(
   const rightCornerRadius = isLast
     ? TITLE_CARD_OUTER_CORNER_RADIUS
     : 0;
-  const leftCornerRadius = Math.abs(card.x - CANVAS.marginX) <= 1
+  const leftCornerRadius = card.x <= CANVAS.marginX + 1
     ? TITLE_CARD_OUTER_CORNER_RADIUS
     : 0;
   const cornerRadii = {
@@ -5358,7 +5362,7 @@ function drawTitleDayCard(
   // O cartão de hoje já foi preenchido pela geometria contínua
   // que também cobre sua faixa na timeline. Não desenhamos uma segunda
   // forma aqui, evitando a separação entre duas geometrias.
-  if (!isSelected && !textOnly) {
+  if (!isSelected) {
     // Os demais cartões conservam a borda fina escura.
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
@@ -5378,10 +5382,7 @@ function drawTitleDayCard(
       },
       cardColor
     );
-    drawAdjacentTitleCardCurve(ctx, date, card, cardColor, borderColor);
   }
-
-  if (backgroundOnly) return;
 
   // A data mantém a cor original; somente a palavra do dia recebe
   // a cor correspondente a sábado, domingo ou feriado.
@@ -5392,55 +5393,73 @@ function drawTitleDayCard(
   const dateColor = isSelected
     ? new Color("#FFFFFF", 0.96)
     : new Color(SETTINGS.secondaryTextColor, 1.0);
-  const weekdayLabel = shortWeekday(date);
-  const dayLabel = String(date.getDate()).padStart(2, "0");
-  const layout = titleCardTypography();
-  const daily = titleDailyTemperatureForDay(date);
-  const minimumValue = finiteWeatherNumber(daily?.minimum);
-  const maximumValue = finiteWeatherNumber(daily?.maximum);
-  const minimum = minimumValue !== null ? String(Math.round(minimumValue)) + "º" : "--º";
-  const maximum = maximumValue !== null ? String(Math.round(maximumValue)) + "º" : "--º";
-  const iconGap = scaleVertical(3);
-  // A segunda linha usa a mesma referência retangular nos sete dias:
-  // as curvas da moldura não deslocam nem reduzem este conjunto.
-  const weatherCenterX = card.x + card.width / 2;
-  const detailFontSize = Math.max(1, Math.min(scaleFontSize(24),
-    Math.floor((card.width - 16 - layout.iconSize - iconGap * 2) /
-      ((minimum.length + maximum.length) * 0.62))));
-  const minimumWidth = minimum.length * detailFontSize * 0.62;
-  const maximumWidth = maximum.length * detailFontSize * 0.62;
-  const weatherWidth = minimumWidth + iconGap * 2 + layout.iconSize + maximumWidth;
-  const weatherX = weatherCenterX - weatherWidth / 2;
-  // Só os quadros estáticos nas bordas alinham dia/data à linha do clima.
-  // A posição, e não o dia da semana, identifica a extremidade real.
-  const atLeftEdge = Math.abs(card.x - CANVAS.marginX) < 0.001;
-  const atRightEdge = Math.abs(card.x + card.width - (CANVAS.width - CANVAS.marginX)) < 0.001;
-  const isStatic = titleDayCardRect(titleTodayCardIndex()).x === CANVAS.marginX;
-  const titleStartX = isStatic && atLeftEdge
-    ? weatherX + weatherWidth - layout.titleWidth
-    : isStatic && atRightEdge
-      ? weatherX
-      : weatherCenterX - layout.titleWidth / 2;
-  ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackMonospacedSystemFont(layout.titleFontSize));
-  ctx.setTextColor(weekdayColor);
-  drawTightTitleText(ctx, weekdayLabel, titleStartX, layout.titleY, layout.titleFontSize);
-  ctx.setTextColor(dateColor);
-  // Letras próximas permitem aumentar a fonte sem alterar a largura do quadro.
-  drawTightTitleText(ctx, dayLabel, titleStartX + 1.72 * layout.titleFontSize,
-    layout.titleY, layout.titleFontSize);
+  const detailColor = isSelected
+    ? new Color("#FFFFFF", 0.96)
+    : new Color("#D1D1D6", 0.96);
 
-  const detailVisibleHeight = detailFontSize * (1.15 - TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
-  const weatherY = layout.weatherCenterY - detailVisibleHeight / 2 -
-    detailFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO;
+  const weekdayLabel = shortWeekday(date);
+  const dateLabel = titleDayMonthLabel(date);
+
+  const titleFontSize = titleHeaderFontSize();
+  const titleCharacterWidth = titleFontSize * 0.60;
+  const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
+  const titleGap = titleCharacterWidth / 2;
+  const titleGroupWidth = (weekdayLabel.length + dateLabel.length + 0.5) * titleCharacterWidth;
+  const titleY = titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
+    WIDGET_CONTOUR.strokeInset + scaleVertical(7),
+    scaleVertical(3), titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
+  const titleStartX = card.x + (card.width - titleGroupWidth) / 2;
+  ctx.setTextAlignedLeft();
+  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
+  ctx.setTextColor(weekdayColor);
+  ctx.drawText(weekdayLabel, new Point(titleStartX, titleY));
+  ctx.setTextColor(dateColor);
+  ctx.drawText(dateLabel, new Point(titleStartX + weekdayWidth + titleGap, titleY));
+
+  const daily = titleDailyTemperatureForDay(date);
+  const minimum = Number.isFinite(Number(daily?.minimum))
+    ? String(Math.round(Number(daily.minimum))) + "º" : "--º";
+  const maximum = Number.isFinite(Number(daily?.maximum))
+    ? String(Math.round(Number(daily.maximum))) + "º" : "--º";
+  const counts = titleScheduleCountsForDay(date);
+  const detailFontSize = scaleFontSize(18);
+  const detailCharacterWidth = detailFontSize * 0.62;
+  const iconSize = scaleVertical(22);
+  const iconGap = scaleVertical(2);
+  const minimumWidth = minimum.length * detailCharacterWidth;
+  const maximumWidth = maximum.length * detailCharacterWidth;
+  const weatherWidth = minimumWidth + iconGap * 2 + iconSize + maximumWidth;
+  const weatherX = card.x + (card.width - weatherWidth) / 2;
+  const weatherY = titleY + titleFontSize * 1.15 + scaleVertical(3);
+  const weatherCenterY = weatherY + detailFontSize / 2;
   ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
   ctx.drawText(minimum, new Point(weatherX, weatherY));
   drawTitleWeatherIcon(ctx, titleForecastForDay(date),
-    weatherX + minimumWidth + iconGap + layout.iconSize / 2,
-    layout.weatherCenterY, layout.iconSize);
+    weatherX + minimumWidth + iconGap + iconSize / 2, weatherCenterY, iconSize);
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor, 1.0));
-  ctx.drawText(maximum, new Point(weatherX + minimumWidth + iconGap * 2 + layout.iconSize, weatherY));
+  ctx.drawText(maximum, new Point(weatherX + minimumWidth + iconGap * 2 + iconSize, weatherY));
+
+  // Terceira linha: somente as letras E e L recebem negrito.
+  const parts = [
+    { text: "E", bold: true },
+    { text: ": " + String(counts.events) + " | ", bold: false },
+    { text: "L", bold: true },
+    { text: ": " + String(counts.reminders), bold: false },
+  ];
+  const countLength = parts.reduce((total, part) => total + part.text.length, 0);
+  const countFontSize = Math.min(scaleFontSize(16),
+    Math.floor((card.width - 16) / (countLength * 0.62)));
+  const countCharacterWidth = countFontSize * 0.62;
+  let countX = card.x + (card.width - countLength * countCharacterWidth) / 2;
+  const countY = weatherCenterY + iconSize / 2 + scaleVertical(4);
+  ctx.setTextColor(detailColor);
+  for (const part of parts) {
+    ctx.setFont(part.bold ? Font.blackMonospacedSystemFont(countFontSize)
+      : Font.regularMonospacedSystemFont(countFontSize));
+    ctx.drawText(part.text, new Point(countX, countY));
+    countX += part.text.length * countCharacterWidth;
+  }
 }
 
 function titleDailyTemperatureForDay(date) {
@@ -11974,90 +11993,7 @@ function eventArrivalGuideTrackCenterY(rowTop, rowHeight, index, count) {
   return rowTop + rowHeight * (index + 1) / (count + 1);
 }
 
-function drawEventArrivalGuides(ctx, items, day) {
-  const isTomorrow = day === "tomorrow";
-  const guides = isTomorrow
-    ? tomorrowEventArrivalGuides(items)
-    : todayEventArrivalGuides(items);
-  if (guides.length === 0) return;
-
-  const tomorrowStart = addDays(startOfDay(windowStart), 1);
-  const dayBoundaryX = isTomorrow
-    ? timeToX(tomorrowStart)
-    : 0;
-  const rowHeight = timelineRowHeight(isTomorrow ? tomorrowStart : windowStart);
-
-  const guidesByRow = new Map();
-  for (const guide of guides) {
-    if (!guidesByRow.has(guide.row)) guidesByRow.set(guide.row, []);
-    guidesByRow.get(guide.row).push(guide);
-  }
-
-  for (const rowGuides of guidesByRow.values()) {
-    const rowTop = timelineChartTop() + rowGuides[0].row * rowHeight;
-    const baseLayout = eventArrivalGuideLayout(day, dayBoundaryX, 0);
-    // Todos os números ficam no centro da faixa. Somente os tracejados
-    // usam os níveis 1/(N+1), 2/(N+1), ... em ordem cronológica.
-    const labelCenterY = rowTop + rowHeight / 2;
-    const bounds = timelineVisibleContentBounds(rowTop, rowHeight, 4);
-    baseLayout.labelX = Math.max(baseLayout.labelX, bounds.left + EVENT_ARRIVAL_GUIDE_LEFT_MARGIN);
-    const separatorWidth = scaleVertical(EVENT_ARRIVAL_GUIDE_SEPARATOR_WIDTH);
-    const margin = EVENT_ARRIVAL_GUIDE_LEFT_MARGIN;
-    const gap = EVENT_ARRIVAL_GUIDE_LABEL_GAP;
-    // Usa a geometria real dos charts da faixa, incluindo um evento em
-    // andamento que já ocupe a margem onde os números seriam desenhados.
-    const occupiedSegments = items
-      .filter((item) => Number(item.gridRow) === rowGuides[0].row &&
-        (item.kind === "event" || item.kind === "reminder") &&
-        !isBirthdayItem(item))
-      .flatMap((item) => timelineItemBarSegmentsForDisplay(item))
-      .filter((segment) => segment.x + segment.width > baseLayout.labelX);
-    const chartLeft = Math.min(bounds.right, ...occupiedSegments.map(
-      (segment) => segment.x
-    ));
-    let nextLabelX = baseLayout.labelX;
-    const visibleLabels = [];
-    for (const guide of rowGuides) {
-      const labelWidth = eventArrivalGuideLabelWidth(guide.label);
-      // Os rótulos devem caber por inteiro antes do primeiro chart.
-      // Ao comprimir a faixa, os últimos somem primeiro; o próximo evento
-      // permanece até que nem seu próprio número caiba mais.
-      if (nextLabelX + labelWidth + gap > chartLeft) break;
-      visibleLabels.push({ guide, labelX: nextLabelX, labelWidth });
-      nextLabelX += labelWidth + gap + separatorWidth + margin;
-    }
-    for (const { guide, labelX, labelWidth } of visibleLabels) {
-      drawEventArrivalGuideLabel(ctx, guide.label, labelX, labelCenterY, labelWidth);
-    }
-
-    for (let index = 0; index < rowGuides.length; index++) {
-      const guide = rowGuides[index];
-      const centerY = eventArrivalGuideTrackCenterY(
-        rowTop, rowHeight, index, rowGuides.length
-      );
-      const ownLabel = visibleLabels[index];
-      // Mesmo sem número, cada evento mantém sua própria linha até o chart.
-      let dashStartX = ownLabel
-        ? ownLabel.labelX + ownLabel.labelWidth + gap
-        : visibleLabels.length
-          ? visibleLabels[visibleLabels.length - 1].labelX +
-            visibleLabels[visibleLabels.length - 1].labelWidth + gap
-          : baseLayout.labelX;
-      const visibleTargetX = Math.max(0, Math.min(
-        bounds.right, timelineEventGuideTargetX(guide.event)
-      ));
-      for (const following of visibleLabels.slice(index + 1)) {
-        // 45 px de tracejado e a margem de 15 px antes do próximo número.
-        drawEventArrivalGuideDashes(
-          ctx, dashStartX,
-          Math.min(visibleTargetX, following.labelX - margin), centerY
-        );
-        dashStartX = following.labelX + following.labelWidth + gap;
-      }
-      drawEventArrivalGuideDashes(ctx, dashStartX, visibleTargetX, centerY);
-    }
-  }
-}
+function drawEventArrivalGuides() {}
 
 function drawEventStartLines(ctx, items) {
   const events = timelineStartLineItems(items);
