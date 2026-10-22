@@ -13,11 +13,13 @@ function replaceOnce(from, to) {
 }
 replaceOnce('const now = new Date();', 'const now = new Date(options.now ?? Date.now());');
 replaceOnce('const windowStart = new Date(now);', 'const windowStart = new Date(options.focusDate ?? now);');
-replaceOnce('const loadResult = await loadWindow();', 'const loadResult = options.loadResult ?? await loadWindow();');
-replaceOnce('const astronomy = await loadAstronomy();', 'const astronomy = options.astronomy ?? await loadAstronomy();');
-replaceOnce('const hourlyWeather = isAccessoryFamily(widgetFamily)', 'const hourlyWeather = options.hourlyWeather ?? (isAccessoryFamily(widgetFamily)');
+replaceOnce('const loadResult = await loadWindow();', 'options.onPhase?.("agenda");\nconst loadResult = options.loadResult ?? await loadWindow();');
+replaceOnce('const astronomy = await loadAstronomy();', 'options.onPhase?.("localização e astronomia");\nconst astronomy = options.astronomy ?? await loadAstronomy();');
+replaceOnce('const hourlyWeather = isAccessoryFamily(widgetFamily)', 'options.onPhase?.("clima");\nconst hourlyWeather = options.hourlyWeather ?? (isAccessoryFamily(widgetFamily)');
 replaceOnce(': await loadHourlyWeather(astronomy);', ': await loadHourlyWeather(astronomy));');
-replaceOnce('const automaticHolidayDates = await loadAutomaticHolidays(astronomy);', 'const automaticHolidayDates = options.holidayDates ?? await loadAutomaticHolidays(astronomy);');
+replaceOnce('const nightTextures =', 'options.onPhase?.("texturas");\nconst nightTextures =');
+replaceOnce('const automaticHolidayDates = await loadAutomaticHolidays(astronomy);', 'options.onPhase?.("feriados");\nconst automaticHolidayDates = options.holidayDates ?? await loadAutomaticHolidays(astronomy);');
+replaceOnce('const widget = isAccessoryFamily(widgetFamily)', 'options.onPhase?.("preparação do desenho");\nconst widget = isAccessoryFamily(widgetFamily)');
 const finishStart = code.indexOf('// URL explícita abre diretamente');
 const finishEnd = code.indexOf('Script.complete();', finishStart) + 'Script.complete();'.length;
 if (finishStart < 0 || finishEnd < finishStart) throw new Error('Missing entry boundary');

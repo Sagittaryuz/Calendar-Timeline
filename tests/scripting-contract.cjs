@@ -25,6 +25,14 @@ function load(name){
   modules.set(name,module.exports);return module.exports;
 }
 async function main(){
+  const diagnostics=load('diagnostics');
+  diagnostics.markPhase('teste do desenho',Date.now());
+  assert.match(diagnostics.failureDetails(new TypeError('Falha nativa de teste')),/teste do desenho/);
+  assert.match(diagnostics.failureDetails(new TypeError('Falha nativa de teste')),/TypeError: Falha nativa de teste/);
+  assert.match(diagnostics.failureDetails(null),/null/);
+  const originalSet=storage.set;storage.set=()=>{throw Error('Storage indisponível')};
+  assert.doesNotThrow(()=>diagnostics.markPhase('não deve interromper o motor',Date.now()));
+  storage.set=originalSet;
   const select=load('selection'),today=new Date(2026,9,22,12);
   assert.equal(select.localDay(select.resolveFocus(null,today)),'2026-10-22');
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-22'},today)),'2026-10-23');

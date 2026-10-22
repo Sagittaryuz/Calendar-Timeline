@@ -491,21 +491,27 @@ const windowStart = new Date(options.focusDate ?? now);
 const windowEnd = new Date(
   windowStart.getTime() + windowHours * 60 * 60 * 1000
 );
+options.onPhase?.("agenda");
 const loadResult = options.loadResult ?? await loadWindow();
+options.onPhase?.("localização e astronomia");
 const astronomy = options.astronomy ?? await loadAstronomy();
 const widgetFamily = config.runsInWidget ? config.widgetFamily : null;
+options.onPhase?.("clima");
 const hourlyWeather = options.hourlyWeather ?? (isAccessoryFamily(widgetFamily)
   ? emptyHourlyWeather()
   : await loadHourlyWeather(astronomy));
+options.onPhase?.("texturas");
 const nightTextures =
   SETTINGS.showNightTexture && !isAccessoryFamily(widgetFamily)
     ? await loadNightTextures()
     : emptyNightTextures();
+options.onPhase?.("feriados");
 const automaticHolidayDates = options.holidayDates ?? await loadAutomaticHolidays(astronomy);
 automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
 const preparedItems = prepareTimelineItems(loadResult.items, now);
 const timelineRowCounts = prepareTimelineRowCounts(preparedItems);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems, timelineRowCounts);
+options.onPhase?.("preparação do desenho");
 const widget = isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);

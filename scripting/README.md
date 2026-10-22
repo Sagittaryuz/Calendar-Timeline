@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.1.1
+# Calendar Timeline para Scripting — teste 0.1.2
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -13,6 +13,8 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 - Cache privado por projeto. Permissões e credenciais do Scriptable não são transferidas para o Scripting.
 
 ## Instalação e teste no aparelho
+
+**Importação remota:** use `https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting`. A branch `scripting` é o canal de distribuição. A versão 0.1.2 substitui o aviso genérico de permissões pelo erro e pela etapa de preparação, somente no aparelho. As capturas anteriores confirmaram que Calendários, Lembretes e Localização estavam habilitados; não confirmaram a causa da falha. A correção funcional depende do erro real retornado nesta versão. Importe/atualize pelo vínculo remoto e confira a versão antes de testar; não há confirmação de atualização automática no aparelho.
 
 Instale o Scripting pela App Store. Há duas opções:
 
