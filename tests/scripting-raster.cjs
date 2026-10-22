@@ -6,6 +6,7 @@ async function main(){
  const drawing=await import(pathToFileURL(path.join(dir,'drawing.js')).href);
  const nativeColor=new drawing.Color('rgba(255, 0, 0, 1.00)');
  assert.equal(nativeColor.hex,'ff0000');assert.equal(nativeColor.alpha,1);
+ assert.equal(new drawing.Color('#rgba(255, 0, 0, 1.00)').hex,'ff0000','Old cached calendar color is recoverable');
  const translucent=new drawing.Color('rgba(12, 34, 56, 0.5)',0.5);
  assert.equal(translucent.hex,'0c2238');assert.equal(translucent.alpha,0.25);
  const nativePaint=new RectRaster(1,1);nativePaint.fill({x:0,y:0,width:1,height:1},nativeColor);

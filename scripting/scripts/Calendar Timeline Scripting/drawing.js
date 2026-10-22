@@ -7,11 +7,12 @@ export class Point { constructor(x,y) {Object.assign(this,{x,y});} }
 export class Rect { constructor(x,y,width,height) {Object.assign(this,{x,y,width,height});} }
 export class Color {
   constructor(hex,alpha=1) {
-    const rgba=/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i.exec(hex);
+    const raw=hex.replace(/^#/,'');
+    const rgba=/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i.exec(raw);
     if(rgba){
       this.hex=rgba.slice(1,4).map(n=>Math.max(0,Math.min(255,Math.round(Number(n)))).toString(16).padStart(2,'0')).join('');
       this.alpha=alpha*(rgba[4]===undefined?1:Math.max(0,Math.min(1,Number(rgba[4]))));
-    }else{this.hex=hex.replace(/^#/, '');this.alpha=alpha;}
+    }else{this.hex=raw;this.alpha=alpha;}
   }
   static white(){return new Color('FFFFFF');}
   static black(){return new Color('000000');}

@@ -527,6 +527,9 @@ for (let index = 0; index < TITLE_CARD_COUNT; index++) {
 }
 return {image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
   version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
+  selectedDayIsToday:dateKey(windowStart)===dateKey(now), timelineBackground:timelineBackgroundColorForDate(windowStart),
+  nowMarker:dateKey(windowStart)===dateKey(now)?{x:CANVAS.plotLeft+timeToX(now),color:'#30D158'}:null,
+  contour:{inset:WIDGET_CONTOUR.strokeInset,width:CANVAS.width,height:CANVAS.height},
   sourceStatus: {schedule: loadResult.sourceStatus, partialErrors: loadResult.partialErrors,
     weather: hourlyWeather.freshness}, weatherSnapshot: hourlyWeather, locationSnapshot: astronomy};
 
@@ -3789,20 +3792,7 @@ async function renderWidget(items, loadError) {
 }
 
 function shiftWidgetImage(image) {
-  const shiftedCtx = new DrawContext();
-  shiftedCtx.size = new Size(CANVAS.width, CANVAS.height);
-  shiftedCtx.opaque = true;
-  shiftedCtx.respectScreenScale = false;
-  for (let y = 0; y < CANVAS.height; y++) {
-    shiftedCtx.setFillColor(widgetGradientColorAtY(y));
-    shiftedCtx.fillRect(new Rect(0, y, WIDGET_LEFT_EDGE_RETRACTION, 1));
-  }
-  shiftedCtx.drawImageInRect(
-    image,
-    new Rect(WIDGET_LEFT_EDGE_RETRACTION, 0,
-      CANVAS.width - WIDGET_LEFT_EDGE_RETRACTION, CANVAS.height)
-  );
-  return shiftedCtx.getImage();
+  return image;
 }
 
 function dayEndCapsuleEntries() {
@@ -3829,16 +3819,7 @@ async function drawDayEndCapsules(ctx) {
 }
 
 function shouldBlurFutureTimeline() {
-  if (!SETTINGS.futureTimelineBlurEnabled) return false;
-
-  const metrics = futureTimelineBlurMetrics();
-  if (metrics.width <= 0) return false;
-
-  // Sem conseguir verificar o Calendário/Lembretes, mantém o futuro
-  // protegido até que a leitura volte a funcionar.
-  if (loadResult?.error) return true;
-
-  return hasBlockingTodayTimelineItems(loadResult?.items ?? []);
+  return false;
 }
 
 function hasBlockingTodayTimelineItems(items) {
@@ -4163,36 +4144,16 @@ function timelineOuterBorderTopY() {
 }
 
 function drawTimelineOuterBorder(ctx) {
+  // One contour in final canvas coordinates; no translated or rescaled copy.
+  // The iOS container still performs its own device-specific final clipping.
   const inset = WIDGET_CONTOUR.strokeInset;
-  const topY = timelineOuterBorderTopY();
   const left = widgetLeftContourPoints(inset);
-  const rightBottom = left.filter(p => p.y >= CANVAS.height / 2)
-    .map(p => new Point(CANVAS.width - p.x, p.y));
-  const vertices = [
-    new Point(inset, topY),
-    new Point(CANVAS.width - inset, topY),
-    ...rightBottom,
-    ...left.slice().reverse().filter(p => p.y >= topY),
-    new Point(inset, topY),
-  ];
-  const path = new Path();
-  path.move(vertices[0]);
-  let last = vertices[0];
-  for (const end of vertices.slice(1)) {
-    const start = last;
-    const steps = Math.max(1, Math.ceil(Math.hypot(end.x-start.x, end.y-start.y)));
-    for (let i = 1; i <= steps; i++) {
-      const p = new Point(start.x+(end.x-start.x)*i/steps,
-        start.y+(end.y-start.y)*i/steps);
-      if (insideCurrentDayUnifiedShape((last.x+p.x)/2, (last.y+p.y)/2)) path.move(p);
-      else path.addLine(p);
-      last = p;
-    }
-  }
-  ctx.setStrokeColor(new Color("#303136", 0.82));
-  ctx.setLineWidth(TIMELINE_OUTER_BORDER_WIDTH);
-  ctx.addPath(path);
-  ctx.strokePath();
+  const vertices = [...left, ...left.slice().reverse().map(p => new Point(CANVAS.width-p.x,p.y))];
+  const path = new Path();path.move(vertices[0]);
+  for (const point of vertices.slice(1)) path.addLine(point);
+  path.closeSubpath();ctx.addPath(path);
+  ctx.setStrokeColor(new Color('#FFFFFF',0.9));
+  ctx.setLineWidth(Math.min(inset,scaleVertical(3)));ctx.strokePath();
 }
 
 function currentDayUnifiedShape(path = new Path()) {
@@ -4254,12 +4215,7 @@ function insideCurrentDayUnifiedShape(x, y) {
   return inside;
 }
 
-function drawCurrentDaySpecialBackground(ctx) {
-  const color = timelineBackgroundColorForDate(startOfDay(windowStart));
-  if (color === SETTINGS.timelineBackgroundColor) return;
-  ctx.setFillColor(new Color(color, 1));
-  ctx.addPath(currentDayUnifiedShape());
-  ctx.fillPath();
+function drawCurrentDaySpecialBackground() {
 }
 
 function restoreWidgetBackgroundSpan(ctx, x, y, width) {
@@ -4280,86 +4236,18 @@ function restoreWidgetBackgroundSpan(ctx, x, y, width) {
   }
 }
 
-function timelineBackgroundColorForDate(
-  date,
-  holidayDates = loadResult.holidayDates
-) {
-  if (holidayDates?.has(dateKey(date))) {
-    return SETTINGS.holidayTimelineBackgroundColor;
-  }
-  if (date.getDay() === 6) {
-    return (
-      SETTINGS.saturdayTimelineBackgroundColor ??
-      SETTINGS.nonTodayTimelineOverlayColor
-    );
-  }
-  if (date.getDay() === 0) {
-    return SETTINGS.sundayTimelineBackgroundColor;
-  }
-  return SETTINGS.timelineBackgroundColor;
+function timelineBackgroundColorForDate(date, holidayDates = loadResult.holidayDates) {
+  if (dateKey(date) === dateKey(now)) return SETTINGS.timelineBackgroundColor;
+  if (holidayDates?.has(dateKey(date))) return SETTINGS.holidayTimelineBackgroundColor;
+  if (date.getDay() === 6) return SETTINGS.saturdayTimelineBackgroundColor;
+  if (date.getDay() === 0) return SETTINGS.sundayTimelineBackgroundColor;
+  return SETTINGS.nonTodayTimelineOverlayColor;
 }
 
-function drawTimelineBackground(
-  ctx,
-  localToTimeline = false
-) {
-  let dayStart = startOfDay(windowStart);
-  const finalDay = startOfDay(windowEnd);
-  const todayKey = dateKey(startOfDay(windowStart));
-
-  while (dayStart <= finalDay) {
-    const dayEnd = addDays(dayStart, 1);
-    const visibleStart = new Date(
-      Math.max(dayStart.getTime(), windowStart.getTime())
-    );
-    const visibleEnd = new Date(
-      Math.min(dayEnd.getTime(), windowEnd.getTime())
-    );
-    const x0 = Math.max(0, timeToX(visibleStart));
-    const x1 = Math.min(timelineWidth(), timeToX(visibleEnd));
-    const isToday = dateKey(dayStart) === todayKey;
-    const backgroundColor = timelineBackgroundColorForDate(dayStart);
-    const isSpecialDay =
-      backgroundColor !== SETTINGS.timelineBackgroundColor;
-
-    // Quando hoje é sábado, domingo ou feriado, sua cor já foi
-    // desenhada na geometria contínua do canvas principal. O painel
-    // permanece transparente nesse trecho para não criar uma segunda
-    // forma sobreposta.
-    const isUnifiedCurrentDay =
-      localToTimeline && isToday && isSpecialDay;
-    if (
-      x1 > x0 &&
-      !isUnifiedCurrentDay &&
-      (isSpecialDay || !isToday)
-    ) {
-      ctx.setFillColor(
-        new Color(
-          isSpecialDay
-            ? backgroundColor
-            : (!isToday && dayStart > startOfDay(windowStart) && shouldBlurFutureTimeline()
-                ? SETTINGS.blurredWeekdayTimelineOverlayColor
-                : SETTINGS.nonTodayTimelineOverlayColor),
-          isSpecialDay
-            ? 1.0
-            : SETTINGS.nonTodayTimelineOverlayOpacity
-        )
-      );
-      ctx.fillRect(
-        new Rect(
-          localToTimeline
-            ? x0
-            : CANVAS.plotLeft + x0,
-          localToTimeline
-            ? 0
-            : CANVAS.timelineTop,
-          x1 - x0,
-          timelineHeight()
-        )
-      );
-    }
-    dayStart = dayEnd;
-  }
+function drawTimelineBackground(ctx, localToTimeline = false) {
+  ctx.setFillColor(new Color(timelineBackgroundColorForDate(windowStart)));
+  ctx.fillRect(new Rect(localToTimeline ? 0 : CANVAS.plotLeft,
+    localToTimeline ? 0 : CANVAS.timelineTop, timelineWidth(), timelineHeight()));
 }
 
 function widgetGradientColorAtY(y) {
@@ -5127,11 +5015,7 @@ function currentDayFrameHorizontalDirection(
   return "right";
 }
 
-function drawCurrentDayFrameOverlay(ctx, items = []) {
-  // A moldura completa precisa ficar na camada de primeiro plano.
-  drawCurrentDayBottomLineUnderlay(ctx);
-  drawCurrentDayFrame(ctx);
-  drawCurrentDayBoundaryVerticalOverlay(ctx, items);
+function drawCurrentDayFrameOverlay() {
 }
 
 function pendingDayCarryoverBorderOutset() {
@@ -5318,7 +5202,7 @@ function drawTitleDayCard(
   isSelected,
   isLast
 ) {
-  const borderColor = new Color("#303136", 0.82);
+  const borderColor = new Color(isSelected ? "#FFFFFF" : "#303136", isSelected ? 0.96 : 0.82);
   const dayBackgroundColor = timelineBackgroundColorForDate(date);
   const isSpecialDay =
     dayBackgroundColor !== SETTINGS.timelineBackgroundColor;
@@ -5332,16 +5216,7 @@ function drawTitleDayCard(
   // feriado preservam respectivamente azul, vermelho e amarelo. Durante
   // o blur, apenas o cartão futuro de domingo usa o vermelho mais escuro.
   // Os demais cartões seguem as cores especiais ou o cinza do dia útil.
-  const cardColor = new Color(
-    useBlurredSundayColor
-      ? SETTINGS.blurredSundayCardColor
-      : isSpecialDay
-      ? dayBackgroundColor
-      : blurEnabled
-        ? "#232327"
-        : SETTINGS.nonBlurredFutureCardColor,
-    1.0
-  );
+  const cardColor = new Color(dayBackgroundColor,1);
 
   // Só as extremidades externas da faixa recebem raio. As junções entre
   // cartões permanecem retas; a moldura contínua de hoje é desenhada à parte.
@@ -5355,14 +5230,14 @@ function drawTitleDayCard(
     topLeft: leftCornerRadius,
     topRight: rightCornerRadius,
     // Hoje mantém sua geometria contínua própria, desenhada separadamente.
-    bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,
-    bottomLeft: isSelected ? TITLE_CARD_STANDARD_CORNER_RADIUS : 0,
+    bottomRight: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    bottomLeft: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
   };
 
   // O cartão de hoje já foi preenchido pela geometria contínua
   // que também cobre sua faixa na timeline. Não desenhamos uma segunda
   // forma aqui, evitando a separação entre duas geometrias.
-  if (!isSelected) {
+  if (true) {
     // Os demais cartões conservam a borda fina escura.
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
@@ -5400,14 +5275,13 @@ function drawTitleDayCard(
   const weekdayLabel = shortWeekday(date);
   const dateLabel = titleDayMonthLabel(date);
 
-  const titleFontSize = titleHeaderFontSize();
+  const titleFontSize = Math.min(titleHeaderFontSize(),scaleFontSize(date.getDay() % 6 === 0 ? 18 : 22));
   const titleCharacterWidth = titleFontSize * 0.60;
   const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
   const titleGap = titleCharacterWidth / 2;
   const titleGroupWidth = (weekdayLabel.length + dateLabel.length + 0.5) * titleCharacterWidth;
-  const titleY = titleSafeTextY(titleGroupWidth + 4, titleFontSize * 1.15,
-    WIDGET_CONTOUR.strokeInset + scaleVertical(7),
-    scaleVertical(3), titleFontSize * TITLE_CARD_TEXT_VISIBLE_TOP_RATIO);
+  const blockHeight = titleFontSize*1.15 + scaleVertical(3) + scaleFontSize(18)/2 + scaleVertical(22)/2 + scaleVertical(4) + scaleFontSize(16);
+  const titleY = card.y + (card.height-blockHeight)/2 - scaleVertical(2);
   const titleStartX = card.x + (card.width - titleGroupWidth) / 2;
   ctx.setTextAlignedLeft();
   ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
@@ -9146,7 +9020,9 @@ async function renderTimelinePanel(items, loadError) {
   drawWeekdayBadgesOnTop(ctx);
   drawDayBoundaryMoonsOnTop(ctx, hourlyWeather);
   drawRainCountdown(ctx, rainCountdown);
-  return ctx.getImage();
+  drawCurrentTimeMarker(ctx);
+  const panel = ctx.getImage();
+  return dateKey(windowStart) === dateKey(now) ? panel : {...panel,blurRadius:4};
 }
 
 function timelineItemsStartingToday(items) {
@@ -12636,101 +12512,11 @@ function drawReminderMarker(ctx, centerX, centerY, diameter) {
 }
 
 function drawTimelineBar(ctx, rect, color, item) {
-  let accent = null;
-  if (item.isOverdue) accent = new Color(SETTINGS.overdueReminderColor);
-  else if (item.isCurrentEvent) accent = new Color(SETTINGS.currentEventColor);
-  else if (item.conflictCount > 0) accent = new Color(SETTINGS.conflictColor);
-  else if (item.kind === "reminder" && item.priority > 0) {
-    accent = new Color(SETTINGS.priorityReminderColor);
-  }
-
-  // Contorno preto comum a todos os charts.
-  const cornerRadius = isCompactMode()
-    ? scaleVertical(6)
-    : scaleVertical(7);
-  const outlineWidth = Math.min(
-    scaleVertical(2),
-    Math.max(
-      scaleVertical(0.75),
-      Math.min(rect.width, rect.height) / 4
-    )
-  );
-  const outlinedRect = new Rect(
-    rect.x + outlineWidth,
-    rect.y + outlineWidth,
-    Math.max(1, rect.width - outlineWidth * 2),
-    Math.max(1, rect.height - outlineWidth * 2)
-  );
-
-  fillRoundedRect(
-    ctx,
-    rect,
-    cornerRadius,
-    new Color("#000000", 1.0)
-  );
-
-  if (item.isPendingDayCarryover) {
-    // O chart permanece normal por dentro; o destaque abraça sua
-    // geometria pelo lado externo, com afastamento visual definido.
-    fillRoundedRect(
-      ctx,
-      outlinedRect,
-      Math.max(1, cornerRadius - outlineWidth),
-      color
-    );
-    drawPendingDayCarryoverBorder(
-      ctx,
-      rect,
-      cornerRadius
-    );
-    return;
-  }
-
-  if (item.kind === "event" && item.isCurrentEvent) {
-    // Mantém somente o contorno preto comum e pinta todo o interior de
-    // branco; o texto branco continua legível com contorno preto.
-    fillRoundedRect(
-      ctx,
-      outlinedRect,
-      Math.max(1, cornerRadius - outlineWidth),
-      new Color("#FFFFFF", 1.0)
-    );
-    return;
-  }
-
-  if (!accent || rect.width < 8 || rect.height < 8) {
-    fillRoundedRect(
-      ctx,
-      outlinedRect,
-      Math.max(1, cornerRadius - outlineWidth),
-      color
-    );
-    return;
-  }
-
-  const accentBorderWidth = item.isCurrentEvent
-    ? scaleVertical(4)
-    : scaleVertical(3);
-  fillRoundedRect(
-    ctx,
-    outlinedRect,
-    Math.max(1, cornerRadius - outlineWidth),
-    accent
-  );
-  fillRoundedRect(
-    ctx,
-    new Rect(
-      outlinedRect.x + accentBorderWidth,
-      outlinedRect.y + accentBorderWidth,
-      Math.max(1, outlinedRect.width - accentBorderWidth * 2),
-      Math.max(1, outlinedRect.height - accentBorderWidth * 2)
-    ),
-    Math.max(
-      1,
-      cornerRadius - outlineWidth - accentBorderWidth
-    ),
-    color
-  );
+  const radius = isCompactMode() ? scaleVertical(6) : scaleVertical(7);
+  const border = Math.min(scaleVertical(2),Math.max(scaleVertical(0.75),Math.min(rect.width,rect.height)/4));
+  fillRoundedRect(ctx,rect,radius,new Color('#000000'));
+  fillRoundedRect(ctx,new Rect(rect.x+border,rect.y+border,
+    Math.max(1,rect.width-2*border),Math.max(1,rect.height-2*border)),Math.max(1,radius-border),color);
 }
 
 function reminderPriorityPrefix(item) {
@@ -13226,6 +13012,14 @@ function fillRoundedRect(ctx, rect, radius, color) {
 function cleanTitle(value, fallback) {
   const title = String(value ?? "").replace(/\s+/g, " ").trim();
   return title || fallback;
+}
+
+function drawCurrentTimeMarker(ctx) {
+  if (dateKey(windowStart) !== dateKey(now)) return;
+  const x = timeToX(now),width = scaleVertical(3);
+  if (x < 0 || x >= timelineWidth()) return;
+  ctx.setFillColor(new Color('#30D158'));
+  ctx.fillRect(new Rect(Math.max(0,Math.min(timelineWidth()-width,x-width/2)),0,width,timelineHeight()-WIDGET_CONTOUR.strokeInset*2));
 }
 
 }

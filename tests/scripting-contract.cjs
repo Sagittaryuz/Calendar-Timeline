@@ -24,6 +24,7 @@ const uiModule=new Proxy(native,{get:(target,key)=>{
   return target[key];
 }});
 function load(name){
+  name=name.replace(/\.(js|ts|tsx)$/,'');
   if(modules.has(name))return modules.get(name);
   const file=['.ts','.tsx','.js'].map(ext=>path.join(dir,name+ext)).find(fs.existsSync);
   const text=fs.readFileSync(file,'utf8');
@@ -31,7 +32,7 @@ function load(name){
   assert.equal(result.diagnostics.length,0,'Syntax diagnostics: '+name);
   const module={exports:{}};modules.set(name,module.exports);
   vm.runInNewContext(result.outputText,{...globals,module,exports:module.exports,Storage:storage,Date,URL,console,setTimeout,clearTimeout,
-    require:id=>id==='scripting'?uiModule:id==='./drawing'?{DrawContext:class{}}:load(id.replace('./',''))},{filename:file});
+    require:id=>id==='scripting'?uiModule:load(id.replace('./',''))},{filename:file});
   modules.set(name,module.exports);return module.exports;
 }
 async function main(){
@@ -59,6 +60,9 @@ async function main(){
   assert(!/scripting_\d+\.UIImage/.test(graphSource),'Graph must use the runtime-global UIImage');
   const events=await host.CalendarEvent.between(today,new Date(+today+86400000));
   assert.equal(events[0].title,'Teste');assert.equal(events[0].calendar.color.hex,'0088FF');
+  calendar.color='rgba(255, 0, 0, 1.00)';
+  assert.equal((await createHost(today).CalendarEvent.today())[0].calendar.color.hex,'ff0000','Native rgba must become valid Scriptable hex before chart/line creation');
+  calendar.color='#0088FF';
   const reminders=await host.Reminder.incompleteDueToday();assert.equal(reminders[0].dueDate,+dueDate===+reminders[0].dueDate?dueDate:null);assert(reminders[0].dueDateIncludesTime);
   const files=host.FileManager.local();files.writeString('/safe','first');files.move('/safe','/next');assert.equal(files.readString('/next'),'first');assert(!files.fileExists('/safe'));
   denied=true;await assert.rejects(()=>createHost(today).CalendarEvent.today());

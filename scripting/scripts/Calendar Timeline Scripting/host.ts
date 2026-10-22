@@ -17,8 +17,10 @@ function storedFiles() {
 }
 
 function calendar(value:any){
-  return value ? {identifier:value.identifier,title:value.title,
-    color:{hex:typeof value.color==='string'?value.color.replace('#',''):''}} : null
+  if(!value)return null
+  const raw=typeof value.color==='string'?value.color:value.color?.hex
+  const normalized=typeof raw==='string'?new drawing.Color(raw).hex:''
+  return {identifier:value.identifier,title:value.title,color:{hex:normalized}}
 }
 function event(value:any){return {...value,identifier:value.identifier,title:value.title,
   startDate:value.startDate,endDate:value.endDate,isAllDay:value.isAllDay,

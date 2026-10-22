@@ -24,6 +24,33 @@ function functionSource(text,name){
 }
 for(const name of ['titleHeaderFontSize','titleDayCardRect','drawDatePanel','drawTitleDayCard'])
   replaceOnce(functionSource(code,name),functionSource(fixedWeek,name));
+const dailyStyle=fs.readFileSync(path.join(root,'scripting/reference/daily-style.js'),'utf8').replace(/\r\n/g,'\n');
+for(const name of ['timelineBackgroundColorForDate','drawTimelineBackground','shouldBlurFutureTimeline',
+  'drawCurrentDaySpecialBackground','drawCurrentDayFrameOverlay','shiftWidgetImage','drawTimelineOuterBorder','drawTimelineBar'])
+  replaceOnce(functionSource(code,name),functionSource(dailyStyle,name));
+code+='\n'+functionSource(dailyStyle,'drawCurrentTimeMarker')+'\n';
+// Round both lower corners of weekday cards; weekends retain square joins.
+replaceOnce('bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,\n    bottomLeft: isSelected ? TITLE_CARD_STANDARD_CORNER_RADIUS : 0,',
+  'bottomRight: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,\n    bottomLeft: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,');
+replaceOnce('if (!isSelected) {\n    // Os demais cartões', 'if (true) {\n    // Os demais cartões');
+replaceOnce('const borderColor = new Color("#303136", 0.82);', 'const borderColor = new Color(isSelected ? "#FFFFFF" : "#303136", isSelected ? 0.96 : 0.82);');
+const cardColorStart=code.indexOf('const cardColor = new Color(',code.indexOf('function drawTitleDayCard('));
+const cardColorEnd=code.indexOf('\n  );',cardColorStart)+5;
+if(cardColorStart<0||cardColorEnd<5)throw new Error('Missing title card color');
+code=code.slice(0,cardColorStart)+'const cardColor = new Color(dayBackgroundColor,1);'+code.slice(cardColorEnd);
+// Center the complete three-line block, rather than pushing all cards down
+// to satisfy the obsolete moving header's outer contour measurements.
+replaceOnce('const titleFontSize = titleHeaderFontSize();','const titleFontSize = Math.min(titleHeaderFontSize(),scaleFontSize(date.getDay() % 6 === 0 ? 18 : 22));');
+const titleYStart=code.indexOf('const titleY = titleSafeTextY(',code.indexOf('function drawTitleDayCard('));
+const titleYEnd=code.indexOf(';',titleYStart)+1;
+if(titleYStart<0||titleYEnd<1)throw new Error('Missing title block');
+code=code.slice(0,titleYStart)+`const blockHeight = titleFontSize*1.15 + scaleVertical(3) + scaleFontSize(18)/2 + scaleVertical(22)/2 + scaleVertical(4) + scaleFontSize(16);
+  const titleY = card.y + (card.height-blockHeight)/2 - scaleVertical(2);`+code.slice(titleYEnd);
+replaceOnce('drawRainCountdown(ctx, rainCountdown);\n  return ctx.getImage();',
+  `drawRainCountdown(ctx, rainCountdown);
+  drawCurrentTimeMarker(ctx);
+  const panel = ctx.getImage();
+  return dateKey(windowStart) === dateKey(now) ? panel : {...panel,blurRadius:4};`);
 replaceOnce('const today = startOfDay(windowStart);\n  return addDays(today, -today.getDay());', 'const today = startOfDay(now);\n  return addDays(today, -today.getDay());');
 replaceOnce(functionSource(code,'drawEventArrivalGuides'),'function drawEventArrivalGuides() {}');
 replaceOnce('await drawDayEndCapsules(contentCtx);','// Daily overview: no end-of-day countdown capsule.');
@@ -49,6 +76,9 @@ for (let index = 0; index < TITLE_CARD_COUNT; index++) {
 }
 return {image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
   version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
+  selectedDayIsToday:dateKey(windowStart)===dateKey(now), timelineBackground:timelineBackgroundColorForDate(windowStart),
+  nowMarker:dateKey(windowStart)===dateKey(now)?{x:CANVAS.plotLeft+timeToX(now),color:'#30D158'}:null,
+  contour:{inset:WIDGET_CONTOUR.strokeInset,width:CANVAS.width,height:CANVAS.height},
   sourceStatus: {schedule: loadResult.sourceStatus, partialErrors: loadResult.partialErrors,
     weather: hourlyWeather.freshness}, weatherSnapshot: hourlyWeather, locationSnapshot: astronomy};
 ` + code.slice(finishEnd);

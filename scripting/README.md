@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.2.0
+# Calendar Timeline para Scripting — teste 0.2.1
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -16,6 +16,12 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 
 ## Instalação e teste no aparelho
 
+**0.2.1 — revisão visual:** todo o painel da timeline recebe blur nativo quando a data escolhida não é hoje; os sete cartões permanecem legíveis e interativos. Hoje usa preto, outros dias úteis usam o cinza `#3B3C3E`; fins de semana e feriados não atuais preservam suas cores especiais. Charts mantêm sua cor de origem mesmo durante eventos em andamento, sem preenchimento branco por estado. As cores rgba são normalizadas antes de entrar no motor; cores antigas com prefixo `#rgba(...)` também são recuperadas. As linhas de início seguem a cor do evento/lembrete. O marcador verde indica a hora real somente em hoje, na última execução; ele não desloca a régua nem garante atualização contínua entre execuções do iOS.
+
+Os cartões úteis têm os dois cantos inferiores curvos; sábado/domingo têm junções inferiores retas. O bloco de três linhas é centralizado em cada cartão e sobe em relação à antiga compensação para o contorno móvel. O deslocamento/compressão horizontal `shiftWidgetImage` do original foi desabilitado nesta edição: desenho e áreas de toque agora usam diretamente o mesmo canvas final. A moldura externa é um contorno único, com traço dentro de `[0,1092] × [0,510]` e margem lógica de 4 unidades. O recorte físico do iOS pode variar com aparelho, escala e versão; não foi calibrado em um dispositivo nesta revisão.
+
+`tests/scripting-visual.cjs` gera prévias locais aproximadas por Canvas para hoje, outro dia útil e sábado. Verifica blur integral, fundos, cores das linhas, marcador atual, centralização vertical das três linhas e pontos da moldura dentro do canvas. Essas imagens usam fontes/renderizador locais, não são capturas do Scripting nem comprovação de fidelidade no iPhone.
+
 **0.2.0:** atualização no mesmo vínculo remoto, com semana fixa e seleção por App Intent. A 0.1.4 foi confirmada pelo usuário na Tela de Início. A 0.2.0 passou nos testes locais: sete áreas de toque fixas em todos os dias da semana e em dois horários reais, janela diária completa, ausência das contagens removidas e motor com/sem clima. O comportamento nativo dos toques e o visual da 0.2.0 ainda precisam de reteste. A cor `rgba(255, 0, 0, 1.00)` registrada no aparelho agora é convertida para hexadecimal e alpha; o teste reproduz esse valor. Os arquivos originais do Scriptable ficam preservados.
 
 **Proteção 0.1.4:** a captura do iPhone confirmou `Cor raster inválida` no brilho solar na 0.1.3. A causa numérica exata não foi reproduzida nos testes locais ampliados: 24 cenários, incluindo 15h18, clima vazio e clima sintético com sol/chuva. Cores/alpha inválidos agora são omitidos do bitmap, com contagem e primeiro valor em `raster-warnings`, exibidos no app. Isso evita abortar a agenda por uma pintura inválida; se houver avisos, parte do visual pode faltar. Não equivale a confirmar a causa nem a fidelidade visual. Nenhum dado de agenda entra nesse registro. Com clima sintético, o máximo local foi 1.502 operações e 80 camadas, contra 498 operações nos cenários sem clima. Consumo de memória, tempo e execução na Tela de Início continuam sem medição no aparelho.
@@ -26,7 +32,7 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 
 Instale o Scripting pela App Store. Há duas opções:
 
-1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.0-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.0.
+1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.1-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.1.
 2. **Servidor de desenvolvimento:** no computador, dentro de `scripting/`, execute `npx --yes scripting-cli@1.5.0 start --editor=none --port=4317 --no-auto-open`. Conecte o Scripting ao IP do computador exibido no terminal; ambos precisam estar na mesma rede. Selecione o projeto `Calendar Timeline Scripting` que aparece na lista de projetos do servidor. O CLI usa `scripts/` e recebe os tipos `.d.ts` da versão conectada.
 
 Execute o projeto uma vez no aplicativo e conceda as permissões nativas de Calendário, Lembretes e Localização. Adicione um widget médio do Scripting à Tela de Início e escolha `Calendar Timeline Scripting`. Confira os toques no widget real, pois a prévia não comprova o comportamento do WidgetKit.
