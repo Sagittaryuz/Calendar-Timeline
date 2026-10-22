@@ -16,6 +16,7 @@ export async function loadModel(options:{background?:boolean}={}){
   const model=await renderOriginal(host,{now:now.getTime(),focusDate:focus.getTime(),hours:'24',onPhase:(phase:string)=>markPhase(phase,started),
     ...(reusable?{hourlyWeather:snapshot.weather,astronomy:snapshot.location}:{})})
   markPhase('salvamento do cache',started)
+  Storage.set('raster-warnings',host.renderWarnings())
   if(!reusable&&model.weatherSnapshot?.hours?.length>0){
     Storage.set('weather-model',{savedAt:Date.now(),weather:model.weatherSnapshot,location:model.locationSnapshot})
   }

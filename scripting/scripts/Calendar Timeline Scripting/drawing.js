@@ -51,7 +51,7 @@ export class DrawContext {
     if(this.bitmap){this.bitmap.fill(rect,this.state.fill);return;}
     (this.rectRun??=[]).push({rect,state:{...this.state}});
     if(this.rectRun.length>=128){
-      this.bitmap=new RectRaster(this.size.width,this.size.height);
+      this.bitmap=new RectRaster(this.size.width,this.size.height,this.onInvalidColor);
       for(const entry of this.rectRun)this.bitmap.fill(entry.rect,entry.state.fill);
       this.rectRun=[];
     }

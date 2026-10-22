@@ -41,6 +41,7 @@ async function within<T>(task:Promise<T>,milliseconds:number):Promise<T>{
 
 export function createHost(now=new Date(),options:{background?:boolean}={}) {
   const files=storedFiles(),today=dayRange(now)
+  const renderWarnings:{count:number;first?:any}={count:0}
   const background=options.background===true,networkDeadline=Date.now()+(background?6000:15000)
   const promises=new Map<string,Promise<any[]>>()
   const memo=(key:string,fn:()=>Promise<any[]>)=>{
@@ -64,6 +65,7 @@ export function createHost(now=new Date(),options:{background?:boolean}={}) {
     async loadJSON(){return JSON.parse(await this.loadString())}
   }
   class BitmapDrawContext extends drawing.DrawContext {
+    onInvalidColor=(detail:any)=>{renderWarnings.count++;renderWarnings.first??=detail}
     makeRaster=(crop:any)=>{
       const data=Data.fromUint8Array(encodePNG(crop))
       const native=data?UIImage.fromData(data):null
@@ -72,6 +74,7 @@ export function createHost(now=new Date(),options:{background?:boolean}={}) {
     }
   }
   return {
+    renderWarnings:()=>({...renderWarnings}),
     ...drawing,DrawContext:BitmapDrawContext,DateFormatter,
     CalendarEvent:{between:(a:Date,b:Date)=>memo('events:'+a.toISOString()+b.toISOString(),async()=>
       (await CalendarEvent.getAll(a,b)).map(event)),

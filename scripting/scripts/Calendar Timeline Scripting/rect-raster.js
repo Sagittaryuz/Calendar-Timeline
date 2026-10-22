@@ -2,18 +2,26 @@
 // Rasterize only long consecutive rectangle runs at the original logical
 // bitmap resolution. Text, paths, clocks and tap geometry stay vector-based.
 export class RectRaster {
-  constructor(width,height){
+  constructor(width,height,onInvalidColor){
     this.width=Math.ceil(width);this.height=Math.ceil(height);
     this.pixels=new Uint8ClampedArray(this.width*this.height*4);
     this.left=this.width;this.top=this.height;this.right=0;this.bottom=0;
+    this.onInvalidColor=onInvalidColor;
   }
   fill(r,color){
     const left=Math.max(0,Math.floor(r.x)),top=Math.max(0,Math.floor(r.y));
     const right=Math.min(this.width,Math.ceil(r.x+r.width)),bottom=Math.min(this.height,Math.ceil(r.y+r.height));
-    if(right<=left||bottom<=top||color.alpha<=0)return;
+    if(right<=left||bottom<=top)return;
+    const h=color?.hex,alpha=color?.alpha;
+    if(typeof h!=='string'||!/^([0-9a-f]{6})$/i.test(h)||typeof alpha!=='number'||!Number.isFinite(alpha)){
+      // A broken decorative paint must not abort the entire agenda. Report
+      // the precise scalar values locally; never replace it with an opaque fill.
+      this.onInvalidColor?.({hex:String(h).slice(0,20),alpha:String(alpha).slice(0,30),alphaType:typeof alpha});
+      return;
+    }
+    if(alpha<=0)return;
     this.left=Math.min(this.left,left);this.top=Math.min(this.top,top);this.right=Math.max(this.right,right);this.bottom=Math.max(this.bottom,bottom);
-    const h=color.hex,red=parseInt(h.slice(0,2),16),green=parseInt(h.slice(2,4),16),blue=parseInt(h.slice(4,6),16);
-    if(![red,green,blue,color.alpha].every(Number.isFinite))throw new Error('Cor raster inválida');
+    const red=parseInt(h.slice(0,2),16),green=parseInt(h.slice(2,4),16),blue=parseInt(h.slice(4,6),16);
     const p=this.pixels;
     for(let y=top;y<bottom;y++){
       const cy=Math.min(y+1,r.y+r.height)-Math.max(y,r.y);

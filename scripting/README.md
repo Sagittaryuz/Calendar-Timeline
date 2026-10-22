@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.1.3
+# Calendar Timeline para Scripting — teste 0.1.4
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -13,6 +13,8 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 - Cache privado por projeto. Permissões e credenciais do Scriptable não são transferidas para o Scripting.
 
 ## Instalação e teste no aparelho
+
+**Proteção 0.1.4:** a captura do iPhone confirmou `Cor raster inválida` no brilho solar na 0.1.3. A causa numérica exata não foi reproduzida nos testes locais ampliados: 24 cenários, incluindo 15h18, clima vazio e clima sintético com sol/chuva. Cores/alpha inválidos agora são omitidos do bitmap, com contagem e primeiro valor em `raster-warnings`, exibidos no app. Isso evita abortar a agenda por uma pintura inválida; se houver avisos, parte do visual pode faltar. Não equivale a confirmar a causa nem a fidelidade visual. Nenhum dado de agenda entra nesse registro. Com clima sintético, o máximo local foi 1.502 operações e 80 camadas, contra 498 operações nos cenários sem clima. Consumo de memória, tempo e execução na Tela de Início continuam sem medição no aparelho.
 
 **Correção 0.1.3:** o diagnóstico no iPhone confirmou `undefined is not an object (evaluating 'scripting_1.Data.fromUint8Array')` durante a preparação do desenho na 0.1.2. O adaptador importava utilitários nativos pelo módulo de UI, mas esses utilitários são usados como globais nos exemplos oficiais. Foram removidas essas importações do adaptador e a importação de `UIImage` do componente de desenho. O teste agora separa os globais do módulo de UI e exercita a conversão PNG no adaptador, para não mascarar novamente esse erro. A execução nativa após a correção ainda depende de reteste no iPhone.
 
