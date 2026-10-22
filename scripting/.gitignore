@@ -1,0 +1,4 @@
+dts/
+*.log
+*.zip
+node_modules/

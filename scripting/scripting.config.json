@@ -1,0 +1,7 @@
+{
+  "editor": "none",
+  "port": 4317,
+  "autoOpen": false,
+  "generateTsConfig": true,
+  "ignore": ["*.log", "*.zip", "node_modules", "README.md"]
+}
