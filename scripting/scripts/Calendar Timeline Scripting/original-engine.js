@@ -4152,35 +4152,39 @@ function drawTimelineOuterBorder(ctx) {
   const path = new Path();path.move(vertices[0]);
   for (const point of vertices.slice(1)) path.addLine(point);
   path.closeSubpath();ctx.addPath(path);
-  ctx.setStrokeColor(new Color('#FFFFFF',0.9));
+  ctx.setStrokeColor(new Color('#303136',0.82));
   ctx.setLineWidth(Math.min(inset,scaleVertical(3)));ctx.strokePath();
 }
 
 function currentDayUnifiedShape(path = new Path()) {
-  const m = currentDayFrameMetrics();
-  const c = m.todayCard;
-  const r = m.frameRadius;
-  const { bridge } = buildCurrentDayUpperPath(null, c, m.bridgeY, m.lineWidth, m.lineColor,
-    "right", m.boundaryX, r, path, 0, r);
-  path.addLine(new Point(m.boundaryX, m.bridgeY));
-  path.addLine(new Point(m.boundaryX, m.bottomLineCenterY));
-  const points = widgetLeftContourPoints();
-  for (const p of points.slice().reverse().filter(p => p.y >= m.bridgeY)) path.addLine(p);
-  {
-    path.addLine(new Point(WIDGET_CONTOUR.strokeInset, m.bridgeY));
-    const left = c.x + m.lineWidth / 2;
-    const lowerRadius = c.x === CANVAS.plotLeft ? Math.min(r, TODAY_CARD_SOFT_CORNER_RADIUS) : r;
-    const lowerDirection = c.x === CANVAS.plotLeft ? 1 : -1;
-    const centerX = left + lowerDirection * lowerRadius;
-    path.addLine(new Point(centerX, m.bridgeY));
-    appendContourArc(path, centerX, m.bridgeY - lowerRadius,
-      lowerRadius, lowerRadius, Math.PI / 2, lowerDirection > 0 ? Math.PI : 0);
-    if (c.x === CANVAS.marginX) {
-      // Fecha pelo mesmo arco externo usado no traço branco da moldura.
-      for (const point of widgetLeftContourPoints().slice(0, 65).reverse()) path.addLine(point);
-    } else path.addLine(new Point(left, c.y));
+  const c=titleDayCardRect(titleTodayCardIndex());
+  const inset=WIDGET_CONTOUR.strokeInset,left=c.x+inset,right=c.x+c.width-inset;
+  const bridgeY=dayBoundaryMoonBorderTopY();
+  const first=titleTodayCardIndex()===0,last=titleTodayCardIndex()===6;
+  const radius=windowStart.getDay()%6===0?0:Math.min(WIDGET_COMMON_CORNER_RADIUS,
+    (bridgeY-c.y)/2,Math.max(0,left-inset),Math.max(0,CANVAS.width-inset-right));
+  const contour=widgetLeftContourPoints(inset);
+  const upper=contour.slice(0,65);
+  path.move(first?upper[0]:new Point(left,c.y));
+  if(last){
+    path.addLine(new Point(CANVAS.width-upper[0].x,c.y));
+    for(const p of upper.slice(1))path.addLine(new Point(CANVAS.width-p.x,p.y));
+  }else{
+    path.addLine(new Point(right,c.y));path.addLine(new Point(right,bridgeY-radius));
+    if(radius)appendContourArc(path,right+radius,bridgeY-radius,radius,radius,Math.PI,Math.PI/2);
+    path.addLine(new Point(CANVAS.width-inset,bridgeY));
   }
-  return path;
+  for(const p of contour.filter(p=>p.y>=bridgeY))path.addLine(new Point(CANVAS.width-p.x,p.y));
+  for(const p of contour.slice().reverse().filter(p=>p.y>=bridgeY))path.addLine(p);
+  path.addLine(new Point(inset,bridgeY));
+  if(first){
+    for(const p of upper.slice().reverse())path.addLine(p);
+  }else{
+    path.addLine(new Point(left-radius,bridgeY));
+    if(radius)appendContourArc(path,left-radius,bridgeY-radius,radius,radius,Math.PI/2,0);
+    path.addLine(new Point(left,c.y));
+  }
+  path.closeSubpath();return path;
 }
 
 function currentDayUnifiedPolygon() {
@@ -4215,7 +4219,9 @@ function insideCurrentDayUnifiedShape(x, y) {
   return inside;
 }
 
-function drawCurrentDaySpecialBackground() {
+function drawCurrentDaySpecialBackground(ctx) {
+  ctx.setFillColor(new Color(timelineBackgroundColorForDate(windowStart)));
+  ctx.addPath(currentDayUnifiedShape());ctx.fillPath();
 }
 
 function restoreWidgetBackgroundSpan(ctx, x, y, width) {
@@ -5015,7 +5021,10 @@ function currentDayFrameHorizontalDirection(
   return "right";
 }
 
-function drawCurrentDayFrameOverlay() {
+function drawCurrentDayFrameOverlay(ctx) {
+  ctx.addPath(currentDayUnifiedShape());
+  ctx.setStrokeColor(new Color('#FFFFFF',0.96));
+  ctx.setLineWidth(scaleVertical(3));ctx.strokePath();
 }
 
 function pendingDayCarryoverBorderOutset() {
@@ -5230,14 +5239,14 @@ function drawTitleDayCard(
     topLeft: leftCornerRadius,
     topRight: rightCornerRadius,
     // Hoje mantém sua geometria contínua própria, desenhada separadamente.
-    bottomRight: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
-    bottomLeft: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,
+    bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,
+    bottomLeft: isSelected ? TITLE_CARD_STANDARD_CORNER_RADIUS : 0,
   };
 
   // O cartão de hoje já foi preenchido pela geometria contínua
   // que também cobre sua faixa na timeline. Não desenhamos uma segunda
   // forma aqui, evitando a separação entre duas geometrias.
-  if (true) {
+  if (!isSelected) {
     // Os demais cartões conservam a borda fina escura.
     fillTitleCardShape(ctx, card, cornerRadii, borderColor);
     const inner = new Rect(
@@ -9022,7 +9031,7 @@ async function renderTimelinePanel(items, loadError) {
   drawRainCountdown(ctx, rainCountdown);
   drawCurrentTimeMarker(ctx);
   const panel = ctx.getImage();
-  return dateKey(windowStart) === dateKey(now) ? panel : {...panel,blurRadius:4};
+  return panel;
 }
 
 function timelineItemsStartingToday(items) {

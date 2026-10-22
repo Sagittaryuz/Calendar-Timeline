@@ -16,9 +16,45 @@ function drawTimelineBackground(ctx, localToTimeline = false) {
 function shouldBlurFutureTimeline() {
   return false;
 }
-function drawCurrentDaySpecialBackground() {
+function drawCurrentDaySpecialBackground(ctx) {
+  ctx.setFillColor(new Color(timelineBackgroundColorForDate(windowStart)));
+  ctx.addPath(currentDayUnifiedShape());ctx.fillPath();
 }
-function drawCurrentDayFrameOverlay() {
+function drawCurrentDayFrameOverlay(ctx) {
+  ctx.addPath(currentDayUnifiedShape());
+  ctx.setStrokeColor(new Color('#FFFFFF',0.96));
+  ctx.setLineWidth(scaleVertical(3));ctx.strokePath();
+}
+
+function currentDayUnifiedShape(path = new Path()) {
+  const c=titleDayCardRect(titleTodayCardIndex());
+  const inset=WIDGET_CONTOUR.strokeInset,left=c.x+inset,right=c.x+c.width-inset;
+  const bridgeY=dayBoundaryMoonBorderTopY();
+  const first=titleTodayCardIndex()===0,last=titleTodayCardIndex()===6;
+  const radius=windowStart.getDay()%6===0?0:Math.min(WIDGET_COMMON_CORNER_RADIUS,
+    (bridgeY-c.y)/2,Math.max(0,left-inset),Math.max(0,CANVAS.width-inset-right));
+  const contour=widgetLeftContourPoints(inset);
+  const upper=contour.slice(0,65);
+  path.move(first?upper[0]:new Point(left,c.y));
+  if(last){
+    path.addLine(new Point(CANVAS.width-upper[0].x,c.y));
+    for(const p of upper.slice(1))path.addLine(new Point(CANVAS.width-p.x,p.y));
+  }else{
+    path.addLine(new Point(right,c.y));path.addLine(new Point(right,bridgeY-radius));
+    if(radius)appendContourArc(path,right+radius,bridgeY-radius,radius,radius,Math.PI,Math.PI/2);
+    path.addLine(new Point(CANVAS.width-inset,bridgeY));
+  }
+  for(const p of contour.filter(p=>p.y>=bridgeY))path.addLine(new Point(CANVAS.width-p.x,p.y));
+  for(const p of contour.slice().reverse().filter(p=>p.y>=bridgeY))path.addLine(p);
+  path.addLine(new Point(inset,bridgeY));
+  if(first){
+    for(const p of upper.slice().reverse())path.addLine(p);
+  }else{
+    path.addLine(new Point(left-radius,bridgeY));
+    if(radius)appendContourArc(path,left-radius,bridgeY-radius,radius,radius,Math.PI/2,0);
+    path.addLine(new Point(left,c.y));
+  }
+  path.closeSubpath();return path;
 }
 function shiftWidgetImage(image) {
   return image;
@@ -33,7 +69,7 @@ function drawTimelineOuterBorder(ctx) {
   const path = new Path();path.move(vertices[0]);
   for (const point of vertices.slice(1)) path.addLine(point);
   path.closeSubpath();ctx.addPath(path);
-  ctx.setStrokeColor(new Color('#FFFFFF',0.9));
+  ctx.setStrokeColor(new Color('#303136',0.82));
   ctx.setLineWidth(Math.min(inset,scaleVertical(3)));ctx.strokePath();
 }
 

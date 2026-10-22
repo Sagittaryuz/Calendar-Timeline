@@ -26,13 +26,11 @@ for(const name of ['titleHeaderFontSize','titleDayCardRect','drawDatePanel','dra
   replaceOnce(functionSource(code,name),functionSource(fixedWeek,name));
 const dailyStyle=fs.readFileSync(path.join(root,'scripting/reference/daily-style.js'),'utf8').replace(/\r\n/g,'\n');
 for(const name of ['timelineBackgroundColorForDate','drawTimelineBackground','shouldBlurFutureTimeline',
-  'drawCurrentDaySpecialBackground','drawCurrentDayFrameOverlay','shiftWidgetImage','drawTimelineOuterBorder','drawTimelineBar'])
+  'drawCurrentDaySpecialBackground','drawCurrentDayFrameOverlay','currentDayUnifiedShape','shiftWidgetImage','drawTimelineOuterBorder','drawTimelineBar'])
   replaceOnce(functionSource(code,name),functionSource(dailyStyle,name));
 code+='\n'+functionSource(dailyStyle,'drawCurrentTimeMarker')+'\n';
-// Round both lower corners of weekday cards; weekends retain square joins.
-replaceOnce('bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,\n    bottomLeft: isSelected ? TITLE_CARD_STANDARD_CORNER_RADIUS : 0,',
-  'bottomRight: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,\n    bottomLeft: date.getDay() % 6 === 0 ? 0 : TITLE_CARD_STANDARD_CORNER_RADIUS,');
-replaceOnce('if (!isSelected) {\n    // Os demais cartões', 'if (true) {\n    // Os demais cartões');
+// The selected card is part of one unified frame with the full timeline.
+// Do not round ordinary card bottoms as a substitute for its bridge curves.
 replaceOnce('const borderColor = new Color("#303136", 0.82);', 'const borderColor = new Color(isSelected ? "#FFFFFF" : "#303136", isSelected ? 0.96 : 0.82);');
 const cardColorStart=code.indexOf('const cardColor = new Color(',code.indexOf('function drawTitleDayCard('));
 const cardColorEnd=code.indexOf('\n  );',cardColorStart)+5;
@@ -50,7 +48,7 @@ replaceOnce('drawRainCountdown(ctx, rainCountdown);\n  return ctx.getImage();',
   `drawRainCountdown(ctx, rainCountdown);
   drawCurrentTimeMarker(ctx);
   const panel = ctx.getImage();
-  return dateKey(windowStart) === dateKey(now) ? panel : {...panel,blurRadius:4};`);
+  return panel;`);
 replaceOnce('const today = startOfDay(windowStart);\n  return addDays(today, -today.getDay());', 'const today = startOfDay(now);\n  return addDays(today, -today.getDay());');
 replaceOnce(functionSource(code,'drawEventArrivalGuides'),'function drawEventArrivalGuides() {}');
 replaceOnce('await drawDayEndCapsules(contentCtx);','// Daily overview: no end-of-day countdown capsule.');

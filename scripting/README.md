@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.2.1
+# Calendar Timeline para Scripting — teste 0.2.2
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -16,6 +16,10 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 
 ## Instalação e teste no aparelho
 
+**0.2.2 — correção da interpretação da curva e novos toques:** a curva pedida é a junção externa entre o cartão selecionado e a timeline, não um arredondamento independente do fundo de cada cartão. A moldura branca agora é um único caminho fechado que envolve o cartão e todo o painel, com junções curvas simétricas à esquerda/direita em dias úteis. Sábado/domingo preservam a exceção de junções retas. Os demais cartões voltam à geometria inferior anterior. O blur foi retirado de todos os dias por pedido do usuário. Permanecem fundos, cores de origem dos charts/linhas, posição fixa dos sete dias e marcador verde em hoje.
+
+O desenho de fundo usa um `Link` com `calshow://` (o mesmo destino do original) para abrir o Calendário da Apple. Os sete botões de dia ficam acima do link e mantêm seus App Intents de seleção. O código não promete abrir uma data específica no Calendário. Foram verificados localmente a árvore de UI (um link de fundo + sete intents independentes), os dois arcos de junção na trajetória da moldura, os limites do canvas e ausência de blur. A abertura real do aplicativo e a disputa de toques entre Link/Buttons ainda precisam de reteste no iPhone. As prévias Canvas locais continuam aproximadas.
+
 **0.2.1 — revisão visual:** todo o painel da timeline recebe blur nativo quando a data escolhida não é hoje; os sete cartões permanecem legíveis e interativos. Hoje usa preto, outros dias úteis usam o cinza `#3B3C3E`; fins de semana e feriados não atuais preservam suas cores especiais. Charts mantêm sua cor de origem mesmo durante eventos em andamento, sem preenchimento branco por estado. As cores rgba são normalizadas antes de entrar no motor; cores antigas com prefixo `#rgba(...)` também são recuperadas. As linhas de início seguem a cor do evento/lembrete. O marcador verde indica a hora real somente em hoje, na última execução; ele não desloca a régua nem garante atualização contínua entre execuções do iOS.
 
 Os cartões úteis têm os dois cantos inferiores curvos; sábado/domingo têm junções inferiores retas. O bloco de três linhas é centralizado em cada cartão e sobe em relação à antiga compensação para o contorno móvel. O deslocamento/compressão horizontal `shiftWidgetImage` do original foi desabilitado nesta edição: desenho e áreas de toque agora usam diretamente o mesmo canvas final. A moldura externa é um contorno único, com traço dentro de `[0,1092] × [0,510]` e margem lógica de 4 unidades. O recorte físico do iOS pode variar com aparelho, escala e versão; não foi calibrado em um dispositivo nesta revisão.
@@ -32,7 +36,7 @@ Os cartões úteis têm os dois cantos inferiores curvos; sábado/domingo têm j
 
 Instale o Scripting pela App Store. Há duas opções:
 
-1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.1-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.1.
+1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.2-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.2.
 2. **Servidor de desenvolvimento:** no computador, dentro de `scripting/`, execute `npx --yes scripting-cli@1.5.0 start --editor=none --port=4317 --no-auto-open`. Conecte o Scripting ao IP do computador exibido no terminal; ambos precisam estar na mesma rede. Selecione o projeto `Calendar Timeline Scripting` que aparece na lista de projetos do servidor. O CLI usa `scripts/` e recebe os tipos `.d.ts` da versão conectada.
 
 Execute o projeto uma vez no aplicativo e conceda as permissões nativas de Calendário, Lembretes e Localização. Adicione um widget médio do Scripting à Tela de Início e escolha `Calendar Timeline Scripting`. Confira os toques no widget real, pois a prévia não comprova o comportamento do WidgetKit.

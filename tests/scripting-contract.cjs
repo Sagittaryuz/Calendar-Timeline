@@ -18,7 +18,8 @@ const globals={
   UIImage:{fromData:data=>({width:1,height:1,bytes:data.bytes})},
   fetch:async()=>{requests++;return {status:200,ok:true,text:async()=>'{"ok":true}'}}
 };
-const native={AppIntentProtocol:{AppIntent:0},AppIntentManager:{register:spec=>spec},Widget:{reloadAll:()=>reloads++}};
+const native={AppIntentProtocol:{AppIntent:0},AppIntentManager:{register:spec=>Object.assign(params=>({name:spec.name,params}),{perform:spec.perform})},Widget:{reloadAll:()=>reloads++},
+  Link:'Link',Button:'Button',Rectangle:'Rectangle',ZStack:'ZStack',Canvas:'Canvas'};
 const uiModule=new Proxy(native,{get:(target,key)=>{
   if(key in globals)throw Error('Native utility incorrectly imported: '+String(key));
   return target[key];
@@ -32,6 +33,7 @@ function load(name){
   assert.equal(result.diagnostics.length,0,'Syntax diagnostics: '+name);
   const module={exports:{}};modules.set(name,module.exports);
   vm.runInNewContext(result.outputText,{...globals,module,exports:module.exports,Storage:storage,Date,URL,console,setTimeout,clearTimeout,
+    createElement:(type,props,...children)=>({type,props,children}),
     require:id=>id==='scripting'?uiModule:load(id.replace('./',''))},{filename:file});
   modules.set(name,module.exports);return module.exports;
 }
@@ -73,6 +75,11 @@ async function main(){
   const intent=load('app_intents').SelectDay;const now=new Date();
   await intent.perform({date:select.localDay(now)});assert.equal(reloads,1);assert.equal(store.get('selected-day').selectedOn,select.localDay(now));
   await assert.rejects(()=>intent.perform({date:'2020-01-01'}));assert.equal(reloads,1);
+  const header=Array.from({length:7},(_,i)=>({date:`2026-10-${18+i}`,label:'Dia',x:i*156,y:4,width:150,height:100}));
+  const view=load('timeline-view').TimelineView({model:{width:1092,height:510,image:{},header},width:364,height:170});
+  assert.equal(view.children[0].type,'Link');assert.equal(view.children[0].props.url,'calshow://','Background opens Apple Calendar');
+  const buttons=view.children[1];assert.equal(buttons.length,7);
+  buttons.forEach((button,i)=>assert.equal(button.props.intent.params.date,header[i].date,'Day buttons retain independent selection intents'));
   // Syntax-check every entry and adapter, without fabricated Scripting declarations.
   for(const filename of fs.readdirSync(dir).filter(n=>/\.(ts|tsx|js)$/.test(n))){
     const result=ts.transpileModule(fs.readFileSync(path.join(dir,filename),'utf8'),{fileName:filename,reportDiagnostics:true,compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});
