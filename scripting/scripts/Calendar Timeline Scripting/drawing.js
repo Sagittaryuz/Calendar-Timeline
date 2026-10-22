@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Scriptable drawing contract, recorded without changing the source geometry.
 import { drawDiagonal } from './diagonal-canvas.js';
+import { RectRaster } from './rect-raster.js';
 export class Size { constructor(width,height) {Object.assign(this,{width,height});} }
 export class Point { constructor(x,y) {Object.assign(this,{x,y});} }
 export class Rect { constructor(x,y,width,height) {Object.assign(this,{x,y,width,height});} }
@@ -37,8 +38,24 @@ export class DrawContext {
   setTextAlignedLeft(){this.state.align='left';}
   setTextAlignedCenter(){this.state.align='center';}
   addPath(p){this.path=p.commands.slice();}
-  op(type,data){this.ops.push({type,...data,state:{...this.state}});}
-  fillRect(rect){this.op('fillRect',{rect});}
+  flushRects(){
+    if(this.bitmap){
+      const crop=this.bitmap.crop();this.bitmap=null;
+      if(crop){const image=this.makeRaster(crop);this.ops.push({type:'image',image,rect:new Rect(crop.x,crop.y,crop.width,crop.height)});}
+    }else if(this.rectRun?.length)for(const entry of this.rectRun)this.ops.push({type:'fillRect',rect:entry.rect,state:entry.state});
+    this.rectRun=[];
+  }
+  op(type,data){this.flushRects();this.ops.push({type,...data,state:{...this.state}});}
+  fillRect(rect){
+    if(!this.makeRaster){this.op('fillRect',{rect});return;}
+    if(this.bitmap){this.bitmap.fill(rect,this.state.fill);return;}
+    (this.rectRun??=[]).push({rect,state:{...this.state}});
+    if(this.rectRun.length>=128){
+      this.bitmap=new RectRaster(this.size.width,this.size.height);
+      for(const entry of this.rectRun)this.bitmap.fill(entry.rect,entry.state.fill);
+      this.rectRun=[];
+    }
+  }
   strokeRect(rect){this.op('strokeRect',{rect});}
   fillEllipse(rect){this.op('fillEllipse',{rect});}
   strokeEllipse(rect){this.op('strokeEllipse',{rect});}
@@ -47,8 +64,8 @@ export class DrawContext {
   drawText(text,point){this.op('text',{text:String(text),point});}
   drawTextInRect(text,rect){this.op('text',{text:String(text),point:new Point(rect.x,rect.y),rect});}
   drawImageAtPoint(image,p){this.drawImageInRect(image,new Rect(p.x,p.y,image.size.width,image.size.height));}
-  drawImageInRect(image,rect){this.ops.push({type:'image',image,rect});}
-  getImage(){return {size:{...this.size},ops:this.ops.slice()};}
+  drawImageInRect(image,rect){this.flushRects();this.ops.push({type:'image',image,rect});}
+  getImage(){this.flushRects();return {size:{...this.size},ops:this.ops.slice()};}
 }
 
 export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymbol){

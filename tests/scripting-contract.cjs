@@ -15,13 +15,13 @@ const native={
 };
 function load(name){
   if(modules.has(name))return modules.get(name);
-  const file=fs.existsSync(path.join(dir,name+'.ts'))?path.join(dir,name+'.ts'):path.join(dir,name+'.tsx');
+  const file=['.ts','.tsx','.js'].map(ext=>path.join(dir,name+ext)).find(fs.existsSync);
   const text=fs.readFileSync(file,'utf8');
   const result=ts.transpileModule(text,{fileName:file,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,jsxFactory:'createElement'},reportDiagnostics:true});
   assert.equal(result.diagnostics.length,0,'Syntax diagnostics: '+name);
   const module={exports:{}};modules.set(name,module.exports);
-  vm.runInNewContext(result.outputText,{module,exports:module.exports,Storage:storage,Date,URL,console,
-    require:id=>id==='scripting'?native:id==='./drawing'?{}:load(id.replace('./',''))},{filename:file});
+  vm.runInNewContext(result.outputText,{module,exports:module.exports,Storage:storage,Date,URL,console,setTimeout,clearTimeout,
+    require:id=>id==='scripting'?native:id==='./drawing'?{DrawContext:class{}}:load(id.replace('./',''))},{filename:file});
   modules.set(name,module.exports);return module.exports;
 }
 async function main(){

@@ -1,5 +1,6 @@
-import { CalendarEvent, Reminder, DateFormatter, Keychain, Location, UIImage, fetch } from 'scripting'
+import { CalendarEvent, Reminder, DateFormatter, Keychain, Location, UIImage, Data, fetch } from 'scripting'
 import * as drawing from './drawing'
+import { encodePNG } from './rect-raster'
 
 function storedFiles() {
   const key=(p:string)=>'engine-file:'+p
@@ -30,11 +31,19 @@ function reminder(value:any){
 }
 function dayRange(now:Date){const start=new Date(now.getFullYear(),now.getMonth(),now.getDate());const end=new Date(start);end.setDate(end.getDate()+1);return {start,end}}
 
-export function createHost(now=new Date()) {
+async function within<T>(task:Promise<T>,milliseconds:number):Promise<T>{
+  let timer:ReturnType<typeof setTimeout>|undefined
+  try{return await Promise.race([task,new Promise<never>((_,reject)=>{
+    timer=setTimeout(()=>reject(new Error('Tempo de consulta excedido')),milliseconds)
+  })])}finally{if(timer!==undefined)clearTimeout(timer)}
+}
+
+export function createHost(now=new Date(),options:{background?:boolean}={}) {
   const files=storedFiles(),today=dayRange(now)
+  const background=options.background===true,networkDeadline=Date.now()+(background?6000:15000)
   const promises=new Map<string,Promise<any[]>>()
   const memo=(key:string,fn:()=>Promise<any[]>)=>{
-    if(!promises.has(key))promises.set(key,fn());return promises.get(key)!
+    if(!promises.has(key))promises.set(key,within(fn(),background?5000:10000));return promises.get(key)!
   }
   class Request {
     method='GET';headers:Record<string,string>={};body?:string;timeoutInterval=12;response?:{statusCode:number}
@@ -42,15 +51,27 @@ export function createHost(now=new Date()) {
     async loadString(){
       const allowed=['api.open-meteo.com','api.met.no','brasilapi.com.br','nominatim.openstreetmap.org','servicodados.ibge.gov.br','date.nager.at']
       const url=new URL(this.url)
-      if(url.protocol!=='https:'||!allowed.includes(url.hostname))throw new Error('Destino externo não habilitado nesta edição')
-      const res=await fetch(this.url,{method:this.method,headers:this.headers,body:this.body,timeout:this.timeoutInterval})
+      const holidaySource=url.hostname==='raw.githubusercontent.com'&&url.pathname.startsWith('/joaopbini/feriados-brasil/master/dados/feriados/')
+      if(url.protocol!=='https:'||(!allowed.includes(url.hostname)&&!holidaySource))throw new Error('Destino externo não habilitado nesta edição')
+      const remaining=networkDeadline-Date.now()
+      if(remaining<=0)throw new Error('Orçamento de rede encerrado; manter cache')
+      const timeout=Math.min(this.timeoutInterval,background?3:8,remaining/1000)
+      const res=await within(fetch(this.url,{method:this.method,headers:this.headers,body:this.body,timeout}),Math.ceil(timeout*1000))
       this.response={statusCode:res.status};if(!res.ok)throw new Error('HTTP '+res.status)
       return res.text()
     }
     async loadJSON(){return JSON.parse(await this.loadString())}
   }
+  class BitmapDrawContext extends drawing.DrawContext {
+    makeRaster=(crop:any)=>{
+      const data=Data.fromUint8Array(encodePNG(crop))
+      const native=data?UIImage.fromData(data):null
+      if(!native)throw new Error('Falha ao preparar camada bitmap')
+      return {native,size:{width:crop.width,height:crop.height}}
+    }
+  }
   return {
-    ...drawing,DateFormatter,
+    ...drawing,DrawContext:BitmapDrawContext,DateFormatter,
     CalendarEvent:{between:(a:Date,b:Date)=>memo('events:'+a.toISOString()+b.toISOString(),async()=>
       (await CalendarEvent.getAll(a,b)).map(event)),
       today:()=>memo('today-events',async()=>(await CalendarEvent.getAll(today.start,today.end)).map(event))},
@@ -60,9 +81,9 @@ export function createHost(now=new Date()) {
       scheduled:()=>memo('pending-reminders',async()=>(await Reminder.getIncompletes()).map(reminder))},
     FileManager:{local:()=>files},Keychain,
     Location:{setAccuracyToThreeKilometers:()=>{},current:async()=>{
-      await Location.setAccuracy('threeKilometers');const point=await Location.requestCurrent();
+      await within(Location.setAccuracy('threeKilometers'),1000);const point=await within(Location.requestCurrent(),background?2000:5000);
       if(!point)throw new Error('Localização indisponível');return point
-    },reverseGeocode:(latitude:number,longitude:number)=>Location.reverseGeocode({latitude,longitude,locale:'pt_BR'})},
+    },reverseGeocode:(latitude:number,longitude:number)=>within(Location.reverseGeocode({latitude,longitude,locale:'pt_BR'}),background?1500:3000)},
     Request,
     SFSymbol:{named:(symbol:string)=>({image:{symbol,size:{width:30,height:30}},applyFont:()=>{}})},
     Data:{fromBase64String:(value:string)=>value},

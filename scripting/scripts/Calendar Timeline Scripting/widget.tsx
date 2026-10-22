@@ -8,10 +8,12 @@ async function main(){
     return
   }
   try{
-    const model=await loadModel(),{width,height}=Widget.displaySize
+    const model=await loadModel({background:true}),{width,height}=Widget.displaySize
+    Storage.set('widget-diagnostic',{version:'0.1.1',phase:'present-requested',at:Date.now()})
     Widget.present(<TimelineView model={model} width={width} height={height}/>,
       {policy:'after',date:new Date(Date.now()+15*60*1000)})
-  }catch{
+  }catch(error){
+    Storage.set('widget-diagnostic',{version:'0.1.1',phase:'failed-before-present',at:Date.now(),error:String(error).slice(0,180)})
     Widget.present(<Text widgetBackground="#0A0A0B" foregroundStyle="white">Abra Calendar Timeline Scripting no app para autorizar as fontes e verificar o teste.</Text>)
   }
 }

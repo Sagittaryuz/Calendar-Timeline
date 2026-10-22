@@ -6,7 +6,13 @@ async function main(){
   const {renderOriginal}=await import(require('node:url').pathToFileURL(path.join(dir,'original-engine.js')).href);
   const host={...drawing,DateFormatter:class{string(d){return this.dateFormat==='HH:mm'?`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:String(d.getDate())}},
     Keychain:{contains:()=>false},FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>false})}};
-  let count=0,maxOps=0,maxLayers=0;
+  let count=0,maxOps=0,maxLayers=0,totalRasterBytes=0;
+  if(process.env.RASTER_BATCH==='1'){
+    const {encodePNG}=await import(require('node:url').pathToFileURL(path.join(dir,'rect-raster.js')).href);
+    host.DrawContext=class extends drawing.DrawContext {
+      makeRaster=crop=>{const png=encodePNG(crop);totalRasterBytes+=png.length;return {native:{},size:{width:crop.width,height:crop.height}}};
+    };
+  }
   for(const date of ['2026-10-22T12:00:00','2026-10-23T00:00:00','2026-10-25T00:00:00','2026-12-31T23:59:00','2027-01-01T00:00:00']){
     for(const populated of [false,true]){
       const focus=new Date(date),now=new Date('2026-10-22T12:00:00');
@@ -38,5 +44,9 @@ async function main(){
   }
   console.log(`PASS: ${count} complete original-engine renders; empty/populated, navigation, weekend, year boundary.`);
   console.log(`Replay validated; maximum ${maxOps} operations / ${maxLayers} Canvas layers in synthetic scenarios. Device memory/performance unverified.`);
+  if(process.env.RASTER_BATCH==='1'){
+    assert(maxOps<5000,'Bitmap batching bounds Canvas traffic');
+    console.log(`Raster batch PNG bytes across ${count} scenarios: ${totalRasterBytes}.`);
+  }
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

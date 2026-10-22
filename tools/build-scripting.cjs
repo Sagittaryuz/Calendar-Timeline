@@ -51,6 +51,7 @@ if(capsuleStart<0||capsuleEnd<0)throw new Error('Missing capsule boundary');
 code=code.slice(0,capsuleStart)+`async function drawDayEndCapsules(ctx) {
   const entries = dayEndCapsuleEntries();
   if (!entries.length) return;
+  ctx.flushRects?.();
   ctx.ops.push({type:'capsules',entries,height:DAY_CHANGE_CIRCLE_DIAMETER,
     width:scaleVertical(24),fontSize:scaleFontSize(24),
     centerY:CANVAS.timelineTop+(weatherIconCenterY()+bottomLegendCenterY())/2});
@@ -79,6 +80,7 @@ code=code.slice(0,diagonalStart)+`async function drawDiagonalWeekdayLabels(ctx) 
   const boundaryX=Math.max(0,timeToX(addDays(startOfDay(windowStart),1)));
   const entries=diagonalWeekdayLabelEntries().filter(e=>e.x1>boundaryX)
     .map(e=>({...e,x0:Math.max(e.x0,boundaryX)}));
+  ctx.flushRects?.();
   if(entries.length)ctx.ops.push({type:'diagonal',entries,options:{width:timelineWidth(),
     minFontSize:scaleFontSize(isCompactMode()?26:30),minDateFontSize:scaleFontSize(12),
     maxFontSize:scaleFontSize(isCompactMode()?92:isExtendedDetailedMode()?108:132),

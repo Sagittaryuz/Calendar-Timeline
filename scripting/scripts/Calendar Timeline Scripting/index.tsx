@@ -7,7 +7,8 @@ async function main(){
     const model=await loadModel()
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
-      <Text>Versão de teste para Scripting · 0.1.0</Text>
+      <Text>Versão de teste para Scripting · 0.1.1</Text>
+      <Text>Preparação local: {Storage.get<any>('render-diagnostic')?.elapsedMS??'—'} ms. Isso não mede o desenho final na Tela de Início.</Text>
       <Text>Motor original: {model.version}. Dia: {model.focusDate}.</Text>
       <Text>Calendário: {model.sourceStatus.schedule?.event===false?'acesso não confirmado':'consultado'}. Lembretes: {model.sourceStatus.schedule?.reminder===false?'acesso não confirmado':'consultado'}.</Text>
       <Text>Adicione o widget médio do Scripting à Tela de Início e selecione este projeto. Toque nos dias do cabeçalho para mudar a timeline.</Text>
