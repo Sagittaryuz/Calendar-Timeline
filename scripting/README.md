@@ -1,3 +1,11 @@
+## Atual: 0.3.5 — retorno à estrutura anterior
+
+O pacote ativo voltou aos 25 arquivos da versão 0.2.15, commit 565bba1. Dezoito arquivos são idênticos byte a byte ao original, incluindo motor, desenho, modelo, adaptador e seleção. Foram retiradas do diretório distribuído as telas Pro, extensões novas e entradas geradas da 0.3.4. Fontes e histórico foram preservados em scripting/experimental-pro, scripting/entrypoints e na tag scripting-v0.3.4-alpha.1.
+
+As únicas diferenças da base são a identificação 0.3.5, a solicitação de atualização em 1 minuto, o link direto ao Calendário, a prioridade da fila antes da captura, a permissão para concluir lembretes recorrentes e textos da tela. A ponte termina antes de Widget.present, como já ocorria na 0.2.15. O pareamento e seus nomes de armazenamento/Keychain não mudaram.
+
+Atualize o mesmo projeto pelo vínculo Git. O pacote distribuído deve conter 25 arquivos; uma atualização parcial que conserve extensões antigas pode não representar este pacote. Não apague o projeto nem o armazenamento. Os testes locais foram aprovados; a compilação e o widget no iPhone ainda precisam ser confirmados. As seções seguintes são histórico e não descrevem as funções Pro disponíveis nesta recuperação.
+
 ## 0.3.4 — pacote de recuperação
 
 Atualize o projeto existente pelo mesmo vínculo Git, preservando armazenamento e pareamento. As entradas index.tsx, widget.tsx e extensões são autocontidas: cada uma inclui sua versão e dependências do projeto. Não dependem de módulos internos antigos no cache para executar. O código-fonte editável das entradas está em scripting/entrypoints; npm run build:scripting gera os arquivos distribuídos.

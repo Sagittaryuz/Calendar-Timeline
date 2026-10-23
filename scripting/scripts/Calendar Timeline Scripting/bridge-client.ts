@@ -94,7 +94,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   attempt=beginAttempt(options.origin)
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
   const meta={clientVersion:VERSION,origin:options.origin??'manual',linkedReadIds:{event:linked('event'),reminder:linked('reminder')}}
-  // Process queued commands before an expensive full agenda capture.
+  // Keep the write queue ahead of the full agenda capture in a bounded widget run.
   const realWrites=Storage.get<boolean>('real-agenda-disabled')===true?null:await synchronizeReal(body=>request(config,body),VERSION,()=>deadline-Date.now())
   // Real agenda upload is independent of the test command path. A stale test
   // event must not prevent a read-only weekly snapshot reaching the owner.

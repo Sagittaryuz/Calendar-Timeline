@@ -33,7 +33,7 @@ export function readLines(reads:any,legacy:any[]=[]){
 }
 export function commandStatus(report:any){
  const real=report.realWrites
- const personal=real?`Agenda pessoal: ${real.applied} gravações confirmadas, ${real.detailsRead??0} leituras detalhadas, ${real.conflicts} conflitos, ${real.pending} pendentes. `:''
+ const personal=real?`Agenda pessoal: ${real.applied} gravações confirmadas, ${real.conflicts} conflitos, ${real.pending} pendentes. `:''
  return personal+(report.commandState==='not-checked'?'Comandos de teste: não consultados nesta execução.':`Gravações confirmadas: ${report.applied}. Conflitos: ${report.conflicts}. Pendentes: ${report.pending??'não consultados'}.`)
 }
 export function readStatus(report:any){

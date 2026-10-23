@@ -30,6 +30,6 @@ const cache=new Map();function load(name){if(cache.has(name))return cache.get(na
  log.beginAttempt('widget-touch');assert(log.previousAttemptLines().some(s=>s.includes('sem resultado local registrado')),'Interrupted does not pretend to know whether writes happened');
  const order=[];mode='offline';await touch.refreshFromWidget({sync:()=>auto.autoSynchronize({origin:'widget-touch',force:true}),load:async()=>{order.push('load');throw Error('render')},failed:()=>order.push('failed'),reload:()=>order.push('reload'),open:async url=>{assert.equal(url,'calshow://');order.push('calendar');return true}});
  assert.deepEqual(order,['load','failed','reload','calendar']);assert.equal(writes,0);
- const index=fs.readFileSync('scripting/entrypoints/index.tsx','utf8');assert(index.indexOf('const previousAttempts=previousAttemptLines()')<index.indexOf("origin:'app-open'"));assert(index.includes("key={'attempt-'+index}"));
+ const index=fs.readFileSync(dir+'index.tsx','utf8');assert(index.indexOf('const previousAttempts=previousAttemptLines()')<index.indexOf("origin:'app-open'"));assert(index.includes("key={'attempt-'+index}"));
  console.log('PASS: offline actual client -> persistent safe journal -> next-open snapshot -> successful retry retains failure; HTTP/format/partial errors, bounded history, interrupted state, no secrets/payloads and Calendar redirect preserved. Native APIs simulated.');
 })().catch(e=>{console.error(e);process.exitCode=1});

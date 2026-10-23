@@ -1,0 +1,112 @@
+{
+  "version": "0.3.5",
+  "base": "565bba1",
+  "files": [
+    {
+      "file": "app_intents.tsx",
+      "sha256": "c501234b5fc3af773f915f5c8a27051c53e4812cbfe9e1402f0e60c147458cb1"
+    },
+    {
+      "file": "bridge-agenda.ts",
+      "sha256": "80e96a54e207329e88dbccabe299cd3abf2f3db642abb7b508a757b670d0086c"
+    },
+    {
+      "file": "bridge-attempts.ts",
+      "sha256": "467d2747e9f5c73098849d8efb5ea08d57dff0a608e44e8cdc52959a1f806ecc"
+    },
+    {
+      "file": "bridge-auto.ts",
+      "sha256": "fcdb2fac5b92995b1e6d276d76bf2dec1b64fa8e385e61f3e0f76907a5a60b5a"
+    },
+    {
+      "file": "bridge-client.ts",
+      "sha256": "8cac6e3c3eb705dc4c91bc5f278ebff7089bdb4af92165e6bc6afec6c857008a"
+    },
+    {
+      "file": "bridge-event-reader.ts",
+      "sha256": "5609815040f4c2127ebe16a8cce52c7cdbe28b06995788743829db7bb7e81805"
+    },
+    {
+      "file": "bridge-protocol.ts",
+      "sha256": "91e60529a927300cc5cab904a6fcc54a2a3f464f9ae371013b129b856638f447"
+    },
+    {
+      "file": "bridge-read-state.ts",
+      "sha256": "03707ab90a0d07c2a2d823555f2101e2c0893a19b3ca86e3be019e678582c0b8"
+    },
+    {
+      "file": "bridge-real.ts",
+      "sha256": "e570ddbaad93c60e632a2a057cb980d31e5c6ccbaf40cb0994795715420b4fd3"
+    },
+    {
+      "file": "bridge.tsx",
+      "sha256": "5db0f407aa2d3b6070026c722f28e66a0eaf9fb1df1d94efcf2f606a4a87716f"
+    },
+    {
+      "file": "diagnostics.ts",
+      "sha256": "b3f51e7e26b677fc78a987ab1cacdea53c0b3ea434bacaf3db17ed1fc0d2c52f"
+    },
+    {
+      "file": "diagonal-canvas.js",
+      "sha256": "845cfa29f61466dde19e7a5b440d87d3be4e777ef50ce36221243d2cf9c4591c"
+    },
+    {
+      "file": "drawing.js",
+      "sha256": "0dcb40b5e354dbf47373e8b3a244b3fc8810b124de815dc2df6321a44b1220de"
+    },
+    {
+      "file": "graph-view.tsx",
+      "sha256": "17356208cf39677d36d203b9d31f0a30cadd6cce4858b77e08cafe93c294189a"
+    },
+    {
+      "file": "host.ts",
+      "sha256": "c505ba2d24bc8aa3c4d5e9654fafc16593c1527c1ddf3aa854abf7bcb2b6fb94"
+    },
+    {
+      "file": "index.tsx",
+      "sha256": "cfacd064f5a4ea8b51d2da809a388677fbe25d3ccea89eee21c9685c2d55449d"
+    },
+    {
+      "file": "intent.tsx",
+      "sha256": "118fe52dfbc8d2c157951414dde05d12138b478a66293716e2f6075326bb2bf4"
+    },
+    {
+      "file": "model.ts",
+      "sha256": "a9fd67e7d9683205e010bf1903c8b64d92477890730c8a25f2f55f900fd85f70"
+    },
+    {
+      "file": "original-engine.js",
+      "sha256": "be576065c770e22ddafbcc942ee061e4a75b268b91ec52a30075267988667ef7"
+    },
+    {
+      "file": "rect-raster.js",
+      "sha256": "7ccb077b7c935fabfff852573155c4424bb1443ac0c329c0e4197dc6eb4ad8a8"
+    },
+    {
+      "file": "script.json",
+      "sha256": "6e0cc3fd6f23e2582ef6b716645d656ddfc3c71153b6d2ba45bdd51ce7deba94"
+    },
+    {
+      "file": "selection.ts",
+      "sha256": "334b7dd51e5bd03f047cbd32c9b2eb28753c967c7301a2e61ba433589f6a0d80"
+    },
+    {
+      "file": "timeline-view.tsx",
+      "sha256": "09d612d3e2ff292f6a75fbe762eeb6f4f4e6c4ddf76cf046d1fc21d6adda01a1"
+    },
+    {
+      "file": "widget-refresh.ts",
+      "sha256": "f247e01ed282b36ceae0ec261d33295956daec99305f5ce64e552fe129468401"
+    },
+    {
+      "file": "widget.tsx",
+      "sha256": "f1fee1676458c68d1ddc60c91f6250d838a29775fb143b03c189f85472983fae"
+    }
+  ],
+  "fileCount": 25,
+  "byteIdenticalOriginals": 18,
+  "nativeCompilationConfirmed": false,
+  "nativeWidgetConfirmed": false,
+  "saneagoCompletionConfirmed": false,
+  "tests": "Baseline behavior suite and recovery comparison/recurring readback/idempotency passed"
+}

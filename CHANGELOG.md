@@ -1,5 +1,12 @@
 # Histórico da edição Scripting
 
+## 0.3.5 — 23/10/2026
+
+- Retorna à estrutura de 25 arquivos da 0.2.15, retirando as extensões Pro e bundles do pacote ativo; preserva fontes e histórico.
+- Motor, desenho e outros 16 arquivos são byte a byte iguais à base. Mantém só sete arquivos com diferenças pequenas: versão/textos, ponte prioritária, recorrência, intervalo e link direto.
+- Testes da base e de recuperação aprovados, incluindo 18 hashes originais e conclusão recorrente sem repetição. Aceitação no iPhone pendente.
+
+
 ## 0.3.4 — 23/10/2026
 
 - Recuperação com entradas autocontidas, versão embutida e namespace do SDK, preservando detalhes da 0.3.3.

@@ -1,56 +1,9 @@
-# Calendar Timeline 0.3.4
+# Calendar Timeline 0.3.5 — recuperação pela base anterior
 
-Atualize o mesmo projeto pela branch `scripting`, preservando pareamento e Keychain.
-Inclui o registro local de tentativas da 0.2.15, e a correção de lembretes recorrentes no servidor 0.3.1.
+A prioridade desta versão é restaurar a execução da estrutura 0.2.15. O motor e o desenho original foram preservados; 18 dos 25 arquivos são byte a byte iguais à base 565bba1. As telas de dia, criação por frase, exportações, painel Início, ferramenta do Assistente, Central de Controle e edição de detalhes foram temporariamente retiradas do pacote ativo. O código permanece no Git e em scripting/experimental-pro e scripting/entrypoints; a tag scripting-v0.3.4-alpha.1 preserva o pacote anterior completo.
 
-- Corpo da timeline: link direto `calshow://`, sem script intermediário. Esse toque
-  abre o Calendário e não sincroniza a ponte antes. Não promete abrir uma data específica.
-- Dias: App Intent grava seleção local e solicita recarregar widgets de usuário,
-  sem esperar rede nem abrir a tela do Scripting.
-- Widget: preparação da agenda e ponte começam em paralelo. Solicita execução após
-  1 minuto por padrão, configurável em 1/5/15; frequência real depende do iOS.
-- Central de Controle: **Sincronizar agenda**, dentro do pareamento/escopo existentes.
+A ponte e o pareamento anteriores continuam. A fila pessoal pode criar/editar campos básicos, concluir e reabrir lembretes; lembretes recorrentes mantêm suas regras. Eventos recorrentes, participantes e fontes não graváveis permanecem fora do escopo de escrita. A conclusão precisa de gravação e releitura no aparelho. Nada é criado ou concluído apenas por instalar.
 
-## Agenda e criação
+A fila é processada antes da captura da agenda, para aproveitar o tempo concedido à execução do widget. O widget aguarda a ponte antes de apresentar a timeline e solicita nova execução após 1 minuto. O iOS decide a frequência efetiva; não há garantia de execução a cada 60 segundos. O corpo abre o Calendário diretamente.
 
-O app consulta o dia, lista eventos e lembretes datados não concluídos, identifica
-sobreposições e calcula intervalos sem eventos ocupados entre 08h e 18h. Eventos
-de dia inteiro e lembretes não são descontados. Não é uma prova de disponibilidade
-pessoal. Falha na leitura de calendários não produz um falso dia livre.
-
-**Resumir meu dia** usa IA local se disponível. Caso contrário prepara uma conversa
-no Assistente sem envio automático. **Criar por frase** interpreta localmente ou,
-somente após escolha explícita, usa o provedor configurado. O usuário revisa tipo,
-título, datas, calendário/lista e confirma a gravação. Datas ausentes não recebem
-horário ou duração inventados. Itens de dia inteiro usam fim exclusivo.
-
-A criação reutiliza `executeReal`: diário persistido antes da escrita, marcador de
-recuperação e confirmação por releitura. **Retomar criação pendente** reutiliza o
-comando. Falha ou conflito não autoriza criar outra cópia. Não há exclusão de itens.
-Instalação, abertura e consulta não criam eventos ou lembretes.
-
-Ferramenta **Consultar agenda** compartilha com a conversa somente após aprovação
-e toque. Não envia notas ou convidados. O painel Início compartilha somente
-contagens/horários locais. Preferências exportáveis não incluem agenda ou pareamento.
-Uma pasta externa pode ser autorizada para exportações; isso não ativa sync do Drive.
-
-## Verificação e recuperação
-
-Testes locais: ponte/diário anterior, conflitos/intervalos/cobertura parcial, datas
-inválidas, criação com revisão e releitura simulada, seleção de dias, rede/cache,
-12 cenários do motor e sete prévias Canvas. Geometria do widget foi preservada.
-Não confirmados no iPhone: tipos nativos, visual, links, velocidade, Central de
-Controle, notificações/IA e primeira criação desta versão. Home exige versão compatível.
-
-Rollback: `scripting-v0.2.15-alpha.1`, preservando armazenamento/pareamento. O toque
-antigo volta a passar pelo Scripting. Código vem do Git; Drive é backup privado.
-
-### Correção de segundo plano 0.3.2
-
-A sincronização termina antes de Widget.present, que destrói o contexto de execução. A fila pessoal é processada antes da captura completa, para não gastar todo o orçamento lendo a agenda. Sem erro de rede, o script tenta sincronizar a cada execução do widget concedida pelo iOS, sem precisar abrir o app. A política solicita nova execução após 1 minuto, mas não constitui agendamento periódico garantido. O iOS pode espaçar as execuções.
-
-Referências oficiais: https://scriptingapp.github.io/guide/Widget/Widget%20Quick%20Start e https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date .
-
-### Recuperação de compilação 0.3.4
-
-As entradas distribuídas embutem dependências e versão. Edite scripting/entrypoints e os módulos originais; execute npm run build:scripting antes de publicar. Não edite as entradas geradas. O diagnóstico independente diagnose.tsx verifica arquivos e APIs locais; não limpa cache, armazenamento, Keychain, pareamento ou projetos. Nenhuma migração é necessária. A edição 0.3.3 de detalhes foi preservada. As evidências de testes do pacote não confirmam compilação no iPhone nem conclusão de comandos.
+Atualize o mesmo projeto e preserve Storage e Keychain. O pacote Git possui 25 arquivos e não usa o gerador de bundles Pro. npm run build:scripting verifica o pacote ativo sem reescrever as entradas. npm run test:scripting inclui comparação da árvore com a 0.2.15 e conclusão recorrente simulada, com preservação de regras/notas/alarmes e sem segunda gravação na repetição de comando. Compilação/renderização no iPhone e recibo da Saneago continuam pendentes de verificação física.
