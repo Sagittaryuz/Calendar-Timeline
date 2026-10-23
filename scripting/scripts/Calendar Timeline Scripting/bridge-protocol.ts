@@ -16,6 +16,7 @@ export function project(kind:string,item:any){
  if(kind==='event'){out.start=new Date(item.startDate).toISOString();out.end=new Date(item.endDate).toISOString();out.isAllDay=!!item.isAllDay
   const modified=item.lastModifiedDate==null?NaN:Number(new Date(item.lastModifiedDate))
   out.nativeModifiedAt=Number.isFinite(modified)?new Date(modified).toISOString():null
+  out.linkKey=item.notes?.match(/ct-bridge-command:[^\s]+/)?.[0]??null
  }
  else {out.due=dueString(item.dueDateComponents);out.completed=!!item.isCompleted}
  out.revision=revision(out);return out

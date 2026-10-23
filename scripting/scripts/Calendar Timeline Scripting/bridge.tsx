@@ -12,20 +12,20 @@ export async function showBridge(reconfigure=false,onStatus?:(message:string)=>v
   }
   if(!Storage.get<boolean>('test-scope-consent')){
    onStatus?.("Aguardando sua autorização para os dois itens de teste…")
-   const yes=await Dialog.confirm({title:'Prova com dois itens de teste',message:'Este projeto pode criar e editar somente o lembrete e o evento [CT TESTE] enviados pela ponte privada. Pode concluir/reabrir o lembrete. Nenhum outro registro será enviado. Os itens usam o calendário/lista padrão do iPhone.',confirmLabel:'Executar prova',cancelLabel:'Cancelar'})
+   const yes=await Dialog.confirm({title:'Conectar agenda e testes',message:'Este projeto pode criar e editar somente o lembrete e o evento [CT TESTE] enviados pela ponte privada. Pode concluir/reabrir o lembrete. Sua agenda real da semana atual e próxima também é enviada em modo de consulta; notas e convidados não são enviados. Os itens usam o calendário/lista padrão do iPhone.',confirmLabel:'Executar prova',cancelLabel:'Cancelar'})
    if(!yes){onStatus?.("Prova cancelada. Nenhum dado foi enviado.");return}
    if(!Storage.set('test-scope-consent',true))throw Error('Não foi possível guardar a autorização local.')
   }
   onStatus?.("Conectando à ponte privada e verificando a fila…")
   const report=await synchronize()
   Widget.reloadAll()
-  const message=`Sincronização concluída em ${new Date(report.finishedAt).toLocaleString("pt-BR")}. Gravações confirmadas: ${report.applied}. Conflitos: ${report.conflicts}. Pendentes: ${report.pending}.`
+  const message=`Sincronização concluída em ${new Date(report.finishedAt).toLocaleString("pt-BR")}. Gravações confirmadas: ${report.applied}. Conflitos: ${report.conflicts}. Pendentes: ${report.pending??'não consultados'}. Agenda: ${report.agenda?.accepted?'recebida':'envio não confirmado'}.`
   if(onStatus){onStatus(message);return}
   await Navigation.present(<NavigationStack><VStack spacing={14} padding={20} navigationTitle="Calendar Timeline Bridge">
-   <Text>Ponte de teste · versão 0.1.2</Text>
+   <Text>Ponte de teste · versão 0.2.0</Text>
    <Text>Última execução: {new Date(report.finishedAt).toLocaleString('pt-BR')}</Text>
    <Text>Gravações confirmadas nesta execução: {report.applied}. Conflitos: {report.conflicts}. Pendentes: {report.pending}.</Text>
-   <Text>Somente os dois itens [CT TESTE] são compartilhados. Alterações feitas neles no Calendário ou Lembretes serão enviadas na próxima execução.</Text>
+   <Text>A semana atual e a próxima são compartilhadas para consulta. Somente os dois itens [CT TESTE] aceitam alterações remotas.</Text>
    <Text>Volte ao ChatGPT e use o plugin Calendar Timeline Bridge para consultar o resultado ou enviar uma alteração de teste.</Text>
    <Text>A ponte roda ao executar este projeto. Atualização contínua com o iPhone bloqueado ainda não foi comprovada.</Text>
 

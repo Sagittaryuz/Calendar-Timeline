@@ -1,3 +1,4 @@
+import { collectAgenda } from './bridge-agenda'
 import { readLinkedEvent } from './bridge-event-reader'
 import { assertTest, ENDPOINT, executeCommand, project, validateConfig } from './bridge-protocol'
 const CONFIG='ct-bridge-config-v1'
@@ -6,11 +7,16 @@ export function configure(raw:string){const config=validateConfig(JSON.parse(raw
 export function configuration(){const raw=Keychain.get(CONFIG);return raw?validateConfig(JSON.parse(raw)):null}
 function linked(kind:string){return Storage.get<string>('linked:'+kind)}
 const api={
- get:async(kind:string,id:string)=>kind==='event'?readLinkedEvent(id,{
-  get:(key:string)=>CalendarEvent.get(key),reference:()=>Storage.get<any>('bridge-event-reference'),
-  calendars:()=>Calendar.forEvents(),query:(start:Date,end:Date,calendars:any[])=>CalendarEvent.getAll(start,end,calendars),
-  remember:(value:any)=>write('bridge-event-reference',value),diagnose:(value:any)=>write('bridge-event-read',value)
- }):Reminder.get(id),
+ get:async(kind:string,id:string)=>{
+  if(kind!=='event')return Reminder.get(id)
+  const item=await readLinkedEvent(id,{
+   get:(key:string)=>CalendarEvent.get(key),reference:()=>Storage.get<any>('bridge-event-reference'),
+   query:(start:Date,end:Date)=>CalendarEvent.getAll(start,end),
+   remember:(value:any)=>write('bridge-event-reference',value),diagnose:(value:any)=>write('bridge-event-read',value)
+  })
+  if(item&&item.identifier!==id)write('linked:event',item.identifier)
+  return item
+ },
  getLinked:linked,
  link:(kind:string,id:string)=>write('linked:'+kind,id),
  loadJournal:(id:string)=>Storage.get<any>('journal:'+id),
@@ -68,7 +74,7 @@ async function items(){
  for(const kind of ['reminder','event']){
   const id=linked(kind);if(!id)continue
   const item=await api.get(kind,id)
-  if(item){assertTest(item);result.push(project(kind,item))}
+  if(item){if(!item.title?.startsWith('[CT TESTE] ')||!item.notes?.includes('ct-bridge-command:'))throw Error('Vínculo fora do piloto');result.push(project(kind,item))}
  }
  return result
 }
@@ -79,6 +85,20 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
  deadline=options.budgetMS?Date.now()+options.budgetMS:Infinity
  try{
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
+  const meta={clientVersion:'0.2.12',origin:options.origin??'manual'}
+  // Real agenda upload is independent of the test command path. A stale test
+  // event must not prevent a read-only weekly snapshot reaching the owner.
+  let agenda:any=null
+  if(Storage.get<boolean>('real-agenda-disabled')!==true){
+   let timer:any
+   try{
+    const remaining=Math.max(150,Math.min(10000,deadline-Date.now()-300))
+    const snapshot:any=await Promise.race([collectAgenda(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de leitura da agenda excedido')),remaining)})])
+    const result=await request(config,{op:'agenda',snapshot,meta})
+    agenda={...result,coverage:snapshot.coverage}
+    write('bridge-agenda-status',agenda)
+   }catch{agenda={state:'deferred',at:new Date().toISOString()};write('bridge-agenda-status',agenda)}finally{clearTimeout(timer)}
+  }
   // Replay a result whose upload failed before any new native writes.
   const outbox=Storage.get<any>('result-outbox')
   if(outbox){
@@ -91,9 +111,15 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
    }
    await request(config,outbox);Storage.remove('result-outbox')
   }
-  const initialItems=await items()
-  const meta={clientVersion:'0.2.11',origin:options.origin??'manual'}
-  const received=await request(config,{op:'sync',items:initialItems,claim:deadline-Date.now()>2000,meta})
+  let initialItems:any[]
+  try{initialItems=await items()}catch(error){
+   if(agenda?.accepted){
+    const report={version:'0.1.4',finishedAt:new Date().toISOString(),applied:0,conflicts:1,pending:null,agenda,testState:'deferred'}
+    write('last-sync',report);return report
+   }
+   throw error
+  }
+  const received=await request(config,{op:'sync',items:initialItems,claim:deadline-Date.now()>2000,meta:{...meta,eventRead:Storage.get('bridge-event-read')}})
   if(received.warnings?.length)throw Error('A ponte recusou uma leitura antiga ou conflitante. Atualize o projeto e tente novamente.')
   let applied=0,conflicts=0
   for(const command of received.commands){
@@ -111,7 +137,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   const final=received.commands.length?await request(config,{op:'sync',items:finalItems,claim:false,meta}):received
   if(final.warnings?.length)throw Error('A ponte preservou uma versão mais recente do evento; envio adiado.')
   write('bridge-local-items',finalItems)
-  const report={version:'0.1.3',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
+  const report={version:'0.1.4',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount,agenda,testState:'ok'}
   write('last-sync',report);return report
  }finally{syncing=false;deadline=Infinity}
 }

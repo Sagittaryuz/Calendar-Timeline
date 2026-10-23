@@ -9,7 +9,7 @@ async function main(){
   try{
     if(Script.queryParameters.refresh==='1'){
       await refreshFromWidget({
-        sync:()=>autoSynchronize({origin:'widget-touch',force:true,budgetMS:6500}),
+        sync:()=>autoSynchronize({origin:'widget-touch',force:true,budgetMS:10000}),
         load:()=>loadModel({background:true}),reload:()=>Widget.reloadAll(),open:(url:string)=>Safari.openURL(url),
         failed:()=>Storage.set('widget-tap-diagnostic',{at:Date.now(),state:'local-render-failed'})
       })
@@ -20,15 +20,16 @@ async function main(){
       return
     }
     // The first foreground execution obtains the iOS permissions used by the widget.
-    await autoSynchronize({origin:'app-open',force:true,budgetMS:8000})
+    await autoSynchronize({origin:'app-open',force:true,budgetMS:15000})
     const model=await loadModel()
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><ScrollView><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
       <BridgeLauncher/>
       <Text fixedSize={{horizontal:false,vertical:true}}>{Storage.get<any>('bridge-auto-state')?.message??'A ponte automática será ativada após o pareamento.'}</Text>
       {(Storage.get<any[]>('bridge-local-items')??[]).map((item:any)=><Text key={item.kind} fixedSize={{horizontal:false,vertical:true}}>{item.kind==='event'?`Último evento lido: ${item.title}`:`Último lembrete lido: ${item.completed?'concluído':'aberto'}`}</Text>)}
+      <Text fixedSize={{horizontal:false,vertical:true}}>{(()=>{const agenda=Storage.get<any>('bridge-agenda-status');return agenda?.accepted?`Agenda real: ${agenda.count} itens enviados (${agenda.state}) em ${new Date(agenda.receivedAt).toLocaleString('pt-BR')}. Janela: ${agenda.window?.startDay} a ${agenda.window?.endDay} (fim exclusivo).`:'Agenda real: envio ainda não confirmado nesta execução.'})()}</Text>
       <Text>Ponte automática ao abrir, tocar e nas execuções do widget autorizadas pelo iOS. Não há serviço contínuo garantido com a tela bloqueada.</Text>
-      <Text>A ponte compartilha somente os dois itens de teste após o pareamento privado.</Text>
+      <Text>A ponte compartilha sua semana atual e a próxima para consulta privada: títulos, datas, horários, calendário/lista e conclusão. Notas e convidados ficam no iPhone. Escritas remotas continuam restritas aos dois testes.</Text>
       <Text>Versão de teste para Scripting · {VERSION}</Text>
       <Text>Preparação local: {Storage.get<any>('render-diagnostic')?.elapsedMS??'—'} ms. Isso não mede o desenho final na Tela de Início.</Text>
       <Text>Motor original: {model.version}. Dia: {model.focusDate}.</Text>

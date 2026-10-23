@@ -1,28 +1,28 @@
 import { project } from './bridge-protocol'
-// Arrival order is not a version: both native entry points can retain old objects.
+// Native identifiers can change. Resolve the exact creation marker across all
+// calendars, never by title. Do not assume either lookup is inherently fresh.
 export async function readLinkedEvent(id:string,host:any){
- const cached=await host.get(id)
- const reference=host.reference()
- const calendarId=reference?.calendarId??cached?.calendar?.identifier
- if(!calendarId){if(!cached)return null;throw Error('Calendário do evento de teste não identificado.')}
- const calendars=(await host.calendars()).filter((c:any)=>c.identifier===calendarId)
- if(!calendars.length)throw Error('Calendário do evento de teste indisponível; nenhum título antigo será reenviado.')
- const anchor=Number(cached?.startDate??new Date(reference?.start??Date.now()))
- const rows=await host.query(new Date(anchor-15*86400000),new Date(anchor+15*86400000),calendars)
- const matches=rows.filter((event:any)=>event.identifier===id)
- if(matches.length>1)throw Error('Identificador de evento ambíguo; confira o item de teste no aparelho.')
- let fresh=matches[0],method='calendar-range'
- if(!fresh)throw Error('Evento de teste ausente na nova consulta. A cópia anterior não será tratada como atualizada.')
+ const cached=await host.get(id),reference=host.reference()
  const marker=reference?.marker??cached?.notes?.match(/ct-bridge-command:[^\s]+/)?.[0]
- for(const item of [fresh,...(cached?[cached]:[])])if(item.identifier!==id||item.calendar?.identifier!==calendarId||(marker&&!item.notes?.includes(marker)))throw Error('O vínculo do evento mudou; sincronização interrompida para conferência.')
- let chosen=project('event',fresh)
- if(cached){
-  const direct=project('event',cached)
-  if(direct.revision!==chosen.revision&&(!direct.nativeModifiedAt||!chosen.nativeModifiedAt||direct.nativeModifiedAt===chosen.nativeModifiedAt))throw Error('Leituras conflitantes do evento sem versão nativa distinta. Nenhum título será reenviado.')
-  if(direct.nativeModifiedAt&&(!chosen.nativeModifiedAt||direct.nativeModifiedAt>chosen.nativeModifiedAt)){fresh=cached;chosen=direct;method='identifier-newer'}
+ const anchor=Number(new Date(reference?.start??cached?.startDate??Date.now()))
+ const rows=await host.query(new Date(anchor-15*86400000),new Date(anchor+15*86400000))
+ const exact=rows.filter((e:any)=>e.identifier===id)
+ const marked=marker?rows.filter((e:any)=>e.notes?.match(/ct-bridge-command:[^\s]+/)?.[0]===marker):[]
+ if(!marked.length&&!exact.length)throw Error('Evento de teste ausente na nova consulta. A cópia anterior não será tratada como atualizada.')
+ if(exact.some((e:any)=>marker&&e.notes?.match(/ct-bridge-command:[^\s]+/)?.[0]!==marker))throw Error('O vínculo do evento mudou; sincronização interrompida para conferência.')
+ const candidates=[...marked,...exact,...(cached&&(!marker||cached.notes?.match(/ct-bridge-command:[^\s]+/)?.[0]===marker)?[cached]:[])]
+ const snapshots=candidates.map((native:any)=>({native,item:project('event',native)}))
+ snapshots.sort((a:any,b:any)=>(b.item.nativeModifiedAt??'').localeCompare(a.item.nativeModifiedAt??''))
+ const chosen=snapshots[0]
+ for(const candidate of snapshots){
+  const a=chosen.item,b=candidate.item
+  if(a.revision!==b.revision&&(!a.nativeModifiedAt||!b.nativeModifiedAt||a.nativeModifiedAt===b.nativeModifiedAt)){
+   host.diagnose({at:new Date().toISOString(),state:'conflict',candidates:snapshots.slice(0,10).map((x:any)=>x.item)})
+   throw Error('Leituras conflitantes ou identificador ambíguo sem versão nativa distinta. Nenhum título será reenviado.')
+  }
  }
- if(reference?.nativeModifiedAt&&(!chosen.nativeModifiedAt||chosen.nativeModifiedAt<reference.nativeModifiedAt||(chosen.nativeModifiedAt===reference.nativeModifiedAt&&reference.revision!==chosen.revision)))throw Error('Leitura anterior ao último estado confirmado do evento; envio adiado.')
- host.remember({id,calendarId,start:fresh.startDate.toISOString(),marker,nativeModifiedAt:chosen.nativeModifiedAt,revision:chosen.revision})
- host.diagnose({at:new Date().toISOString(),method,nativeModifiedAt:chosen.nativeModifiedAt,changedFromIdentifierRead:cached?.title!==fresh.title,title:fresh.title})
- return fresh
+ if(reference?.nativeModifiedAt&&(!chosen.item.nativeModifiedAt||chosen.item.nativeModifiedAt<reference.nativeModifiedAt||(chosen.item.nativeModifiedAt===reference.nativeModifiedAt&&reference.revision!==chosen.item.revision)))throw Error('Leitura anterior ao último estado confirmado do evento; envio adiado.')
+ host.remember({id:chosen.item.id,calendarId:chosen.item.calendarId,start:chosen.item.start,marker,nativeModifiedAt:chosen.item.nativeModifiedAt,revision:chosen.item.revision})
+ host.diagnose({at:new Date().toISOString(),method:'all-calendars-marker-and-version',relinked:chosen.item.id!==id,changedFromIdentifierRead:cached?.title!==chosen.item.title,title:chosen.item.title,candidates:snapshots.slice(0,10).map((x:any)=>x.item)})
+ return chosen.native
 }

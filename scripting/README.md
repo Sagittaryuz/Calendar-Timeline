@@ -1,3 +1,11 @@
+## 0.2.12 — consulta real do iPhone e leitura por marcador
+
+Atualize o mesmo projeto no Scripting e abra-o. Sem refazer o pareamento, sem Atalhos e sem Google Agenda. A ponte privada compartilha a semana atual e próxima (segunda a segunda, fim exclusivo), em modo de consulta: títulos, calendários/listas, datas, horários e conclusão dos lembretes disponíveis ao Scripting. Notas, convidados, locais e URLs não são enviados. Lembretes sem data e futuras ocorrências ainda não concretizadas pela API ficam fora.
+
+O teste passa a ser localizado pelo marcador exclusivo em todos os calendários na janela de busca, com comparação de versões e religação segura quando o identificador muda. Não há título forçado para EDITADO. A versão real do iPhone precisa ser confirmada após a atualização; os testes locais simulam APIs nativas.
+
+O serviço privado 0.2.0 adiciona `bridge_list_agenda`, com paginação e indicação de cobertura, erro, truncamento e idade da captura. `bridge_get_status` inclui a primeira página da próxima semana. Escritas continuam exclusivas dos dois testes. O desenho do widget é preservado. Consulte [BRIDGE.md](BRIDGE.md) para arquitetura, campos e limites atuais. As seções abaixo registram versões anteriores.
+
 ## 0.2.10 — centralização dos quadros e destaque de hoje menor
 
 As três linhas são centralizadas horizontalmente em todos os quadros, incluindo domingo e sábado. A primeira linha e as temperaturas usam alinhamento nativo ao centro dos seus retângulos, sem depender de estimativas para posicionar o texto. O conjunto permanece na posição inferior adotada na 0.2.9. O limite superior da fonte de hoje passa de 42 para 36 unidades de referência (na prévia: 41 para 38 unidades do desenho), mantendo sua hierarquia.

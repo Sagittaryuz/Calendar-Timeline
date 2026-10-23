@@ -1,3 +1,7 @@
+# Estado atual: Scripting 0.2.12 / serviço 0.2.0
+
+A seção 0.2.12 ao final define o escopo atual de leitura real. As seções anteriores documentam o piloto e não descrevem os limites atuais de consulta.
+
 # Calendar Timeline Bridge · prova 0.1.1
 
 Incluída no Calendar Timeline Scripting desde a versão 0.2.6. Atualize o mesmo projeto e toque em **Ponte com ChatGPT**. Nenhuma credencial acompanha os arquivos. O projeto separado antigo permanece para compatibilidade; sua instalação não é necessária.
@@ -51,3 +55,22 @@ A leitura combina `CalendarEvent.get` e `getAll`, compara `lastModifiedDate` doc
 O serviço 0.1.2 admite snapshots de evento atomicamente por versão nativa, preservando milissegundos. Clientes antigos não podem substituir um estado versionado. Omissão em consulta não é tratada como exclusão. Resultados antigos de comandos não são confirmados como aplicados; a caixa de saída é relida após atualização. A origem e versão do cliente acompanham os snapshots aceitos. Pareamento e escopo dos dois itens de teste são preservados.
 
 Testes locais cobrem as duas fontes nativas alternadamente antigas, checkpoint, versões iguais conflitantes, clientes antigos, omissão e renomeação posterior legítima. APIs do iPhone são simuladas nesses testes. O cache interno do Scripting não foi inspecionado; a admissão sem controle de versão era uma falha comprovada do nosso código. A confirmação do título real exige executar esta versão no aparelho. Atualização de código e sincronização dos dados são operações distintas.
+
+
+## 0.2.12 — agenda real do iPhone para consulta
+
+Autorização do proprietário nesta conversa: ampliar a leitura para eventos e lembretes reais, sem Google Agenda. O serviço privado 0.2.0 mantém pareamento e identidade. Escritas permanecem limitadas ao evento e lembrete de teste; não há ferramenta de escrita nem exclusão para registros reais.
+
+O Scripting lê todos os calendários disponíveis via CalendarEvent.getAll, e Reminder.getAll para preservar lembretes concluídos. Só transmite ocorrências na semana atual e próxima (segunda a segunda, fim exclusivo). Lembretes sem data, vencidos antes da janela ou apenas futuras recorrências não concretizadas ficam fora. API Reminder não expande recorrências. Campos enviados: identificador, título, calendário/lista, tipo, início/fim ou vencimento, dia inteiro, fuso e conclusão. Notas, participantes, localização e URLs não são enviados. Marcador nas notas é usado localmente somente para resolver o teste.
+
+A leitura do teste agora busca o marcador exclusivo em todos os calendários da janela, compara versões nativas e pode religar um identificador alterado. No servidor, essa religação exige o marcador do comando original de criação e uma versão nativa posterior, com atualização condicional atômica. Nenhuma regra procura a palavra EDITADO ou reescreve o título.
+
+A agenda é enviada antes do fluxo dos testes e independe dele. O servidor conserva somente a captura vigente por aparelho, com controle de concorrência, janela, contagem, cobertura e truncamento. Erros de permissão não viram agenda vazia; versões anteriores de eventos são preservadas e sinalizadas. Limite de 1500 itens e tamanho limitado no aparelho; truncamento é explícito. Lembretes não possuem lastModifiedDate documentado; seu estado é o observado na captura mais recente, sem garantia de detecção de cache nativo.
+
+Consulta: bridge_list_agenda com start/end YYYY-MM-DD (end exclusivo), kind opcional, includeCompleted (padrão true), limit até 200 e offset/nextOffset. Padrão é a próxima semana. bridge_get_status também contém a primeira página da próxima semana em agenda, para continuidade com o plugin já instalado. Conferir available, covered, complete, stale, capturedAt e nextOffset. Dados fora da janela capturada não são tratados como vazios.
+
+Atualize o mesmo projeto no Scripting e abra-o sem tocar no botão Ponte. Não refaça o pareamento. O app mostra o recebimento da agenda separadamente do teste. Execução pelo iOS e rede continuam necessárias; nenhuma consulta no chat desperta o iPhone. Não há uso de Atalhos ou acesso ao Google Agenda.
+
+Testes: SQLite real e transporte/projeção nativos simulados, autenticação/revogação, leitura real sem escrita, novo identificador do evento com busca antiga, proteção contra regressão, independência do envio da agenda, dia inteiro/fuso, recorrências de eventos, lembretes datados/concluídos, paginação, erros de cobertura, privacidade e rejeição de campos extras. A migração 0003 adiciona somente bridge_agenda e preserva os dados existentes. Validar no iPhone após atualização: título real EDITADO, captura com origin app-open e a lista real da próxima semana. Publicação e testes locais não confirmam esse resultado no aparelho.
+
+APIs verificadas: https://scriptingapp.github.io/guide/Device%20Capabilities/CalendarEvent e https://scriptingapp.github.io/guide/Device%20Capabilities/Reminder .
