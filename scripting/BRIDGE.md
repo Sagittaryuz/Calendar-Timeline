@@ -74,3 +74,12 @@ Atualize o mesmo projeto no Scripting e abra-o sem tocar no botão Ponte. Não r
 Testes: SQLite real e transporte/projeção nativos simulados, autenticação/revogação, leitura real sem escrita, novo identificador do evento com busca antiga, proteção contra regressão, independência do envio da agenda, dia inteiro/fuso, recorrências de eventos, lembretes datados/concluídos, paginação, erros de cobertura, privacidade e rejeição de campos extras. A migração 0003 adiciona somente bridge_agenda e preserva os dados existentes. Validar no iPhone após atualização: título real EDITADO, captura com origin app-open e a lista real da próxima semana. Publicação e testes locais não confirmam esse resultado no aparelho.
 
 APIs verificadas: https://scriptingapp.github.io/guide/Device%20Capabilities/CalendarEvent e https://scriptingapp.github.io/guide/Device%20Capabilities/Reminder .
+
+
+## Serviço 0.2.1 — correção compatível com Scripting 0.2.12
+
+A produção confirmou clientVersion 0.2.12 com origin widget-touch. A versão antes mostrada correspondia ao último item recebido; a atualização do projeto não altera retroativamente esses metadados. A agenda real, porém, teve uma requisição de 22 KB recusada com HTTP 400. Os logs anteriores não guardavam o motivo, portanto a causa específica ainda não foi comprovada.
+
+O serviço passa a preservar os registros válidos quando uma linha nativa tem campos/datas inválidos, marcando a cobertura como parcial. Linhas de limite fora da janela são ignoradas sem armazená-las. Campos extras como notas/convidados e janelas inválidas continuam recusados. O último diagnóstico de agenda fica separado dos snapshots aceitos, com versão, origem, estado e motivo, sem títulos ou conteúdo dos registros rejeitados. O código do iPhone continua 0.2.12, sem novo download nem novo pareamento necessário para essa correção.
+
+Testes locais cobrem isolamento de registro inválido, linha de limite, erro 400, privacidade do diagnóstico e versão. A execução real do novo serviço ainda precisa confirmar o envio da agenda. O teste continua sendo recebido sem EDITADO; não foi renomeado pelo servidor para ocultar essa diferença.
