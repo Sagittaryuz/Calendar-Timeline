@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.2.2
+# Calendar Timeline para Scripting — teste 0.2.3
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -15,6 +15,10 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 - Cache privado por projeto. Permissões e credenciais do Scriptable não são transferidas para o Scripting.
 
 ## Instalação e teste no aparelho
+
+**0.2.3 — hierarquia do cabeçalho e corte de excessos:** remove os dois caminhos que desenhavam o círculo inferior com o dia da semana, sem substituto. A primeira linha agora mostra dia e número da data em fonte maior; a segunda contém máxima (vermelha) e mínima (azul), centralizadas; a terceira mostra `E: X | L: Y` em fonte pequena, centralizada. Domingo alinha a borda direita da primeira linha com a segunda, e sábado a borda esquerda. O tamanho da primeira linha se adapta nas extremidades para respeitar o contorno. O mês sai da primeira linha para dar espaço ao destaque solicitado.
+
+O gráfico completo tem uma máscara nativa Canvas pelo contorno externo, que corta os prolongamentos das imagens/caminhos e textos aninhados; ela não altera as áreas de toque. Os textos do cabeçalho também têm recorte nas áreas de seus cartões. O teste local confirma transparência em amostras fora do contorno e verifica alinhamentos, três linhas, destaque tipográfico, contagem menor e remoção do círculo. O contrato da UI verifica o Canvas usado na máscara. A máscara é documentada no Scripting (`mask: VirtualNode`), mas a execução final, fontes e recorte nativo da 0.2.3 ainda precisam de teste no aparelho.
 
 **0.2.2 — correção da interpretação da curva e novos toques:** a curva pedida é a junção externa entre o cartão selecionado e a timeline, não um arredondamento independente do fundo de cada cartão. A moldura branca agora é um único caminho fechado que envolve o cartão e todo o painel, com junções curvas simétricas à esquerda/direita em dias úteis. Sábado/domingo preservam a exceção de junções retas. Os demais cartões voltam à geometria inferior anterior. O blur foi retirado de todos os dias por pedido do usuário. Permanecem fundos, cores de origem dos charts/linhas, posição fixa dos sete dias e marcador verde em hoje.
 
@@ -36,7 +40,7 @@ Os cartões úteis têm os dois cantos inferiores curvos; sábado/domingo têm j
 
 Instale o Scripting pela App Store. Há duas opções:
 
-1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.2-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.2.
+1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.3-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.3.
 2. **Servidor de desenvolvimento:** no computador, dentro de `scripting/`, execute `npx --yes scripting-cli@1.5.0 start --editor=none --port=4317 --no-auto-open`. Conecte o Scripting ao IP do computador exibido no terminal; ambos precisam estar na mesma rede. Selecione o projeto `Calendar Timeline Scripting` que aparece na lista de projetos do servidor. O CLI usa `scripts/` e recebe os tipos `.d.ts` da versão conectada.
 
 Execute o projeto uma vez no aplicativo e conceda as permissões nativas de Calendário, Lembretes e Localização. Adicione um widget médio do Scripting à Tela de Início e escolha `Calendar Timeline Scripting`. Confira os toques no widget real, pois a prévia não comprova o comportamento do WidgetKit.

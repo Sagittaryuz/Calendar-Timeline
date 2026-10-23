@@ -23,6 +23,11 @@ async function main(){
    if(part.type==='canvas')d.replay(bridge,part.ops,image.size.width,image.size.height,image.size.width,image.size.height,()=>null);
    else ctx.drawImage(paint(part.image),part.rect.x,part.rect.y,part.rect.width,part.rect.height);
   }
+  if(image.outerClip){
+   ctx.save();ctx.globalCompositeOperation='destination-in';ctx.beginPath();
+   for(const [method,...args] of image.outerClip)ctx[method](...args);
+   ctx.fillStyle='white';ctx.fill();ctx.restore();
+  }
   if(!image.blurRadius)return canvas;
   const blurred=native.createCanvas(canvas.width,canvas.height),b=blurred.getContext('2d');
   b.filter=`blur(${image.blurRadius}px)`;b.drawImage(canvas,0,0);return blurred;
@@ -61,8 +66,22 @@ async function main(){
    assert(texts.length>=3,'Three header rows');
    const top=Math.min(...texts.map(o=>o.point.y)),bottom=Math.max(...texts.map(o=>o.point.y+o.state.font.size));
    assert(Math.abs((top+bottom)/2-(card.y+card.height/2))<5,'Header block centered vertically');
+   const rows=[...new Set(texts.map(t=>t.point.y))].sort((a,b)=>a-b);
+   assert.equal(rows.length,3,'Exactly three header rows');
+   const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
+   assert(title[0].state.font.size>temps[0].state.font.size*1.2,`First row is prominent: ${card.date}: ${title[0].state.font.size}/${temps[0].state.font.size}`);
+   assert(counts[0].state.font.size<=11,'Third row is small');
+   assert.match(counts[0].text,/^E: \d+ \| L: \d+$/);
+   const weekday=new Date(card.date+'T12:00:00').getDay();
+   if(weekday===0)assert(Math.abs(Math.max(...title.map(t=>t.point.x+t.text.length*t.state.font.size*0.60))-Math.max(...temps.map(t=>t.point.x+t.text.length*t.state.font.size*0.62)))<0.01,'Sunday first-row right edge follows second row');
+   if(weekday===6)assert(Math.abs(Math.min(...title.map(t=>t.rect.x))-Math.min(...temps.map(t=>t.rect.x)))<0.01,'Saturday first-row left edge follows second row');
   }
-  const image=paint(model.image);fs.writeFileSync(path.join(out,`scripting-${version}-day-${day}.png`),image.toBuffer('image/png'));
+  assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
+  const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
+  for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');
+  const image=paint(model.image),pixels=image.getContext('2d');
+  for(const [x,y] of [[0,0],[1,255],[1091,255],[545,0],[545,509]])assert.equal(pixels.getImageData(x,y,1,1).data[3],0,'Paint outside outer frame is cut');
+  fs.writeFileSync(path.join(out,`scripting-${version}-day-${day}.png`),image.toBuffer('image/png'));
   sheetCtx.fillStyle='#111';sheetCtx.fillRect(0,row*570,1092,570);sheetCtx.fillStyle='white';sheetCtx.font='24px Arial';sheetCtx.fillText(label,20,row*570+34);sheetCtx.drawImage(image,0,row*570+50);row++;
  }
  fs.writeFileSync(path.join(out,`scripting-${version}-review.png`),sheet.toBuffer('image/png'));

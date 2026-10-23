@@ -14,6 +14,11 @@ export function GraphView({image,width,height,viewport}:{image:any;width:number;
   const sx=width/image.size.width,sy=height/image.size.height
   const visible=viewport??{x:0,y:0,width:image.size.width,height:image.size.height}
   return <ZStack alignment="topLeading" frame={{width,height}} clipped
+    mask={image.outerClip?<Canvas frame={{width,height}} opaque={false} draw={(ctx,size)=>{
+      ctx.scale(size.width/image.size.width,size.height/image.size.height);
+      ctx.beginPath();for(const [method,...args] of image.outerClip)ctx[method](...args);
+      ctx.fillStyle='white';ctx.fill();
+    }}/>:undefined}
     blur={image.blurRadius ? image.blurRadius*Math.min(sx,sy) : undefined}>
     {segments(image,visible).map((part:any,index:number)=>{
       if(part.type==='canvas')return <Canvas key={String(index)} frame={{width,height}} opaque={false}

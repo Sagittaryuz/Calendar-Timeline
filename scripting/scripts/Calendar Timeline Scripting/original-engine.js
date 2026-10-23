@@ -3788,7 +3788,12 @@ async function renderWidget(items, loadError) {
   // Última camada: a cápsula prevalece inclusive sobre os charts.
   // Daily overview: no end-of-day countdown capsule.
 
-  return shiftWidgetImage(contentCtx.getImage());
+  const finalImage=contentCtx.getImage();
+  const clipPoints=widgetLeftContourPoints(WIDGET_CONTOUR.strokeInset);
+  const clipPath=new Path();clipPath.move(clipPoints[0]);
+  for(const p of clipPoints.slice(1))clipPath.addLine(p);
+  for(const p of clipPoints.slice().reverse())clipPath.addLine(new Point(CANVAS.width-p.x,p.y));
+  clipPath.closeSubpath();return {...finalImage,outerClip:clipPath.commands};
 }
 
 function shiftWidgetImage(image) {
@@ -3996,44 +4001,7 @@ function currentDayBoundaryBadgeCenterY() {
   return currentDayFrameMetrics().bottomLineCenterY - DAY_CHANGE_CIRCLE_DIAMETER / 2 + 1;
 }
 
-function drawCurrentDayBoundaryBadgeOnForeground(ctx) {
-  const metrics = futureTimelineBlurMetrics();
-  if (metrics.width <= 0) return;
-
-  const boundaryDate = addDays(startOfDay(windowStart), 1);
-  const localX = timelineLegendCenterX(boundaryDate);
-  if (
-    localX < 0 ||
-    localX > timelineWidth()
-  ) {
-    return;
-  }
-
-  const centerX = CANVAS.plotLeft + localX;
-  const centerY = currentDayBoundaryBadgeCenterY();
-  const style = dayBadgeStyle(
-    boundaryDate,
-    loadResult.holidayDates
-  );
-  const badge = dayLegendCircleRect(centerX, centerY);
-  const fontSize = scaleFontSize(20);
-  const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
-
-  ctx.setFillColor(style.background);
-  ctx.fillEllipse(badge);
-  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-  ctx.setTextColor(style.text);
-  ctx.setTextAlignedCenter();
-  ctx.drawTextInRect(
-    shortWeekday(boundaryDate),
-    centeredDayLegendTextRect(
-      centerX,
-      centerY,
-      textWidth,
-      fontSize
-    )
-  );
-}
+function drawCurrentDayBoundaryBadgeOnForeground() {}
 
 function restoreRoundedSideCorners(
   ctx,
@@ -5204,145 +5172,48 @@ function drawCurrentDayFrame(ctx) {
   );
 }
 
-function drawTitleDayCard(
-  ctx,
-  date,
-  card,
-  isSelected,
-  isLast
-) {
-  const borderColor = new Color(isSelected ? "#FFFFFF" : "#303136", isSelected ? 0.96 : 0.82);
-  const dayBackgroundColor = timelineBackgroundColorForDate(date);
-  const isSpecialDay =
-    dayBackgroundColor !== SETTINGS.timelineBackgroundColor;
-  const blurEnabled = shouldBlurFutureTimeline();
-  const useBlurredSundayColor =
-    !isSelected &&
-    blurEnabled &&
-    date.getDay() === 0 &&
-    dayBackgroundColor === SETTINGS.sundayTimelineBackgroundColor;
-  // Dias úteis não atuais usam o cinza da timeline; sábado, domingo e
-  // feriado preservam respectivamente azul, vermelho e amarelo. Durante
-  // o blur, apenas o cartão futuro de domingo usa o vermelho mais escuro.
-  // Os demais cartões seguem as cores especiais ou o cinza do dia útil.
-  const cardColor = new Color(dayBackgroundColor,1);
-
-  // Só as extremidades externas da faixa recebem raio. As junções entre
-  // cartões permanecem retas; a moldura contínua de hoje é desenhada à parte.
-  const rightCornerRadius = isLast
-    ? TITLE_CARD_OUTER_CORNER_RADIUS
-    : 0;
-  const leftCornerRadius = card.x <= CANVAS.marginX + 1
-    ? TITLE_CARD_OUTER_CORNER_RADIUS
-    : 0;
-  const cornerRadii = {
-    topLeft: leftCornerRadius,
-    topRight: rightCornerRadius,
-    // Hoje mantém sua geometria contínua própria, desenhada separadamente.
-    bottomRight: isSelected ? (isLast ? 0 : rightCornerRadius) : 0,
-    bottomLeft: isSelected ? TITLE_CARD_STANDARD_CORNER_RADIUS : 0,
-  };
-
-  // O cartão de hoje já foi preenchido pela geometria contínua
-  // que também cobre sua faixa na timeline. Não desenhamos uma segunda
-  // forma aqui, evitando a separação entre duas geometrias.
-  if (!isSelected) {
-    // Os demais cartões conservam a borda fina escura.
-    fillTitleCardShape(ctx, card, cornerRadii, borderColor);
-    const inner = new Rect(
-      card.x + 2,
-      card.y + scaleVertical(2),
-      card.width - 4,
-      card.height - scaleVertical(4)
-    );
-    fillTitleCardShape(
-      ctx,
-      inner,
-      {
-        topLeft: Math.max(0, cornerRadii.topLeft - scaleVertical(2)),
-        topRight: Math.max(0, cornerRadii.topRight - scaleVertical(2)),
-        bottomRight: Math.max(0, cornerRadii.bottomRight - scaleVertical(2)),
-        bottomLeft: Math.max(0, cornerRadii.bottomLeft - scaleVertical(2)),
-      },
-      cardColor
-    );
+function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
+  if(!isSelected){
+    const radii={topLeft:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0,
+      topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0};
+    fillTitleCardShape(ctx,card,radii,new Color('#303136',0.82));
+    fillTitleCardShape(ctx,new Rect(card.x+2,card.y+2,card.width-4,card.height-4),
+      {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2)},
+      new Color(timelineBackgroundColorForDate(date)));
   }
-
-  // A data mantém a cor original; somente a palavra do dia recebe
-  // a cor correspondente a sábado, domingo ou feriado.
-  const weekdayColor = titleWeekdayColor(
-    date,
-    loadResult.holidayDates
-  );
-  const dateColor = isSelected
-    ? new Color("#FFFFFF", 0.96)
-    : new Color(SETTINGS.secondaryTextColor, 1.0);
-  const detailColor = isSelected
-    ? new Color("#FFFFFF", 0.96)
-    : new Color("#D1D1D6", 0.96);
-
-  const weekdayLabel = shortWeekday(date);
-  const dateLabel = titleDayMonthLabel(date);
-
-  const titleFontSize = Math.min(titleHeaderFontSize(),scaleFontSize(date.getDay() % 6 === 0 ? 18 : 22));
-  const titleCharacterWidth = titleFontSize * 0.60;
-  const weekdayWidth = weekdayLabel.length * titleCharacterWidth;
-  const titleGap = titleCharacterWidth / 2;
-  const titleGroupWidth = (weekdayLabel.length + dateLabel.length + 0.5) * titleCharacterWidth;
-  const blockHeight = titleFontSize*1.15 + scaleVertical(3) + scaleFontSize(18)/2 + scaleVertical(22)/2 + scaleVertical(4) + scaleFontSize(16);
-  const titleY = card.y + (card.height-blockHeight)/2 - scaleVertical(2);
-  const titleStartX = card.x + (card.width - titleGroupWidth) / 2;
-  ctx.setTextAlignedLeft();
-  ctx.setFont(Font.blackMonospacedSystemFont(titleFontSize));
-  ctx.setTextColor(weekdayColor);
-  ctx.drawText(weekdayLabel, new Point(titleStartX, titleY));
-  ctx.setTextColor(dateColor);
-  ctx.drawText(dateLabel, new Point(titleStartX + weekdayWidth + titleGap, titleY));
-
-  const daily = titleDailyTemperatureForDay(date);
-  const minimum = Number.isFinite(Number(daily?.minimum))
-    ? String(Math.round(Number(daily.minimum))) + "º" : "--º";
-  const maximum = Number.isFinite(Number(daily?.maximum))
-    ? String(Math.round(Number(daily.maximum))) + "º" : "--º";
-  const counts = titleScheduleCountsForDay(date);
-  const detailFontSize = scaleFontSize(18);
-  const detailCharacterWidth = detailFontSize * 0.62;
-  const iconSize = scaleVertical(22);
-  const iconGap = scaleVertical(2);
-  const minimumWidth = minimum.length * detailCharacterWidth;
-  const maximumWidth = maximum.length * detailCharacterWidth;
-  const weatherWidth = minimumWidth + iconGap * 2 + iconSize + maximumWidth;
-  const weatherX = card.x + (card.width - weatherWidth) / 2;
-  const weatherY = titleY + titleFontSize * 1.15 + scaleVertical(3);
-  const weatherCenterY = weatherY + detailFontSize / 2;
-  ctx.setFont(Font.blackMonospacedSystemFont(detailFontSize));
-  ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor, 1.0));
-  ctx.drawText(minimum, new Point(weatherX, weatherY));
-  drawTitleWeatherIcon(ctx, titleForecastForDay(date),
-    weatherX + minimumWidth + iconGap + iconSize / 2, weatherCenterY, iconSize);
-  ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor, 1.0));
-  ctx.drawText(maximum, new Point(weatherX + minimumWidth + iconGap * 2 + iconSize, weatherY));
-
-  // Terceira linha: somente as letras E e L recebem negrito.
-  const parts = [
-    { text: "E", bold: true },
-    { text: ": " + String(counts.events) + " | ", bold: false },
-    { text: "L", bold: true },
-    { text: ": " + String(counts.reminders), bold: false },
-  ];
-  const countLength = parts.reduce((total, part) => total + part.text.length, 0);
-  const countFontSize = Math.min(scaleFontSize(16),
-    Math.floor((card.width - 16) / (countLength * 0.62)));
-  const countCharacterWidth = countFontSize * 0.62;
-  let countX = card.x + (card.width - countLength * countCharacterWidth) / 2;
-  const countY = weatherCenterY + iconSize / 2 + scaleVertical(4);
-  ctx.setTextColor(detailColor);
-  for (const part of parts) {
-    ctx.setFont(part.bold ? Font.blackMonospacedSystemFont(countFontSize)
-      : Font.regularMonospacedSystemFont(countFontSize));
-    ctx.drawText(part.text, new Point(countX, countY));
-    countX += part.text.length * countCharacterWidth;
+  const daily=titleDailyTemperatureForDay(date);
+  const temp=value=>{const n=finiteWeatherNumber(value);return n===null?'--º':`${Math.round(n)}º`};
+  const maximum=temp(daily?.maximum),minimum=temp(daily?.minimum);
+  const counts=titleScheduleCountsForDay(date),summary=`E: ${counts.events} | L: ${counts.reminders}`;
+  const weekday=shortWeekday(date),number=String(date.getDate()).padStart(2,'0'),headline=`${weekday} ${number}`;
+  const temperatureSize=scaleFontSize(18),smallSize=Math.min(scaleFontSize(10),(card.width-16)/(summary.length*0.62));
+  const gap=scaleVertical(32),maxWidth=maximum.length*temperatureSize*0.62,minWidth=minimum.length*temperatureSize*0.62;
+  const temperatureWidth=maxWidth+gap+minWidth,temperatureLeft=card.x+(card.width-temperatureWidth)/2;
+  const temperatureRight=temperatureLeft+temperatureWidth;
+  let headlineSize=scaleFontSize(34),layout;
+  for(let attempt=0;attempt<30;attempt++){
+    const height=headlineSize*1.12+scaleVertical(3)+temperatureSize*1.12+scaleVertical(4)+smallSize*1.12;
+    const top=card.y+(card.height-height)/2-scaleVertical(1);
+    const width=headline.length*headlineSize*0.60;
+    const x=date.getDay()===0?temperatureRight-width:date.getDay()===6?temperatureLeft:card.x+(card.width-width)/2;
+    const bounds=widgetVisibleContentBounds(top,headlineSize*1.12,2);
+    layout={top,x,width};
+    if(x>=Math.max(card.x+3,bounds.left)&&x+width<=Math.min(card.x+card.width-3,bounds.right))break;
+    headlineSize-=scaleFontSize(0.5);
   }
+  ctx.setTextAlignedLeft();ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
+  ctx.setTextColor(titleWeekdayColor(date,loadResult.holidayDates));
+  ctx.drawTextInRect(headline,new Rect(layout.x,layout.top,card.x+card.width-3-layout.x,card.y+card.height-3-layout.top));
+  const temperatureY=layout.top+headlineSize*1.12+scaleVertical(3);
+  ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
+  ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
+  ctx.drawTextInRect(maximum,new Rect(temperatureLeft,temperatureY,card.x+card.width-3-temperatureLeft,card.y+card.height-3-temperatureY));
+  ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor));
+  ctx.drawTextInRect(minimum,new Rect(temperatureRight-minWidth,temperatureY,card.x+card.width-3-temperatureRight+minWidth,card.y+card.height-3-temperatureY));
+  const countY=temperatureY+temperatureSize*1.12+scaleVertical(4);
+  ctx.setFont(Font.regularMonospacedSystemFont(smallSize));ctx.setTextAlignedCenter();
+  ctx.setTextColor(new Color('#D1D1D6',0.96));
+  ctx.drawTextInRect(summary,new Rect(card.x+8,countY,card.width-16,smallSize*1.2));
 }
 
 function titleDailyTemperatureForDay(date) {
@@ -9522,44 +9393,7 @@ function drawTimelineDayBoundariesOnTop(ctx) {
   }
 }
 
-function drawWeekdayBadgesOnTop(ctx) {
-  // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
-  const fontSize = scaleFontSize(20);
-  const centerY = dayChangeLegendCenterY();
-  const textWidth =
-    DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
-
-  for (const tick of hourTicks()) {
-    if (tick.getHours() !== 0) continue;
-
-    // A virada imediatamente seguinte é recomposta no canvas principal,
-    // depois da moldura, para que o círculo encoste nela sem ser mascarado.
-    if (
-      dateKey(tick) ===
-      dateKey(addDays(startOfDay(windowStart), 1))
-    ) {
-      continue;
-    }
-
-    const x = timelineLegendCenterX(tick);
-    const style = dayBadgeStyle(tick, loadResult.holidayDates);
-    const badge = dayLegendCircleRect(x, centerY);
-    ctx.setFillColor(style.background);
-    ctx.fillEllipse(badge);
-    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
-    ctx.setTextColor(style.text);
-    ctx.setTextAlignedCenter();
-    ctx.drawTextInRect(
-      shortWeekday(tick),
-      centeredDayLegendTextRect(
-        x,
-        centerY,
-        textWidth,
-        fontSize
-      )
-    );
-  }
-}
+function drawWeekdayBadgesOnTop() {}
 
 
 function drawFixedDaylightGlow(ctx, weather) {

@@ -29,21 +29,18 @@ for(const name of ['timelineBackgroundColorForDate','drawTimelineBackground','sh
   'drawCurrentDaySpecialBackground','drawCurrentDayFrameOverlay','currentDayUnifiedShape','shiftWidgetImage','drawTimelineOuterBorder','drawTimelineBar'])
   replaceOnce(functionSource(code,name),functionSource(dailyStyle,name));
 code+='\n'+functionSource(dailyStyle,'drawCurrentTimeMarker')+'\n';
-// The selected card is part of one unified frame with the full timeline.
-// Do not round ordinary card bottoms as a substitute for its bridge curves.
-replaceOnce('const borderColor = new Color("#303136", 0.82);', 'const borderColor = new Color(isSelected ? "#FFFFFF" : "#303136", isSelected ? 0.96 : 0.82);');
-const cardColorStart=code.indexOf('const cardColor = new Color(',code.indexOf('function drawTitleDayCard('));
-const cardColorEnd=code.indexOf('\n  );',cardColorStart)+5;
-if(cardColorStart<0||cardColorEnd<5)throw new Error('Missing title card color');
-code=code.slice(0,cardColorStart)+'const cardColor = new Color(dayBackgroundColor,1);'+code.slice(cardColorEnd);
-// Center the complete three-line block, rather than pushing all cards down
-// to satisfy the obsolete moving header's outer contour measurements.
-replaceOnce('const titleFontSize = titleHeaderFontSize();','const titleFontSize = Math.min(titleHeaderFontSize(),scaleFontSize(date.getDay() % 6 === 0 ? 18 : 22));');
-const titleYStart=code.indexOf('const titleY = titleSafeTextY(',code.indexOf('function drawTitleDayCard('));
-const titleYEnd=code.indexOf(';',titleYStart)+1;
-if(titleYStart<0||titleYEnd<1)throw new Error('Missing title block');
-code=code.slice(0,titleYStart)+`const blockHeight = titleFontSize*1.15 + scaleVertical(3) + scaleFontSize(18)/2 + scaleVertical(22)/2 + scaleVertical(4) + scaleFontSize(16);
-  const titleY = card.y + (card.height-blockHeight)/2 - scaleVertical(2);`+code.slice(titleYEnd);
+const headerStyle=fs.readFileSync(path.join(root,'scripting/reference/header-style.js'),'utf8').replace(/\r\n/g,'\n');
+replaceOnce(functionSource(code,'drawTitleDayCard'),functionSource(headerStyle,'drawTitleDayCard'));
+for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])
+  replaceOnce(functionSource(code,name),`function ${name}() {}`);
+// Native masking clips all paint (including nested images and text) to the
+// same outer contour, without changing frame layout or touch coordinates.
+replaceOnce('return shiftWidgetImage(contentCtx.getImage());',`const finalImage=contentCtx.getImage();
+  const clipPoints=widgetLeftContourPoints(WIDGET_CONTOUR.strokeInset);
+  const clipPath=new Path();clipPath.move(clipPoints[0]);
+  for(const p of clipPoints.slice(1))clipPath.addLine(p);
+  for(const p of clipPoints.slice().reverse())clipPath.addLine(new Point(CANVAS.width-p.x,p.y));
+  clipPath.closeSubpath();return {...finalImage,outerClip:clipPath.commands};`);
 replaceOnce('drawRainCountdown(ctx, rainCountdown);\n  return ctx.getImage();',
   `drawRainCountdown(ctx, rainCountdown);
   drawCurrentTimeMarker(ctx);

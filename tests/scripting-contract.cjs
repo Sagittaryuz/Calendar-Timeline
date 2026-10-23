@@ -80,6 +80,11 @@ async function main(){
   assert.equal(view.children[0].type,'Link');assert.equal(view.children[0].props.url,'calshow://','Background opens Apple Calendar');
   const buttons=view.children[1];assert.equal(buttons.length,7);
   buttons.forEach((button,i)=>assert.equal(button.props.intent.params.date,header[i].date,'Day buttons retain independent selection intents'));
+  const masked=load('graph-view').GraphView({image:{size:{width:1092,height:510},ops:[],outerClip:[['moveTo',4,4],['lineTo',1088,4],['closePath']]},width:364,height:170});
+  assert.equal(masked.props.mask.type,'Canvas','Root graphic uses a contour mask');
+  const clipCalls=[],clipContext=new Proxy({}, {get:(_,key)=>(...args)=>clipCalls.push([key,...args])});
+  masked.props.mask.props.draw(clipContext,{width:364,height:170});
+  assert(clipCalls.some(c=>c[0]==='moveTo'&&c[1]===4));assert(clipCalls.some(c=>c[0]==='fill'));
   // Syntax-check every entry and adapter, without fabricated Scripting declarations.
   for(const filename of fs.readdirSync(dir).filter(n=>/\.(ts|tsx|js)$/.test(n))){
     const result=ts.transpileModule(fs.readFileSync(path.join(dir,filename),'utf8'),{fileName:filename,reportDiagnostics:true,compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});
