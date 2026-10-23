@@ -24,7 +24,7 @@
 Versões anteriores: `scripting/README.md` e tags Git.
 
 
-## Scripting 0.3.1 / ponte 0.4.0 — campos detalhados
+## Scripting 0.3.3 / ponte 0.4.0 — campos detalhados
 
 Notas em eventos e lembretes: substituir, acrescentar ao fim/início ou limpar explicitamente. Eventos: localização textual, link HTTP/HTTPS e coordenadas. Lembretes: prioridade 0 a 9. Ambos: substituir/remover alertas absolutos, relativos (segundos) ou por entrada/saída de uma região. Campos omitidos são preservados. Localização de lembretes é configurada no alerta; não há campo textual nativo documentado. Não há geocodificação automática.
 

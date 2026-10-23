@@ -193,7 +193,7 @@ São guardados somente campos permitidos, sem mensagens nativas brutas, títulos
 Testes: scripting-bridge-attempts.cjs usa o cliente real com APIs nativas/rede simuladas para reproduzir falha -> persistência -> abertura seguinte -> sucesso sem apagar o registro, erros HTTP/formato/captura parcial, limite de histórico, interrupção e preservação da abertura do Calendário. Também passaram os testes automáticos, UI, recibo canônico, integração e contrato. A apresentação e persistência final no Scripting instalado exigem reteste após atualizar. Rollback: release 0.2.14, preservando armazenamento, pareamento e filas. Esta mudança não altera o serviço privado nem escreve na agenda durante a implantação.
 
 
-## Scripting 0.3.1 / ponte 0.4.0 — campos detalhados
+## Scripting 0.3.3 / ponte 0.4.0 — campos detalhados
 
 Notas em eventos e lembretes: substituir, acrescentar ao fim/início ou limpar explicitamente. Eventos: localização textual, link HTTP/HTTPS e coordenadas. Lembretes: prioridade 0 a 9. Ambos: substituir/remover alertas absolutos, relativos (segundos) ou por entrada/saída de uma região. Campos omitidos são preservados. Localização de lembretes é configurada no alerta; não há campo textual nativo documentado. Não há geocodificação automática.
 
