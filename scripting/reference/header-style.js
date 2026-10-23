@@ -13,7 +13,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   const maximum=temp(daily?.maximum),minimum=temp(daily?.minimum);
   const counts=titleScheduleCountsForDay(date),summary=`E: ${counts.events} | L: ${counts.reminders}`;
   const weekday=shortWeekday(date),number=String(date.getDate()).padStart(2,'0'),headline=`${weekday} ${number}`;
-  const temperatureSize=scaleFontSize(18),smallSize=Math.min(scaleFontSize(10),(card.width-16)/(summary.length*0.62));
+  const temperatureSize=scaleFontSize(18),smallSize=Math.min(scaleFontSize(15),(card.width-16)/(summary.length*0.62));
   const gap=scaleVertical(32),maxWidth=maximum.length*temperatureSize*0.62,minWidth=minimum.length*temperatureSize*0.62;
   const temperatureWidth=maxWidth+gap+minWidth,temperatureLeft=card.x+(card.width-temperatureWidth)/2;
   const temperatureRight=temperatureLeft+temperatureWidth;
@@ -35,6 +35,8 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
   ctx.drawTextInRect(maximum,new Rect(temperatureLeft,temperatureY,card.x+card.width-3-temperatureLeft,card.y+card.height-3-temperatureY));
+  drawTitleWeatherIcon(ctx,titleForecastForDay(date),temperatureLeft+maxWidth+gap/2,
+    temperatureY+temperatureSize*0.56,scaleVertical(22));
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor));
   ctx.drawTextInRect(minimum,new Rect(temperatureRight-minWidth,temperatureY,card.x+card.width-3-temperatureRight+minWidth,card.y+card.height-3-temperatureY));
   const countY=temperatureY+temperatureSize*1.12+scaleVertical(4);

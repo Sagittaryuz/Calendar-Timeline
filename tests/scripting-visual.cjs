@@ -39,7 +39,8 @@ async function main(){
   const items=[{kind:'event',identifier:'a',title:'EVENTO ROSA',start:at(10),end:at(14),color:'#FF2D55',isAllDay:false},
    {kind:'reminder',identifier:'b',title:'LEMBRETE LARANJA',start:at(8),end:at(16),color:'#FF9500',priority:1,sourceIsAllDay:false,isAllDay:false}];
   const options={now:+now,focusDate:+focus,loadResult:{items,holidayDates:new Set(),error:null},
-   astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()};
+   astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:Object.fromEntries(
+     Array.from({length:7},(_,i)=>[`2026-10-${18+i}`,{minimum:20,maximum:30,symbol:'d0'}]))},holidayDates:new Set()};
   const model=await renderOriginal(host,options),ops=[],blurs=[];
   function visit(image){if(image.blurRadius)blurs.push(image);for(const op of image.ops){ops.push(op);if(op.type==='image'&&!op.image.native&&!op.image.symbol)visit(op.image)}}visit(model.image);
   assert.equal(blurs.length,0,'No blur on any selected day');
@@ -69,9 +70,13 @@ async function main(){
    const rows=[...new Set(texts.map(t=>t.point.y))].sort((a,b)=>a-b);
    assert.equal(rows.length,3,'Exactly three header rows');
    const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
-   assert(title[0].state.font.size>temps[0].state.font.size*1.2,`First row is prominent: ${card.date}: ${title[0].state.font.size}/${temps[0].state.font.size}`);
-   assert(counts[0].state.font.size<=11,'Third row is small');
+   assert(title[0].state.font.size>temps[0].state.font.size*1.05,`First row remains larger and fits contour: ${card.date}: ${title[0].state.font.size}/${temps[0].state.font.size}`);
+   assert(counts[0].state.font.size>=14&&counts[0].state.font.size<temps[0].state.font.size,'Third row enlarged and below temperature size');
    assert.match(counts[0].text,/^E: \d+ \| L: \d+$/);
+   const icon=model.image.ops.find(o=>o.type==='fillEllipse'&&o.state.fill.hex==='FFDE00'&&
+     o.rect.x>temps[0].point.x&&o.rect.x+o.rect.width<temps[1].point.x&&
+     Math.abs(o.rect.y+o.rect.height/2-(rows[1]+temps[0].state.font.size*0.56))<1);
+   assert(icon,'Weather icon between maximum and minimum in every card');
    const weekday=new Date(card.date+'T12:00:00').getDay();
    if(weekday===0)assert(Math.abs(Math.max(...title.map(t=>t.point.x+t.text.length*t.state.font.size*0.60))-Math.max(...temps.map(t=>t.point.x+t.text.length*t.state.font.size*0.62)))<0.01,'Sunday first-row right edge follows second row');
    if(weekday===6)assert(Math.abs(Math.min(...title.map(t=>t.rect.x))-Math.min(...temps.map(t=>t.rect.x)))<0.01,'Saturday first-row left edge follows second row');

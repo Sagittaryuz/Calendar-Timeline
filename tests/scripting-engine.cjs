@@ -61,6 +61,30 @@ async function main(){
     assert.equal(new Date(m.windowStart).getHours(),0);
   }
   const generated=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
+  // Exercise real loadLiveWindow, including today's duplicate authoritative
+  // query. Passing options.loadResult would hide the navigation regression.
+  const at=(day,h=0)=>new Date(2026,9,day,h);
+  const event=(title,startDate,endDate,isAllDay=true)=>({title,identifier:title,
+    startDate,endDate,isAllDay,calendar:{title:'Teste',identifier:'test',color:{hex:'#FF0000'}}});
+  const fixtures=[event('REDEFINIÇÃO COMPLETA',at(22),at(23)),
+    event('TESTE DE CIÊNCIAS',at(22),at(23)),event('TESTE DE MATEMÁTICA',at(23),at(24)),
+    event('EVENTO DE DOIS DIAS',at(22),at(24)),event('ATRAVESSA MEIA-NOITE',at(22,23),at(23,1),false)];
+  const liveHost={...host,CalendarEvent:{between:async()=>fixtures,
+    today:async()=>fixtures.filter(e=>e.startDate<at(23)&&e.endDate>at(22))},
+    Reminder:{incompleteDueBetween:async()=>[],incompleteDueToday:async()=>[],scheduled:async()=>[]}};
+  for(const day of [22,23,24]){
+    const model=await renderOriginal(liveHost,{now:+at(22,23),focusDate:+at(day),
+      astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()});
+    assert.deepEqual(model.sourceStatus.schedule,{event:true,reminder:true},'Exercise live agenda path');
+    const labels=[];function collect(image){for(const op of image.ops){if(op.type==='text')labels.push(op.text);if(op.type==='image'&&op.image.ops)collect(op.image)}}collect(model.image);
+    const has=title=>labels.some(t=>t.includes(title));
+    assert.equal(has('REDEFINIÇÃO COMPLETA'),day===22,'One-day event stays on Oct22');
+    assert.equal(has('TESTE DE CIÊNCIAS'),day===22,'Second one-day event stays on Oct22');
+    assert.equal(has('TESTE DE MATEMÁTICA'),day===23,'Oct23 event stays on Oct23');
+    assert.equal(has('EVENTO DE DOIS DIAS'),day!==24,'True multi-day event retained until exclusive end');
+    assert.equal(has('ATRAVESSA MEIA-NOITE'),day!==24,'Timed overnight event retained on both dates');
+  }
+  console.log('PASS: live agenda navigation respects all-day exclusive ends, true multi-day and overnight events.');
   assert(generated.includes('function drawEventArrivalGuides() {}'),'No event-arrival countdowns');
   console.log('PASS: seven fixed Sun-Sat hit targets; all seven selections; no clock movement; full local day; no event/end-of-day countdowns.');
   console.log(`PASS: ${count} complete original-engine renders; empty/populated, navigation, weekend, year boundary.`);

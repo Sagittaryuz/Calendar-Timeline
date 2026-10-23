@@ -14,6 +14,10 @@ function replaceOnce(from, to) {
 replaceOnce('const now = new Date();', 'const now = new Date(options.now ?? Date.now());');
 replaceOnce('const windowStart = new Date(now);', 'const windowStart = startOfDay(new Date(options.focusDate ?? now));');
 replaceOnce('const windowEnd = new Date(\n  windowStart.getTime() + windowHours * 60 * 60 * 1000\n);', 'const windowEnd = addDays(windowStart, 1);');
+// today() describes the real current day, even when browsing another date.
+// Its compatibility extension must never extend today's events into selection.
+replaceOnce('occursToday ? addDays(startOfDay(windowStart), 1) : null',
+  'occursToday ? addDays(startOfDay(now), 1) : null');
 // Historical seven-card geometry and three-line typography, restored without
 // modifying the original Scriptable entry. Keep the week anchored to real now.
 const fixedWeek=fs.readFileSync(path.join(root,'scripting/reference/fixed-week-3bcb13b.js'),'utf8').replace(/\r\n/g,'\n');

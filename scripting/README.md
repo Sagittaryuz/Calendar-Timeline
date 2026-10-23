@@ -1,4 +1,4 @@
-# Calendar Timeline para Scripting — teste 0.2.3
+# Calendar Timeline para Scripting — teste 0.2.4
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.
 
@@ -15,6 +15,10 @@ Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calenda
 - Cache privado por projeto. Permissões e credenciais do Scriptable não são transferidas para o Scripting.
 
 ## Instalação e teste no aparelho
+
+**0.2.4 — ícone do clima, contagens maiores e eventos no dia correto:** restaura a condição climática representativa de cada dia entre a máxima e a mínima, usando os desenhos originais e somente quando há previsão disponível. A terceira linha passa de 10 para até 15 unidades lógicas, limitada à largura do cartão. Preserva os alinhamentos de domingo/sábado e o recorte externo.
+
+Corrige também a extensão indevida de eventos de hoje ao navegar: a consulta de hoje se refere ao dia real, mas a compatibilidade de término usava o fim do dia selecionado. Ao selecionar sexta no dia 22, eventos de quinta eram estendidos até sábado. Agora essa regra usa a meia-noite seguinte ao dia real. Regressão pelo carregamento completo verifica dois eventos de quinta ausentes na sexta, evento próprio de sexta, eventos de vários dias e eventos com horário atravessando a meia-noite. A prévia local confirma os sete ícones entre temperaturas e a terceira linha maior. O resultado nativo desta versão ainda requer conferência no iPhone.
 
 **0.2.3 — hierarquia do cabeçalho e corte de excessos:** remove os dois caminhos que desenhavam o círculo inferior com o dia da semana, sem substituto. A primeira linha agora mostra dia e número da data em fonte maior; a segunda contém máxima (vermelha) e mínima (azul), centralizadas; a terceira mostra `E: X | L: Y` em fonte pequena, centralizada. Domingo alinha a borda direita da primeira linha com a segunda, e sábado a borda esquerda. O tamanho da primeira linha se adapta nas extremidades para respeitar o contorno. O mês sai da primeira linha para dar espaço ao destaque solicitado.
 
@@ -40,7 +44,7 @@ Os cartões úteis têm os dois cantos inferiores curvos; sábado/domingo têm j
 
 Instale o Scripting pela App Store. Há duas opções:
 
-1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.3-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.3.
+1. **Arquivo de teste:** importe o ZIP da pré-release Git `scripting-v0.2.4-alpha.1` no Scripting, substituindo os arquivos do projeto experimental anterior. O ZIP contém a pasta `Calendar Timeline Scripting` com `script.json`, `index.tsx` e os módulos. Se a importação não aceitar a pasta interna, extraia o ZIP e importe essa pasta pelo app Arquivos. Confira se o projeto executado informa a versão 0.2.4.
 2. **Servidor de desenvolvimento:** no computador, dentro de `scripting/`, execute `npx --yes scripting-cli@1.5.0 start --editor=none --port=4317 --no-auto-open`. Conecte o Scripting ao IP do computador exibido no terminal; ambos precisam estar na mesma rede. Selecione o projeto `Calendar Timeline Scripting` que aparece na lista de projetos do servidor. O CLI usa `scripts/` e recebe os tipos `.d.ts` da versão conectada.
 
 Execute o projeto uma vez no aplicativo e conceda as permissões nativas de Calendário, Lembretes e Localização. Adicione um widget médio do Scripting à Tela de Início e escolha `Calendar Timeline Scripting`. Confira os toques no widget real, pois a prévia não comprova o comportamento do WidgetKit.
