@@ -29,3 +29,16 @@ A ponte e o widget são distribuídos no mesmo repositório Calendar-Timeline. O
 A ponte executa pelo botão no aplicativo ou pelo Intent do mesmo projeto. O widget não inicia gravações e não aguarda a rede da ponte. O pareamento deve ser feito uma vez neste projeto, pois o armazenamento do projeto separado não é migrado. Não use os dois projetos simultaneamente com a mesma configuração. Atualização do código vem do Git; sincronização de dados ocorre ao executar a ponte.
 
 0.2.7: ao tocar na ponte, o andamento aparece abaixo do botão. Cancelamentos, falhas e o resultado também aparecem ali. Se o diálogo não abrir, informe a etapa/erro exibido, sem compartilhar a configuração privada. A versão usa Dialog global conforme https://scriptingapp.github.io/guide/Views/Dialog/index_example .
+
+
+## Calendar Timeline 0.2.8 — execução automática no próprio projeto
+
+A ponte roda na abertura do app, no toque no corpo (antes de abrir o Calendário), na seleção de dia e nas execuções do widget pelo iOS. Não há necessidade de automações no Atalhos. Pairing/consentimento permanecem necessários uma vez. O botão fica disponível para configurar e diagnosticar, mas não é preciso tocá-lo em cada rodada.
+
+O iOS determina quando executar o widget. `policy: after` pede uma nova execução a partir de 15 minutos; não é um agendador preciso. Sem execução do projeto/widget, a ponte não é despertada por um comando no servidor. Não há promessa de tempo real, serviço contínuo ou execução com o telefone bloqueado. BackgroundKeeper e notificações push não foram ativados.
+
+A nova leitura por intervalo trata o cenário em que a busca por identificador devolve um objeto antigo. Essa é uma correção a validar no iPhone do usuário, não uma confirmação da causa interna do Scripting. O último título realmente lido aparece na tela do app e fica em `bridge-event-read`/`bridge-local-items`, somente no aparelho. Nem notas nem outros eventos entram no snapshot enviado.
+
+Testes reproduzíveis no repositório: `tests/scripting-bridge-automatic.cjs`, `tests/scripting-bridge-integration.cjs`, `tests/scripting-bridge-ui.cjs`, `tests/scripting-contract.cjs`, `tests/bridge-device.mjs`, `tests/scripting-engine.cjs`. TYPESCRIPT_PATH pode indicar a instalação local de TypeScript. APIs nativas precisam de validação no iPhone.
+
+Referências oficiais: https://scriptingapp.github.io/guide/Device%20Capabilities/CalendarEvent , https://scriptingapp.github.io/guide/Script/Script , https://scriptingapp.github.io/guide/AppIntent , https://scriptingapp.github.io/guide/Device%20Capabilities/Safari/ .

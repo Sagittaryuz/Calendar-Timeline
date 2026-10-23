@@ -1,3 +1,4 @@
+import { readLinkedEvent } from './bridge-event-reader'
 import { assertTest, ENDPOINT, executeCommand, project, validateConfig } from './bridge-protocol'
 const CONFIG='ct-bridge-config-v1'
 function write(key:string,value:any){if(!Storage.set(key,value))throw Error('Não foi possível guardar o estado local; nenhuma nova operação será iniciada.')}
@@ -5,7 +6,11 @@ export function configure(raw:string){const config=validateConfig(JSON.parse(raw
 export function configuration(){const raw=Keychain.get(CONFIG);return raw?validateConfig(JSON.parse(raw)):null}
 function linked(kind:string){return Storage.get<string>('linked:'+kind)}
 const api={
- get:async(kind:string,id:string)=>kind==='event'?CalendarEvent.get(id):Reminder.get(id),
+ get:async(kind:string,id:string)=>kind==='event'?readLinkedEvent(id,{
+  get:(key:string)=>CalendarEvent.get(key),reference:()=>Storage.get<any>('bridge-event-reference'),
+  calendars:()=>Calendar.forEvents(),query:(start:Date,end:Date,calendars:any[])=>CalendarEvent.getAll(start,end,calendars),
+  remember:(value:any)=>write('bridge-event-reference',value),diagnose:(value:any)=>write('bridge-event-read',value)
+ }):Reminder.get(id),
  getLinked:linked,
  link:(kind:string,id:string)=>write('linked:'+kind,id),
  loadJournal:(id:string)=>Storage.get<any>('journal:'+id),
@@ -47,13 +52,16 @@ const api={
   await item.save()
  }
 }
+let deadline=Infinity
 async function request(config:any,body:any):Promise<any>{
+ const remaining=Math.min(20000,deadline-Date.now())
+ if(remaining<150)throw Error("Tempo da rodada automática encerrado; a fila será retomada na próxima execução.")
  let timer:any
  try{return await Promise.race([(async()=>{
   const response=await fetch(ENDPOINT+'/api/device',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.deviceToken,'OAI-Sites-Authorization':'Bearer '+config.siteAccess},body:JSON.stringify(body)})
   if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Acesso à ponte não confirmado. Confira o pareamento no painel privado.')
   const data:any=await response.json();if(!response.ok)throw Error(data.error??'Ponte indisponível');return data
- })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de conexão excedido; a fila será retomada na próxima execução.')),20000)})])}finally{clearTimeout(timer)}
+ })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de conexão excedido; a fila será retomada na próxima execução.')),remaining)})])}finally{clearTimeout(timer)}
 }
 async function items(){
  const result=[]
@@ -65,17 +73,20 @@ async function items(){
  return result
 }
 let syncing=false
-export async function synchronize(){
+export async function synchronize(options:{budgetMS?:number}={}){
  if(syncing)throw Error('Sincronização já está em andamento nesta execução')
  syncing=true
+ deadline=options.budgetMS?Date.now()+options.budgetMS:Infinity
  try{
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
   // Replay a result whose upload failed before any new native writes.
   const outbox=Storage.get<any>('result-outbox')
   if(outbox){await request(config,outbox);Storage.remove('result-outbox')}
-  const received=await request(config,{op:'sync',items:await items()})
+  const initialItems=await items()
+  const received=await request(config,{op:'sync',items:initialItems,claim:deadline-Date.now()>2000})
   let applied=0,conflicts=0
   for(const command of received.commands){
+   if(deadline-Date.now()<1500)break
    if(Date.parse(command.leaseUntil)<=Date.now())throw Error('A reserva do comando expirou. Aguarde e execute a sincronização novamente.')
    // A native or transport failure leaves the cloud command pending. The
    // durable journal + command marker recover a save interrupted by iOS.
@@ -84,8 +95,11 @@ export async function synchronize(){
    write('result-outbox',ack);await request(config,ack);Storage.remove('result-outbox')
    if(result.status==='applied')applied++;else conflicts++
   }
-  const final=await request(config,{op:'sync',items:await items(),claim:false})
-  const report={version:'0.1.1',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
+  // Reuse the initial snapshot when no command changed native records.
+  const finalItems=received.commands.length?await items():initialItems
+  const final=received.commands.length?await request(config,{op:'sync',items:finalItems,claim:false}):received
+  write('bridge-local-items',finalItems)
+  const report={version:'0.1.2',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
   write('last-sync',report);return report
- }finally{syncing=false}
+ }finally{syncing=false;deadline=Infinity}
 }

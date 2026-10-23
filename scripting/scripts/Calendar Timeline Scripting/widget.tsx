@@ -1,4 +1,5 @@
 import { Widget, Text } from 'scripting'
+import { autoSynchronize } from './bridge-auto'
 import { loadModel } from './model'
 import { TimelineView } from './timeline-view'
 import { VERSION, failureDetails } from './diagnostics'
@@ -9,6 +10,7 @@ async function main(){
     return
   }
   try{
+    await autoSynchronize({origin:'widget',budgetMS:4500})
     const model=await loadModel({background:true}),{width,height}=Widget.displaySize
     Storage.set('widget-diagnostic',{version:VERSION,phase:'present-requested',at:Date.now()})
     Widget.present(<TimelineView model={model} width={width} height={height}/>,

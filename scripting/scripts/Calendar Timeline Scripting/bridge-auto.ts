@@ -1,0 +1,19 @@
+import { configuration, synchronize } from './bridge-client'
+// No dialogs or credentials in diagnostics; safe to call from the widget host.
+export async function autoSynchronize(options:{origin:string;force?:boolean;budgetMS?:number}){
+ try{
+  if(!Storage.get<boolean>('test-scope-consent')||!configuration())return {state:'unpaired'}
+  const now=Date.now(),attempt=Storage.get<number>('bridge-auto-attempt')??0
+  if(!options.force&&now-attempt<60000)return {state:'throttled'}
+  if(!Storage.set('bridge-auto-attempt',now))throw Error('Falha ao guardar a tentativa automática.')
+  const report=await synchronize({budgetMS:options.budgetMS??6000})
+  const result={state:'success',origin:options.origin,at:Date.now(),message:`Ponte automática: ${new Date(report.finishedAt).toLocaleString('pt-BR')}. Confirmados: ${report.applied}; pendentes: ${report.pending}.`,report}
+  Storage.set('bridge-auto-state',result)
+  return result
+ }catch{
+  // Keep any native error and private configuration out of the widget/logs.
+  const result={state:'deferred',origin:options.origin,at:Date.now(),message:'Ponte adiada por falha ou limite de tempo. A fila será retomada na próxima execução.'}
+  try{Storage.set('bridge-auto-state',result)}catch{}
+  return result
+ }
+}

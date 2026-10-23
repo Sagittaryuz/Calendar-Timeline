@@ -22,7 +22,7 @@ export async function showBridge(reconfigure=false,onStatus?:(message:string)=>v
   const message=`Sincronização concluída em ${new Date(report.finishedAt).toLocaleString("pt-BR")}. Gravações confirmadas: ${report.applied}. Conflitos: ${report.conflicts}. Pendentes: ${report.pending}.`
   if(onStatus){onStatus(message);return}
   await Navigation.present(<NavigationStack><VStack spacing={14} padding={20} navigationTitle="Calendar Timeline Bridge">
-   <Text>Ponte de teste · versão 0.1.1</Text>
+   <Text>Ponte de teste · versão 0.1.2</Text>
    <Text>Última execução: {new Date(report.finishedAt).toLocaleString('pt-BR')}</Text>
    <Text>Gravações confirmadas nesta execução: {report.applied}. Conflitos: {report.conflicts}. Pendentes: {report.pending}.</Text>
    <Text>Somente os dois itens [CT TESTE] são compartilhados. Alterações feitas neles no Calendário ou Lembretes serão enviadas na próxima execução.</Text>
@@ -36,7 +36,7 @@ export async function showBridge(reconfigure=false,onStatus?:(message:string)=>v
 
 let launching=false
 export function BridgeLauncher(){
- const [status,setStatus]=useState('')
+ const [status,setStatus]=useState(Storage.get<any>('bridge-auto-state')?.message??'')
  const [busy,setBusy]=useState(false)
  return <VStack spacing={8}>
   <Button title={busy?'Ponte em execução…':'Ponte com ChatGPT'} action={async()=>{
@@ -46,6 +46,6 @@ export function BridgeLauncher(){
    catch{setStatus('Não foi possível abrir a ponte. Feche e execute novamente o projeto. Nenhuma sincronização foi confirmada.')}
    finally{launching=false;setBusy(false)}
   }}/>
-  {status?<Text>{status}</Text>:null}
+  {status?<Text fixedSize={{horizontal:false,vertical:true}}>{status}</Text>:null}
  </VStack>
 }

@@ -1,3 +1,17 @@
+## 0.2.8 — atualização pelo toque e ponte automática sem Atalhos
+
+- O corpo do widget executa uma nova instância do mesmo projeto (`scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1`), tenta sincronizar os dois itens do piloto, prepara os dados locais, solicita o redesenho e abre `calshow://`. Há uma passagem pelo Scripting. Falha da ponte não bloqueia a tentativa de atualização local nem o destino Calendário.
+- A ponte também roda automaticamente ao abrir o projeto, ao selecionar um dia e quando o iOS executa o widget. As sete áreas de dia e o desenho foram preservados. Não é necessário configurar o app Atalhos.
+- Uma rodada automática exige o pareamento e o consentimento já guardados neste projeto. O escopo continua sendo somente os dois itens sintéticos `[CT TESTE]`. O widget não abre diálogos de autorização.
+- Rodadas do widget têm orçamento de rede de 4,5 segundos; toque no corpo usa 6,5 segundos e abertura do app usa 8 segundos. Chamadas nativas podem acrescentar duração. Execuções automáticas sem toque são espaçadas em pelo menos um minuto; não há loop de recarga. A solicitação periódica do widget continua a partir de 15 minutos, sujeita ao iOS. Isso não garante execução contínua ou imediata com tela bloqueada.
+- A leitura do evento passou a consultar novamente seu calendário por um intervalo limitado de 30 dias, conferindo o identificador e o marcador da prova. Não reenvia a cópia de `get(id)` como atual se a nova consulta falhar. Eventos pessoais encontrados localmente não são enviados. Um título EDITADO só é confirmado quando for recebido do aparelho; não é preenchido pelo código.
+- Sem comandos, uma única requisição transmite o snapshot e consulta a fila. Quando há gravações, diário, caixa de saída, reserva e releitura continuam ativos. Pendentes não são apresentados como aplicados.
+- A tela do projeto mostra o último título de evento realmente lido, o estado do lembrete e o resultado automático; o conteúdo pode ser rolado.
+
+Validação local: callbacks do widget, degradação offline, limite de rede, consentimento, espaçamento de tentativas, snapshot contendo EDITADO com `get(id)` antigo, lembrete concluído, exclusão de registros pessoais do envio, recusa de vínculo ambíguo/alterado, contrato do widget e 12 renderizações do motor. Teste com o cliente atualizado + serviço real em SQLite local confirmou criação, leitura, edição manual, conclusão/reabertura, recuperação de ACK perdido e conflito, com APIs nativas simuladas. Toque, permissões de extensão, leitura no iPhone e frequência em segundo plano ainda dependem do aparelho.
+
+Rollback: instalar a release 0.2.7 preservando o armazenamento/Keychain do mesmo projeto. Não refaça o pareamento para atualizar código.
+
 ## 0.2.7 — retorno visível do botão da ponte
 
 Corrige o uso de Dialog conforme o exemplo oficial (global nativo). O botão usa callback assíncrono com andamento/erro/resultado na própria tela, sem abrir uma apresentação de resultado sobre a página atual. Toques repetidos são bloqueados enquanto há uma execução. O erro também fica visível se o diálogo falhar. Testes executam os callbacks reais com adaptadores simulados; não comprovam UI/rede no iPhone. O estado do servidor ainda não tinha contato confirmado na publicação desta versão. Pareamento e fila existentes foram preservados.
