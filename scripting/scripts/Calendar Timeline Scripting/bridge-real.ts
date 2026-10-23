@@ -35,12 +35,12 @@ function applyDetails(c:any,n:any){
   }
  }
 }
-function assertWritable(n:any){
- if(!n||!n.calendar?.allowsContentModifications||n.hasRecurrenceRules!==false||n.hasAttendees!==false||['birthday','subscription'].includes(n.calendar.type))throw Error('Item indisponível, somente leitura, recorrente ou com participantes; nenhuma alteração foi autorizada nesse formato.')
+function assertWritable(n:any,kind:string){
+ if(!n||!n.calendar?.allowsContentModifications||(typeof n.hasRecurrenceRules!=='boolean'||kind==='event'&&n.hasRecurrenceRules)||n.hasAttendees!==false||['birthday','subscription'].includes(n.calendar.type))throw Error('Item indisponível, somente leitura, recorrente ou com participantes; nenhuma alteração foi autorizada nesse formato.')
 }
 export async function realCapabilities(version:string){
  const lists=await Promise.all([Calendar.forEvents(),Calendar.forReminders()])
- return {protocol:2,clientVersion:version,at:new Date().toISOString(),calendars:lists.flatMap((list,index)=>list.map(c=>({kind:index?'reminder':'event',id:c.identifier,title:c.title??'Sem título',writable:c.allowsContentModifications===true&&!['birthday','subscription'].includes(c.type)})))}
+ return {protocol:2,clientVersion:version,at:new Date().toISOString(),features:['recurring-reminders-v1'],calendars:lists.flatMap((list,index)=>list.map(c=>({kind:index?'reminder':'event',id:c.identifier,title:c.title??'Sem título',writable:c.allowsContentModifications===true&&!['birthday','subscription'].includes(c.type)})))}
 }
 async function calendarFor(c:any){
  const lists=c.kind==='event'?await Calendar.forEvents():await Calendar.forReminders()
@@ -103,14 +103,15 @@ export async function executeReal(c:any){
   try{return {status:'applied',item:projectReal(c.kind,n,true)}}catch{return {status:'failed',error:'Detalhes nativos fora do formato suportado; nenhum campo foi alterado.'}}
  }
  if(!isNew){
-  try{assertWritable(n)}catch{return {status:'conflict',error:'O item não permite esta alteração.'}}
+  try{assertWritable(n,c.kind)}catch{return {status:'conflict',error:'O item não permite esta alteração.'}}
   const current=projectReal(c.kind,n,c.detailsProtocol===1)
   if(journal&&matches(c,current)){write(key,{state:'applied',nativeId:n.identifier});return {status:'applied',item:current}}
+  if(journal?.state==='written'||journal?.state==='applied')return {status:'conflict',error:'A grava��o anterior n�o corresponde � releitura; nenhuma segunda grava��o foi executada.'}
   if(c.action==='create'||writeRevision(current)!==c.expectedRevision||(c.detailsProtocol===1&&current.detailsRevision!==c.expectedDetailsRevision))return {status:'conflict',error:'O item mudou desde a captura; consulte a nova revisão.'}
   // Requery through the same range API as the real agenda before writing.
   n=await readReal(c,c.itemId)
   if(!n||writeRevision(projectReal(c.kind,n))!==c.expectedRevision||(c.detailsProtocol===1&&projectReal(c.kind,n,true).detailsRevision!==c.expectedDetailsRevision))return {status:'conflict',error:'Leitura mudou antes da gravação.'}
-  assertWritable(n)
+  assertWritable(n,c.kind)
  }
  write(key,{state:'started',nativeId:n.identifier??null})
  const p=c.payload
@@ -126,7 +127,7 @@ export async function executeReal(c:any){
  await n.save()
  if(!n.identifier)throw Error('A gravação não retornou identificador; aguarde a recuperação da fila.')
  write(key,{state:'written',nativeId:n.identifier})
- const reread=await readReal(c,n.identifier);assertWritable(reread)
+ const reread=await readReal(c,n.identifier);assertWritable(reread,c.kind)
  const item=projectReal(c.kind,reread,c.detailsProtocol===1)
  if(!matches(c,item))throw Error('A releitura ainda não confirmou a alteração; nenhuma nova gravação será iniciada.')
  write(key,{state:'applied',nativeId:n.identifier})

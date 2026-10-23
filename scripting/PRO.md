@@ -1,7 +1,7 @@
-# Calendar Timeline 0.3.0
+# Calendar Timeline 0.3.1
 
 Atualize o mesmo projeto pela branch `scripting`, preservando pareamento e Keychain.
-Inclui o registro local de tentativas da 0.2.15, sem alterar a ponte do servidor.
+Inclui o registro local de tentativas da 0.2.15, e a correção de lembretes recorrentes no servidor 0.3.1.
 
 - Corpo da timeline: link direto `calshow://`, sem script intermediário. Esse toque
   abre o Calendário e não sincroniza a ponte antes. Não promete abrir uma data específica.

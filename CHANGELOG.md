@@ -1,5 +1,11 @@
 # Histórico da edição Scripting
 
+## 0.3.1 — 23/10/2026
+
+- Ponte pessoal permite editar/concluir/reabrir lembretes recorrentes, preservando regras, notas e alarmes.
+- Capacidade explícita distingue cliente antigo; diário impede segunda gravação após resultado não confirmado.
+- Servidor privado atualizado sem novo plugin, pareamento ou perda de dados. Testes SQLite/mocks aprovados; iPhone pendente.
+
 ## 0.3.0 — 23/10/2026
 
 - Incorpora o registro de tentativas da 0.2.15.
