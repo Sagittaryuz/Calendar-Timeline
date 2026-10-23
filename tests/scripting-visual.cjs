@@ -33,8 +33,8 @@ async function main(){
   b.filter=`blur(${image.blurRadius}px)`;b.drawImage(canvas,0,0);return blurred;
  }
  const now=new Date(2026,9,22,12,30),out=path.join(__dirname,'../../artifacts');
- const sheet=native.createCanvas(1092,570*3),sheetCtx=sheet.getContext('2d');let row=0;
- for(const [day,label] of [[22,'Hoje: moldura une quadro e timeline, curvas nos dois lados'],[21,'Outro dia útil: cinza, sem blur'],[24,'Sábado: azul, sem blur, junções sem curvas']]){
+ const sheet=native.createCanvas(1092,570*7),sheetCtx=sheet.getContext('2d');let row=0;
+ for(const [day,label] of [[22,'Hoje: fundo acompanha curvas e respeita os vizinhos'],[21,'Outro dia útil: cinza, sem blur'],[24,'Sábado: azul, mesma fonte'],[18,'Domingo: vermelho, mesma fonte'],[19,'Segunda: junção ao lado do domingo'],[20,'Terça: duas junções'],[23,'Sexta: junção ao lado do sábado']]){
   const focus=new Date(2026,9,day),at=h=>new Date(2026,9,day,h);
   const items=[{kind:'event',identifier:'a',title:'EVENTO ROSA',start:at(10),end:at(14),color:'#FF2D55',isAllDay:false},
    {kind:'reminder',identifier:'b',title:'LEMBRETE LARANJA',start:at(8),end:at(16),color:'#FF9500',priority:1,sourceIsAllDay:false,isAllDay:false}];
@@ -44,7 +44,7 @@ async function main(){
   const model=await renderOriginal(host,options),ops=[],blurs=[];
   function visit(image){if(image.blurRadius)blurs.push(image);for(const op of image.ops){ops.push(op);if(op.type==='image'&&!op.image.native&&!op.image.symbol)visit(op.image)}}visit(model.image);
   assert.equal(blurs.length,0,'No blur on any selected day');
-  assert.equal(model.timelineBackground,day===22?'#000000':day===24?'#0D3F68':'#3B3C3E');
+  assert.equal(model.timelineBackground,day===22?'#000000':day===24?'#0D3F68':day===18?'#521720':'#3B3C3E');
   assert.equal(model.nowMarker===null,day!==22);
   if(day===22){
    assert.equal(model.nowMarker.x,1092*12.5/24);
@@ -55,25 +55,28 @@ async function main(){
   assert(contour,'Continuous selected-day frame');
   for(const [,x,y] of contour.path.filter(c=>c.length===3)){assert(x>=4&&x<=1088&&y>=4&&y<=506,'Contour within final widget coordinates')}
   const selected=model.header.find(c=>c.selected),points=contour.path.filter(p=>p.length===3);
-  if(day!==24){
+  if(day!==24&&day!==18){
    const bridgeY=points.find(p=>Math.abs(p[1]-4)<0.01&&p[2]>selected.height&&p[2]<200)[2];
    const left=selected.x+4,right=selected.x+selected.width-4;
    const r=Math.min(52*510/484,(bridgeY-selected.y)/2,left-4,1088-right);
    assert(points.some(p=>Math.abs(p[1]-(left-r))<0.1&&Math.abs(p[2]-bridgeY)<0.1),'Left outward bridge curve');
    assert(points.some(p=>Math.abs(p[1]-(right+r))<0.1&&Math.abs(p[2]-bridgeY)<0.1),'Right outward bridge curve');
   }
+  const headerOps=[...model.image.ops,...model.image.ops.filter(o=>o.type==='image'&&o.rect.y===0&&o.image.size.height===510).flatMap(o=>o.image.ops??[])];
+  const headlineSizes=[];
   for(const card of model.header){
-   const texts=model.image.ops.filter(o=>o.type==='text'&&o.point.y<100&&o.point.x>=card.x&&o.point.x<card.x+card.width);
+   const texts=headerOps.filter(o=>o.type==='text'&&o.point.y<100&&o.point.x>=card.x&&o.point.x<card.x+card.width);
    assert(texts.length>=3,'Three header rows');
    const top=Math.min(...texts.map(o=>o.point.y)),bottom=Math.max(...texts.map(o=>o.point.y+o.state.font.size));
    assert(Math.abs((top+bottom)/2-(card.y+card.height/2))<5,'Header block centered vertically');
    const rows=[...new Set(texts.map(t=>t.point.y))].sort((a,b)=>a-b);
    assert.equal(rows.length,3,'Exactly three header rows');
    const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
-   assert(title[0].state.font.size>temps[0].state.font.size*1.05,`First row remains larger and fits contour: ${card.date}: ${title[0].state.font.size}/${temps[0].state.font.size}`);
+   headlineSizes.push(title[0].state.font.size);
+   assert(title[0].state.font.size>temps[0].state.font.size,`First row remains larger and fits contour: ${card.date}`);
    assert(counts[0].state.font.size>=14&&counts[0].state.font.size<temps[0].state.font.size,'Third row enlarged and below temperature size');
    assert.match(counts[0].text,/^E: \d+ \| L: \d+$/);
-   const icon=model.image.ops.find(o=>o.type==='fillEllipse'&&o.state.fill.hex==='FFDE00'&&
+   const icon=headerOps.find(o=>o.type==='fillEllipse'&&o.state.fill.hex==='FFDE00'&&
      o.rect.x>temps[0].point.x&&o.rect.x+o.rect.width<temps[1].point.x&&
      Math.abs(o.rect.y+o.rect.height/2-(rows[1]+temps[0].state.font.size*0.56))<1);
    assert(icon,'Weather icon between maximum and minimum in every card');
@@ -81,10 +84,33 @@ async function main(){
    if(weekday===0)assert(Math.abs(Math.max(...title.map(t=>t.point.x+t.text.length*t.state.font.size*0.60))-Math.max(...temps.map(t=>t.point.x+t.text.length*t.state.font.size*0.62)))<0.01,'Sunday first-row right edge follows second row');
    if(weekday===6)assert(Math.abs(Math.min(...title.map(t=>t.rect.x))-Math.min(...temps.map(t=>t.rect.x)))<0.01,'Saturday first-row left edge follows second row');
   }
+  assert.equal(new Set(headlineSizes).size,1,'Same headline font size on all seven days, including weekends');
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
   for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');
   const image=paint(model.image),pixels=image.getContext('2d');
+  if(day!==24&&day!==18){
+   const bridgeY=points.find(p=>Math.abs(p[1]-4)<0.01&&p[2]>selected.height&&p[2]<200)[2];
+   const r=Math.min(52*510/484,(bridgeY-selected.y)/2,selected.x,1088-(selected.x+selected.width-4));
+   const gap=3*510/484/2+1.2287;
+   const childCards=model.image.ops.filter(o=>o.type==='image'&&o.rect.y===0&&o.image.outerClip);
+   assert.equal(childCards.length,6,'All six neighboring cards use an independent contour mask');
+   for(const side of [-1,1]){
+    const cx=side===-1?selected.x+4-r:selected.x+selected.width-4+r,cy=bridgeY-r;
+    const unitX=side===-1?Math.SQRT1_2:-Math.SQRT1_2,unitY=Math.SQRT1_2;
+    const profile=Math.pow(0.5,1/2.45),arcX=cx+(side===-1?1:-1)*r*profile,arcY=cy+r*profile;
+    const point=distance=>[Math.round(arcX+unitX*distance),Math.round(arcY+unitY*distance)];
+    const own=point(5),color=Array.from(pixels.getImageData(...own,1,1).data).slice(0,3);
+    const expected=model.timelineBackground.slice(1).match(/../g).map(x=>parseInt(x,16));
+    assert.deepEqual(color,expected,'Selected background follows the curved shoulder on both sides');
+    // The same offset mask is applied to every adjacent card; inspect its
+    // winding directly, independently of which rectangular card is painted.
+    const mask=native.createCanvas(1092,510).getContext('2d');mask.beginPath();
+    for(const [method,...args] of childCards[0].image.outerClip)mask[method](...args);
+    assert.equal(mask.isPointInPath(...point(-gap-4)),true,'Neighbor side remains visible');
+    assert.equal(mask.isPointInPath(...point(-gap+1)),false,'Gap follows a parallel offset of the real superellipse');
+   }
+  }
   for(const [x,y] of [[0,0],[1,255],[1091,255],[545,0],[545,509]])assert.equal(pixels.getImageData(x,y,1,1).data[3],0,'Paint outside outer frame is cut');
   fs.writeFileSync(path.join(out,`scripting-${version}-day-${day}.png`),image.toBuffer('image/png'));
   sheetCtx.fillStyle='#111';sheetCtx.fillRect(0,row*570,1092,570);sheetCtx.fillStyle='white';sheetCtx.font='24px Arial';sheetCtx.fillText(label,20,row*570+34);sheetCtx.drawImage(image,0,row*570+50);row++;

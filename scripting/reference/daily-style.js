@@ -56,6 +56,31 @@ function currentDayUnifiedShape(path = new Path()) {
   }
   path.closeSubpath();return path;
 }
+function dayCardNeighbourClip() {
+  const path=new Path();
+  path.move(new Point(0,0));path.addLine(new Point(CANVAS.width,0));
+  path.addLine(new Point(CANVAS.width,CANVAS.height));path.addLine(new Point(0,CANVAS.height));path.closeSubpath();
+  // Nonzero winding hole: keep adjacent cards outside the selected fill,
+  // its half-stroke and the same clear gap used between header cards.
+  const offset=scaleVertical(3)/2+titleCardGap();
+  const vertices=[];
+  for(const [,x,y] of currentDayUnifiedShape().commands.filter(c=>c.length===3)){
+    const previous=vertices[vertices.length-1];
+    if(!previous||Math.hypot(x-previous.x,y-previous.y)>1e-6)vertices.push(new Point(x,y));
+  }
+  if(Math.hypot(vertices[0].x-vertices.at(-1).x,vertices[0].y-vertices.at(-1).y)<1e-6)vertices.pop();
+  // Offset the actual superellipse polyline along its normals. Shrinking
+  // radii alone would change the gap around this non-circular profile.
+  const normal=(a,b)=>{const length=Math.hypot(b.x-a.x,b.y-a.y);return {x:(b.y-a.y)/length,y:(a.x-b.x)/length}};
+  const points=vertices.map((p,i)=>{
+    const a=normal(vertices[(i+vertices.length-1)%vertices.length],p),b=normal(p,vertices[(i+1)%vertices.length]);
+    const factor=offset/Math.max(1e-6,1+a.x*b.x+a.y*b.y);
+    return new Point(p.x+(a.x+b.x)*factor,p.y+(a.y+b.y)*factor);
+  }).reverse();
+  path.move(points[0]);
+  for(const p of points.slice(1))path.addLine(p);
+  path.closeSubpath();return path.commands;
+}
 function shiftWidgetImage(image) {
   return image;
 }
