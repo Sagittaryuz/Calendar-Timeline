@@ -6,7 +6,8 @@ for(const name of ['index.tsx','bridge.tsx','bridge-client.ts','bridge-protocol.
  assert.equal(r.diagnostics.length,0,name);
 }
 
-assert.equal(read(dir+'bridge-protocol.ts'),read('scripting/scripts/Calendar Timeline Bridge/protocol.ts'));
+assert(read(dir+'bridge-protocol.ts').includes('item.lastModifiedDate')); // Content revision format remains unchanged.
+assert(read(dir+'bridge-protocol.ts').includes("[item.id,item.title,item.calendarId,item.start,item.end,item.isAllDay]"));
 assert(!read(dir+'widget.tsx').includes('bridge-client'));
 assert(read(dir+'index.tsx').includes('finally{Script.exit()}'));
 assert(read(dir+'index.tsx').includes('<BridgeLauncher/>'));

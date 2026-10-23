@@ -13,7 +13,10 @@ function dueString(components:any){
 }
 export function project(kind:string,item:any){
  const out:any={kind,id:item.identifier,title:item.title,calendarId:item.calendar?.identifier}
- if(kind==='event'){out.start=new Date(item.startDate).toISOString();out.end=new Date(item.endDate).toISOString();out.isAllDay=!!item.isAllDay}
+ if(kind==='event'){out.start=new Date(item.startDate).toISOString();out.end=new Date(item.endDate).toISOString();out.isAllDay=!!item.isAllDay
+  const modified=item.lastModifiedDate==null?NaN:Number(new Date(item.lastModifiedDate))
+  out.nativeModifiedAt=Number.isFinite(modified)?new Date(modified).toISOString():null
+ }
  else {out.due=dueString(item.dueDateComponents);out.completed=!!item.isCompleted}
  out.revision=revision(out);return out
 }

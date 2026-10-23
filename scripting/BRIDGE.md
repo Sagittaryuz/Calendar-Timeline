@@ -42,3 +42,12 @@ A nova leitura por intervalo trata o cenário em que a busca por identificador d
 Testes reproduzíveis no repositório: `tests/scripting-bridge-automatic.cjs`, `tests/scripting-bridge-integration.cjs`, `tests/scripting-bridge-ui.cjs`, `tests/scripting-contract.cjs`, `tests/bridge-device.mjs`, `tests/scripting-engine.cjs`. TYPESCRIPT_PATH pode indicar a instalação local de TypeScript. APIs nativas precisam de validação no iPhone.
 
 Referências oficiais: https://scriptingapp.github.io/guide/Device%20Capabilities/CalendarEvent , https://scriptingapp.github.io/guide/Script/Script , https://scriptingapp.github.io/guide/AppIntent , https://scriptingapp.github.io/guide/Device%20Capabilities/Safari/ .
+
+
+## 0.2.11 — proteção contra regressão do evento
+
+A leitura combina `CalendarEvent.get` e `getAll`, compara `lastModifiedDate` documentada pela API e guarda um checkpoint local. Leituras anteriores ou conflitantes sem versão distinta são adiadas; não se presume que a consulta por intervalo é sempre mais recente. O conteúdo de `revision` permanece compatível com comandos existentes. Lembretes não recebem metadados de modificação não documentados.
+
+O serviço 0.1.2 admite snapshots de evento atomicamente por versão nativa, preservando milissegundos. Clientes antigos não podem substituir um estado versionado. Omissão em consulta não é tratada como exclusão. Resultados antigos de comandos não são confirmados como aplicados; a caixa de saída é relida após atualização. A origem e versão do cliente acompanham os snapshots aceitos. Pareamento e escopo dos dois itens de teste são preservados.
+
+Testes locais cobrem as duas fontes nativas alternadamente antigas, checkpoint, versões iguais conflitantes, clientes antigos, omissão e renomeação posterior legítima. APIs do iPhone são simuladas nesses testes. O cache interno do Scripting não foi inspecionado; a admissão sem controle de versão era uma falha comprovada do nosso código. A confirmação do título real exige executar esta versão no aparelho. Atualização de código e sincronização dos dados são operações distintas.

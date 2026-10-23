@@ -73,7 +73,7 @@ async function items(){
  return result
 }
 let syncing=false
-export async function synchronize(options:{budgetMS?:number}={}){
+export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
  if(syncing)throw Error('Sincronização já está em andamento nesta execução')
  syncing=true
  deadline=options.budgetMS?Date.now()+options.budgetMS:Infinity
@@ -81,9 +81,20 @@ export async function synchronize(options:{budgetMS?:number}={}){
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
   // Replay a result whose upload failed before any new native writes.
   const outbox=Storage.get<any>('result-outbox')
-  if(outbox){await request(config,outbox);Storage.remove('result-outbox')}
+  if(outbox){
+   // An ACK persisted by an older release has no native version. Re-read it
+   // before retrying, without repeating the native write or inventing a title.
+   if(outbox.status==='applied'&&outbox.item?.kind==='event'){
+    const native=await api.get('event',outbox.item.id),current=native?project('event',native):null
+    if(current?.revision===outbox.item.revision)outbox.item=current
+    else {outbox.status='conflict';outbox.error='O evento mudou após a gravação interrompida; releitura atual preservada.';delete outbox.item}
+   }
+   await request(config,outbox);Storage.remove('result-outbox')
+  }
   const initialItems=await items()
-  const received=await request(config,{op:'sync',items:initialItems,claim:deadline-Date.now()>2000})
+  const meta={clientVersion:'0.2.11',origin:options.origin??'manual'}
+  const received=await request(config,{op:'sync',items:initialItems,claim:deadline-Date.now()>2000,meta})
+  if(received.warnings?.length)throw Error('A ponte recusou uma leitura antiga ou conflitante. Atualize o projeto e tente novamente.')
   let applied=0,conflicts=0
   for(const command of received.commands){
    if(deadline-Date.now()<1500)break
@@ -97,9 +108,10 @@ export async function synchronize(options:{budgetMS?:number}={}){
   }
   // Reuse the initial snapshot when no command changed native records.
   const finalItems=received.commands.length?await items():initialItems
-  const final=received.commands.length?await request(config,{op:'sync',items:finalItems,claim:false}):received
+  const final=received.commands.length?await request(config,{op:'sync',items:finalItems,claim:false,meta}):received
+  if(final.warnings?.length)throw Error('A ponte preservou uma versão mais recente do evento; envio adiado.')
   write('bridge-local-items',finalItems)
-  const report={version:'0.1.2',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
+  const report={version:'0.1.3',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
   write('last-sync',report);return report
  }finally{syncing=false;deadline=Infinity}
 }
