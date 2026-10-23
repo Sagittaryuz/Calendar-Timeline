@@ -1,0 +1,23 @@
+# Calendar Timeline Bridge · prova 0.1.0
+
+Projeto separado do widget para testar ChatGPT ⇄ iPhone. Nenhuma credencial acompanha os arquivos e o widget atual permanece na versão 0.2.5.
+
+1. Abra o painel privado: https://calendar-timeline-bridge.sagittaryuz.chatgpt.site
+2. Gere a configuração privada no painel. Ela aparece uma vez; copie somente para o Scripting, não para o chat.
+3. Importe pelo Git no Scripting:
+   `https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Bridge`
+4. No painel, prepare os dois itens. Eles ficam pendentes até a execução no aparelho.
+5. Abra `Calendar Timeline Bridge` no Scripting, cole a configuração e execute a prova. Conceda Calendário/Lembretes quando o iOS solicitar. Somente o evento e o lembrete `[CT TESTE]` usam a lista/calendário padrão.
+6. Volte ao painel/plugin e confirme a chegada dos dois itens. Peça pelo plugin uma alteração ou conclusão, execute novamente o projeto no iPhone e confira a confirmação `applied`.
+
+Ferramentas do plugin: `bridge_get_status`, `bridge_list_test_items`, `bridge_queue_test_change`, `bridge_get_command`. Uma alteração precisa do identificador e da revisão recebida na última leitura. Somente `applied` significa confirmação por releitura; `pending` significa apenas comando na fila. O endpoint MCP é exposto pelo plugin privado provisionado no Sites, não por configuração local do Codex.
+
+O piloto limita uma criação de cada tipo por pareamento, não envia agenda pessoal, não permite excluir itens, não modifica convidados/recorrência e rejeita dados fora do escopo. Alterações feitas manualmente nos dois itens são enviadas na próxima execução. Se houver edição concorrente, a ponte retorna conflito em vez de sobrescrever.
+
+Em falha, a caixa de saída e o diário local retomam o comando na próxima execução. Não apague o projeto nem seu armazenamento para tentar resolver uma falha: isso remove o Keychain e o histórico local da prova. No painel é possível revogar a conexão; isso não apaga os itens Apple. Para colar uma nova configuração, abra `scripting://run/Calendar%20Timeline%20Bridge?configure=1`. Não revogue/repareie para contornar erros sem antes conferir os itens existentes.
+
+Esta versão não comprova sincronização automática com tela bloqueada. Atalhos pode chamar o Intent de sincronização depois do pareamento, mas isso não equivale a um serviço continuamente ativo.
+
+Testes: `node tests/bridge-device.mjs`; sintaxe TS/TSX conferida. O serviço privado possui seus testes de banco/transporte em seu Git privado. Nenhuma escrita real no iPhone foi confirmada durante a implantação pelo computador.
+
+Rollback: continue usando o widget existente, revogue a conexão no painel e preserve os dois itens para inspeção. Versões de código vêm do Git; backup privado no Drive não é canal de atualização.
