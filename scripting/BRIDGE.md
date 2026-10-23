@@ -27,3 +27,5 @@ Rollback: continue usando o widget existente, revogue a conexão no painel e pre
 A ponte e o widget são distribuídos no mesmo repositório Calendar-Timeline. O serviço privado existente preserva sua hospedagem gerenciada, identidade e dados. Nenhum novo serviço foi criado nesta integração.
 
 A ponte executa pelo botão no aplicativo ou pelo Intent do mesmo projeto. O widget não inicia gravações e não aguarda a rede da ponte. O pareamento deve ser feito uma vez neste projeto, pois o armazenamento do projeto separado não é migrado. Não use os dois projetos simultaneamente com a mesma configuração. Atualização do código vem do Git; sincronização de dados ocorre ao executar a ponte.
+
+0.2.7: ao tocar na ponte, o andamento aparece abaixo do botão. Cancelamentos, falhas e o resultado também aparecem ali. Se o diálogo não abrir, informe a etapa/erro exibido, sem compartilhar a configuração privada. A versão usa Dialog global conforme https://scriptingapp.github.io/guide/Views/Dialog/index_example .

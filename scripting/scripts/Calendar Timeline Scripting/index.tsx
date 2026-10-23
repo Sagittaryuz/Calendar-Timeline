@@ -1,5 +1,5 @@
-import { Button, Navigation, NavigationStack, VStack, Text, Script, Widget } from 'scripting'
-import { showBridge } from './bridge'
+import { Navigation, NavigationStack, VStack, Text, Script, Widget } from 'scripting'
+import { BridgeLauncher, showBridge } from './bridge'
 import { loadModel } from './model'
 import { VERSION, failureDetails } from './diagnostics'
 
@@ -13,7 +13,7 @@ async function main(){
     const model=await loadModel()
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
-      <Button title="Ponte com ChatGPT" action={()=>showBridge()}/>
+      <BridgeLauncher/>
       <Text>A ponte compartilha somente os dois itens de teste após o pareamento privado.</Text>
       <Text>Versão de teste para Scripting · {VERSION}</Text>
       <Text>Preparação local: {Storage.get<any>('render-diagnostic')?.elapsedMS??'—'} ms. Isso não mede o desenho final na Tela de Início.</Text>

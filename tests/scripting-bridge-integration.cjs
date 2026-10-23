@@ -9,5 +9,5 @@ assert.equal(read(dir+'bridge-client.ts').replace('./bridge-protocol','./protoco
 assert.equal(read(dir+'bridge-protocol.ts'),read('scripting/scripts/Calendar Timeline Bridge/protocol.ts'));
 assert(!read(dir+'widget.tsx').includes('bridge-client'));
 assert(read(dir+'index.tsx').includes('finally{Script.exit()}'));
-assert(read(dir+'index.tsx').includes('Ponte com ChatGPT'));
+assert(read(dir+'index.tsx').includes('<BridgeLauncher/>'));
 console.log('PASS: integrated bridge syntax; tested client/protocol preserved; foreground entry and intent; widget has no bridge network dependency. Native UI still requires iPhone.');

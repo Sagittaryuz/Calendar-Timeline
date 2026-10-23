@@ -1,3 +1,7 @@
+## 0.2.7 — retorno visível do botão da ponte
+
+Corrige o uso de Dialog conforme o exemplo oficial (global nativo). O botão usa callback assíncrono com andamento/erro/resultado na própria tela, sem abrir uma apresentação de resultado sobre a página atual. Toques repetidos são bloqueados enquanto há uma execução. O erro também fica visível se o diálogo falhar. Testes executam os callbacks reais com adaptadores simulados; não comprovam UI/rede no iPhone. O estado do servidor ainda não tinha contato confirmado na publicação desta versão. Pareamento e fila existentes foram preservados.
+
 ## 0.2.6 — ponte incluída no widget
 
 Atualize o projeto existente pelo Git no Scripting. Na tela do aplicativo, toque em **Ponte com ChatGPT** para parear e executar a prova. Não é necessário outro projeto. Veja [BRIDGE.md](BRIDGE.md). O pareamento inicial ainda é necessário. O desenho do widget foi preservado e não aguarda a rede da ponte.

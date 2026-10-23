@@ -1,20 +1,26 @@
-import { Button, Dialog, Navigation, NavigationStack, Script, Widget, Text, VStack } from 'scripting'
+import { Button, Navigation, NavigationStack, Widget, Text, VStack, useState } from 'scripting'
 import { configuration, configure, synchronize } from './bridge-client'
 
-export async function showBridge(reconfigure=false){
+export async function showBridge(reconfigure=false,onStatus?:(message:string)=>void){
  try{
+  onStatus?.("Verificando o pareamento local…")
   if(!configuration()||reconfigure){
+   onStatus?.("Aguardando a configuração privada no diálogo de pareamento…")
    const raw=await Dialog.prompt({title:'Parear Calendar Timeline Bridge',message:'Cole a configuração privada gerada no painel. Ela será guardada no Keychain deste projeto.',obscureText:true,confirmLabel:'Parear'})
-   if(!raw)return
+   if(!raw){onStatus?.("Pareamento cancelado. Nenhum dado foi enviado.");return}
    configure(raw)
   }
   if(!Storage.get<boolean>('test-scope-consent')){
+   onStatus?.("Aguardando sua autorização para os dois itens de teste…")
    const yes=await Dialog.confirm({title:'Prova com dois itens de teste',message:'Este projeto pode criar e editar somente o lembrete e o evento [CT TESTE] enviados pela ponte privada. Pode concluir/reabrir o lembrete. Nenhum outro registro será enviado. Os itens usam o calendário/lista padrão do iPhone.',confirmLabel:'Executar prova',cancelLabel:'Cancelar'})
-   if(!yes)return
+   if(!yes){onStatus?.("Prova cancelada. Nenhum dado foi enviado.");return}
    if(!Storage.set('test-scope-consent',true))throw Error('Não foi possível guardar a autorização local.')
   }
+  onStatus?.("Conectando à ponte privada e verificando a fila…")
   const report=await synchronize()
   Widget.reloadAll()
+  const message=`Sincronização concluída em ${new Date(report.finishedAt).toLocaleString("pt-BR")}. Gravações confirmadas: ${report.applied}. Conflitos: ${report.conflicts}. Pendentes: ${report.pending}.`
+  if(onStatus){onStatus(message);return}
   await Navigation.present(<NavigationStack><VStack spacing={14} padding={20} navigationTitle="Calendar Timeline Bridge">
    <Text>Ponte de teste · versão 0.1.1</Text>
    <Text>Última execução: {new Date(report.finishedAt).toLocaleString('pt-BR')}</Text>
@@ -22,8 +28,24 @@ export async function showBridge(reconfigure=false){
    <Text>Somente os dois itens [CT TESTE] são compartilhados. Alterações feitas neles no Calendário ou Lembretes serão enviadas na próxima execução.</Text>
    <Text>Volte ao ChatGPT e use o plugin Calendar Timeline Bridge para consultar o resultado ou enviar uma alteração de teste.</Text>
    <Text>A ponte roda ao executar este projeto. Atualização contínua com o iPhone bloqueado ainda não foi comprovada.</Text>
-   <Button title="Fechar" action={()=>Navigation.dismiss()}/>
+
   </VStack></NavigationStack>)
- }catch(error:any){await Dialog.alert({title:'Ponte não concluída',message:'Não foi possível confirmar a sincronização. A fila e o registro local serão retomados na próxima execução.\n\n'+String(error?.message??error)})}
+ }catch(error:any){const message='Não foi possível confirmar a sincronização. A fila e o registro local serão retomados na próxima execução.\n\n'+String(error?.message??error);if(onStatus){onStatus(message);return}await Dialog.alert({title:'Ponte não concluída',message})}
 }
 
+
+let launching=false
+export function BridgeLauncher(){
+ const [status,setStatus]=useState('')
+ const [busy,setBusy]=useState(false)
+ return <VStack spacing={8}>
+  <Button title={busy?'Ponte em execução…':'Ponte com ChatGPT'} action={async()=>{
+   if(launching){setStatus('A ponte já está em execução. Aguarde o resultado.');return}
+   launching=true;setBusy(true);setStatus('Abrindo a ponte…')
+   try{await showBridge(false,setStatus)}
+   catch{setStatus('Não foi possível abrir a ponte. Feche e execute novamente o projeto. Nenhuma sincronização foi confirmada.')}
+   finally{launching=false;setBusy(false)}
+  }}/>
+  {status?<Text>{status}</Text>:null}
+ </VStack>
+}
