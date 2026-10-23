@@ -5183,21 +5183,21 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
       {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2)},
       new Color(timelineBackgroundColorForDate(date)));
   }
-  const headlineSize=weekHeaderHeadlineSize();
+  const headlineSize=weekHeaderHeadlineSize(date);
   const layout=weekHeaderLayout(date,card,headlineSize);
   const {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight}=layout;
   ctx.setTextAlignedLeft();ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
   ctx.setTextColor(titleWeekdayColor(date,loadResult.holidayDates));
   ctx.drawTextInRect(headline,new Rect(layout.x,layout.top,card.x+card.width-3-layout.x,card.y+card.height-3-layout.top));
-  const temperatureY=layout.top+headlineSize*1.12+scaleVertical(3);
+  const temperatureY=layout.temperatureY;
   ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
   ctx.drawTextInRect(maximum,new Rect(temperatureLeft,temperatureY,card.x+card.width-3-temperatureLeft,card.y+card.height-3-temperatureY));
   drawTitleWeatherIcon(ctx,titleForecastForDay(date),temperatureLeft+maxWidth+gap/2,
-    temperatureY+temperatureSize*0.56,scaleVertical(22));
+    temperatureY+temperatureSize*0.56,scaleVertical(24));
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor));
   ctx.drawTextInRect(minimum,new Rect(temperatureRight-minWidth,temperatureY,card.x+card.width-3-temperatureRight+minWidth,card.y+card.height-3-temperatureY));
-  const countY=temperatureY+temperatureSize*1.12+scaleVertical(4);
+  const countY=layout.countY;
   ctx.setFont(Font.regularMonospacedSystemFont(smallSize));ctx.setTextAlignedCenter();
   ctx.setTextColor(new Color('#D1D1D6',0.96));
   ctx.drawTextInRect(summary,new Rect(card.x+8,countY,card.width-16,smallSize*1.2));
@@ -12888,28 +12888,43 @@ function weekHeaderLayout(date,card,headlineSize) {
   const maximum=temp(daily?.maximum),minimum=temp(daily?.minimum);
   const counts=titleScheduleCountsForDay(date),summary=`E: ${counts.events} | L: ${counts.reminders}`;
   const headline=`${shortWeekday(date)} ${String(date.getDate()).padStart(2,'0')}`;
-  const temperatureSize=scaleFontSize(18),smallSize=Math.min(scaleFontSize(15),(card.width-16)/(summary.length*0.62));
-  const gap=scaleVertical(32),maxWidth=maximum.length*temperatureSize*0.62,minWidth=minimum.length*temperatureSize*0.62;
+  const temperatureSize=scaleFontSize(21),smallSize=Math.min(scaleFontSize(16),(card.width-16)/(summary.length*0.62));
+  const gap=scaleVertical(38),maxWidth=maximum.length*temperatureSize*0.62,minWidth=minimum.length*temperatureSize*0.62;
   const temperatureWidth=maxWidth+gap+minWidth,temperatureLeft=card.x+(card.width-temperatureWidth)/2;
   const temperatureRight=temperatureLeft+temperatureWidth;
-  const height=headlineSize*1.12+scaleVertical(3)+temperatureSize*1.12+scaleVertical(4)+smallSize*1.12;
-  const top=card.y+(card.height-height)/2-scaleVertical(1),width=headline.length*headlineSize*0.60;
+  const height=headlineSize+scaleVertical(1.5)+temperatureSize+scaleVertical(1.5)+smallSize*1.2;
+  const top=card.y+card.height-height-scaleVertical(2),width=headline.length*headlineSize*0.60;
+  const temperatureY=top+headlineSize+scaleVertical(1.5),countY=temperatureY+temperatureSize+scaleVertical(1.5);
   const x=date.getDay()===0?temperatureRight-width:date.getDay()===6?temperatureLeft:card.x+(card.width-width)/2;
-  return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width};
+  return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width,temperatureY,countY,height};
 }
 
-function weekHeaderHeadlineSize() {
-  // One shared fit, never a smaller font just for Saturday or Sunday.
-  for(let size=scaleFontSize(34);size>=scaleFontSize(12);size-=scaleFontSize(0.5)){
+function weekHeaderHeadlineFits(date,card,size) {
+  const layout=weekHeaderLayout(date,card,size);
+  const bounds=widgetVisibleContentBounds(layout.top,size*1.05,2);
+  return layout.top>=card.y+scaleVertical(2)
+    &&layout.x>=Math.max(card.x+3,bounds.left)
+    &&layout.x+layout.width<=Math.min(card.x+card.width-3,bounds.right)
+    &&layout.countY+layout.smallSize*1.2<=card.y+card.height-scaleVertical(1);
+}
+
+function weekHeaderHeadlineSize(date) {
+  // Shared typography for ordinary cards, including both weekends. Today's
+  // headline may use extra space without shifting either of the lower rows.
+  let shared=scaleFontSize(25);
+  for(let size=scaleFontSize(38);size>=scaleFontSize(25);size-=0.5){
     let fits=true;
     for(let i=0;i<TITLE_CARD_COUNT;i++){
-      const card=titleDayCardRect(i),date=addDays(titleWeekStart(),i),layout=weekHeaderLayout(date,card,size);
-      const bounds=widgetVisibleContentBounds(layout.top,size*1.12,2);
-      if(layout.x<Math.max(card.x+3,bounds.left)||layout.x+layout.width>Math.min(card.x+card.width-3,bounds.right)){fits=false;break;}
+      if(!weekHeaderHeadlineFits(addDays(titleWeekStart(),i),titleDayCardRect(i),size)){fits=false;break;}
     }
-    if(fits)return size;
+    if(fits){shared=size;break;}
   }
-  return scaleFontSize(12);
+  if(dateKey(date)!==dateKey(now))return shared;
+  const card=titleDayCardRect(date.getDay());
+  for(let size=scaleFontSize(42);size>shared;size-=0.5){
+    if(weekHeaderHeadlineFits(date,card,size))return size;
+  }
+  return shared;
 }
 
 }

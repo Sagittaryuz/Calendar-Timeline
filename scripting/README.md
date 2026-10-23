@@ -1,3 +1,9 @@
+## 0.2.9 — cabeçalhos maiores e mais abaixo
+
+A primeira linha dos sete quadros ganha destaque (na prévia: 28 em vez de 21 unidades); hoje pode crescer ainda mais até os limites do próprio quadro. Os demais dias usam o mesmo tamanho, inclusive sábado e domingo. A segunda linha passa de 19 para 22 unidades e a terceira de 16 para 17 na referência local. O grupo fica ancorado perto da base do quadro, com espaçamentos compactos: temperaturas e contagens permanecem alinhadas nos sete dias. Mantém o ícone entre máxima/mínima e os alinhamentos especiais dos fins de semana. O encaixe considera a moldura externa e impede o aumento quando não cabe.
+
+Prévia Canvas local aproximada, com verificação de hierarquia, posição inferior, alinhamentos, ícones e recortes. Fontes e encaixe final precisam de conferência no iPhone.
+
 ## 0.2.8 — atualização pelo toque e ponte automática sem Atalhos
 
 - O corpo do widget executa uma nova instância do mesmo projeto (`scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1`), tenta sincronizar os dois itens do piloto, prepara os dados locais, solicita o redesenho e abre `calshow://`. Há uma passagem pelo Scripting. Falha da ponte não bloqueia a tentativa de atualização local nem o destino Calendário.

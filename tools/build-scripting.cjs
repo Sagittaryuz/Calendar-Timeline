@@ -36,7 +36,7 @@ code+='\n'+functionSource(dailyStyle,'drawCurrentTimeMarker')+'\n';
 code+='\n'+functionSource(dailyStyle,'dayCardNeighbourClip')+'\n';
 const headerStyle=fs.readFileSync(path.join(root,'scripting/reference/header-style.js'),'utf8').replace(/\r\n/g,'\n');
 replaceOnce(functionSource(code,'drawTitleDayCard'),functionSource(headerStyle,'drawTitleDayCard'));
-for(const name of ['weekHeaderLayout','weekHeaderHeadlineSize'])code+='\n'+functionSource(headerStyle,name)+'\n';
+for(const name of ['weekHeaderLayout','weekHeaderHeadlineFits','weekHeaderHeadlineSize'])code+='\n'+functionSource(headerStyle,name)+'\n';
 for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])
   replaceOnce(functionSource(code,name),`function ${name}() {}`);
 // Native masking clips all paint (including nested images and text) to the

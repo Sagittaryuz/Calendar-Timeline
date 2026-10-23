@@ -68,11 +68,15 @@ async function main(){
    const texts=headerOps.filter(o=>o.type==='text'&&o.point.y<100&&o.point.x>=card.x&&o.point.x<card.x+card.width);
    assert(texts.length>=3,'Three header rows');
    const top=Math.min(...texts.map(o=>o.point.y)),bottom=Math.max(...texts.map(o=>o.point.y+o.state.font.size));
-   assert(Math.abs((top+bottom)/2-(card.y+card.height/2))<5,'Header block centered vertically');
+   assert(bottom<card.y+card.height-2,'Header stays inside its lower frame');
    const rows=[...new Set(texts.map(t=>t.point.y))].sort((a,b)=>a-b);
    assert.equal(rows.length,3,'Exactly three header rows');
    const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
-   headlineSizes.push(title[0].state.font.size);
+   headlineSizes.push({date:card.date,size:title[0].state.font.size});
+   assert(title[0].state.font.size>=27,'First row is substantially larger');
+   assert(rows[0]+title[0].state.font.size>=48,'First row baseline moved down');
+   assert(rows[1]>=50&&rows[2]>=74,'Lower two rows moved down together');
+   assert(temps[0].state.font.size>=22&&counts[0].state.font.size>=17,'Second and third rows enlarged');
    assert(title[0].state.font.size>temps[0].state.font.size,`First row remains larger and fits contour: ${card.date}`);
    assert(counts[0].state.font.size>=14&&counts[0].state.font.size<temps[0].state.font.size,'Third row enlarged and below temperature size');
    assert.match(counts[0].text,/^E: \d+ \| L: \d+$/);
@@ -84,7 +88,8 @@ async function main(){
    if(weekday===0)assert(Math.abs(Math.max(...title.map(t=>t.point.x+t.text.length*t.state.font.size*0.60))-Math.max(...temps.map(t=>t.point.x+t.text.length*t.state.font.size*0.62)))<0.01,'Sunday first-row right edge follows second row');
    if(weekday===6)assert(Math.abs(Math.min(...title.map(t=>t.rect.x))-Math.min(...temps.map(t=>t.rect.x)))<0.01,'Saturday first-row left edge follows second row');
   }
-  assert.equal(new Set(headlineSizes).size,1,'Same headline font size on all seven days, including weekends');
+  assert.equal(new Set(headlineSizes.filter(x=>x.date!=='2026-10-22').map(x=>x.size)).size,1,'Same ordinary headline size including weekends');
+  assert(headlineSizes.find(x=>x.date==='2026-10-22').size>headlineSizes.find(x=>x.date==='2026-10-21').size,'Today uses more available headline space');
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
   for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');
