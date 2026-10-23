@@ -1,3 +1,5 @@
+import { VERSION } from './diagnostics'
+import { agendaReadState, disagreesWithAgenda } from './bridge-read-state'
 import { collectAgenda } from './bridge-agenda'
 import { readLinkedEvent } from './bridge-event-reader'
 import { assertTest, ENDPOINT, executeCommand, project, validateConfig } from './bridge-protocol'
@@ -85,18 +87,19 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
  deadline=options.budgetMS?Date.now()+options.budgetMS:Infinity
  try{
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
-  const meta={clientVersion:'0.2.12',origin:options.origin??'manual'}
+  const meta={clientVersion:VERSION,origin:options.origin??'manual',linkedReadIds:{event:linked('event'),reminder:linked('reminder')}}
   // Real agenda upload is independent of the test command path. A stale test
   // event must not prevent a read-only weekly snapshot reaching the owner.
-  let agenda:any=null
+  let agenda:any=null,reads:any=null
   if(Storage.get<boolean>('real-agenda-disabled')!==true){
    let timer:any
    try{
     const remaining=Math.max(150,Math.min(10000,deadline-Date.now()-300))
     const snapshot:any=await Promise.race([collectAgenda(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de leitura da agenda excedido')),remaining)})])
     const result=await request(config,{op:'agenda',snapshot,meta})
-    agenda={...result,coverage:snapshot.coverage}
+    agenda={...result,coverage:result.coverage??snapshot.coverage}
     write('bridge-agenda-status',agenda)
+    if(result.accepted){reads=agendaReadState(snapshot,{event:linked('event'),reminder:linked('reminder')},result);write('bridge-read-items',reads)}
    }catch{agenda={state:'deferred',at:new Date().toISOString()};write('bridge-agenda-status',agenda)}finally{clearTimeout(timer)}
   }
   // Replay a result whose upload failed before any new native writes.
@@ -111,14 +114,20 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
    }
    await request(config,outbox);Storage.remove('result-outbox')
   }
+  const readOnlyReport=()=>{
+   const report={version:VERSION,finishedAt:new Date().toISOString(),applied:0,conflicts:0,pending:null,agenda,testState:reads?.states.event==='confirmed'?'agenda-read':'unavailable',commandState:'not-checked'}
+   write('last-sync',report);return report
+  }
   let initialItems:any[]
   try{initialItems=await items()}catch(error){
    if(agenda?.accepted){
-    const report={version:'0.1.4',finishedAt:new Date().toISOString(),applied:0,conflicts:1,pending:null,agenda,testState:'deferred'}
-    write('last-sync',report);return report
+    return readOnlyReport()
    }
    throw error
   }
+  // Do not re-upload an older test lookup or claim writes when it disagrees
+  // with the real agenda capture that has just been accepted.
+  if(agenda?.accepted&&disagreesWithAgenda(initialItems,reads))return readOnlyReport()
   const received=await request(config,{op:'sync',items:initialItems,claim:deadline-Date.now()>2000,meta:{...meta,eventRead:Storage.get('bridge-event-read')}})
   if(received.warnings?.length)throw Error('A ponte recusou uma leitura antiga ou conflitante. Atualize o projeto e tente novamente.')
   let applied=0,conflicts=0
@@ -137,7 +146,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   const final=received.commands.length?await request(config,{op:'sync',items:finalItems,claim:false,meta}):received
   if(final.warnings?.length)throw Error('A ponte preservou uma versão mais recente do evento; envio adiado.')
   write('bridge-local-items',finalItems)
-  const report={version:'0.1.4',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount,agenda,testState:'ok'}
+  const report={version:VERSION,finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount,agenda,testState:reads?.states.event==='confirmed'?'agenda-read':'ok',commandState:'checked'}
   write('last-sync',report);return report
  }finally{syncing=false;deadline=Infinity}
 }

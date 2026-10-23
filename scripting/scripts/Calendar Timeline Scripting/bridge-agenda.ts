@@ -8,6 +8,12 @@ export function agendaWindow(now=new Date()){
  const end=new Date(start);end.setDate(end.getDate()+14)
  return {start:start.toISOString(),end:end.toISOString(),startDay:day(start),nextStart:day(next),endDay:day(end),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone??'UTC'}
 }
+export function exclusiveAllDayEnd(start:Date,end:Date){
+ const result=new Date(end.getFullYear(),end.getMonth(),end.getDate())
+ if(end.getHours()||end.getMinutes()||end.getSeconds()||end.getMilliseconds())result.setDate(result.getDate()+1)
+ if(day(result)<=day(start))result.setTime(new Date(start.getFullYear(),start.getMonth(),start.getDate()+1).getTime())
+ return day(result)
+}
 export function agendaDate(components:any){
  if(!components||components.year==null||components.month==null||components.day==null)return null
  const dateOnly=`${components.year}-${String(components.month).padStart(2,'0')}-${String(components.day).padStart(2,'0')}`
@@ -30,7 +36,7 @@ export async function collectAgenda(now=new Date(),host:any={events:(a:Date,b:Da
      const start=new Date(native.startDate),end=new Date(native.endDate)
      if(!Number.isFinite(+start)||!Number.isFinite(+end)||+end<=+start)throw Error('Invalid interval')
      if(+end<=Date.parse(window.start)||+start>=Date.parse(window.end))continue
-     item.isAllDay=!!native.isAllDay;item.start=item.isAllDay?day(start):start.toISOString();item.end=item.isAllDay?day(end):end.toISOString()
+     item.isAllDay=!!native.isAllDay;item.start=item.isAllDay?day(start):start.toISOString();item.end=item.isAllDay?exclusiveAllDayEnd(start,end):end.toISOString()
      item.occurrence=new Date(native.occurrenceDate??native.startDate).toISOString()
      const modified=native.lastModifiedDate==null?NaN:+new Date(native.lastModifiedDate)
      item.nativeModifiedAt=Number.isFinite(modified)?new Date(modified).toISOString():null

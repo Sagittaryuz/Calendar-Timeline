@@ -1,3 +1,9 @@
+## 0.2.13 — status e Último evento lido pela captura da agenda real
+
+A linha de leitura usa o registro da agenda aceito pelo servidor, com data da captura, e deixa de exibir o cache antigo do piloto. Leitura confirmada e execução de comandos são estados separados: uma consulta bem-sucedida não aparece como deferred só porque a revisão do teste divergiu. A tela informa quando comandos não foram consultados; não simula confirmação de gravações. Mensagem automática duplicada removida. Versão do cliente e versão da tela usam a mesma constante.
+
+Atualize o mesmo projeto e abra-o, preservando o pareamento. O serviço privado 0.2.3 devolve o recibo canônico dos registros vinculados, sem liberar edição dos itens reais. Os testes reproduzem EDITADO com data de modificação inalterada e uma leitura antiga concorrente. Visual final no iPhone ainda requer conferência após atualizar. A conversão de dia inteiro agora produz fim exclusivo também no próprio cliente.
+
 ## 0.2.12 — consulta real do iPhone e leitura por marcador
 
 Atualize o mesmo projeto no Scripting e abra-o. Sem refazer o pareamento, sem Atalhos e sem Google Agenda. A ponte privada compartilha a semana atual e próxima (segunda a segunda, fim exclusivo), em modo de consulta: títulos, calendários/listas, datas, horários e conclusão dos lembretes disponíveis ao Scripting. Notas, convidados, locais e URLs não são enviados. Lembretes sem data e futuras ocorrências ainda não concretizadas pela API ficam fora.

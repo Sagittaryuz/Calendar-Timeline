@@ -1,3 +1,5 @@
+import { VERSION } from './diagnostics'
+import { commandStatus, readStatus } from './bridge-read-state'
 import { Button, Navigation, NavigationStack, Widget, Text, VStack, useState } from 'scripting'
 import { configuration, configure, synchronize } from './bridge-client'
 
@@ -19,12 +21,12 @@ export async function showBridge(reconfigure=false,onStatus?:(message:string)=>v
   onStatus?.("Conectando à ponte privada e verificando a fila…")
   const report=await synchronize()
   Widget.reloadAll()
-  const message=`Sincronização concluída em ${new Date(report.finishedAt).toLocaleString("pt-BR")}. Gravações confirmadas: ${report.applied}. Conflitos: ${report.conflicts}. Pendentes: ${report.pending??'não consultados'}. Agenda: ${report.agenda?.accepted?'recebida':'envio não confirmado'}.`
+  const message=`Sincronização concluída em ${new Date(report.finishedAt).toLocaleString("pt-BR")}. ${readStatus(report)} ${commandStatus(report)} Agenda: ${report.agenda?.accepted?'recebida':'envio não confirmado'}.`
   if(onStatus){onStatus(message);return}
   await Navigation.present(<NavigationStack><VStack spacing={14} padding={20} navigationTitle="Calendar Timeline Bridge">
-   <Text>Ponte de teste · versão 0.2.0</Text>
+   <Text>Ponte Calendar Timeline · {VERSION}</Text>
    <Text>Última execução: {new Date(report.finishedAt).toLocaleString('pt-BR')}</Text>
-   <Text>Gravações confirmadas nesta execução: {report.applied}. Conflitos: {report.conflicts}. Pendentes: {report.pending}.</Text>
+   <Text>{readStatus(report)} {commandStatus(report)}</Text>
    <Text>A semana atual e a próxima são compartilhadas para consulta. Somente os dois itens [CT TESTE] aceitam alterações remotas.</Text>
    <Text>Volte ao ChatGPT e use o plugin Calendar Timeline Bridge para consultar o resultado ou enviar uma alteração de teste.</Text>
    <Text>A ponte roda ao executar este projeto. Atualização contínua com o iPhone bloqueado ainda não foi comprovada.</Text>

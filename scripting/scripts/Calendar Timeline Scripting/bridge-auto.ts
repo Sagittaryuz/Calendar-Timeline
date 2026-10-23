@@ -1,3 +1,4 @@
+import { commandStatus, readStatus } from './bridge-read-state'
 import { configuration, synchronize } from './bridge-client'
 // No dialogs or credentials in diagnostics; safe to call from the widget host.
 export async function autoSynchronize(options:{origin:string;force?:boolean;budgetMS?:number}){
@@ -8,7 +9,7 @@ export async function autoSynchronize(options:{origin:string;force?:boolean;budg
   if(!Storage.set('bridge-auto-attempt',now))throw Error('Falha ao guardar a tentativa automática.')
   const report=await synchronize({budgetMS:options.budgetMS??10000,origin:options.origin})
   const originLabel=({'widget':'execução do widget','app-open':'abertura do projeto','widget-touch':'toque na timeline','day-touch':'seleção de dia'} as Record<string,string>)[options.origin]??options.origin
-  const result={state:'success',origin:options.origin,at:Date.now(),message:`Ponte automática (${originLabel}): ${new Date(report.finishedAt).toLocaleString('pt-BR')}. Agenda: ${report.agenda?.accepted?'recebida no servidor':'envio não confirmado'}. Teste: ${report.testState??'ok'}. Confirmados: ${report.applied}; pendentes: ${report.pending??'não consultados'}.`,report}
+  const result={state:'success',origin:options.origin,at:Date.now(),message:`Ponte automática (${originLabel}): ${new Date(report.finishedAt).toLocaleString('pt-BR')}. Agenda: ${report.agenda?.accepted?'recebida no servidor':'envio não confirmado'}. ${readStatus(report)} ${commandStatus(report)}`,report}
   Storage.set('bridge-auto-state',result)
   return result
  }catch{

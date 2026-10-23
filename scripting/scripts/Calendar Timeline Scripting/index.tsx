@@ -1,3 +1,4 @@
+import { readLines } from './bridge-read-state'
 import { Navigation, NavigationStack, ScrollView, VStack, Text, Script, Widget } from 'scripting'
 import { BridgeLauncher, showBridge } from './bridge'
 import { autoSynchronize } from './bridge-auto'
@@ -25,8 +26,7 @@ async function main(){
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><ScrollView><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
       <BridgeLauncher/>
-      <Text fixedSize={{horizontal:false,vertical:true}}>{Storage.get<any>('bridge-auto-state')?.message??'A ponte automática será ativada após o pareamento.'}</Text>
-      {(Storage.get<any[]>('bridge-local-items')??[]).map((item:any)=><Text key={item.kind} fixedSize={{horizontal:false,vertical:true}}>{item.kind==='event'?`Último evento lido: ${item.title}`:`Último lembrete lido: ${item.completed?'concluído':'aberto'}`}</Text>)}
+      {readLines(Storage.get('bridge-read-items'),Storage.get<any[]>('bridge-local-items')??[]).map((line:string,index:number)=><Text key={index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
       <Text fixedSize={{horizontal:false,vertical:true}}>{(()=>{const agenda=Storage.get<any>('bridge-agenda-status');return agenda?.accepted?`Agenda real: ${agenda.count} itens enviados (${agenda.state}) em ${new Date(agenda.receivedAt).toLocaleString('pt-BR')}. Janela: ${agenda.window?.startDay} a ${agenda.window?.endDay} (fim exclusivo).`:'Agenda real: envio ainda não confirmado nesta execução.'})()}</Text>
       <Text>Ponte automática ao abrir, tocar e nas execuções do widget autorizadas pelo iOS. Não há serviço contínuo garantido com a tela bloqueada.</Text>
       <Text>A ponte compartilha sua semana atual e a próxima para consulta privada: títulos, datas, horários, calendário/lista e conclusão. Notas e convidados ficam no iPhone. Escritas remotas continuam restritas aos dois testes.</Text>
