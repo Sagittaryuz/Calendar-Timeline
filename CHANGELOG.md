@@ -1,5 +1,13 @@
 # Histórico da edição Scripting
 
+## 0.3.4 — 23/10/2026
+
+- Recuperação com entradas autocontidas, versão embutida e namespace do SDK, preservando detalhes da 0.3.3.
+- Fontes editáveis em scripting/entrypoints; geração determinística por npm run build:scripting.
+- Diagnóstico independente de inicialização e diagnose.tsx para conferir arquivos, hashes e APIs sem ler agenda/credenciais.
+- Testes locais do pacote distribuído aprovados. Causa exata do erro genérico e compilação/renderização no iPhone ainda não confirmadas.
+
+
 ## 0.3.2 — 23/10/2026
 
 - Corrige interrupção da ponte em segundo plano: aguarda sincronização antes de Widget.present encerrar o contexto.
