@@ -1,5 +1,11 @@
 # Histórico da edição Scripting
 
+## 0.3.2 — 23/10/2026
+
+- Corrige interrupção da ponte em segundo plano: aguarda sincronização antes de Widget.present encerrar o contexto.
+- Processa comandos antes da captura completa da agenda e evita a captura redundante após escrita. Orçamento do widget: até 8 segundos.
+- Mantém solicitação de atualização em 1 minuto; execução efetiva continua sob controle do iOS.
+
 ## 0.3.1 — 23/10/2026
 
 - Ponte pessoal permite editar/concluir/reabrir lembretes recorrentes, preservando regras, notas e alarmes.

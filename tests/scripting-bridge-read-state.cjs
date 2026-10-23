@@ -27,7 +27,7 @@ const cache=new Map();function load(name){if(cache.has(name))return cache.get(na
  assert(first.message.includes('Leitura confirmada pela agenda real'));assert(first.message.includes('Comandos de teste: não consultados'));assert(!first.message.includes('deferred'));
  const lines=ui.readLines(values.get('bridge-read-items'),values.get('bridge-local-items'));
  assert(lines.some(x=>x.includes(edited.title)));assert(!lines.some(x=>x.includes('Evento original')));assert(uploads.every(x=>['agenda','real-sync'].includes(x.op)));
- assert.equal(uploads[0].meta.clientVersion,load('diagnostics').VERSION);
+ assert.equal(uploads.find(x=>x.op==='agenda').meta.clientVersion,load('diagnostics').VERSION);
  // Same native version + cached original cannot overwrite the canonical read.
  mode='older';await auto.autoSynchronize({origin:'widget',force:true,budgetMS:10000});
  assert(ui.readLines(values.get('bridge-read-items')).some(x=>x.includes(edited.title)));assert(uploads.every(x=>['agenda','real-sync'].includes(x.op)));
