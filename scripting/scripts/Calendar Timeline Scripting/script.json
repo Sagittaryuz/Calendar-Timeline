@@ -2,6 +2,6 @@
   "name": "Calendar Timeline Scripting",
   "icon": "calendar",
   "color": "#0A0A0B",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Widget e consulta privada da agenda real do iPhone com ChatGPT; criação, edição e conclusão de itens reais com confirmação no iPhone."
 }

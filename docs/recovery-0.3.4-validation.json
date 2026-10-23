@@ -1,0 +1,18 @@
+{
+  "version": "0.3.4",
+  "sourceBase": "f7e8bdccdf3a6949f9af056ed1fbd590ab6d7451",
+  "package": "self-contained entries, namespace SDK import, embedded version",
+  "checks": [
+    "Syntax and full dependency bundling",
+    "All previous behavior suites",
+    "Actual distributed widget bootstrap and synchronization-before-presentation",
+    "Independent bootstrap error alert",
+    "Standalone diagnosis: clean and missing-file cases",
+    "Normalized source hashes",
+    "Deterministic regeneration"
+  ],
+  "iphoneCompilationConfirmed": false,
+  "iphoneWidgetRenderConfirmed": false,
+  "saneagoCompletionConfirmed": false,
+  "causeOfGenericNativeBuildFailure": "Not isolated: no console detail and no device development connection"
+}

@@ -1,3 +1,11 @@
+## 0.3.4 — pacote de recuperação
+
+Atualize o projeto existente pelo mesmo vínculo Git, preservando armazenamento e pareamento. As entradas index.tsx, widget.tsx e extensões são autocontidas: cada uma inclui sua versão e dependências do projeto. Não dependem de módulos internos antigos no cache para executar. O código-fonte editável das entradas está em scripting/entrypoints; npm run build:scripting gera os arquivos distribuídos.
+
+Se a tela principal não abrir, selecione **diagnose.tsx** no seletor de arquivos e execute esse arquivo. Ele não importa nenhum módulo do Calendar. Exibe arquivos ausentes/divergentes, versão do pacote e APIs indisponíveis, usando apenas o código local. Não lê agenda, credenciais ou pareamento. O build-manifest.json registra os hashes esperados.
+
+A recuperação elimina dependências de módulos internos na construção das entradas e usa um único import de namespace do SDK. Acrescenta alerta independente caso falhe a inicialização ou a própria tela de diagnóstico. A mensagem genérica do iPhone não revelou a causa exata; compilação nativa, renderização e execução da fila ainda exigem verificação no aparelho. Os testes locais não equivalem a essa confirmação.
+
 ## 0.3.0 — Scripting Pro e acesso direto
 
 Inclui as correções da 0.2.15. Agenda detalhada, conflitos/intervalos, criação por

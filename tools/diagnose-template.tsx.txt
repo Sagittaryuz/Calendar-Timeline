@@ -1,0 +1,30 @@
+import * as Host from 'scripting'
+// Independent entry: deliberately imports no project modules and reads no agenda or credentials.
+const EXPECTED_VERSION=__VERSION__
+const EXPECTED_FILES=__FILES__
+async function diagnose(){
+  const runtime=(Host as any).Script
+  const issues:string[]=[]
+  const folder=runtime.directory||FileManager.scriptsDirectory+'/'+runtime.name
+  const normalized=(value:string)=>value.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n')
+  const canHash=typeof Crypto!=='undefined'&&typeof Crypto.sha256==='function'&&typeof Data!=='undefined'
+  for(const file of EXPECTED_FILES){
+    try{
+      const content=normalized(await FileManager.readAsString(folder+'/'+file.name))
+      if(canHash){
+        const data=Data.fromString(content)
+        const hash=Crypto.sha256(data).toHexString().toLowerCase()
+        if(hash!==file.sha256)issues.push('Divergente: '+file.name)
+      }
+    }catch{issues.push('Ausente ou ilegível: '+file.name)}
+  }
+  const ui=['Widget','Text','Navigation','NavigationStack','ScrollView','VStack','HStack','Button','Canvas','ZStack','Rectangle','Link','useState','useRef','useEffect','AppIntentManager','AppIntentProtocol']
+  for(const name of ui)if((Host as any)[name]===undefined)issues.push('API ausente no app: '+name)
+  if(runtime.metadata.version!==EXPECTED_VERSION)issues.unshift('Metadados: '+runtime.metadata.version+'; esperado: '+EXPECTED_VERSION)
+  const report={version:EXPECTED_VERSION,metadataVersion:runtime.metadata.version,at:new Date().toISOString(),hashesChecked:canHash,issues}
+  Storage.set('source-integrity-report',report)
+  const message='Pacote esperado: '+EXPECTED_VERSION+'\n'+EXPECTED_FILES.length+' arquivos consultados. '+(canHash?'Hashes conferidos.':'API de hash indisponível; apenas presença conferida.')+'\n'+(issues.length?issues.join('\n'):'Arquivos e APIs conferidos. A compilação nativa e o widget ainda precisam executar.')
+  console.log(JSON.stringify(report))
+  await Dialog.alert({title:'Diagnóstico Calendar Timeline',message})
+}
+diagnose().catch(async error=>{await Dialog.alert({title:'Diagnóstico independente',message:String(error)})}).finally(()=>{(Host as any).Script.exit()})
