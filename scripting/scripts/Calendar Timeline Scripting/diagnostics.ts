@@ -1,4 +1,4 @@
-export const VERSION='0.2.15'
+export const VERSION='0.3.0'
 
 export function markPhase(phase:string,started:number){
   // Diagnostics must never turn a successful model into a failure.
@@ -16,3 +16,4 @@ export function failureDetails(error:unknown){
   }catch{detail='Não foi possível ler o erro retornado pelo aplicativo.'}
   return `Versão ${VERSION} · etapa: ${phase}\n${detail.slice(0,1100)}`
 }
+

@@ -6,6 +6,8 @@ import { autoSynchronize } from './bridge-auto'
 import { refreshFromWidget } from './widget-refresh'
 import { loadModel } from './model'
 import { VERSION, failureDetails } from './diagnostics'
+import { DayDetails } from './day-screen'
+import { refreshMinutes } from './pro-common'
 
 async function main(){
   // Snapshot before app-open sync so success cannot hide the prior offline attempt.
@@ -30,9 +32,10 @@ async function main(){
     await Navigation.present(<NavigationStack><ScrollView><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
       <BridgeLauncher/>
       {previousAttempts.map((line:string,index:number)=><Text key={'attempt-'+index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
+      <DayDetails/>
       {readLines(Storage.get('bridge-read-items'),Storage.get<any[]>('bridge-local-items')??[]).map((line:string,index:number)=><Text key={index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
       <Text fixedSize={{horizontal:false,vertical:true}}>{(()=>{const agenda=Storage.get<any>('bridge-agenda-status');return agenda?.accepted?`Agenda real: ${agenda.count} itens enviados (${agenda.state}) em ${new Date(agenda.receivedAt).toLocaleString('pt-BR')}. Janela: ${agenda.window?.startDay} a ${agenda.window?.endDay} (fim exclusivo).`:'Agenda real: envio ainda não confirmado nesta execução.'})()}</Text>
-      <Text>Ponte automática ao abrir, tocar e nas execuções do widget autorizadas pelo iOS. Não há serviço contínuo garantido com a tela bloqueada.</Text>
+      <Text>Ponte ao abrir e nas execuções do widget autorizadas pelo iOS. Para solicitar manualmente, use a Central de Controle. O corpo da timeline abre o Calendário diretamente.</Text>
       <Text>A ponte compartilha sua semana atual e a próxima para consulta privada: títulos, datas, horários, calendário/lista e conclusão. Notas e convidados ficam no iPhone. O ChatGPT pode solicitar criação/edição de eventos e lembretes reais e conclusão/reabertura de lembretes. A gravação só é confirmada após releitura no iPhone. Séries e itens com participantes são apenas consultados.</Text>
       <Text>Versão de teste para Scripting · {VERSION}</Text>
       <Text>Preparação local: {Storage.get<any>('render-diagnostic')?.elapsedMS??'—'} ms. Isso não mede o desenho final na Tela de Início.</Text>
@@ -40,7 +43,7 @@ async function main(){
       <Text>Avisos de desenho: {JSON.stringify(Storage.get('raster-warnings'))}. Se houver avisos, partes do efeito visual foram omitidas; a reprodução visual precisa de conferência.</Text>
       <Text>Calendário: {model.sourceStatus.schedule?.event===false?'acesso não confirmado':'consultado'}. Lembretes: {model.sourceStatus.schedule?.reminder===false?'acesso não confirmado':'consultado'}.</Text>
       <Text>Semana fixa de domingo a sábado. Toque em um dia para ver sua agenda das 00h às 24h. A régua não se desloca com o relógio.</Text>
-      <Text>Eventos e lembretes são consultados novamente a cada execução. A atualização automática é solicitada a partir de 15 minutos, sujeita ao iOS.</Text>
+      <Text>{'Eventos e lembretes são consultados a cada execução. Atualização solicitada após '+refreshMinutes()+' minuto(s), sujeita ao iOS.'}</Text>
       <Text>Não há botão Atualizar. Na virada do dia, a seleção retorna a hoje na próxima execução.</Text>
       <Text>Esta versão ainda exige conferência visual e teste dos toques na Tela de Início.</Text>
       <Text>Último diagnóstico do widget: {Storage.get<any>('widget-diagnostic')?.error??Storage.get<any>('widget-diagnostic')?.phase??'sem registro'}.</Text>

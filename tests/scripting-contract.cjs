@@ -77,7 +77,7 @@ async function main(){
   await assert.rejects(()=>intent.perform({date:'2020-01-01'}));assert.equal(reloads,1);
   const header=Array.from({length:7},(_,i)=>({date:`2026-10-${18+i}`,label:'Dia',x:i*156,y:4,width:150,height:100}));
   const view=load('timeline-view').TimelineView({model:{width:1092,height:510,image:{},header},width:364,height:170});
-  assert.equal(view.children[0].type,'Link');assert.equal(view.children[0].props.url,'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1','Body starts fresh execution before Calendar destination');
+  assert.equal(view.children[0].type,'Link');assert.equal(view.children[0].props.url,'calshow://','Body opens Calendar directly without foreground Scripting');
   const buttons=view.children[1];assert.equal(buttons.length,7);
   buttons.forEach((button,i)=>assert.equal(button.props.intent.params.date,header[i].date,'Day buttons retain independent selection intents'));
   const masked=load('graph-view').GraphView({image:{size:{width:1092,height:510},ops:[],outerClip:[['moveTo',4,4],['lineTo',1088,4],['closePath']]},width:364,height:170});

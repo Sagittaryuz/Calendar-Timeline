@@ -1,0 +1,9 @@
+{
+  "name":"calendar-timeline-validation",
+  "private":true,
+  "scripts":{
+    "check:scripting":"node tools/check-scripting.cjs",
+    "test:scripting":"node tests/scripting-contract.cjs && node tests/scripting-engine.cjs && node tests/scripting-bridge-automatic.cjs && node tests/scripting-bridge-integration.cjs && node tests/scripting-bridge-read-state.cjs && node tests/scripting-bridge-ui.cjs && node tests/scripting-bridge-attempts.cjs && node tests/scripting-pro.cjs"
+  },
+  "devDependencies":{"esbuild":"0.28.2","typescript":"5.9.3","@napi-rs/canvas":"0.1.80"}
+}

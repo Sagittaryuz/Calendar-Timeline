@@ -1,3 +1,11 @@
+## 0.3.0 — Scripting Pro e acesso direto
+
+Inclui as correções da 0.2.15. Agenda detalhada, conflitos/intervalos, criação por
+frase com revisão e releitura, assistente, Central de Controle, painel Início e
+preferências exportáveis. Corpo abre Calendário diretamente; dias não esperam a
+ponte. Solicita atualização em 1 minuto. [Ativação, testes e limites](PRO.md).
+Atualize o mesmo projeto pelo Git; preserve o pareamento. iPhone ainda não validado.
+
 ## 0.2.13 — status e Último evento lido pela captura da agenda real
 
 A linha de leitura usa o registro da agenda aceito pelo servidor, com data da captura, e deixa de exibir o cache antigo do piloto. Leitura confirmada e execução de comandos são estados separados: uma consulta bem-sucedida não aparece como deferred só porque a revisão do teste divergiu. A tela informa quando comandos não foram consultados; não simula confirmação de gravações. Mensagem automática duplicada removida. Versão do cliente e versão da tela usam a mesma constante.

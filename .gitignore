@@ -1,0 +1,4 @@
+node_modules/
+scripting/dts/
+work/
+*.log

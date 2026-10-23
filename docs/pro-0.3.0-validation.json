@@ -1,0 +1,21 @@
+{
+  "version": "0.3.0",
+  "at": "2026-10-23 21:56:57 UTC",
+  "base": "565bba1 / 0.2.15",
+  "localPassed": [
+    "27 modules syntax/imports",
+    "8 Scripting test suites",
+    "journal failures retained across success",
+    "conflicts/free slots/partial coverage",
+    "date validation, explicit review and creation save/reread mocks",
+    "12 engine scenarios",
+    "7 local Canvas views"
+  ],
+  "nativeIPhone": false,
+  "pending": [
+    "iPhone update and native declarations",
+    "Home, Control Center and direct Calendar tap",
+    "actual Pro creation and local AI",
+    "actual refresh interval"
+  ]
+}

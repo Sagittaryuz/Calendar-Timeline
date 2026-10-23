@@ -1,6 +1,7 @@
 import { AppIntentManager, AppIntentProtocol, Widget } from 'scripting'
 import { autoSynchronize } from './bridge-auto'
 import { localDay, validateSelection } from './selection'
+import { reloadWidgets } from './pro-common'
 
 export const SelectDay = AppIntentManager.register({
   name:'CalendarTimelineSelectDay',
@@ -9,6 +10,11 @@ export const SelectDay = AppIntentManager.register({
     const now=new Date()
     const selected=validateSelection(date,now)
     if(!Storage.set('selected-day',{date:selected,selectedOn:localDay(now)}))throw new Error('Não foi possível guardar o dia selecionado.')
-    try{await autoSynchronize({origin:'day-touch',force:true,budgetMS:4500})}finally{Widget.reloadAll()}
+    await reloadWidgets()
   },
+})
+export const SynchronizeAgenda=AppIntentManager.register({
+  name:'CalendarTimelineSynchronize',protocol:AppIntentProtocol.AppIntent,perform:async()=>{
+    await autoSynchronize({origin:'control-center',force:true,budgetMS:10000});await reloadWidgets()
+  }
 })

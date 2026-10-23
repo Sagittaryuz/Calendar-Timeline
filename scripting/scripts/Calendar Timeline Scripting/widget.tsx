@@ -3,6 +3,7 @@ import { autoSynchronize } from './bridge-auto'
 import { loadModel } from './model'
 import { TimelineView } from './timeline-view'
 import { VERSION, failureDetails } from './diagnostics'
+import { refreshMinutes } from './pro-common'
 
 async function main(){
   if(Widget.family!=='systemMedium'){
@@ -10,11 +11,12 @@ async function main(){
     return
   }
   try{
-    await autoSynchronize({origin:'widget',budgetMS:4500})
+    const bridge=autoSynchronize({origin:'widget',budgetMS:4500})
     const model=await loadModel({background:true}),{width,height}=Widget.displaySize
     Storage.set('widget-diagnostic',{version:VERSION,phase:'present-requested',at:Date.now()})
     Widget.present(<TimelineView model={model} width={width} height={height}/>,
-      {policy:'after',date:new Date(Date.now()+15*60*1000)})
+      {policy:'after',date:new Date(Date.now()+refreshMinutes()*60*1000)})
+    await bridge
   }catch(error){
     const detail=failureDetails(error)
     try{Storage.set('widget-diagnostic',{version:VERSION,phase:'failed-before-present',at:Date.now(),error:detail})}catch{}
