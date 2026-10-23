@@ -2,6 +2,6 @@
   "name": "Calendar Timeline Scripting",
   "icon": "calendar",
   "color": "#0A0A0B",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "Calendar Timeline com widget e ponte privada de teste com ChatGPT no mesmo projeto."
 }

@@ -1,3 +1,13 @@
+## 0.2.10 — centralização dos quadros e destaque de hoje menor
+
+As três linhas são centralizadas horizontalmente em todos os quadros, incluindo domingo e sábado. A primeira linha e as temperaturas usam alinhamento nativo ao centro dos seus retângulos, sem depender de estimativas para posicionar o texto. O conjunto permanece na posição inferior adotada na 0.2.9. O limite superior da fonte de hoje passa de 42 para 36 unidades de referência (na prévia: 41 para 38 unidades do desenho), mantendo sua hierarquia.
+
+A tela agora identifica a origem da última sincronização automática: abertura do projeto, toque na timeline, seleção de dia ou execução do widget. O servidor atual informa o último contato, mas não armazena essa origem. Portanto, um contato após usar também o botão manual não comprova isoladamente a atualização periódica em segundo plano.
+
+Verificação real em 23/10/2026: a API da ponte recebeu o título do evento com EDITADO e o lembrete concluído; último contato observado às 10:58:37 de São Paulo. O usuário informou ter usado também o botão manual. A leitura do título editado está confirmada; a execução periódica sem interação ainda precisa ser observada separadamente.
+
+Validação local desta versão: sete composições Canvas, centralização das três linhas, tamanho menor de hoje, limites da moldura, contrato do widget e regressão da leitura/execução automática simulada. Tipografia final depende da renderização no iPhone.
+
 ## 0.2.9 — cabeçalhos maiores e mais abaixo
 
 A primeira linha dos sete quadros ganha destaque (na prévia: 28 em vez de 21 unidades); hoje pode crescer ainda mais até os limites do próprio quadro. Os demais dias usam o mesmo tamanho, inclusive sábado e domingo. A segunda linha passa de 19 para 22 unidades e a terceira de 16 para 17 na referência local. O grupo fica ancorado perto da base do quadro, com espaçamentos compactos: temperaturas e contagens permanecem alinhadas nos sete dias. Mantém o ícone entre máxima/mínima e os alinhamentos especiais dos fins de semana. O encaixe considera a moldura externa e impede o aumento quando não cabe.

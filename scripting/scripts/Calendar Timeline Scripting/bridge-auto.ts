@@ -7,7 +7,8 @@ export async function autoSynchronize(options:{origin:string;force?:boolean;budg
   if(!options.force&&now-attempt<60000)return {state:'throttled'}
   if(!Storage.set('bridge-auto-attempt',now))throw Error('Falha ao guardar a tentativa automática.')
   const report=await synchronize({budgetMS:options.budgetMS??6000})
-  const result={state:'success',origin:options.origin,at:Date.now(),message:`Ponte automática: ${new Date(report.finishedAt).toLocaleString('pt-BR')}. Confirmados: ${report.applied}; pendentes: ${report.pending}.`,report}
+  const originLabel=({'widget':'execução do widget','app-open':'abertura do projeto','widget-touch':'toque na timeline','day-touch':'seleção de dia'} as Record<string,string>)[options.origin]??options.origin
+  const result={state:'success',origin:options.origin,at:Date.now(),message:`Ponte automática (${originLabel}): ${new Date(report.finishedAt).toLocaleString('pt-BR')}. Confirmados: ${report.applied}; pendentes: ${report.pending}.`,report}
   Storage.set('bridge-auto-state',result)
   return result
  }catch{

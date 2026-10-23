@@ -13,17 +13,17 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   const headlineSize=weekHeaderHeadlineSize(date);
   const layout=weekHeaderLayout(date,card,headlineSize);
   const {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight}=layout;
-  ctx.setTextAlignedLeft();ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
+  ctx.setTextAlignedCenter();ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
   ctx.setTextColor(titleWeekdayColor(date,loadResult.holidayDates));
-  ctx.drawTextInRect(headline,new Rect(layout.x,layout.top,card.x+card.width-3-layout.x,card.y+card.height-3-layout.top));
+  ctx.drawTextInRect(headline,new Rect(card.x+3,layout.top,card.width-6,card.y+card.height-3-layout.top));
   const temperatureY=layout.temperatureY;
   ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
-  ctx.drawTextInRect(maximum,new Rect(temperatureLeft,temperatureY,card.x+card.width-3-temperatureLeft,card.y+card.height-3-temperatureY));
+  ctx.drawTextInRect(maximum,new Rect(temperatureLeft,temperatureY,maxWidth,card.y+card.height-3-temperatureY));
   drawTitleWeatherIcon(ctx,titleForecastForDay(date),temperatureLeft+maxWidth+gap/2,
     temperatureY+temperatureSize*0.56,scaleVertical(24));
   ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor));
-  ctx.drawTextInRect(minimum,new Rect(temperatureRight-minWidth,temperatureY,card.x+card.width-3-temperatureRight+minWidth,card.y+card.height-3-temperatureY));
+  ctx.drawTextInRect(minimum,new Rect(temperatureRight-minWidth,temperatureY,minWidth,card.y+card.height-3-temperatureY));
   const countY=layout.countY;
   ctx.setFont(Font.regularMonospacedSystemFont(smallSize));ctx.setTextAlignedCenter();
   ctx.setTextColor(new Color('#D1D1D6',0.96));
@@ -47,7 +47,7 @@ function weekHeaderLayout(date,card,headlineSize) {
   const height=headlineSize+scaleVertical(1.5)+temperatureSize+scaleVertical(1.5)+smallSize*1.2;
   const top=card.y+card.height-height-scaleVertical(2),width=headline.length*headlineSize*0.60;
   const temperatureY=top+headlineSize+scaleVertical(1.5),countY=temperatureY+temperatureSize+scaleVertical(1.5);
-  const x=date.getDay()===0?temperatureRight-width:date.getDay()===6?temperatureLeft:card.x+(card.width-width)/2;
+  const x=card.x+(card.width-width)/2;
   return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width,temperatureY,countY,height};
 }
 
@@ -72,7 +72,7 @@ function weekHeaderHeadlineSize(date) {
   }
   if(dateKey(date)!==dateKey(now))return shared;
   const card=titleDayCardRect(date.getDay());
-  for(let size=scaleFontSize(42);size>shared;size-=0.5){
+  for(let size=scaleFontSize(36);size>shared;size-=0.5){
     if(weekHeaderHeadlineFits(date,card,size))return size;
   }
   return shared;

@@ -73,7 +73,7 @@ async function main(){
    assert.equal(rows.length,3,'Exactly three header rows');
    const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
    headlineSizes.push({date:card.date,size:title[0].state.font.size});
-   assert(title[0].state.font.size>=27,'First row is substantially larger');
+   assert(title[0].state.font.size>=26,'First row retains its hierarchy');
    assert(rows[0]+title[0].state.font.size>=48,'First row baseline moved down');
    assert(rows[1]>=50&&rows[2]>=74,'Lower two rows moved down together');
    assert(temps[0].state.font.size>=22&&counts[0].state.font.size>=17,'Second and third rows enlarged');
@@ -84,12 +84,17 @@ async function main(){
      o.rect.x>temps[0].point.x&&o.rect.x+o.rect.width<temps[1].point.x&&
      Math.abs(o.rect.y+o.rect.height/2-(rows[1]+temps[0].state.font.size*0.56))<1);
    assert(icon,'Weather icon between maximum and minimum in every card');
-   const weekday=new Date(card.date+'T12:00:00').getDay();
-   if(weekday===0)assert(Math.abs(Math.max(...title.map(t=>t.point.x+t.text.length*t.state.font.size*0.60))-Math.max(...temps.map(t=>t.point.x+t.text.length*t.state.font.size*0.62)))<0.01,'Sunday first-row right edge follows second row');
-   if(weekday===6)assert(Math.abs(Math.min(...title.map(t=>t.rect.x))-Math.min(...temps.map(t=>t.rect.x)))<0.01,'Saturday first-row left edge follows second row');
+   const center=card.x+card.width/2;
+   assert.equal(title[0].state.align,'center','Native centered headline');
+   assert(Math.abs(title[0].rect.x+title[0].rect.width/2-center)<0.01,'Headline centered in every card');
+   assert.equal(counts[0].state.align,'center');
+   assert(Math.abs(counts[0].rect.x+counts[0].rect.width/2-center)<0.01,'Counts centered in every card');
+   assert(temps.every(t=>t.state.align==='center'),'Each temperature centered in its own box');
+   assert(Math.abs((temps[0].rect.x+temps[1].rect.x+temps[1].rect.width)/2-center)<0.01,'Temperature/icon group centered in every card');
   }
   assert.equal(new Set(headlineSizes.filter(x=>x.date!=='2026-10-22').map(x=>x.size)).size,1,'Same ordinary headline size including weekends');
   assert(headlineSizes.find(x=>x.date==='2026-10-22').size>headlineSizes.find(x=>x.date==='2026-10-21').size,'Today uses more available headline space');
+  assert(headlineSizes.find(x=>x.date==='2026-10-22').size<=38,'Today slightly smaller than the previous 41');
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
   for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');

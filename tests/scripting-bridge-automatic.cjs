@@ -14,7 +14,7 @@ const cache=new Map();function load(name){if(cache.has(name))return cache.get(na
  assert.equal((await auto.autoSynchronize({origin:'widget'})).state,'unpaired');assert.equal(uploads.length,0);
  client.configure(JSON.stringify({version:1,endpoint:'https://calendar-timeline-bridge.sagittaryuz.chatgpt.site',deviceId:'synthetic-device-id-long-enough',deviceToken:'synthetic-token-long-enough',siteAccess:'synthetic-platform-long-enough'}));
  values.set('test-scope-consent',true);values.set('linked:event','event-id');values.set('linked:reminder','rem-id');
- const report=await auto.autoSynchronize({origin:'widget',budgetMS:4500});assert.equal(report.state,'success');
+ const report=await auto.autoSynchronize({origin:'widget',budgetMS:4500});assert.equal(report.state,'success');assert(report.message.includes('execução do widget'),'Automatic result identifies its trigger');
  for(const sent of uploads){assert.equal(sent.items.length,2);assert(sent.items.some(x=>x.kind==='reminder'&&x.completed));assert(sent.items.some(x=>x.title==='[CT TESTE] Evento EDITADO'));assert(!JSON.stringify(sent).includes('Personal event'));}
  assert.equal(values.get('bridge-event-read').changedFromIdentifierRead,true);
  const before=uploads.length;assert.equal((await auto.autoSynchronize({origin:'widget'})).state,'throttled');assert.equal(uploads.length,before);
