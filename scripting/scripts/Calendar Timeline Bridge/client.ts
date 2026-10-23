@@ -76,15 +76,16 @@ export async function synchronize(){
   const received=await request(config,{op:'sync',items:await items()})
   let applied=0,conflicts=0
   for(const command of received.commands){
+   if(Date.parse(command.leaseUntil)<=Date.now())throw Error('A reserva do comando expirou. Aguarde e execute a sincronização novamente.')
    // A native or transport failure leaves the cloud command pending. The
    // durable journal + command marker recover a save interrupted by iOS.
    const result=await executeCommand(command,api)
-   const ack={op:'result',commandId:command.id,...result}
+   const ack={op:'result',commandId:command.id,leaseToken:command.leaseToken,...result}
    write('result-outbox',ack);await request(config,ack);Storage.remove('result-outbox')
    if(result.status==='applied')applied++;else conflicts++
   }
-  const final=await request(config,{op:'sync',items:await items()})
-  const report={version:'0.1.0',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.commands.length}
+  const final=await request(config,{op:'sync',items:await items(),claim:false})
+  const report={version:'0.1.1',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
   write('last-sync',report);return report
  }finally{syncing=false}
 }

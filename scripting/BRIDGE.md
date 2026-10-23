@@ -1,4 +1,4 @@
-# Calendar Timeline Bridge · prova 0.1.0
+# Calendar Timeline Bridge · prova 0.1.1
 
 Projeto separado do widget para testar ChatGPT ⇄ iPhone. Nenhuma credencial acompanha os arquivos e o widget atual permanece na versão 0.2.5.
 
@@ -15,6 +15,8 @@ Ferramentas do plugin: `bridge_get_status`, `bridge_list_test_items`, `bridge_qu
 O piloto limita uma criação de cada tipo por pareamento, não envia agenda pessoal, não permite excluir itens, não modifica convidados/recorrência e rejeita dados fora do escopo. Alterações feitas manualmente nos dois itens são enviadas na próxima execução. Se houver edição concorrente, a ponte retorna conflito em vez de sobrescrever.
 
 Em falha, a caixa de saída e o diário local retomam o comando na próxima execução. Não apague o projeto nem seu armazenamento para tentar resolver uma falha: isso remove o Keychain e o histórico local da prova. No painel é possível revogar a conexão; isso não apaga os itens Apple. Para colar uma nova configuração, abra `scripting://run/Calendar%20Timeline%20Bridge?configure=1`. Não revogue/repareie para contornar erros sem antes conferir os itens existentes.
+
+Versão 0.1.1: cada rodada reserva os comandos por cinco minutos para reduzir colisões entre execuções simultâneas. Se o iOS interromper a execução antes da confirmação, aguarde a reserva expirar e execute novamente; o diário e o marcador no item recuperam a gravação quando possível. Isso não é uma garantia distribuída de execução exatamente uma vez: uma suspensão longa no meio da chamada nativa ainda exige conferência no aparelho. O snapshot final não reserva comandos que chegaram durante a rodada.
 
 Esta versão não comprova sincronização automática com tela bloqueada. Atalhos pode chamar o Intent de sincronização depois do pareamento, mas isso não equivale a um serviço continuamente ativo.
 

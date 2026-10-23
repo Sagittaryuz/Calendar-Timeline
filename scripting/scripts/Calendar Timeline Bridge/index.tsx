@@ -15,7 +15,7 @@ async function main(){
   }
   const report=await synchronize()
   await Navigation.present(<NavigationStack><VStack spacing={14} padding={20} navigationTitle="Calendar Timeline Bridge">
-   <Text>Ponte de teste · versão 0.1.0</Text>
+   <Text>Ponte de teste · versão 0.1.1</Text>
    <Text>Última execução: {new Date(report.finishedAt).toLocaleString('pt-BR')}</Text>
    <Text>Gravações confirmadas nesta execução: {report.applied}. Conflitos: {report.conflicts}. Pendentes: {report.pending}.</Text>
    <Text>Somente os dois itens [CT TESTE] são compartilhados. Alterações feitas neles no Calendário ou Lembretes serão enviadas na próxima execução.</Text>
