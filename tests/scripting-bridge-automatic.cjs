@@ -37,7 +37,7 @@ const cache=new Map();function load(name){if(cache.has(name))return cache.get(na
  queryRows=[];await assert.rejects(client.synchronize(),/ausente na nova consulta/);assert.equal(uploads.length,beforeFailures,'Never upload stale identifier lookup if refreshed query failed');
  queryRows=[edited,{...edited,title:'[CT TESTE] Conflicting duplicate'}];await assert.rejects(client.synchronize(),/ambíguo/);
  queryRows=[{...edited,notes:'ct-bridge-command:somebody-else'}];await assert.rejects(client.synchronize(),/vínculo/);
- queryRows=[edited];mode='hanging';const started=Date.now();await assert.rejects(client.synchronize({budgetMS:200}),/Tempo de conexão excedido/);assert(Date.now()-started<1000,'Bounded network wait');
+ queryRows=[edited];mode='hanging';const started=Date.now();await assert.rejects(client.synchronize({budgetMS:200}),/Tempo de espera excedido/);assert(Date.now()-started<1000,'Bounded network wait');
  mode='offline';assert.equal((await auto.autoSynchronize({origin:'widget',force:true})).state,'deferred');assert(!JSON.stringify(values.get('bridge-auto-state')).includes('synthetic-token'));
  const order=[];await touch.refreshFromWidget({sync:async()=>{order.push('sync');throw Error('offline')},load:async()=>{order.push('local');throw Error('local unavailable')},failed:()=>order.push('diagnostic'),reload:()=>{order.push('reload');reloads++},open:async url=>{assert.equal(url,'calshow://');order.push('calendar');return true}});
  assert.deepEqual(order,['sync','local','diagnostic','reload','calendar']);assert.equal(reloads,1);

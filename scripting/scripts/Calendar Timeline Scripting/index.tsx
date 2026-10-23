@@ -1,4 +1,5 @@
 import { readLines } from './bridge-read-state'
+import { previousAttemptLines } from './bridge-attempts'
 import { Navigation, NavigationStack, ScrollView, VStack, Text, Script, Widget } from 'scripting'
 import { BridgeLauncher, showBridge } from './bridge'
 import { autoSynchronize } from './bridge-auto'
@@ -7,6 +8,8 @@ import { loadModel } from './model'
 import { VERSION, failureDetails } from './diagnostics'
 
 async function main(){
+  // Snapshot before app-open sync so success cannot hide the prior offline attempt.
+  const previousAttempts=previousAttemptLines()
   try{
     if(Script.queryParameters.refresh==='1'){
       await refreshFromWidget({
@@ -26,6 +29,7 @@ async function main(){
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><ScrollView><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
       <BridgeLauncher/>
+      {previousAttempts.map((line:string,index:number)=><Text key={'attempt-'+index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
       {readLines(Storage.get('bridge-read-items'),Storage.get<any[]>('bridge-local-items')??[]).map((line:string,index:number)=><Text key={index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
       <Text fixedSize={{horizontal:false,vertical:true}}>{(()=>{const agenda=Storage.get<any>('bridge-agenda-status');return agenda?.accepted?`Agenda real: ${agenda.count} itens enviados (${agenda.state}) em ${new Date(agenda.receivedAt).toLocaleString('pt-BR')}. Janela: ${agenda.window?.startDay} a ${agenda.window?.endDay} (fim exclusivo).`:'Agenda real: envio ainda não confirmado nesta execução.'})()}</Text>
       <Text>Ponte automática ao abrir, tocar e nas execuções do widget autorizadas pelo iOS. Não há serviço contínuo garantido com a tela bloqueada.</Text>
@@ -45,6 +49,7 @@ async function main(){
     const detail=failureDetails(error)
     await Navigation.present(<NavigationStack><ScrollView><VStack spacing={12} padding={16} navigationTitle="Diagnóstico Calendar Timeline">
       <Text>Falha ao preparar a timeline. Este erro não confirma falta de permissão.</Text>
+      {previousAttempts.map((line:string,index:number)=><Text key={'attempt-error-'+index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
       <Text>{detail}</Text>
       <Text>Envie uma captura desta tela para identificar a causa. O diagnóstico fica somente no aparelho.</Text>
     </VStack></ScrollView></NavigationStack>)

@@ -1,4 +1,5 @@
 import { VERSION } from './diagnostics'
+import { beginAttempt, finishAttempt, bridgeFailure, safeFailure } from './bridge-attempts'
 import { synchronizeReal } from './bridge-real'
 import { agendaReadState, disagreesWithAgenda } from './bridge-read-state'
 import { collectAgenda } from './bridge-agenda'
@@ -64,13 +65,15 @@ const api={
 let deadline=Infinity
 async function request(config:any,body:any):Promise<any>{
  const remaining=Math.min(20000,deadline-Date.now())
- if(remaining<150)throw Error("Tempo da rodada automática encerrado; a fila será retomada na próxima execução.")
+ if(remaining<150)throw bridgeFailure('budget',body.op)
  let timer:any
  try{return await Promise.race([(async()=>{
-  const response=await fetch(ENDPOINT+'/api/device',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.deviceToken,'OAI-Sites-Authorization':'Bearer '+config.siteAccess},body:JSON.stringify(body)})
-  if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Acesso à ponte não confirmado. Confira o pareamento no painel privado.')
-  const data:any=await response.json();if(!response.ok)throw Error(data.error??'Ponte indisponível');return data
- })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de conexão excedido; a fila será retomada na próxima execução.')),remaining)})])}finally{clearTimeout(timer)}
+  let response:any
+  try{response=await fetch(ENDPOINT+'/api/device',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.deviceToken,'OAI-Sites-Authorization':'Bearer '+config.siteAccess},body:JSON.stringify(body)})}catch{throw bridgeFailure('connection',body.op)}
+  if(!response.headers.get('content-type')?.includes('application/json'))throw bridgeFailure('response',body.op)
+  let data:any;try{data=await response.json()}catch{throw bridgeFailure('response',body.op)}
+  if(!response.ok)throw bridgeFailure('http',body.op);return data
+ })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(bridgeFailure('timeout',body.op)),remaining)})])}finally{clearTimeout(timer)}
 }
 async function items(){
  const result=[]
@@ -86,7 +89,9 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
  if(syncing)throw Error('Sincronização já está em andamento nesta execução')
  syncing=true
  deadline=options.budgetMS?Date.now()+options.budgetMS:Infinity
+ let attempt:any
  try{
+  attempt=beginAttempt(options.origin)
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
   const meta={clientVersion:VERSION,origin:options.origin??'manual',linkedReadIds:{event:linked('event'),reminder:linked('reminder')}}
   // Real agenda upload is independent of the test command path. A stale test
@@ -96,12 +101,12 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
    let timer:any
    try{
     const remaining=Math.max(150,Math.min(10000,deadline-Date.now()-300))
-    const snapshot:any=await Promise.race([collectAgenda(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de leitura da agenda excedido')),remaining)})])
+    const snapshot:any=await Promise.race([collectAgenda(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(bridgeFailure('timeout','native-read')),remaining)})])
     const result=await request(config,{op:'agenda',snapshot,meta})
     agenda={...result,coverage:result.coverage??snapshot.coverage}
     write('bridge-agenda-status',agenda)
     if(result.accepted){reads=agendaReadState(snapshot,{event:linked('event'),reminder:linked('reminder')},result);write('bridge-read-items',reads)}
-   }catch{agenda={state:'deferred',at:new Date().toISOString()};write('bridge-agenda-status',agenda)}finally{clearTimeout(timer)}
+   }catch(error){agenda={state:'deferred',at:new Date().toISOString(),failure:safeFailure(error)};write('bridge-agenda-status',agenda)}finally{clearTimeout(timer)}
   }
   // Personal commands never depend on the stale legacy pilot lookup.
   const realWrites=Storage.get<boolean>('real-agenda-disabled')===true?null:await synchronizeReal(body=>request(config,body),VERSION,()=>deadline-Date.now())
@@ -124,7 +129,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   }
   const readOnlyReport=()=>{
    const report={version:VERSION,finishedAt:new Date().toISOString(),applied:0,conflicts:0,pending:null,agenda,realWrites,testState:reads?.states.event==='confirmed'?'agenda-read':'unavailable',commandState:'not-checked'}
-   write('last-sync',report);return report
+   write('last-sync',report);finishAttempt(attempt,report);return report
   }
   let initialItems:any[]
   try{initialItems=await items()}catch(error){
@@ -155,6 +160,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   if(final.warnings?.length)throw Error('A ponte preservou uma versão mais recente do evento; envio adiado.')
   write('bridge-local-items',finalItems)
   const report={version:VERSION,finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount,agenda,realWrites,testState:reads?.states.event==='confirmed'?'agenda-read':'ok',commandState:'checked'}
-  write('last-sync',report);return report
- }finally{syncing=false;deadline=Infinity}
+  write('last-sync',report);finishAttempt(attempt,report);return report
+ }catch(error){if(attempt)finishAttempt(attempt,undefined,error);throw error}
+ finally{syncing=false;deadline=Infinity}
 }
