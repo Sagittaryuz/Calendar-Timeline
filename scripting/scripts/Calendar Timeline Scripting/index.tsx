@@ -29,7 +29,7 @@ async function main(){
       {readLines(Storage.get('bridge-read-items'),Storage.get<any[]>('bridge-local-items')??[]).map((line:string,index:number)=><Text key={index} fixedSize={{horizontal:false,vertical:true}}>{line}</Text>)}
       <Text fixedSize={{horizontal:false,vertical:true}}>{(()=>{const agenda=Storage.get<any>('bridge-agenda-status');return agenda?.accepted?`Agenda real: ${agenda.count} itens enviados (${agenda.state}) em ${new Date(agenda.receivedAt).toLocaleString('pt-BR')}. Janela: ${agenda.window?.startDay} a ${agenda.window?.endDay} (fim exclusivo).`:'Agenda real: envio ainda não confirmado nesta execução.'})()}</Text>
       <Text>Ponte automática ao abrir, tocar e nas execuções do widget autorizadas pelo iOS. Não há serviço contínuo garantido com a tela bloqueada.</Text>
-      <Text>A ponte compartilha sua semana atual e a próxima para consulta privada: títulos, datas, horários, calendário/lista e conclusão. Notas e convidados ficam no iPhone. Escritas remotas continuam restritas aos dois testes.</Text>
+      <Text>A ponte compartilha sua semana atual e a próxima para consulta privada: títulos, datas, horários, calendário/lista e conclusão. Notas e convidados ficam no iPhone. O ChatGPT pode solicitar criação/edição de eventos e lembretes reais e conclusão/reabertura de lembretes. A gravação só é confirmada após releitura no iPhone. Séries e itens com participantes são apenas consultados.</Text>
       <Text>Versão de teste para Scripting · {VERSION}</Text>
       <Text>Preparação local: {Storage.get<any>('render-diagnostic')?.elapsedMS??'—'} ms. Isso não mede o desenho final na Tela de Início.</Text>
       <Text>Motor original: {model.version}. Dia: {model.focusDate}.</Text>

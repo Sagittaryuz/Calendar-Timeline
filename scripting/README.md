@@ -163,3 +163,12 @@ node tests/agenda-priority.cjs
 ```
 
 Documentação consultada: https://scriptingapp.github.io/llms.txt — Canvas, UIImage, CalendarEvent, Reminder, Location, DateFormatter, Storage, Keychain, fetch, Button, Widget, AppIntent, Script, ZStack, position, clipped e blur. Skill oficial de desenvolvimento: https://github.com/ScriptingApp/scripting-app-development.
+
+
+## 0.2.14 — escrita pessoal pela ponte
+
+A mesma ponte privada agora oferece bridge_list_calendars, bridge_get_item e bridge_queue_change para criação/edição de eventos e lembretes reais e conclusão/reabertura de lembretes. Atualize este projeto pelo Git e abra-o para anunciar os destinos de escrita. Não refaça o pareamento. A fila pessoal funciona independentemente dos checkpoints dos dois testes antigos. Nenhuma escrita pessoal é feita apenas por instalar ou abrir: é necessário um comando solicitado pelo proprietário no ChatGPT.
+
+A confirmação continua exigindo gravação e releitura no iPhone. A escrita é suspensa em conflito, permissão insuficiente, recorrência ou participantes. Notas/alarmes existentes são preservados; um marcador em novos itens permite recuperação de criação interrompida. Não há exclusão remota. Consulta/descoberta continua na semana atual e próxima; lembretes sem data não aparecem na consulta semanal. Vencimentos de lembretes têm precisão de minuto; dias inteiros usam fim exclusivo. Sem garantia de execução contínua ou imediata com iPhone bloqueado. Um resultado pendente não significa gravação.
+
+Validação local cobre o protocolo, transporte e banco SQLite com APIs nativas simuladas. A primeira escrita real da 0.2.14 depende de atualizar e executar no aparelho. O widget, sua geometria e os arquivos Scriptable originais foram preservados. Rollback: release anterior 0.2.13, mantendo o armazenamento e o pareamento; ela não processa a fila pessoal. Código vem do Git; o Drive armazena somente backup privado sem credenciais ou agenda pessoal.

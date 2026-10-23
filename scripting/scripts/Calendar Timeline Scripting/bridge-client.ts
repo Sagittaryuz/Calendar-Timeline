@@ -1,4 +1,5 @@
 import { VERSION } from './diagnostics'
+import { synchronizeReal } from './bridge-real'
 import { agendaReadState, disagreesWithAgenda } from './bridge-read-state'
 import { collectAgenda } from './bridge-agenda'
 import { readLinkedEvent } from './bridge-event-reader'
@@ -102,6 +103,13 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
     if(result.accepted){reads=agendaReadState(snapshot,{event:linked('event'),reminder:linked('reminder')},result);write('bridge-read-items',reads)}
    }catch{agenda={state:'deferred',at:new Date().toISOString()};write('bridge-agenda-status',agenda)}finally{clearTimeout(timer)}
   }
+  // Personal commands never depend on the stale legacy pilot lookup.
+  const realWrites=Storage.get<boolean>('real-agenda-disabled')===true?null:await synchronizeReal(body=>request(config,body),VERSION,()=>deadline-Date.now())
+  if(realWrites?.applied&&deadline-Date.now()>1500){
+   const snapshot=await collectAgenda(),result=await request(config,{op:'agenda',snapshot,meta})
+   agenda={...result,coverage:result.coverage??snapshot.coverage};write('bridge-agenda-status',agenda)
+   if(result.accepted){reads=agendaReadState(snapshot,{event:linked('event'),reminder:linked('reminder')},result);write('bridge-read-items',reads)}
+  }
   // Replay a result whose upload failed before any new native writes.
   const outbox=Storage.get<any>('result-outbox')
   if(outbox){
@@ -115,7 +123,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
    await request(config,outbox);Storage.remove('result-outbox')
   }
   const readOnlyReport=()=>{
-   const report={version:VERSION,finishedAt:new Date().toISOString(),applied:0,conflicts:0,pending:null,agenda,testState:reads?.states.event==='confirmed'?'agenda-read':'unavailable',commandState:'not-checked'}
+   const report={version:VERSION,finishedAt:new Date().toISOString(),applied:0,conflicts:0,pending:null,agenda,realWrites,testState:reads?.states.event==='confirmed'?'agenda-read':'unavailable',commandState:'not-checked'}
    write('last-sync',report);return report
   }
   let initialItems:any[]
@@ -146,7 +154,7 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   const final=received.commands.length?await request(config,{op:'sync',items:finalItems,claim:false,meta}):received
   if(final.warnings?.length)throw Error('A ponte preservou uma versão mais recente do evento; envio adiado.')
   write('bridge-local-items',finalItems)
-  const report={version:VERSION,finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount,agenda,testState:reads?.states.event==='confirmed'?'agenda-read':'ok',commandState:'checked'}
+  const report={version:VERSION,finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount,agenda,realWrites,testState:reads?.states.event==='confirmed'?'agenda-read':'ok',commandState:'checked'}
   write('last-sync',report);return report
  }finally{syncing=false;deadline=Infinity}
 }

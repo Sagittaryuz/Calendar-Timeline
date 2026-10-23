@@ -31,7 +31,7 @@ export async function collectAgenda(now=new Date(),host:any={events:(a:Date,b:Da
   let invalid=0
   for(const native of result.value as any[]){
    try{
-    const item:any={kind,id:native.identifier,title:native.title,calendarId:native.calendar?.identifier??'unknown',calendarTitle:native.calendar?.title??'',calendarType:native.calendar?.type??'unknown'}
+    const item:any={kind,id:native.identifier,title:native.title,calendarId:native.calendar?.identifier??'unknown',calendarTitle:native.calendar?.title??'',calendarType:native.calendar?.type??'unknown',writeAccess:{writable:native.calendar?.allowsContentModifications===true,recurring:typeof native.hasRecurrenceRules==='boolean'?native.hasRecurrenceRules:null,participants:typeof native.hasAttendees==='boolean'?native.hasAttendees:null}}
     if(kind==='event'){
      const start=new Date(native.startDate),end=new Date(native.endDate)
      if(!Number.isFinite(+start)||!Number.isFinite(+end)||+end<=+start)throw Error('Invalid interval')

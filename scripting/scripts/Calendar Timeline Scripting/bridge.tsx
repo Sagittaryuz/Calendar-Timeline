@@ -14,7 +14,7 @@ export async function showBridge(reconfigure=false,onStatus?:(message:string)=>v
   }
   if(!Storage.get<boolean>('test-scope-consent')){
    onStatus?.("Aguardando sua autorização para os dois itens de teste…")
-   const yes=await Dialog.confirm({title:'Conectar agenda e testes',message:'Este projeto pode criar e editar somente o lembrete e o evento [CT TESTE] enviados pela ponte privada. Pode concluir/reabrir o lembrete. Sua agenda real da semana atual e próxima também é enviada em modo de consulta; notas e convidados não são enviados. Os itens usam o calendário/lista padrão do iPhone.',confirmLabel:'Executar prova',cancelLabel:'Cancelar'})
+   const yes=await Dialog.confirm({title:'Conectar agenda e testes',message:'Este projeto pode criar e editar eventos e lembretes enviados pela sua ponte privada e concluir/reabrir lembretes reais. Séries recorrentes e itens com participantes ficam somente para consulta. Sua agenda real da semana atual e próxima também é enviada em modo de consulta; notas e convidados não são enviados. Os itens usam o calendário/lista padrão do iPhone.',confirmLabel:'Executar prova',cancelLabel:'Cancelar'})
    if(!yes){onStatus?.("Prova cancelada. Nenhum dado foi enviado.");return}
    if(!Storage.set('test-scope-consent',true))throw Error('Não foi possível guardar a autorização local.')
   }
@@ -27,8 +27,8 @@ export async function showBridge(reconfigure=false,onStatus?:(message:string)=>v
    <Text>Ponte Calendar Timeline · {VERSION}</Text>
    <Text>Última execução: {new Date(report.finishedAt).toLocaleString('pt-BR')}</Text>
    <Text>{readStatus(report)} {commandStatus(report)}</Text>
-   <Text>A semana atual e a próxima são compartilhadas para consulta. Somente os dois itens [CT TESTE] aceitam alterações remotas.</Text>
-   <Text>Volte ao ChatGPT e use o plugin Calendar Timeline Bridge para consultar o resultado ou enviar uma alteração de teste.</Text>
+   <Text>A semana atual e a próxima são compartilhadas para consulta. Itens reais graváveis, sem recorrência ou participantes, aceitam alterações pela fila privada.</Text>
+   <Text>Volte ao ChatGPT e use o plugin Calendar Timeline Bridge para consultar o resultado ou solicitar uma alteração na sua agenda.</Text>
    <Text>A ponte roda ao executar este projeto. Atualização contínua com o iPhone bloqueado ainda não foi comprovada.</Text>
 
   </VStack></NavigationStack>)
