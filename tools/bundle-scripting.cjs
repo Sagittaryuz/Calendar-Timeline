@@ -5,6 +5,7 @@ const root=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Script
 const sources=path.resolve(__dirname,'../scripting/entrypoints');
 const entries=fs.readdirSync(sources).filter(n=>n.endsWith('.tsx'));
 const version=JSON.parse(fs.readFileSync(path.join(root,'script.json'),'utf8')).version;
+if(!fs.existsSync(path.join(root,'pro-common.ts')))throw Error('O pacote ativo usa a base anterior; o gerador Pro foi desativado. Use npm run build:scripting para verificar a recuperação.');
 async function build(name){
  const result=await esbuild({stdin:{contents:fs.readFileSync(path.join(sources,name),'utf8'),sourcefile:name,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',platform:'neutral',external:['scripting'],target:'es2020',jsx:'preserve',metafile:true,plugins:[{name:'canonical-entries',setup(b){b.onLoad({filter:/\.tsx$/},args=>{
   if(path.dirname(args.path)===root&&entries.includes(path.basename(args.path)))return {contents:fs.readFileSync(path.join(sources,path.basename(args.path)),'utf8'),loader:'tsx',resolveDir:root};
