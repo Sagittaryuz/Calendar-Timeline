@@ -11,12 +11,12 @@ export function projectReal(kind:string,n:any){
  }else {i.due=agendaDate(n.dueDateComponents);i.completed=!!n.isCompleted}
  return i
 }
-function assertWritable(n:any){
- if(!n||!n.calendar?.allowsContentModifications||n.hasRecurrenceRules!==false||n.hasAttendees!==false||['birthday','subscription'].includes(n.calendar.type))throw Error('Item indisponível, somente leitura, recorrente ou com participantes; nenhuma alteração foi autorizada nesse formato.')
+function assertWritable(n:any,kind:string){
+ if(!n||!n.calendar?.allowsContentModifications||typeof n.hasRecurrenceRules!=='boolean'||kind==='event'&&n.hasRecurrenceRules||n.hasAttendees!==false||['birthday','subscription'].includes(n.calendar.type))throw Error('Item indisponível, somente leitura, evento recorrente ou com participantes.')
 }
 export async function realCapabilities(version:string){
  const lists=await Promise.all([Calendar.forEvents(),Calendar.forReminders()])
- return {protocol:1,clientVersion:version,at:new Date().toISOString(),calendars:lists.flatMap((list,index)=>list.map(c=>({kind:index?'reminder':'event',id:c.identifier,title:c.title??'Sem título',writable:c.allowsContentModifications===true&&!['birthday','subscription'].includes(c.type)})))}
+ return {protocol:1,clientVersion:version,at:new Date().toISOString(),features:['recurring-reminders-v1'],calendars:lists.flatMap((list,index)=>list.map(c=>({kind:index?'reminder':'event',id:c.identifier,title:c.title??'Sem título',writable:c.allowsContentModifications===true&&!['birthday','subscription'].includes(c.type)})))}
 }
 async function calendarFor(c:any){
  const lists=c.kind==='event'?await Calendar.forEvents():await Calendar.forReminders()
@@ -68,14 +68,15 @@ export async function executeReal(c:any){
  }else n=await readReal(c,c.itemId)
  if(!n)return {status:'conflict',error:'Item não encontrado no iPhone; nenhuma recriação foi feita.'}
  if(!isNew){
-  try{assertWritable(n)}catch{return {status:'conflict',error:'O item não permite esta alteração.'}}
+  try{assertWritable(n,c.kind)}catch{return {status:'conflict',error:'O item não permite esta alteração.'}}
   const current=projectReal(c.kind,n)
   if(journal&&matches(c,current)){write(key,{state:'applied',nativeId:n.identifier});return {status:'applied',item:current}}
+  if(journal?.state==='written'||journal?.state==='applied')return {status:'conflict',error:'A gravação anterior não corresponde à releitura. Nenhuma segunda conclusão ou edição foi executada.'}
   if(c.action==='create'||writeRevision(current)!==c.expectedRevision)return {status:'conflict',error:'O item mudou desde a captura; consulte a nova revisão.'}
   // Requery through the same range API as the real agenda before writing.
   n=await readReal(c,c.itemId)
   if(!n||writeRevision(projectReal(c.kind,n))!==c.expectedRevision)return {status:'conflict',error:'Leitura mudou antes da gravação.'}
-  assertWritable(n)
+  assertWritable(n,c.kind)
  }
  write(key,{state:'started',nativeId:n.identifier??null})
  const p=c.payload
@@ -90,7 +91,7 @@ export async function executeReal(c:any){
  await n.save()
  if(!n.identifier)throw Error('A gravação não retornou identificador; aguarde a recuperação da fila.')
  write(key,{state:'written',nativeId:n.identifier})
- const reread=await readReal(c,n.identifier);assertWritable(reread)
+ const reread=await readReal(c,n.identifier);assertWritable(reread,c.kind)
  const item=projectReal(c.kind,reread)
  if(!matches(c,item))throw Error('A releitura ainda não confirmou a alteração; nenhuma nova gravação será iniciada.')
  write(key,{state:'applied',nativeId:n.identifier})
