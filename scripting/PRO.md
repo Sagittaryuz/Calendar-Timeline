@@ -1,4 +1,4 @@
-# Calendar Timeline 0.3.1
+# Calendar Timeline 0.3.2
 
 Atualize o mesmo projeto pela branch `scripting`, preservando pareamento e Keychain.
 Inclui o registro local de tentativas da 0.2.15, e a correção de lembretes recorrentes no servidor 0.3.1.
@@ -44,3 +44,9 @@ Controle, notificações/IA e primeira criação desta versão. Home exige vers�
 
 Rollback: `scripting-v0.2.15-alpha.1`, preservando armazenamento/pareamento. O toque
 antigo volta a passar pelo Scripting. Código vem do Git; Drive é backup privado.
+
+### Correção de segundo plano 0.3.2
+
+A sincronização termina antes de Widget.present, que destrói o contexto de execução. A fila pessoal é processada antes da captura completa, para não gastar todo o orçamento lendo a agenda. Sem erro de rede, o script tenta sincronizar a cada execução do widget concedida pelo iOS, sem precisar abrir o app. A política solicita nova execução após 1 minuto, mas não constitui agendamento periódico garantido. O iOS pode espaçar as execuções.
+
+Referências oficiais: https://scriptingapp.github.io/guide/Widget/Widget%20Quick%20Start e https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date .

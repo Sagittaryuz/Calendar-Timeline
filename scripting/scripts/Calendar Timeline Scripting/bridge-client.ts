@@ -94,6 +94,8 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
   attempt=beginAttempt(options.origin)
   const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
   const meta={clientVersion:VERSION,origin:options.origin??'manual',linkedReadIds:{event:linked('event'),reminder:linked('reminder')}}
+  // Process queued commands before an expensive full agenda capture.
+  const realWrites=Storage.get<boolean>('real-agenda-disabled')===true?null:await synchronizeReal(body=>request(config,body),VERSION,()=>deadline-Date.now())
   // Real agenda upload is independent of the test command path. A stale test
   // event must not prevent a read-only weekly snapshot reaching the owner.
   let agenda:any=null,reads:any=null
@@ -107,13 +109,6 @@ export async function synchronize(options:{budgetMS?:number;origin?:string}={}){
     write('bridge-agenda-status',agenda)
     if(result.accepted){reads=agendaReadState(snapshot,{event:linked('event'),reminder:linked('reminder')},result);write('bridge-read-items',reads)}
    }catch(error){agenda={state:'deferred',at:new Date().toISOString(),failure:safeFailure(error)};write('bridge-agenda-status',agenda)}finally{clearTimeout(timer)}
-  }
-  // Personal commands never depend on the stale legacy pilot lookup.
-  const realWrites=Storage.get<boolean>('real-agenda-disabled')===true?null:await synchronizeReal(body=>request(config,body),VERSION,()=>deadline-Date.now())
-  if(realWrites?.applied&&deadline-Date.now()>1500){
-   const snapshot=await collectAgenda(),result=await request(config,{op:'agenda',snapshot,meta})
-   agenda={...result,coverage:result.coverage??snapshot.coverage};write('bridge-agenda-status',agenda)
-   if(result.accepted){reads=agendaReadState(snapshot,{event:linked('event'),reminder:linked('reminder')},result);write('bridge-read-items',reads)}
   }
   // Replay a result whose upload failed before any new native writes.
   const outbox=Storage.get<any>('result-outbox')
