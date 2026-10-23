@@ -1,0 +1,91 @@
+import { assertTest, ENDPOINT, executeCommand, project, validateConfig } from './bridge-protocol'
+const CONFIG='ct-bridge-config-v1'
+function write(key:string,value:any){if(!Storage.set(key,value))throw Error('Não foi possível guardar o estado local; nenhuma nova operação será iniciada.')}
+export function configure(raw:string){const config=validateConfig(JSON.parse(raw));const previous=configuration();if(!Keychain.set(CONFIG,JSON.stringify(config),{accessibility:'first_unlock_this_device',synchronizable:false}))throw Error('Falha ao guardar a credencial no Keychain');if(previous?.deviceId!==config.deviceId)Storage.remove('result-outbox');return config}
+export function configuration(){const raw=Keychain.get(CONFIG);return raw?validateConfig(JSON.parse(raw)):null}
+function linked(kind:string){return Storage.get<string>('linked:'+kind)}
+const api={
+ get:async(kind:string,id:string)=>kind==='event'?CalendarEvent.get(id):Reminder.get(id),
+ getLinked:linked,
+ link:(kind:string,id:string)=>write('linked:'+kind,id),
+ loadJournal:(id:string)=>Storage.get<any>('journal:'+id),
+ saveJournal:(id:string,value:any)=>write('journal:'+id,value),
+ make:async(kind:string)=>{
+  const calendar=kind==='event'?await Calendar.defaultForEvents():await Calendar.defaultForReminders()
+  if(!calendar?.allowsContentModifications)throw Error('O calendário/lista padrão não permite gravar o item de teste.')
+  const item=kind==='event'?new CalendarEvent():new Reminder();item.calendar=calendar;return item
+ },
+ recover:async(command:any)=>{
+  const calendarId=Storage.get<string>('calendar:'+command.kind)
+  if(!calendarId)return null
+  const calendars=(command.kind==='event'?await Calendar.forEvents():await Calendar.forReminders()).filter(c=>c.identifier===calendarId)
+  if(!calendars.length)return null
+  const items=command.kind==='event'?await CalendarEvent.getAll(new Date(Date.now()-15*86400000),new Date(Date.now()+15*86400000),calendars):await Reminder.getAll(calendars)
+  const found=items.filter(x=>x.notes?.includes('ct-bridge-command:'+command.id))
+  if(found.length>1)throw Error('Mais de uma cópia do item de teste foi encontrada; confira no aparelho.')
+  return found[0]??null
+ },
+ apply:async(command:any,item:any)=>{
+  const p=command.payload
+  if(command.action==='create'){
+   item.notes='Calendar Timeline Bridge — item exclusivo da prova.\nct-bridge-command:'+command.id
+   write('calendar:'+command.kind,item.calendar.identifier)
+  }
+  if(p.title!==undefined)item.title=p.title
+  if(command.kind==='event'){
+   item.isAllDay=false
+   if(p.start){item.startDate=new Date(p.start);item.endDate=new Date(p.end)}
+  }else{
+   if('due'in p){
+    if(p.due===null)item.dueDateComponents=null
+    else if(/^\d{4}-\d\d-\d\d$/.test(p.due)){const [year,month,day]=p.due.split('-').map(Number);item.dueDateComponents=new DateComponents({year,month,day})}
+    else item.dueDateComponents=DateComponents.fromDate(new Date(p.due))
+   }
+   if(command.action==='complete')item.isCompleted=true
+   if(command.action==='reopen')item.isCompleted=false
+  }
+  await item.save()
+ }
+}
+async function request(config:any,body:any):Promise<any>{
+ let timer:any
+ try{return await Promise.race([(async()=>{
+  const response=await fetch(ENDPOINT+'/api/device',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.deviceToken,'OAI-Sites-Authorization':'Bearer '+config.siteAccess},body:JSON.stringify(body)})
+  if(!response.headers.get('content-type')?.includes('application/json'))throw Error('Acesso à ponte não confirmado. Confira o pareamento no painel privado.')
+  const data:any=await response.json();if(!response.ok)throw Error(data.error??'Ponte indisponível');return data
+ })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de conexão excedido; a fila será retomada na próxima execução.')),20000)})])}finally{clearTimeout(timer)}
+}
+async function items(){
+ const result=[]
+ for(const kind of ['reminder','event']){
+  const id=linked(kind);if(!id)continue
+  const item=await api.get(kind,id)
+  if(item){assertTest(item);result.push(project(kind,item))}
+ }
+ return result
+}
+let syncing=false
+export async function synchronize(){
+ if(syncing)throw Error('Sincronização já está em andamento nesta execução')
+ syncing=true
+ try{
+  const config=configuration();if(!config)throw Error('Pareie o projeto pelo painel privado primeiro.')
+  // Replay a result whose upload failed before any new native writes.
+  const outbox=Storage.get<any>('result-outbox')
+  if(outbox){await request(config,outbox);Storage.remove('result-outbox')}
+  const received=await request(config,{op:'sync',items:await items()})
+  let applied=0,conflicts=0
+  for(const command of received.commands){
+   if(Date.parse(command.leaseUntil)<=Date.now())throw Error('A reserva do comando expirou. Aguarde e execute a sincronização novamente.')
+   // A native or transport failure leaves the cloud command pending. The
+   // durable journal + command marker recover a save interrupted by iOS.
+   const result=await executeCommand(command,api)
+   const ack={op:'result',commandId:command.id,leaseToken:command.leaseToken,...result}
+   write('result-outbox',ack);await request(config,ack);Storage.remove('result-outbox')
+   if(result.status==='applied')applied++;else conflicts++
+  }
+  const final=await request(config,{op:'sync',items:await items(),claim:false})
+  const report={version:'0.1.1',finishedAt:new Date().toISOString(),applied,conflicts,pending:final.pendingCount}
+  write('last-sync',report);return report
+ }finally{syncing=false}
+}

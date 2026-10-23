@@ -1,3 +1,7 @@
+## 0.2.6 — ponte incluída no widget
+
+Atualize o projeto existente pelo Git no Scripting. Na tela do aplicativo, toque em **Ponte com ChatGPT** para parear e executar a prova. Não é necessário outro projeto. Veja [BRIDGE.md](BRIDGE.md). O pareamento inicial ainda é necessário. O desenho do widget foi preservado e não aguarda a rede da ponte.
+
 # Calendar Timeline para Scripting — teste 0.2.5
 
 Versão experimental separada do Scriptable. O motor vem do arquivo Git `Calendar Timeline`, versão 2026.10.11.6. Os arquivos originais e o carregador não são alterados.

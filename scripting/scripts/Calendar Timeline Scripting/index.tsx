@@ -1,13 +1,20 @@
-import { Navigation, NavigationStack, VStack, Text, Script, Widget } from 'scripting'
+import { Button, Navigation, NavigationStack, VStack, Text, Script, Widget } from 'scripting'
+import { showBridge } from './bridge'
 import { loadModel } from './model'
 import { VERSION, failureDetails } from './diagnostics'
 
 async function main(){
   try{
+    if(Script.queryParameters.bridge==='1'||Script.queryParameters.configure==='1'){
+      await showBridge(Script.queryParameters.configure==='1')
+      return
+    }
     // The first foreground execution obtains the iOS permissions used by the widget.
     const model=await loadModel()
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
+      <Button title="Ponte com ChatGPT" action={()=>showBridge()}/>
+      <Text>A ponte compartilha somente os dois itens de teste após o pareamento privado.</Text>
       <Text>Versão de teste para Scripting · {VERSION}</Text>
       <Text>Preparação local: {Storage.get<any>('render-diagnostic')?.elapsedMS??'—'} ms. Isso não mede o desenho final na Tela de Início.</Text>
       <Text>Motor original: {model.version}. Dia: {model.focusDate}.</Text>
@@ -27,6 +34,6 @@ async function main(){
       <Text>Envie uma captura desta tela para identificar a causa. O diagnóstico fica somente no aparelho.</Text>
     </VStack></NavigationStack>)
   }
-  Script.exit()
+  finally{Script.exit()}
 }
 main()
