@@ -21,7 +21,7 @@ export const RefreshCalendar=AppIntentManager.register({
       const today=localDay(new Date())
       if(!Storage.set('selected-day',{date:today,selectedOn:today}))throw Error('Não foi possível voltar para hoje.')
       await autoSynchronize({origin:'refresh-button',force:true,budgetMS:4500})
-      await loadModel({background:true,forceWeather:true})
+      await loadModel({background:true,forceWeather:true,prepareOnly:true})
       Storage.set('manual-refresh',{at:Date.now(),state:'prepared'})
     }catch{
       Storage.set('manual-refresh',{at:Date.now(),state:'failed-cache-preserved'})

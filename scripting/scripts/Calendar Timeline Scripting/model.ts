@@ -3,17 +3,17 @@ import { renderOriginal } from './original-engine'
 import { resolveFocus } from './selection'
 import { markPhase } from './diagnostics'
 
-export async function loadModel(options:{background?:boolean;forceWeather?:boolean}={}){
+export async function loadModel(options:{background?:boolean;forceWeather?:boolean;prepareOnly?:boolean}={}){
   const started=Date.now()
   markPhase('inicialização e cache',started)
   const now=new Date(),focus=resolveFocus(Storage.get('selected-day'),now)
   const snapshot=Storage.get<{savedAt:number;weather:any;location:any}>('weather-model')
-  const reusable=!options.forceWeather&&snapshot&&Date.now()-snapshot.savedAt<15*60*1000
+  const reusable=!options.forceWeather&&snapshot&&Date.now()>=snapshot.savedAt&&Date.now()-snapshot.savedAt<15*60*1000
     &&snapshot.weather?.hours?.length>0&&snapshot.location
   markPhase('adaptador nativo',started)
   const host=createHost(now,options)
   markPhase('inicialização do motor',started)
-  const model=await renderOriginal(host,{now:now.getTime(),focusDate:focus.getTime(),hours:'24',onPhase:(phase:string)=>markPhase(phase,started),
+  const model=await renderOriginal(host,{prepareOnly:options.prepareOnly===true,now:now.getTime(),focusDate:focus.getTime(),hours:'24',onPhase:(phase:string)=>markPhase(phase,started),
     ...(reusable?{hourlyWeather:snapshot.weather,astronomy:snapshot.location}:{})})
   markPhase('salvamento do cache',started)
   Storage.set('raster-warnings',host.renderWarnings())

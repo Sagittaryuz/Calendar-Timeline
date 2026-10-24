@@ -14,7 +14,7 @@ async function main(){
     if(Script.queryParameters.refresh==='1'){
       await refreshFromWidget({
         sync:()=>autoSynchronize({origin:'widget-touch',force:true,budgetMS:10000}),
-        load:()=>loadModel({background:true}),reload:()=>Widget.reloadAll(),open:(url:string)=>Safari.openURL(url),
+        load:()=>loadModel({background:true,prepareOnly:true}),reload:()=>Widget.reloadAll(),open:(url:string)=>Safari.openURL(url),
         failed:()=>Storage.set('widget-tap-diagnostic',{at:Date.now(),state:'local-render-failed'})
       })
       return
@@ -25,7 +25,7 @@ async function main(){
     }
     // The first foreground execution obtains the iOS permissions used by the widget.
     await autoSynchronize({origin:'app-open',force:true,budgetMS:15000})
-    const model=await loadModel()
+    const model=await loadModel({prepareOnly:true})
     Widget.reloadAll()
     await Navigation.present(<NavigationStack><ScrollView><VStack spacing={12} padding={16} navigationTitle="Calendar Timeline">
       <BridgeLauncher/>

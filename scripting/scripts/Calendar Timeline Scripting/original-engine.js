@@ -479,6 +479,7 @@ const TITLE_TIMELINE_GAP_ADJUSTMENT =
 // A redução do cabeçalho sobe todo o conteúdo, sem alterar o contorno externo.
 CANVAS.timelineTop += TITLE_TIMELINE_GAP_ADJUSTMENT - TITLE_CARD_HEIGHT_REDUCTION;
 
+let sharedHeaderSize=null;
 const now = new Date(options.now ?? Date.now());
 now.setSeconds(0, 0);
 if (!config.runsInWidget && (args.queryParameters ?? {}).rainbow === "connect") {
@@ -490,28 +491,24 @@ const requestedHours =
 const windowHours = parseWindowHours(requestedHours);
 const windowStart = startOfDay(new Date(options.focusDate ?? now));
 const windowEnd = addDays(windowStart, 1);
-options.onPhase?.("agenda");
-const loadResult = options.loadResult ?? await loadWindow();
-options.onPhase?.("localização e astronomia");
-const astronomy = options.astronomy ?? await loadAstronomy();
+// Agenda is independent of location. Weather and holidays share only location.
+options.onPhase?.("agenda, localização, clima e feriados");
 const widgetFamily = config.runsInWidget ? config.widgetFamily : null;
-options.onPhase?.("clima");
-const hourlyWeather = options.hourlyWeather ?? (isAccessoryFamily(widgetFamily)
-  ? emptyHourlyWeather()
-  : await loadHourlyWeather(astronomy));
-options.onPhase?.("texturas");
-const nightTextures =
-  SETTINGS.showNightTexture && !isAccessoryFamily(widgetFamily)
-    ? await loadNightTextures()
-    : emptyNightTextures();
-options.onPhase?.("feriados");
-const automaticHolidayDates = options.holidayDates ?? await loadAutomaticHolidays(astronomy);
+const astronomyTask=Promise.resolve(options.astronomy??loadAstronomy());
+const [loadResult,astronomy,hourlyWeather,automaticHolidayDates,nightTextures]=await Promise.all([
+  options.loadResult??loadWindow(),
+  astronomyTask,
+  options.hourlyWeather??astronomyTask.then(location=>isAccessoryFamily(widgetFamily)?emptyHourlyWeather():loadHourlyWeather(location)),
+  options.holidayDates??astronomyTask.then(loadAutomaticHolidays),
+  SETTINGS.showNightTexture&&!isAccessoryFamily(widgetFamily)?loadNightTextures():emptyNightTextures(),
+]);
+
 automaticHolidayDates.forEach((key) => loadResult.holidayDates.add(key));
 const preparedItems = prepareTimelineItems(loadResult.items, now);
 const timelineRowCounts = prepareTimelineRowCounts(preparedItems);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems, timelineRowCounts);
 options.onPhase?.("preparação do desenho");
-const widget = isAccessoryFamily(widgetFamily)
+const widget = options.prepareOnly ? {backgroundImage:null} : isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
 
@@ -5192,9 +5189,14 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   const headlineSize=weekHeaderHeadlineSize(date);
   const layout=weekHeaderLayout(date,card,headlineSize);
   const {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight}=layout;
-  ctx.setTextAlignedCenter();ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
+  const weekend=date.getDay()===0||date.getDay()===6;
+  if(date.getDay()===0)ctx.setTextAlignedRight();
+  else if(date.getDay()===6)ctx.setTextAlignedLeft();
+  else ctx.setTextAlignedCenter();
+  ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
   ctx.setTextColor(titleWeekdayColor(date,loadResult.holidayDates));
-  ctx.drawTextInRect(headline,new Rect(card.x+3,layout.top,card.width-6,card.y+card.height-3-layout.top));
+  ctx.drawTextInRect(headline,new Rect(weekend?temperatureLeft:card.x+3,layout.top,weekend?temperatureRight-temperatureLeft:card.width-6,card.y+card.height-3-layout.top));
+  ctx.setTextAlignedCenter();
   const temperatureY=layout.temperatureY;
   ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
@@ -12901,7 +12903,7 @@ function weekHeaderLayout(date,card,headlineSize) {
   const height=headlineSize+scaleVertical(1.5)+temperatureSize+scaleVertical(1.5)+smallSize*1.2;
   const top=card.y+(card.height-height)/2,width=headline.length*headlineSize*0.60;
   const temperatureY=top+headlineSize+scaleVertical(1.5),countY=temperatureY+temperatureSize+scaleVertical(1.5);
-  const x=card.x+(card.width-width)/2;
+  const x=date.getDay()===0?temperatureRight-width:date.getDay()===6?temperatureLeft:card.x+(card.width-width)/2;
   return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width,temperatureY,countY,height};
 }
 
@@ -12917,13 +12919,17 @@ function weekHeaderHeadlineFits(date,card,size) {
 function weekHeaderHeadlineSize(date) {
   // Shared typography for ordinary cards, including both weekends. Today's
   // headline may use extra space without shifting either of the lower rows.
-  let shared=scaleFontSize(25);
+  let shared=sharedHeaderSize;
+  if(shared===null){
+  shared=scaleFontSize(25);
   for(let size=scaleFontSize(38);size>=scaleFontSize(25);size-=0.5){
     let fits=true;
     for(let i=0;i<TITLE_CARD_COUNT;i++){
       if(!weekHeaderHeadlineFits(addDays(titleWeekStart(),i),titleDayCardRect(i),size)){fits=false;break;}
     }
     if(fits){shared=size;break;}
+  }
+  sharedHeaderSize=shared;
   }
   if(dateKey(date)!==dateKey(now))return shared;
   const card=titleDayCardRect(date.getDay());

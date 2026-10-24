@@ -1,3 +1,15 @@
+## Atualização 0.3.12 — alinhamentos e preparação mais leve
+
+Domingo alinha o título à borda direita da linha de temperaturas; sábado à esquerda. Mantém cores, curvas, fontes, centralização vertical, toques e dimensões.
+
+Agenda e localização começam juntas; clima e feriados seguem em paralelo depois da localização. A ponte continua terminando antes da leitura local, preservando comandos, confirmação de gravações e vida útil da extensão. Abrir o app ou preparar um refresh consulta os dados sem construir o desenho descartável; a extensão renderiza normalmente. O encaixe compartilhado dos títulos é calculado uma vez por renderização. Cache do clima com data futura deixa de ser tratado como válido.
+
+Validação: comparação completa das operações de desenho com 0.3.11, exceto os dois títulos solicitados; sete prévias Canvas, cenários de feriado e extragrande; regressões de ponte, recorrência, idempotência, offline e permissões. Teste proporcional de desempenho: 204 para 30 verificações de encaixe; I/O sintético equivalente de 156 para 99 ms, sem equivaler à velocidade nativa. Preparação sem desenho cria zero DrawContext. Ver tests/scripting-performance.cjs.
+
+Revisão de arquitetura: preservados JavaScript/TypeScript e o adaptador nativo, sem novas dependências ou migração. O SDK do Scripting executa este formato; reescrever em Swift não seria uma otimização incremental deste projeto. Preservados rasterização em lotes, limites de rede, caches por fonte e controle de repetição da fila. O maior tempo variável restante é a ponte e as APIs nativas/rede, não uma linguagem diferente. tools/build-scripting.cjs é um gerador histórico de importação, não o comando de release da base recuperada; npm run build:scripting verifica as fontes distribuídas atuais.
+
+Atualize o mesmo projeto pelo Git, preservando Storage, Keychain e pareamento. Reversão: scripting-v0.3.11-alpha.1. Compilação, renderização e latência desta versão no aparelho ainda exigem confirmação; os testes locais não as comprovam.
+
 ## Atualização 0.3.11 — toque invisível na legenda de horas
 
 A legenda inferior de horas agora aciona RefreshCalendar sem desenhar ícone. A área usa coordenadas exportadas pelo próprio motor e a mesma transformação proporcional do desenho no iPad. Preserva o link calshow no restante da timeline e os sete botões de dia.

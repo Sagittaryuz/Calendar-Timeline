@@ -11,7 +11,7 @@ function replaceOnce(from, to) {
   if (!code.includes(from)) throw new Error('Source contract changed: ' + from.slice(0, 100));
   code = code.replace(from, to);
 }
-replaceOnce('const now = new Date();', 'const now = new Date(options.now ?? Date.now());');
+replaceOnce('const now = new Date();', 'let sharedHeaderSize=null;\nconst now = new Date(options.now ?? Date.now());');
 replaceOnce('const windowStart = new Date(now);', 'const windowStart = startOfDay(new Date(options.focusDate ?? now));');
 replaceOnce('const windowEnd = new Date(\n  windowStart.getTime() + windowHours * 60 * 60 * 1000\n);', 'const windowEnd = addDays(windowStart, 1);');
 // today() describes the real current day, even when browsing another date.

@@ -84,8 +84,11 @@ async function main(){
      Math.abs(o.rect.y+o.rect.height/2-(rows[1]+temps[0].state.font.size*0.56))<1);
    assert(icon,'Weather icon between maximum and minimum in every card');
    const center=card.x+card.width/2;
-   assert.equal(title[0].state.align,'center','Native centered headline');
-   assert(Math.abs(title[0].rect.x+title[0].rect.width/2-center)<0.01,'Headline centered in every card');
+   const weekday=new Date(card.date+'T12:00:00').getDay();
+   assert.equal(title[0].state.align,weekday===0?'right':weekday===6?'left':'center');
+   if(weekday===0)assert(Math.abs(title[0].rect.x+title[0].rect.width-(temps[1].rect.x+temps[1].rect.width))<0.01,'Sunday headline aligns with right temperature edge');
+   else if(weekday===6)assert(Math.abs(title[0].rect.x-temps[0].rect.x)<0.01,'Saturday headline aligns with left temperature edge');
+   else assert(Math.abs(title[0].rect.x+title[0].rect.width/2-center)<0.01,'Weekday headline remains centered');
    assert.equal(counts[0].state.align,'center');
    assert(Math.abs(counts[0].rect.x+counts[0].rect.width/2-center)<0.01,'Counts centered in every card');
    assert(temps.every(t=>t.state.align==='center'),'Each temperature centered in its own box');

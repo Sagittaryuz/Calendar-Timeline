@@ -13,9 +13,14 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   const headlineSize=weekHeaderHeadlineSize(date);
   const layout=weekHeaderLayout(date,card,headlineSize);
   const {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight}=layout;
-  ctx.setTextAlignedCenter();ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
+  const weekend=date.getDay()===0||date.getDay()===6;
+  if(date.getDay()===0)ctx.setTextAlignedRight();
+  else if(date.getDay()===6)ctx.setTextAlignedLeft();
+  else ctx.setTextAlignedCenter();
+  ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
   ctx.setTextColor(titleWeekdayColor(date,loadResult.holidayDates));
-  ctx.drawTextInRect(headline,new Rect(card.x+3,layout.top,card.width-6,card.y+card.height-3-layout.top));
+  ctx.drawTextInRect(headline,new Rect(weekend?temperatureLeft:card.x+3,layout.top,weekend?temperatureRight-temperatureLeft:card.width-6,card.y+card.height-3-layout.top));
+  ctx.setTextAlignedCenter();
   const temperatureY=layout.temperatureY;
   ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
   ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
@@ -47,7 +52,7 @@ function weekHeaderLayout(date,card,headlineSize) {
   const height=headlineSize+scaleVertical(1.5)+temperatureSize+scaleVertical(1.5)+smallSize*1.2;
   const top=card.y+card.height-height-scaleVertical(2),width=headline.length*headlineSize*0.60;
   const temperatureY=top+headlineSize+scaleVertical(1.5),countY=temperatureY+temperatureSize+scaleVertical(1.5);
-  const x=card.x+(card.width-width)/2;
+  const x=date.getDay()===0?temperatureRight-width:date.getDay()===6?temperatureLeft:card.x+(card.width-width)/2;
   return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width,temperatureY,countY,height};
 }
 
@@ -62,13 +67,17 @@ function weekHeaderHeadlineFits(date,card,size) {
 function weekHeaderHeadlineSize(date) {
   // Shared typography for ordinary cards, including both weekends. Today's
   // headline may use extra space without shifting either of the lower rows.
-  let shared=scaleFontSize(25);
+  let shared=sharedHeaderSize;
+  if(shared===null){
+  shared=scaleFontSize(25);
   for(let size=scaleFontSize(38);size>=scaleFontSize(25);size-=0.5){
     let fits=true;
     for(let i=0;i<TITLE_CARD_COUNT;i++){
       if(!weekHeaderHeadlineFits(addDays(titleWeekStart(),i),titleDayCardRect(i),size)){fits=false;break;}
     }
     if(fits){shared=size;break;}
+  }
+  sharedHeaderSize=shared;
   }
   if(dateKey(date)!==dateKey(now))return shared;
   const card=titleDayCardRect(date.getDay());

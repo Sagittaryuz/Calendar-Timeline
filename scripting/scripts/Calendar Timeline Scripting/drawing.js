@@ -43,6 +43,7 @@ export class DrawContext {
   setFont(v){this.state.font=v;}
   setLineWidth(v){this.state.width=v;}
   setTextAlignedLeft(){this.state.align='left';}
+  setTextAlignedRight(){this.state.align='right';}
   setTextAlignedCenter(){this.state.align='center';}
   addPath(p){this.path=p.commands.slice();}
   flushRects(){
@@ -90,7 +91,7 @@ export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymb
     } else if(op.type==='text'){
       ctx.save();if(r){ctx.beginPath();ctx.rect(r.x,r.y,r.width,r.height);ctx.clip();}
       ctx.font={name:s.font.name,size:s.font.size};ctx.fillStyle=s.text.css();ctx.textBaseline='top';ctx.textAlign=s.align;
-      ctx.fillText(op.text,op.point.x+(r&&s.align==='center'?r.width/2:0),op.point.y);ctx.restore();
+      ctx.fillText(op.text,op.point.x+(r?(s.align==='center'?r.width/2:s.align==='right'?r.width:0):0),op.point.y);ctx.restore();
     } else if(op.type==='symbol'){
       const image=resolveSymbol(op.symbol,s.fill.css());
       if(image)ctx.drawImage({image},r.x,r.y,r.width,r.height);
