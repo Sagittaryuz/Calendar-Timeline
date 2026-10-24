@@ -1,0 +1,17 @@
+{
+  "version": "0.3.7",
+  "base": "7272374",
+  "localChecks": {
+    "syntaxAndImports": true,
+    "regressionSuite": true,
+    "selections": 7,
+    "specialDateTodayScenarios": 4,
+    "saturdayLeftShoulder": true,
+    "adjacentOffsetMask": true,
+    "sharedBackgroundPixels": true,
+    "threeRowsVerticalCenter": true
+  },
+  "physicalIPhone": false,
+  "physicalIPad": false,
+  "pairingAndStorageChanged": false
+}

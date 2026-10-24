@@ -4129,8 +4129,11 @@ function currentDayUnifiedShape(path = new Path()) {
   const inset=WIDGET_CONTOUR.strokeInset,left=c.x+inset,right=c.x+c.width-inset;
   const bridgeY=dayBoundaryMoonBorderTopY();
   const first=titleTodayCardIndex()===0,last=titleTodayCardIndex()===6;
-  const radius=windowStart.getDay()%6===0?0:Math.min(WIDGET_COMMON_CORNER_RADIUS,
-    (bridgeY-c.y)/2,Math.max(0,left-inset),Math.max(0,CANVAS.width-inset-right));
+  // Each shoulder is independent: Saturday keeps its left curve even
+  // though its right edge already follows the outer widget contour.
+  const radius=Math.min(WIDGET_COMMON_CORNER_RADIUS,(bridgeY-c.y)/2);
+  const leftRadius=first?0:Math.min(radius,Math.max(0,left-inset));
+  const rightRadius=first||last?0:Math.min(radius,Math.max(0,CANVAS.width-inset-right));
   const contour=widgetLeftContourPoints(inset);
   const upper=contour.slice(0,65);
   path.move(first?upper[0]:new Point(left,c.y));
@@ -4138,8 +4141,8 @@ function currentDayUnifiedShape(path = new Path()) {
     path.addLine(new Point(CANVAS.width-upper[0].x,c.y));
     for(const p of upper.slice(1))path.addLine(new Point(CANVAS.width-p.x,p.y));
   }else{
-    path.addLine(new Point(right,c.y));path.addLine(new Point(right,bridgeY-radius));
-    if(radius)appendContourArc(path,right+radius,bridgeY-radius,radius,radius,Math.PI,Math.PI/2);
+    path.addLine(new Point(right,c.y));path.addLine(new Point(right,bridgeY-rightRadius));
+    if(rightRadius)appendContourArc(path,right+rightRadius,bridgeY-rightRadius,rightRadius,rightRadius,Math.PI,Math.PI/2);
     path.addLine(new Point(CANVAS.width-inset,bridgeY));
   }
   for(const p of contour.filter(p=>p.y>=bridgeY))path.addLine(new Point(CANVAS.width-p.x,p.y));
@@ -4148,8 +4151,8 @@ function currentDayUnifiedShape(path = new Path()) {
   if(first){
     for(const p of upper.slice().reverse())path.addLine(p);
   }else{
-    path.addLine(new Point(left-radius,bridgeY));
-    if(radius)appendContourArc(path,left-radius,bridgeY-radius,radius,radius,Math.PI/2,0);
+    path.addLine(new Point(left-leftRadius,bridgeY));
+    if(leftRadius)appendContourArc(path,left-leftRadius,bridgeY-leftRadius,leftRadius,leftRadius,Math.PI/2,0);
     path.addLine(new Point(left,c.y));
   }
   path.closeSubpath();return path;
@@ -4211,10 +4214,10 @@ function restoreWidgetBackgroundSpan(ctx, x, y, width) {
 }
 
 function timelineBackgroundColorForDate(date, holidayDates = loadResult.holidayDates) {
-  if (dateKey(date) === dateKey(now)) return SETTINGS.timelineBackgroundColor;
   if (holidayDates?.has(dateKey(date))) return SETTINGS.holidayTimelineBackgroundColor;
   if (date.getDay() === 6) return SETTINGS.saturdayTimelineBackgroundColor;
   if (date.getDay() === 0) return SETTINGS.sundayTimelineBackgroundColor;
+  if (dateKey(date) === dateKey(now)) return SETTINGS.timelineBackgroundColor;
   return SETTINGS.nonTodayTimelineOverlayColor;
 }
 
@@ -12893,7 +12896,7 @@ function weekHeaderLayout(date,card,headlineSize) {
   const temperatureWidth=maxWidth+gap+minWidth,temperatureLeft=card.x+(card.width-temperatureWidth)/2;
   const temperatureRight=temperatureLeft+temperatureWidth;
   const height=headlineSize+scaleVertical(1.5)+temperatureSize+scaleVertical(1.5)+smallSize*1.2;
-  const top=card.y+card.height-height-scaleVertical(2),width=headline.length*headlineSize*0.60;
+  const top=card.y+(card.height-height)/2,width=headline.length*headlineSize*0.60;
   const temperatureY=top+headlineSize+scaleVertical(1.5),countY=temperatureY+temperatureSize+scaleVertical(1.5);
   const x=card.x+(card.width-width)/2;
   return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width,temperatureY,countY,height};

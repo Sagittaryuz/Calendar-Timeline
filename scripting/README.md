@@ -1,4 +1,12 @@
-## Atual: 0.3.6 — extragrande horizontal do iPad
+## Atual: 0.3.7 — cores, curva do sábado e linhas centralizadas
+
+Sábado mantém fundo azul, domingo vermelho e feriado amarelo, inclusive quando é hoje. Feriados têm prioridade sobre a cor do fim de semana. Quadro selecionado, timeline e preenchimento das curvas usam a mesma cor; os tons existentes foram preservados.
+
+O sábado selecionado agora tem a curva inferior esquerda com o mesmo perfil de superelipse dos dias úteis. O recorte do quadro de sexta usa o offset do próprio contorno, incluindo metade do traço e o vão entre quadros. O canto externo direito permanece no contorno do widget. As três linhas de cada quadro foram centralizadas verticalmente como um conjunto, preservando o alinhamento horizontal.
+
+Validação local: sete composições com verificação de geometria, pixels do preenchimento, afastamento do vizinho e centro das três linhas; quatro cenários adicionais para sábado/domingo/feriado em hoje e feriado no sábado; regressões do pacote e formato extragrande. São simulações Canvas e APIs simuladas; visual/compilação no iPad e iPhone não foram confirmados nesta versão. Atualize o mesmo projeto pelo Git, preservando dados e pareamento. Reversão disponível na tag scripting-v0.3.6-alpha.1.
+
+## Histórico: 0.3.6 — extragrande horizontal do iPad
 
 O widget agora aceita systemMedium e systemExtraLarge. No iPad, adicione o widget de usuário do Scripting no tamanho extragrande horizontal e selecione o mesmo projeto Calendar Timeline Scripting. A disponibilidade desse tamanho depende do app/iPadOS; o script não instala uma nova extensão nativa. Usa Widget.displaySize, com desenho proporcional centralizado e sete áreas de toque alinhadas. O formato médio mantém sua geometria anterior. Os 25 arquivos da base de recuperação são preservados, sem reativar as extensões Pro.
 

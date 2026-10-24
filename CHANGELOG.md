@@ -1,3 +1,10 @@
+## Scripting 0.3.7 — 2026-10-24
+
+- Prioridade das cores de sábado/domingo/feriado inclusive em hoje; mesma cor no quadro, timeline e curva.
+- Curva inferior esquerda do sábado independente do canto externo direito; máscara dos vizinhos mantém o offset real.
+- Três linhas centralizadas verticalmente em todos os quadros.
+- Verificação Canvas de sete seleções e quatro cenários de datas especiais; validação física pendente.
+
 # Histórico da edição Scripting
 
 ## 0.3.6 — 23/10/2026

@@ -55,12 +55,12 @@ async function main(){
   assert(contour,'Continuous selected-day frame');
   for(const [,x,y] of contour.path.filter(c=>c.length===3)){assert(x>=4&&x<=1088&&y>=4&&y<=506,'Contour within final widget coordinates')}
   const selected=model.header.find(c=>c.selected),points=contour.path.filter(p=>p.length===3);
-  if(day!==24&&day!==18){
+  if(day!==18){
    const bridgeY=points.find(p=>Math.abs(p[1]-4)<0.01&&p[2]>selected.height&&p[2]<200)[2];
    const left=selected.x+4,right=selected.x+selected.width-4;
-   const r=Math.min(52*510/484,(bridgeY-selected.y)/2,left-4,1088-right);
+   const r=Math.min(52*510/484,(bridgeY-selected.y)/2,left-4);
    assert(points.some(p=>Math.abs(p[1]-(left-r))<0.1&&Math.abs(p[2]-bridgeY)<0.1),'Left outward bridge curve');
-   assert(points.some(p=>Math.abs(p[1]-(right+r))<0.1&&Math.abs(p[2]-bridgeY)<0.1),'Right outward bridge curve');
+   if(day!==24)assert(points.some(p=>Math.abs(p[1]-(right+r))<0.1&&Math.abs(p[2]-bridgeY)<0.1),'Right outward bridge curve');
   }
   const headerOps=[...model.image.ops,...model.image.ops.filter(o=>o.type==='image'&&o.rect.y===0&&o.image.size.height===510).flatMap(o=>o.image.ops??[])];
   const headlineSizes=[];
@@ -74,8 +74,7 @@ async function main(){
    const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
    headlineSizes.push({date:card.date,size:title[0].state.font.size});
    assert(title[0].state.font.size>=26,'First row retains its hierarchy');
-   assert(rows[0]+title[0].state.font.size>=48,'First row baseline moved down');
-   assert(rows[1]>=50&&rows[2]>=74,'Lower two rows moved down together');
+   assert(Math.abs((rows[0]+rows[2]+counts[0].state.font.size*1.2)/2-(card.y+card.height/2))<0.01,'All three rows vertically centered as one group');
    assert(temps[0].state.font.size>=22&&counts[0].state.font.size>=17,'Second and third rows enlarged');
    assert(title[0].state.font.size>temps[0].state.font.size,`First row remains larger and fits contour: ${card.date}`);
    assert(counts[0].state.font.size>=14&&counts[0].state.font.size<temps[0].state.font.size,'Third row enlarged and below temperature size');
@@ -99,13 +98,13 @@ async function main(){
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
   for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');
   const image=paint(model.image),pixels=image.getContext('2d');
-  if(day!==24&&day!==18){
+  if(day!==18){
    const bridgeY=points.find(p=>Math.abs(p[1]-4)<0.01&&p[2]>selected.height&&p[2]<200)[2];
-   const r=Math.min(52*510/484,(bridgeY-selected.y)/2,selected.x,1088-(selected.x+selected.width-4));
+   const r=Math.min(52*510/484,(bridgeY-selected.y)/2,selected.x);
    const gap=3*510/484/2+1.2287;
    const childCards=model.image.ops.filter(o=>o.type==='image'&&o.rect.y===0&&o.image.outerClip);
    assert.equal(childCards.length,6,'All six neighboring cards use an independent contour mask');
-   for(const side of [-1,1]){
+   for(const side of day===24?[-1]:[-1,1]){
     const cx=side===-1?selected.x+4-r:selected.x+selected.width-4+r,cy=bridgeY-r;
     const unitX=side===-1?Math.SQRT1_2:-Math.SQRT1_2,unitY=Math.SQRT1_2;
     const profile=Math.pow(0.5,1/2.45),arcX=cx+(side===-1?1:-1)*r*profile,arcY=cy+r*profile;
@@ -124,6 +123,20 @@ async function main(){
   for(const [x,y] of [[0,0],[1,255],[1091,255],[545,0],[545,509]])assert.equal(pixels.getImageData(x,y,1,1).data[3],0,'Paint outside outer frame is cut');
   fs.writeFileSync(path.join(out,`scripting-${version}-day-${day}.png`),image.toBuffer('image/png'));
   sheetCtx.fillStyle='#111';sheetCtx.fillRect(0,row*570,1092,570);sheetCtx.fillStyle='white';sheetCtx.font='24px Arial';sheetCtx.fillText(label,20,row*570+34);sheetCtx.drawImage(image,0,row*570+50);row++;
+ }
+ // Special dates retain their background even when they are today.
+ for(const [day,holiday,expected] of [[24,false,'#0D3F68'],[18,false,'#521720'],[22,true,'#3A2A00'],[24,true,'#3A2A00']]){
+  const focus=new Date(2026,9,day),key=`2026-10-${day}`;
+  const holidays=new Set(holiday?[key]:[]);
+  const model=await renderOriginal(host,{now:+focus,focusDate:+focus,
+   loadResult:{items:[],holidayDates:holidays,error:null},holidayDates:holidays,
+   astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}}});
+  assert.equal(model.timelineBackground,expected,'Holiday/weekend takes precedence over today');
+  const selected=model.header.find(c=>c.selected),image=paint(model.image),pixels=image.getContext('2d');
+  const rgb=expected.slice(1).match(/../g).map(x=>parseInt(x,16));
+  assert.deepEqual(Array.from(pixels.getImageData(Math.round(selected.x+selected.width/2),92,1,1).data).slice(0,3),rgb,'Selected card uses the same special-date background');
+  assert.deepEqual(Array.from(pixels.getImageData(540,400,1,1).data).slice(0,3),rgb,'Timeline uses the special-date background');
+  if(holiday)fs.writeFileSync(path.join(out,`scripting-${version}-holiday-${day}.png`),image.toBuffer('image/png'));
  }
  fs.writeFileSync(path.join(out,`scripting-${version}-review.png`),sheet.toBuffer('image/png'));
  console.log('PASS: no blur, joined frame with both outward bridge curves, daily backgrounds, source colors, green now marker, in-bounds contour. Local Canvas review images saved; iOS rendering unverified.');
