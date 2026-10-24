@@ -1,3 +1,11 @@
+## Atualização 0.3.13 — abertura imediata e painel independente
+
+A tela do projeto aparece antes das consultas, com estado real de carregamento e erro, mantendo a ponte antes da nova leitura da agenda. Herda os alinhamentos e otimizações da 0.3.12. O novo teste de abertura exerce a entrada e comprova apresentação anterior à consulta; latência nativa ainda pendente.
+
+O projeto Meu Painel vive em Sagittaryuz/scripting-home (privado). O Calendar fornece apenas um registro local limitado em Storage shared, com dia, contagens e até seis títulos/horários, sem notas, credenciais, localização ou motor compartilhado. Datas antigas/parciais de cache são preservadas. Nenhuma interface de homepage ou import do painel foi acrescentado ao pacote ativo.
+
+Atualize este mesmo projeto; instale Meu Painel separadamente e selecione-o na aba Início. Os resumos são locais ao aparelho e acessíveis a outros scripts instalados no Scripting. As três fontes são independentes; recarregar o painel não comprova que o iOS executou os widgets.
+
 ## Atualização 0.3.12 — alinhamentos e preparação mais leve
 
 Domingo alinha o título à borda direita da linha de temperaturas; sábado à esquerda. Mantém cores, curvas, fontes, centralização vertical, toques e dimensões.

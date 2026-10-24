@@ -525,6 +525,7 @@ for (let index = 0; index < TITLE_CARD_COUNT; index++) {
 const legendHeight=legendTextHeight()+scaleVertical(8);
 const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeight/2);
 return {hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
+  panel:{day:dateKey(windowStart),...titleScheduleCountsForDay(windowStart),freshness:loadResult.freshness,rows:selectedItems.slice(0,6).map(item=>({kind:item.kind,title:String(item.title??'').slice(0,120),time:item.isAllDay?'Dia todo':`${String(item.start.getHours()).padStart(2,'0')}:${String(item.start.getMinutes()).padStart(2,'0')}`}))},
   image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
   version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
   selectedDayIsToday:dateKey(windowStart)===dateKey(now), timelineBackground:timelineBackgroundColorForDate(windowStart),
