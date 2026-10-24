@@ -1,0 +1,13 @@
+{
+  "version": "0.3.6",
+  "family": "systemExtraLarge",
+  "mediumGeometryPreserved": true,
+  "activeFiles": 25,
+  "checks": [
+    "Actual widget entry medium/extralarge/unsupported",
+    "Proportional fit at four landscape sizes",
+    "All seven dates/targets aligned and in bounds",
+    "Original engine visual geometry regression"
+  ],
+  "physicalIPadTested": false
+}

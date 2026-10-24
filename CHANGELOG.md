@@ -1,5 +1,12 @@
 # Histórico da edição Scripting
 
+## 0.3.6 — 23/10/2026
+
+- Suporte ao widget systemExtraLarge horizontal do iPad, usando dimensões reais, proporção preservada e áreas de toque reposicionadas.
+- Mantém o formato médio e o pacote de 25 arquivos; não reativa extensões Pro.
+- Testes de quatro geometrias e da entrada real médio/extragrande aprovados. Verificação física em iPad pendente.
+
+
 ## 0.3.5 — 23/10/2026
 
 - Retorna à estrutura de 25 arquivos da 0.2.15, retirando as extensões Pro e bundles do pacote ativo; preserva fontes e histórico.

@@ -1,4 +1,12 @@
-## Atual: 0.3.5 — retorno à estrutura anterior
+## Atual: 0.3.6 — extragrande horizontal do iPad
+
+O widget agora aceita systemMedium e systemExtraLarge. No iPad, adicione o widget de usuário do Scripting no tamanho extragrande horizontal e selecione o mesmo projeto Calendar Timeline Scripting. A disponibilidade desse tamanho depende do app/iPadOS; o script não instala uma nova extensão nativa. Usa Widget.displaySize, com desenho proporcional centralizado e sete áreas de toque alinhadas. O formato médio mantém sua geometria anterior. Os 25 arquivos da base de recuperação são preservados, sem reativar as extensões Pro.
+
+Testes locais: entrada real para médio/extragrande, ajuste a quatro dimensões horizontais, limites e datas dos sete toques, regressões do motor e comparação com a base. Ainda falta validação física em iPad. Versão do código e atualização dos dados são coisas separadas; a frequência de execução continua sob controle do iPadOS.
+
+Referências oficiais: https://developer.apple.com/documentation/widgetkit/widgetfamily/systemextralarge e https://scriptingapp.github.io/guide/Widget/Widget%20API .
+
+## Histórico: 0.3.5 — retorno à estrutura anterior
 
 O pacote ativo voltou aos 25 arquivos da versão 0.2.15, commit 565bba1. Dezoito arquivos são idênticos byte a byte ao original, incluindo motor, desenho, modelo, adaptador e seleção. Foram retiradas do diretório distribuído as telas Pro, extensões novas e entradas geradas da 0.3.4. Fontes e histórico foram preservados em scripting/experimental-pro, scripting/entrypoints e na tag scripting-v0.3.4-alpha.1.
 

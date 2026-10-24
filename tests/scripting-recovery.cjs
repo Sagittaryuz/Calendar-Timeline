@@ -4,7 +4,7 @@ const old=cp.execFileSync('git',['ls-tree','-r','--name-only',base,'--',relative
 assert.deepEqual(fs.readdirSync(dir).sort(),old.sort(),'Active package contains exactly the original 25 files');
 const changed=new Set(['diagnostics.ts','script.json','widget.tsx','index.tsx','timeline-view.tsx','bridge-client.ts','bridge-real.ts']);let identical=0;
 for(const name of old)if(!changed.has(name)){assert(fs.readFileSync(path.join(dir,name)).equals(cp.execFileSync('git',['show',base+':'+relative+name],{cwd:root})),name+' must match the original byte for byte');identical++}
-const descriptor=JSON.parse(fs.readFileSync(path.join(dir,'script.json'),'utf8'));assert.equal(descriptor.version,'0.3.5');assert(fs.readFileSync(path.join(dir,'diagnostics.ts'),'utf8').includes("VERSION='0.3.5'"));
+const descriptor=JSON.parse(fs.readFileSync(path.join(dir,'script.json'),'utf8'));assert(fs.readFileSync(path.join(dir,'diagnostics.ts'),'utf8').includes("VERSION='"+descriptor.version+"'"));
 assert(!fs.readFileSync(path.join(dir,'index.tsx'),'utf8').includes('day-screen'));assert(!fs.readFileSync(path.join(dir,'widget.tsx'),'utf8').includes('pro-common'));
 const moduleObject={exports:{}},values=new Map(),calendar={identifier:'list',title:'Boletos',type:'calDAV',allowsContentModifications:true};let saves=0;
 const item={identifier:'r',title:'Fixture recorrente',calendar,hasRecurrenceRules:true,hasAttendees:false,isCompleted:false,dueDateComponents:{year:2026,month:10,day:23},recurrenceRules:[{frequency:'monthly'}],notes:'Preservar',alarms:['Preservar']};
