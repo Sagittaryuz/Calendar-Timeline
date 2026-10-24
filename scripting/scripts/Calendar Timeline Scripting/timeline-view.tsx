@@ -1,6 +1,6 @@
-import { Button, Rectangle, ZStack, Link, Image } from 'scripting'
+import { Button, Rectangle, ZStack, Link } from 'scripting'
 import { GraphView } from './graph-view'
-import { SelectDay, RefreshCalendar } from './app_intents'
+import { SelectDay } from './app_intents'
 
 export function timelineLayout(modelWidth:number,modelHeight:number,width:number,height:number,extraLarge=false){
   if(![modelWidth,modelHeight,width,height].every(n=>Number.isFinite(n)&&n>0))throw Error('Dimensões da timeline inválidas.')
@@ -18,10 +18,5 @@ export function TimelineView({model,width,height,extraLarge=false}:{model:any;wi
       position={{x:layout.left+(day.x+day.width/2)*sx,y:layout.top+(day.y+day.height/2)*sy}}>
       <Rectangle fill="black" opacity={0.001} frame={{width:day.width*sx,height:day.height*sy}}/>
     </Button>)}
-    <Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Voltar para hoje e atualizar agenda e condições atuais"
-      frame={{width:28,height:28}} position={{x:layout.left+layout.width-24,y:layout.top+layout.height-24}}>
-      <Image systemName="arrow.clockwise" font={12} foregroundStyle="white" frame={{width:28,height:28}}
-        background={{style:'rgba(0,0,0,0.35)',shape:{type:'circle'}}}/>
-    </Button>
   </ZStack>
 }

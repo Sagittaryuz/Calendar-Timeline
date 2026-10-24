@@ -1,3 +1,7 @@
+## Atualização 0.3.10 — recarga pelos outros widgets
+
+Remove apenas o botão de refresh sobreposto ao Calendar. Codex 1.1.5 e Popular 0.2.4 usam Widget.reloadAll(), que solicita recarga de todas as timelines do Scripting. Calendar conserva seleção de dias, link ao Calendário, atualização periódica solicitada e sua intenção/atalho de atualização. A recarga externa respeita o dia selecionado e o cache/clima do Calendar; não equivale ao botão antigo que voltava para hoje e forçava clima novo. Testes de geometria, navegação, estrutura e intenção aprovados; simultaneidade no aparelho pendente.
+
 ## Atualização 0.3.9 — atualizar e voltar para hoje
 
 O botão ↻ volta a seleção para o dia local atual antes de sincronizar e renovar agenda/clima. O retorno para hoje também é preservado se a consulta falhar; os caches continuam disponíveis. Não altera o comportamento dos botões de seleção de dia. Teste local cobre seleção antiga, ordem antes da rede e falha; toque nativo desta versão pendente.

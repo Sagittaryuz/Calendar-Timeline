@@ -1,3 +1,8 @@
+## Scripting 0.3.10 — 2026-10-24
+
+- Remove ícone de refresh da timeline; recarga global solicitada por Codex/Popular.
+- Preserva dias, links, pareamento, intenção/atalho de atualização. Testes locais aprovados; execução nativa global pendente.
+
 ## Scripting 0.3.9 — 2026-10-24
 
 - Botão de atualização também volta a timeline para hoje, antes da consulta, inclusive quando a rede falha.
