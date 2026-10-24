@@ -1,3 +1,9 @@
+## Atualização 0.3.11 — toque invisível na legenda de horas
+
+A legenda inferior de horas agora aciona RefreshCalendar sem desenhar ícone. A área usa coordenadas exportadas pelo próprio motor e a mesma transformação proporcional do desenho no iPad. Preserva o link calshow no restante da timeline e os sete botões de dia.
+
+A intenção existente volta para hoje, sincroniza a ponte, tenta renovar clima/agenda e solicita Widget.reloadAll(), inclusive em falha. Testes locais de coordenadas e alinhamento em quatro tamanhos, 12 renderizações, intenção, cache e recuperação aprovados. Compilação/visual/toque físicos desta versão ainda não confirmados.
+
 ## Atualização 0.3.10 — recarga pelos outros widgets
 
 Remove apenas o botão de refresh sobreposto ao Calendar. Codex 1.1.5 e Popular 0.2.4 usam Widget.reloadAll(), que solicita recarga de todas as timelines do Scripting. Calendar conserva seleção de dias, link ao Calendário, atualização periódica solicitada e sua intenção/atalho de atualização. A recarga externa respeita o dia selecionado e o cache/clima do Calendar; não equivale ao botão antigo que voltava para hoje e forçava clima novo. Testes de geometria, navegação, estrutura e intenção aprovados; simultaneidade no aparelho pendente.

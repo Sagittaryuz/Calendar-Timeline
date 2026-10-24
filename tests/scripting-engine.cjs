@@ -27,6 +27,7 @@ async function main(){
       const model=await renderOriginal(host,options);
       assert.equal(model.width,1092);assert.equal(model.height,510);assert(model.image.ops.length>0);
       assert.equal(model.header.length,7);
+      const hit=model.hourLegend;assert(hit&&hit.width===1092&&hit.y>400&&hit.height>20&&hit.y+hit.height<=model.height,'Hour hit area follows actual engine legend within canvas');
       assert.equal(model.header.filter(d=>d.selected).length,1);
       assert(model.header.every(d=>d.width>0&&d.x>=0&&d.x+d.width<=1092.001));
       assert.equal(model.focusDate,date.slice(0,10));

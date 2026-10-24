@@ -1,3 +1,8 @@
+## Scripting 0.3.11 — 2026-10-24
+
+- Área invisível de atualização na legenda de horas, alinhada ao desenho real em médio/extragrande.
+- Mantém seleção de dias, link e recarga global; testes locais aprovados, toque nativo pendente.
+
 ## Scripting 0.3.10 — 2026-10-24
 
 - Remove ícone de refresh da timeline; recarga global solicitada por Codex/Popular.

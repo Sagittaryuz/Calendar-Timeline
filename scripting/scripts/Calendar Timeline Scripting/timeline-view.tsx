@@ -1,6 +1,6 @@
 import { Button, Rectangle, ZStack, Link } from 'scripting'
 import { GraphView } from './graph-view'
-import { SelectDay } from './app_intents'
+import { SelectDay, RefreshCalendar } from './app_intents'
 
 export function timelineLayout(modelWidth:number,modelHeight:number,width:number,height:number,extraLarge=false){
   if(![modelWidth,modelHeight,width,height].every(n=>Number.isFinite(n)&&n>0))throw Error('Dimensões da timeline inválidas.')
@@ -18,5 +18,10 @@ export function TimelineView({model,width,height,extraLarge=false}:{model:any;wi
       position={{x:layout.left+(day.x+day.width/2)*sx,y:layout.top+(day.y+day.height/2)*sy}}>
       <Rectangle fill="black" opacity={0.001} frame={{width:day.width*sx,height:day.height*sy}}/>
     </Button>)}
+    {model.hourLegend?<Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Atualizar todos os widgets pela legenda de horas"
+      frame={{width:model.hourLegend.width*sx,height:model.hourLegend.height*sy}}
+      position={{x:layout.left+(model.hourLegend.x+model.hourLegend.width/2)*sx,y:layout.top+(model.hourLegend.y+model.hourLegend.height/2)*sy}}>
+      <Rectangle fill="black" opacity={0.001} frame={{width:model.hourLegend.width*sx,height:model.hourLegend.height*sy}}/>
+    </Button>:null}
   </ZStack>
 }

@@ -525,7 +525,10 @@ for (let index = 0; index < TITLE_CARD_COUNT; index++) {
   if (right > left) header.push({date: dateKey(date), label: shortWeekday(date),
     x: left, y: rect.y, width: right-left, height: rect.height, selected: dateKey(date) === dateKey(focusDay)});
 }
-return {image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
+const legendHeight=legendTextHeight()+scaleVertical(8);
+const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeight/2);
+return {hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
+  image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
   version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
   selectedDayIsToday:dateKey(windowStart)===dateKey(now), timelineBackground:timelineBackgroundColorForDate(windowStart),
   nowMarker:dateKey(windowStart)===dateKey(now)?{x:CANVAS.plotLeft+timeToX(now),color:'#30D158'}:null,

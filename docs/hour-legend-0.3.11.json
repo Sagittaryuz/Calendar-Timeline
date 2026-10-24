@@ -1,0 +1,7 @@
+{
+  "version": "0.3.11",
+  "hitAreaFromEngine": true,
+  "invisibleOpacity": 0.001,
+  "nativeTapConfirmed": false,
+  "layoutAndIntentTestsPassed": true
+}
