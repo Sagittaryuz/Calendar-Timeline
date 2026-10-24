@@ -1,3 +1,11 @@
+## Atualização 0.3.8 — botão de atualização
+
+Botão pequeno de seta circular no canto inferior direito, usando AppIntent em segundo plano, sem solicitar abertura do app. O botão consulta a agenda/lembretes nativos, sincroniza a ponte dentro do orçamento e tenta renovar o clima sem impor o cache rápido de 15 minutos. A seleção do dia é preservada e o cache continua disponível em falhas.
+
+Os widgets solicitam atualização após 1 minuto por padrão. O campo Parâmetro não altera a frequência. Codex/Popular permitem selecionar 1, 5 ou 15 minutos nas preferências do projeto. O iOS decide quando executar; a solicitação de 1 minuto não garante execução nesse intervalo. O botão pede dados atuais disponíveis e recarrega mesmo em falhas, preservando caches. Não altera o código instalado.
+
+Testes locais de intenções, consulta forçada, sucesso/falha e geometria aprovados. Toque, renderização e execução nativa desta versão no iPhone/iPad ainda precisam de confirmação. Atualize o mesmo projeto pelo Git, preservando dados, permissões e pareamento.
+
 ## Atual: 0.3.7 — cores, curva do sábado e linhas centralizadas
 
 Sábado mantém fundo azul, domingo vermelho e feriado amarelo, inclusive quando é hoje. Feriados têm prioridade sobre a cor do fim de semana. Quadro selecionado, timeline e preenchimento das curvas usam a mesma cor; os tons existentes foram preservados.

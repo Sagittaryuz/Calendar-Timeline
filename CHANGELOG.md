@@ -1,3 +1,9 @@
+## Calendar Timeline Scripting 0.3.8 — 2026-10-24
+
+- Botão de atualização por AppIntent no canto inferior direito, com cache preservado.
+- O botão consulta a agenda/lembretes nativos, sincroniza a ponte dentro do orçamento e tenta renovar o clima sem impor o cache rápido de 15 minutos. A seleção do dia é preservada e o cache continua disponível em falhas.
+- Testes locais aprovados; validação do toque nativo pendente.
+
 ## Scripting 0.3.7 — 2026-10-24
 
 - Prioridade das cores de sábado/domingo/feriado inclusive em hoje; mesma cor no quadro, timeline e curva.

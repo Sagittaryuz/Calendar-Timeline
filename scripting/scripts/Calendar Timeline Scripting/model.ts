@@ -3,12 +3,12 @@ import { renderOriginal } from './original-engine'
 import { resolveFocus } from './selection'
 import { markPhase } from './diagnostics'
 
-export async function loadModel(options:{background?:boolean}={}){
+export async function loadModel(options:{background?:boolean;forceWeather?:boolean}={}){
   const started=Date.now()
   markPhase('inicialização e cache',started)
   const now=new Date(),focus=resolveFocus(Storage.get('selected-day'),now)
   const snapshot=Storage.get<{savedAt:number;weather:any;location:any}>('weather-model')
-  const reusable=snapshot&&Date.now()-snapshot.savedAt<15*60*1000
+  const reusable=!options.forceWeather&&snapshot&&Date.now()-snapshot.savedAt<15*60*1000
     &&snapshot.weather?.hours?.length>0&&snapshot.location
   markPhase('adaptador nativo',started)
   const host=createHost(now,options)

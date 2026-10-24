@@ -1,0 +1,7 @@
+{
+  "version": "0.3.8",
+  "manualRefreshIntent": true,
+  "offlineCachePreserved": true,
+  "automaticRequestMinutes": 1,
+  "nativeTapConfirmed": false
+}
