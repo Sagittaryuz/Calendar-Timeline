@@ -1,3 +1,8 @@
+## Scripting 0.3.9 — 2026-10-24
+
+- Botão de atualização também volta a timeline para hoje, antes da consulta, inclusive quando a rede falha.
+- Rótulo acessível atualizado; regressões locais aprovadas. Toque nativo pendente.
+
 ## Calendar Timeline Scripting 0.3.8 — 2026-10-24
 
 - Botão de atualização por AppIntent no canto inferior direito, com cache preservado.

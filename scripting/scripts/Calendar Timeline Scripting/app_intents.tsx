@@ -18,6 +18,8 @@ export const RefreshCalendar=AppIntentManager.register({
   name:'CalendarTimelineRefresh',protocol:AppIntentProtocol.AppIntent,
   perform:async()=>{
     try{
+      const today=localDay(new Date())
+      if(!Storage.set('selected-day',{date:today,selectedOn:today}))throw Error('Não foi possível voltar para hoje.')
       await autoSynchronize({origin:'refresh-button',force:true,budgetMS:4500})
       await loadModel({background:true,forceWeather:true})
       Storage.set('manual-refresh',{at:Date.now(),state:'prepared'})

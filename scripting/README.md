@@ -1,3 +1,7 @@
+## Atualização 0.3.9 — atualizar e voltar para hoje
+
+O botão ↻ volta a seleção para o dia local atual antes de sincronizar e renovar agenda/clima. O retorno para hoje também é preservado se a consulta falhar; os caches continuam disponíveis. Não altera o comportamento dos botões de seleção de dia. Teste local cobre seleção antiga, ordem antes da rede e falha; toque nativo desta versão pendente.
+
 ## Atualização 0.3.8 — botão de atualização
 
 Botão pequeno de seta circular no canto inferior direito, usando AppIntent em segundo plano, sem solicitar abertura do app. O botão consulta a agenda/lembretes nativos, sincroniza a ponte dentro do orçamento e tenta renovar o clima sem impor o cache rápido de 15 minutos. A seleção do dia é preservada e o cache continua disponível em falhas.

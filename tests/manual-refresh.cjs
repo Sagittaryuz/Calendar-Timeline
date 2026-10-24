@@ -7,13 +7,15 @@ function load(name,deps,values=new Map()){
 }
 (async()=>{
  for(const fail of [false,true]){
-  const values=new Map(),events=[],definitions={};
+  const values=new Map([['selected-day',{date:'2000-01-01',selectedOn:'2000-01-01'}]]),events=[],definitions={};
+  const today=load('selection.ts',{}).localDay(new Date());
   const sdk={AppIntentManager:{register:d=>{definitions[d.name]=d;return ()=>({name:d.name})}},AppIntentProtocol:{AppIntent:0},Widget:{reloadAll:()=>events.push('reload')},ControlWidget:{reloadButtons:()=>events.push('control')}};
-  const deps={scripting:sdk,'./selection':{}};
-  deps['./bridge-auto']={autoSynchronize:async options=>{assert(options.force);events.push('bridge')}};
+  const deps={scripting:sdk,'./selection':load('selection.ts',{})};
+  deps['./bridge-auto']={autoSynchronize:async options=>{assert(options.force);assert.equal(values.get('selected-day').date,today,'Reset to today precedes network sync');events.push('bridge')}};
   deps['./model']={loadModel:async options=>{assert(options.background&&options.forceWeather);events.push('model');if(fail)throw Error('offline')}};
   load('app_intents.tsx',deps,values);
   await definitions['CalendarTimelineRefresh'].perform();
+  assert.equal(values.get('selected-day').date,today,'Refresh restores today even when model preparation fails');assert.equal(values.get('selected-day').selectedOn,today);
   assert(events.includes('reload'),'Refresh failure must still request redraw');
   assert.deepEqual(events,['bridge','model','reload']);assert.equal(values.get('manual-refresh').state,fail?'failed-cache-preserved':'prepared');
  }
