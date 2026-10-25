@@ -26,7 +26,7 @@ export async function loadModel(options:{background?:boolean;forceWeather?:boole
   try{if(model.panel){
     const sources=Object.values(model.panel.freshness??{}) as {source:string;fetchedAt:number|null}[]
     const times=sources.map(s=>s.fetchedAt).filter((n):n is number=>Number.isFinite(n)&&Number(n)>0)
-    if(!sources.length||times.length)Storage.set('sagittaryuz-dashboard-v1:Calendar',{schema:1,source:'Calendar',at:times.length?Math.min(...times):Date.now(),version:'0.3.13',...model.panel,cached:sources.some(s=>s.source!=='live')},{shared:true})
+    if(!sources.length||times.length)Storage.set('sagittaryuz-dashboard-v1:Calendar',{schema:1,source:'Calendar',at:times.length?Math.min(...times):Date.now(),version:'0.3.14',...model.panel,cached:sources.some(s=>s.source!=='live')},{shared:true})
   }}catch{}
   markPhase('modelo pronto',started)
   return model

@@ -17,7 +17,7 @@ function load(name,deps,values=new Map()){
   await definitions['CalendarTimelineRefresh'].perform();
   assert.equal(values.get('selected-day').date,today,'Refresh restores today even when model preparation fails');assert.equal(values.get('selected-day').selectedOn,today);
   assert(events.includes('reload'),'Refresh failure must still request redraw');
-  assert.deepEqual(events,['bridge','model','reload']);assert.equal(values.get('manual-refresh').state,fail?'failed-cache-preserved':'prepared');
+  assert.deepEqual(events,['bridge','reload']);assert.equal(values.get('manual-refresh').state,'requested');assert(values.get('calendar-force-weather')>0,'Fresh weather is requested in the single widget render');
  }
  const values=new Map([['weather-model',{savedAt:Date.now(),weather:{hours:[{}]},location:{latitude:1,longitude:2}}]]);
  const calls=[];const deps={'./host':{createHost:()=>({renderWarnings:()=>[]})},'./selection':{resolveFocus:(_,now)=>now},'./diagnostics':{markPhase:()=>{}},'./original-engine':{renderOriginal:async(_,options)=>{calls.push(options);return {weatherSnapshot:{hours:[{}]},locationSnapshot:{latitude:1,longitude:2}}}}};

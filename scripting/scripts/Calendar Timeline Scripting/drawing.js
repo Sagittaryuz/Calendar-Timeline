@@ -148,7 +148,10 @@ export function childViewport(image,rect,viewport){
   const sx=image.size.width/rect.width,sy=image.size.height/rect.height;
   return {x:(visible.x-rect.x)*sx,y:(visible.y-rect.y)*sy,width:visible.width*sx,height:visible.height*sy};
 }
+const segmentCache=new WeakMap();
 export function segments(image,viewport={x:0,y:0,width:image.size.width,height:image.size.height}){
+  const key=[viewport.x,viewport.y,viewport.width,viewport.height].join(',');
+  let cached=segmentCache.get(image);if(cached?.has(key))return cached.get(key);
   const result=[];let run=[];
   function flush(){if(run.length){result.push({type:'canvas',ops:run});run=[];}}
   for(const op of image.ops){
@@ -170,5 +173,6 @@ export function segments(image,viewport={x:0,y:0,width:image.size.width,height:i
       }else run.push(op);
     }
   }
-  flush();return result;
+  flush();if(!cached){cached=new Map();segmentCache.set(image,cached)}
+  if(cached.size>=4)cached.clear();cached.set(key,result);return result;
 }

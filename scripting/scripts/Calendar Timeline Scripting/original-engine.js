@@ -4134,7 +4134,7 @@ function currentDayUnifiedShape(path = new Path()) {
   // though its right edge already follows the outer widget contour.
   const radius=Math.min(WIDGET_COMMON_CORNER_RADIUS,(bridgeY-c.y)/2);
   const leftRadius=first?0:Math.min(radius,Math.max(0,left-inset));
-  const rightRadius=first||last?0:Math.min(radius,Math.max(0,CANVAS.width-inset-right));
+  const rightRadius=last?0:Math.min(radius,Math.max(0,CANVAS.width-inset-right));
   const contour=widgetLeftContourPoints(inset);
   const upper=contour.slice(0,65);
   path.move(first?upper[0]:new Point(left,c.y));
@@ -5181,10 +5181,10 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   if(!isSelected){ctx=new DrawContext();ctx.size=new Size(CANVAS.width,CANVAS.height);ctx.opaque=false;ctx.respectScreenScale=false;}
   if(!isSelected){
     const radii={topLeft:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0,
-      topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0};
+      topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:date.getDay()===6?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomRight:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0};
     fillTitleCardShape(ctx,card,radii,new Color('#303136',0.82));
     fillTitleCardShape(ctx,new Rect(card.x+2,card.y+2,card.width-4,card.height-4),
-      {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2)},
+      {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},
       new Color(timelineBackgroundColorForDate(date)));
   }
   const headlineSize=weekHeaderHeadlineSize(date);
@@ -12372,7 +12372,7 @@ function reminderPriorityPrefix(item) {
 function timelineItemStatus(item) {
   const pieces = [];
   // Contagens de tempo não são desenhadas sobre os títulos dos charts.
-  if (item.conflictCount > 0) pieces.push(`×${item.conflictCount + 1}`);
+  // Overlap counts remain in scheduling data, never in chart labels.
   return pieces.join("  ");
 }
 
@@ -12866,6 +12866,7 @@ function drawCurrentTimeMarker(ctx) {
 }
 
 function dayCardNeighbourClip() {
+  if(dayCardNeighbourClip.cache)return dayCardNeighbourClip.cache;
   const path=new Path();
   path.move(new Point(0,0));path.addLine(new Point(CANVAS.width,0));
   path.addLine(new Point(CANVAS.width,CANVAS.height));path.addLine(new Point(0,CANVAS.height));path.closeSubpath();
@@ -12888,7 +12889,7 @@ function dayCardNeighbourClip() {
   }).reverse();
   path.move(points[0]);
   for(const p of points.slice(1))path.addLine(p);
-  path.closeSubpath();return path.commands;
+  path.closeSubpath();return dayCardNeighbourClip.cache=path.commands;
 }
 
 function weekHeaderLayout(date,card,headlineSize) {

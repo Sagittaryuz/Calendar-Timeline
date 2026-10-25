@@ -20,7 +20,7 @@ const vm=require('node:vm');
  const code=ts.transpileModule(source,{fileName:'widget.tsx',compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React}}).outputText;
  const m={exports:{}};
  const dependencies={scripting:{Widget:{family:'systemMedium',displaySize:{width:300,height:150},present(){assert(bridgeDone,'Widget must not destroy the context before bridge completion');presented=true}},Text:()=>null},'./bridge-auto':{autoSynchronize:()=>pending},'./model':{loadModel:async()=>({})},'./timeline-view':{TimelineView:()=>null},'./diagnostics':{VERSION:'test',failureDetails:String},'./pro-common':{refreshMinutes:()=>1}};
- vm.runInNewContext(code,{exports:m.exports,module:m,require:id=>dependencies[id],React:{createElement:()=>({})},Storage:{set:()=>true},Date});
+ vm.runInNewContext(code,{exports:m.exports,module:m,require:id=>dependencies[id],React:{createElement:()=>({})},Storage:{get:()=>null,set:()=>true},Date});
  const run=m.exports();await new Promise(resolve=>setImmediate(resolve));assert.equal(presented,false);
  finishBridge();await run;assert(presented);
  const client=read(dir+'bridge-client.ts');assert(client.indexOf('await synchronizeReal(')<client.indexOf('await Promise.race([collectAgenda()'),'Claim commands before full agenda capture consumes the time budget');

@@ -1,4 +1,4 @@
-import { Button, Rectangle, ZStack, Link } from 'scripting'
+import { Button, Rectangle, ZStack } from 'scripting'
 import { GraphView } from './graph-view'
 import { SelectDay, RefreshCalendar } from './app_intents'
 
@@ -11,7 +11,7 @@ export function timelineLayout(modelWidth:number,modelHeight:number,width:number
 export function TimelineView({model,width,height,extraLarge=false}:{model:any;width:number;height:number;extraLarge?:boolean}){
   const layout=timelineLayout(model.width,model.height,width,height,extraLarge),{sx,sy}=layout
   return <ZStack alignment="topLeading" frame={{width,height}} clipped widgetBackground="#0A0A0B">
-    <Link url="calshow://" {...(extraLarge?{frame:{width:layout.width,height:layout.height},position:{x:width/2,y:height/2}}:{})}><GraphView image={model.image} width={layout.width} height={layout.height}/></Link>
+    <Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Atualizar Calendar pela timeline e curva térmica" {...(extraLarge?{frame:{width:layout.width,height:layout.height},position:{x:width/2,y:height/2}}:{})}><GraphView image={model.image} width={layout.width} height={layout.height}/></Button>
     {model.header.map((day:any)=><Button key={day.date} intent={SelectDay({date:day.date})}
       buttonStyle="plain" accessibilityLabel={`Mostrar ${day.label}, ${day.date}`}
       frame={{width:day.width*sx,height:day.height*sy}}

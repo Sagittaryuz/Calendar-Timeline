@@ -1,3 +1,13 @@
+## Atualização 0.3.14
+
+Corrige o canto inferior direito do domingo e o inferior esquerdo do sábado usando o raio comum, incluindo o ombro do domingo selecionado. Toques nos dias selecionam e redesenham com nova leitura local; legenda de horas e corpo/curva térmica atualizam e voltam para hoje. Nenhum toque do corpo abre o Calendário.
+
+O antigo ×2 era o contador de sobreposições (um evento simultâneo além do próprio). Removido do texto dos charts; os dados de conflito da agenda continuam preservados.
+
+Desempenho: os três widgets já usam Canvas nativo do Scripting. O Calendar mantém o adaptador necessário para reproduzir sua geometria. A máscara dos vizinhos agora é calculada uma vez por render, em vez de seis; a segmentação do desenho é memoizada por imagem/viewport; o toque de dia não espera a ponte e sua próxima execução local lê a agenda sem repetir essa espera. O refresh manual solicita clima novo no único render seguinte, evitando preparar um modelo descartável antes de renderizá-lo novamente. Clima válido continua reutilizado na navegação entre dias. Sincronizações regulares da ponte permanecem; tocar um dia não promete concluir comandos remotos nesse instante.
+
+Testes: 12 cenários completos, navegação/semana/virada de ano, camadas Canvas, cantos, eventos sobrepostos, ponte e lembretes recorrentes, seleção, clima forçado, cache da máscara e segmentação. Fixture com clima e batching produziu máximo de 893 operações/17 camadas, sem medição física de latência. O orçamento de ponte e o iOS ainda podem influenciar atualizações. Compilação e toques no iPhone/iPad desta versão pendentes. Estrutura original de 25 arquivos, pareamento, Keychain e dados preservados. Reversão: scripting-v0.3.13-alpha.1.
+
 ## Atualização 0.3.13 — abertura imediata e painel independente
 
 A tela do projeto aparece antes das consultas, com estado real de carregamento e erro, mantendo a ponte antes da nova leitura da agenda. Herda os alinhamentos e otimizações da 0.3.12. O novo teste de abertura exerce a entrada e comprova apresentação anterior à consulta; latência nativa ainda pendente.
