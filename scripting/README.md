@@ -1,3 +1,7 @@
+## Atualização 0.3.16
+
+O canto inferior direito de domingo fica reto quando outro dia estiver selecionado. O arredondamento usa o raio existente somente quando domingo for selecionado, seguindo a mesma regra já aplicada ao sábado. Testes cobrem quarta-feira, sábado e domingo selecionados. Validação física pendente.
+
 ## Atualização 0.3.15
 
 O canto inferior esquerdo do quadro de sábado permanece reto enquanto outro dia estiver selecionado. O arredondamento aparece somente com sábado selecionado, usando o ombro e raio existentes do quadro ativo. Domingo e demais elementos preservados. Testes com quarta-feira selecionada e sábado selecionado. Validação física pendente.

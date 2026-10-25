@@ -5181,7 +5181,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   if(!isSelected){ctx=new DrawContext();ctx.size=new Size(CANVAS.width,CANVAS.height);ctx.opaque=false;ctx.respectScreenScale=false;}
   if(!isSelected){
     const radii={topLeft:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0,
-      topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0};
+      topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0};
     fillTitleCardShape(ctx,card,radii,new Color('#303136',0.82));
     fillTitleCardShape(ctx,new Rect(card.x+2,card.y+2,card.width-4,card.height-4),
       {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},
