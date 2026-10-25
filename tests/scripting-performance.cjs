@@ -3,7 +3,7 @@ const {pathToFileURL}=require('node:url');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
-const baseline=cp.execFileSync('git',['show','0519c3d:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'}).replace('topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0','topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:date.getDay()===6?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomRight:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0').replace('topRight:Math.max(0,radii.topRight-2)},','topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},');
+const baseline=cp.execFileSync('git',['show','0519c3d:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'}).replace('topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0','topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0').replace('topRight:Math.max(0,radii.topRight-2)},','topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},');
 function compile(text){return new AsyncFunction('host','options',text.replace('export async function renderOriginal(host, options = {}) {','') .replace(/}\s*$/,''));}
 const current=compile(source),previous=compile(baseline);
 const now=new Date(2026,9,22,12),astronomy={latitude:-16.68,longitude:-49.25},weather={hours:[],daily:{}};

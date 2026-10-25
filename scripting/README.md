@@ -1,3 +1,7 @@
+## Atualização 0.3.15
+
+O canto inferior esquerdo do quadro de sábado permanece reto enquanto outro dia estiver selecionado. O arredondamento aparece somente com sábado selecionado, usando o ombro e raio existentes do quadro ativo. Domingo e demais elementos preservados. Testes com quarta-feira selecionada e sábado selecionado. Validação física pendente.
+
 ## Atualização 0.3.14
 
 Corrige o canto inferior direito do domingo e o inferior esquerdo do sábado usando o raio comum, incluindo o ombro do domingo selecionado. Toques nos dias selecionam e redesenham com nova leitura local; legenda de horas e corpo/curva térmica atualizam e voltam para hoje. Nenhum toque do corpo abre o Calendário.
