@@ -524,7 +524,11 @@ for (let index = 0; index < TITLE_CARD_COUNT; index++) {
 }
 const legendHeight=legendTextHeight()+scaleVertical(8);
 const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeight/2);
+// Hit geometry only: these are the same local bounds used to draw the
+// temperature labels and curve, translated into the root image coordinates.
+const thermalY=CANVAS.timelineTop+thermalTemperatureLabelTopY();
 return {hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
+  thermalBand:{x:CANVAS.plotLeft,y:thermalY,width:timelineWidth(),height:CANVAS.timelineTop+thermalBandBottomY()-thermalY},
   panel:{day:dateKey(windowStart),...titleScheduleCountsForDay(windowStart),freshness:loadResult.freshness,rows:selectedItems.slice(0,6).map(item=>({kind:item.kind,title:String(item.title??'').slice(0,120),time:item.isAllDay?'Dia todo':`${String(item.start.getHours()).padStart(2,'0')}:${String(item.start.getMinutes()).padStart(2,'0')}`}))},
   image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
   version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),

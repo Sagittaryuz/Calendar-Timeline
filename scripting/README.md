@@ -1,3 +1,13 @@
+## Atualização 0.3.17 — áreas de toque
+
+Charts de eventos/lembretes abrem diretamente o Calendário (`calshow://`). A atualização existente fica somente na legenda inferior de horas e na faixa de temperaturas/curva térmica; continua voltando para hoje e solicitando clima novo. Os sete cartões mantêm suas ações de seleção.
+
+Causa: a 0.3.14 envolveu o GraphView inteiro no botão RefreshCalendar. Solução: restaurar o Link de fundo e acrescentar um botão invisível irmão para a faixa térmica, calculado pelo motor com os mesmos limites usados pelos rótulos e pela curva. A legenda mantém seu botão anterior. Não há botões dentro do Link nem intenções sobrepostas entre si. A arbitragem do Link de fundo com os botões acima dele ainda requer teste físico.
+
+Validação local: compilação dos 20 módulos, suíte ativa, 14 cenas com/sem eventos, lembretes e clima, sete seleções, 98 árvores de UI em sete tamanhos médio/extragrande, 18.228 amostras de toque e 20 execuções repetidas das intenções. Operações de desenho e campos anteriores do modelo idênticos à 0.3.16; pacote de 25 arquivos validado por CRC, bytes e versão. Vinte arquivos permanecem iguais à distribuição anterior normalizando CRLF para LF. Relatório: [hit-areas-0.3.17.json](../docs/hit-areas-0.3.17.json).
+
+Atualize o mesmo projeto pelo [vínculo Git existente](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando Storage, Keychain e pareamento. A pré-release `scripting-v0.3.17-alpha.1` contém o arquivo `.scripting`. Nenhum dado de agenda ou pareamento foi acessado ou alterado por estes testes. Abertura do Calendário, ausência de disparo duplo e repetição dos toques no WidgetKit real ainda dependem de teste no iPhone/iPad; os testes locais simulam o despacho pelo elemento superior e as APIs nativas. Reversão disponível na 0.3.16 sem apagar o projeto. Não há workflow de CI Scripting configurado nesta branch; o workflow Android permanece inalterado.
+
 ## Atualização 0.3.16
 
 O canto inferior direito de domingo fica reto quando outro dia estiver selecionado. O arredondamento usa o raio existente somente quando domingo for selecionado, seguindo a mesma regra já aplicada ao sábado. Testes cobrem quarta-feira, sábado e domingo selecionados. Validação física pendente.

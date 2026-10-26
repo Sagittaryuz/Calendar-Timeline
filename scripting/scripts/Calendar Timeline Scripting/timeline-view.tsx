@@ -1,4 +1,4 @@
-import { Button, Rectangle, ZStack } from 'scripting'
+import { Button, Link, Rectangle, ZStack } from 'scripting'
 import { GraphView } from './graph-view'
 import { SelectDay, RefreshCalendar } from './app_intents'
 
@@ -11,13 +11,18 @@ export function timelineLayout(modelWidth:number,modelHeight:number,width:number
 export function TimelineView({model,width,height,extraLarge=false}:{model:any;width:number;height:number;extraLarge?:boolean}){
   const layout=timelineLayout(model.width,model.height,width,height,extraLarge),{sx,sy}=layout
   return <ZStack alignment="topLeading" frame={{width,height}} clipped widgetBackground="#0A0A0B">
-    <Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Atualizar Calendar pela timeline e curva térmica" {...(extraLarge?{frame:{width:layout.width,height:layout.height},position:{x:width/2,y:height/2}}:{})}><GraphView image={model.image} width={layout.width} height={layout.height}/></Button>
+    <Link url="calshow://" accessibilityLabel="Abrir Calendário pelos eventos e lembretes" {...(extraLarge?{frame:{width:layout.width,height:layout.height},position:{x:width/2,y:height/2}}:{})}><GraphView image={model.image} width={layout.width} height={layout.height}/></Link>
     {model.header.map((day:any)=><Button key={day.date} intent={SelectDay({date:day.date})}
       buttonStyle="plain" accessibilityLabel={`Mostrar ${day.label}, ${day.date}`}
       frame={{width:day.width*sx,height:day.height*sy}}
       position={{x:layout.left+(day.x+day.width/2)*sx,y:layout.top+(day.y+day.height/2)*sy}}>
       <Rectangle fill="black" opacity={0.001} frame={{width:day.width*sx,height:day.height*sy}}/>
     </Button>)}
+    {model.thermalBand?<Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Atualizar todos os widgets pela curva térmica"
+      frame={{width:model.thermalBand.width*sx,height:model.thermalBand.height*sy}}
+      position={{x:layout.left+(model.thermalBand.x+model.thermalBand.width/2)*sx,y:layout.top+(model.thermalBand.y+model.thermalBand.height/2)*sy}}>
+      <Rectangle fill="black" opacity={0.001} frame={{width:model.thermalBand.width*sx,height:model.thermalBand.height*sy}}/>
+    </Button>:null}
     {model.hourLegend?<Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Atualizar todos os widgets pela legenda de horas"
       frame={{width:model.hourLegend.width*sx,height:model.hourLegend.height*sy}}
       position={{x:layout.left+(model.hourLegend.x+model.hourLegend.width/2)*sx,y:layout.top+(model.hourLegend.y+model.hourLegend.height/2)*sy}}>

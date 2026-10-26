@@ -1,3 +1,9 @@
+## Scripting 0.3.17 — 2026-10-26
+
+- Restaura abertura direta do Calendário nos charts de eventos/lembretes.
+- Restringe RefreshCalendar à legenda de horas e faixa/curva térmica exportada pelo motor; preserva as sete seleções e todas as operações de desenho da 0.3.16.
+- Compilação, suíte, limites em sete tamanhos, repetição e pacote de 25 arquivos aprovados localmente. Toques/abertura/arbitragem nativos no iOS pendentes. Evidências em docs/hit-areas-0.3.17.json.
+
 ## Scripting 0.3.11 — 2026-10-24
 
 - Área invisível de atualização na legenda de horas, alinhada ao desenho real em médio/extragrande.

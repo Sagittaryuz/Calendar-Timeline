@@ -1,0 +1,148 @@
+{
+  "baseline": "6a5688e3ae3e20aed3ddaaae4f691f831a89e054",
+  "scenes": 14,
+  "trees": 98,
+  "points": 18228,
+  "sizes": [
+    [
+      338,
+      158,
+      false
+    ],
+    [
+      364,
+      170,
+      false
+    ],
+    [
+      402,
+      186,
+      false
+    ],
+    [
+      715,
+      342,
+      true
+    ],
+    [
+      744,
+      348,
+      true
+    ],
+    [
+      1064,
+      510,
+      true
+    ],
+    [
+      980,
+      400,
+      true
+    ]
+  ],
+  "geometries": [
+    {
+      "header": [
+        {
+          "x": 0,
+          "y": 4,
+          "width": 154.94682857142857,
+          "height": 94.58677685950413
+        },
+        {
+          "x": 156.17552857142857,
+          "y": 2,
+          "width": 154.94682857142857,
+          "height": 96.58677685950413
+        },
+        {
+          "x": 312.35105714285714,
+          "y": 2,
+          "width": 154.94682857142857,
+          "height": 96.58677685950413
+        },
+        {
+          "x": 468.5265857142857,
+          "y": 2,
+          "width": 154.94682857142857,
+          "height": 96.58677685950413
+        },
+        {
+          "x": 624.7021142857143,
+          "y": 2,
+          "width": 154.94682857142857,
+          "height": 96.58677685950413
+        },
+        {
+          "x": 780.8776428571429,
+          "y": 2,
+          "width": 154.94682857142857,
+          "height": 96.58677685950413
+        },
+        {
+          "x": 937.0531714285714,
+          "y": 2,
+          "width": 154.94682857142857,
+          "height": 96.58677685950413
+        }
+      ],
+      "charts": {
+        "top": 155.5096917355372,
+        "bottom": 388.5266115702479
+      },
+      "thermalBand": {
+        "x": 0,
+        "y": 388.86661157024787,
+        "width": 1092,
+        "height": 61.34000000000003
+      },
+      "hourLegend": {
+        "x": 0,
+        "y": 457.0557851239669,
+        "width": 1092,
+        "height": 41.095041322314046
+      }
+    }
+  ],
+  "drawing": "byte-identical serialized operations",
+  "repeatIntents": 20,
+  "nativeGestureArbitration": "pending physical iOS",
+  "version": "0.3.17",
+  "build": {
+    "syntaxAndImports": true,
+    "modules": 20,
+    "nativeTypes": "pending-iOS"
+  },
+  "suite": "npm run test:scripting: PASS; new hit-area regression also PASS",
+  "package": {
+    "name": "Calendar-Timeline-Scripting-0.3.17.scripting",
+    "files": 25,
+    "crc": "PASS",
+    "sourceBytes": "all 25 equal",
+    "unchangedVsPublished0316NormalizedCRLF": [
+      "app_intents.tsx",
+      "bridge-agenda.ts",
+      "bridge-attempts.ts",
+      "bridge-auto.ts",
+      "bridge-client.ts",
+      "bridge-event-reader.ts",
+      "bridge-protocol.ts",
+      "bridge-read-state.ts",
+      "bridge-real.ts",
+      "bridge.tsx",
+      "diagonal-canvas.js",
+      "drawing.js",
+      "graph-view.tsx",
+      "host.ts",
+      "index.tsx",
+      "intent.tsx",
+      "rect-raster.js",
+      "selection.ts",
+      "widget-refresh.ts",
+      "widget.tsx"
+    ],
+    "sha256": "0aa8aeba6a583cb2898e7c01f50915d223b8ff7427d5c06d4274490b9c9841ea"
+  },
+  "instructions": "No AGENTS.md or local .agents/skills files present in supplied workspace/repository; owner instructions from delegation applied.",
+  "ci": "No Scripting CI workflow in this branch; only manually triggered Android publication on main. No runs on baseline SHA."
+}
