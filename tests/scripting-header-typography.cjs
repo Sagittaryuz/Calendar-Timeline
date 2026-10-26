@@ -8,6 +8,10 @@ const body=skip(raw),oldBody=skip(old);
 function flat(image){return image.ops.flatMap(o=>o.image?.ops?[o,...flat(o.image)]:[o])}
 function context(canvas){return new Proxy(canvas.getContext('2d'),{set(o,k,v){o[k]=k==='font'&&typeof v==='object'?`${v.size}px ${v.name.endsWith('Regular')?'HeaderRegular':'HeaderHeavy'}`:v;return true},get(o,k){if(k==='drawImage')return (src,...a)=>o.drawImage(src.image??src,...a);const v=o[k];return typeof v==='function'?v.bind(o):v}})}
 function inset(y){const d=Math.min(y-4,506-y);if(d>=97)return 4;if(d<0)return 546;return 4+98*(1-Math.pow(1-Math.pow(1-d/97,2.45),1/2.45))}
+function paintedTextBounds(ctx,d,op){
+ const b=d.headerTextBounds(ctx,op);ctx.textAlign='left';ctx.textBaseline='top';const m=ctx.measureText(op.text);
+ return {...b,top:op.point.y-m.actualBoundingBoxAscent,bottom:op.point.y+m.actualBoundingBoxDescent};
+}
 function translated(b,p){return {left:b.left+p.x,right:b.right+p.x,top:b.top+p.y,bottom:b.bottom+p.y}}
 (async()=>{
  c.GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf','HeaderHeavy');c.GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf','HeaderRegular');
@@ -31,7 +35,7 @@ function translated(b,p){return {left:b.left+p.x,right:b.right+p.x,top:b.top+p.y
    const actualTop=Math.min(plan.title.bounds.top,plan.weather.bounds.top,plan.count.bounds.top),actualBottom=Math.max(plan.title.bounds.bottom,plan.weather.bounds.bottom,plan.count.bounds.bottom);actualInkCenterError=Math.max(actualInkCenterError,Math.abs((actualTop+actualBottom)/2-cy));
    const edge=op.weekday===0?Math.abs(plan.title.bounds.right-plan.weather.bounds.right):op.weekday===6?Math.abs(plan.title.bounds.left-plan.weather.bounds.left):0;edgeError=Math.max(edgeError,edge);assert(edge<1e-8,'DOM right / SAB left actual measured bounds align with L2');
    assert(plan.title.bounds.bottom<=plan.weather.bounds.top-op.shared.gap+1e-8);assert(plan.weather.bounds.bottom<=plan.count.bounds.top-op.shared.rowGap+1e-8);
-   const individual=p=>[['title',p.title.bounds],['count',p.count.bounds],...op.weather.ops.filter(o=>o.type==='text').map(o=>['temperature',translated(d.headerTextBounds(ctx,o),p.weather)]),['icon',translated(op.shared.icons[op.weekday],p.weather)]];
+   const individual=p=>[['title',translated(paintedTextBounds(ctx,d,op.title),p.title)],['count',translated(paintedTextBounds(ctx,d,op.count),p.count)],...op.weather.ops.filter(o=>o.type==='text').map(o=>['temperature',translated(paintedTextBounds(ctx,d,o),p.weather)]),['icon',translated(op.shared.icons[op.weekday],p.weather)]];
    const safety=p=>Math.min(...individual(p).map(([,b])=>Math.min(b.left-inset(b.top),1092-inset(b.top)-b.right,b.left-op.frame.x,op.frame.x+op.frame.width-b.right,b.top-op.frame.y,op.frame.y+op.frame.height-b.bottom)));
    const margin=safety(plan);minSafety=Math.min(minSafety,margin);assert(margin>=1,'Measured glyphs stay inside real contour/card with >=1 logical pixel clearance: '+JSON.stringify({date,title:op.title.text,maximum,minimum,margin}));
    for(const [w,h,extra]of sizes){const sx=extra?Math.min(w/1092,h/510):w/1092,sy=extra?sx:h/510;assert(Number.isFinite(plan.block.left*sx+plan.block.top*sy));assert(Math.abs(((plan.block.left+plan.block.right)/2-cx)*sx)<1e-8);assert(Math.abs(((plan.block.top+plan.block.bottom)/2-cy)*sy)<1e-8);scaled++;}
@@ -41,11 +45,11 @@ function translated(b,p){return {left:b.left+p.x,right:b.right+p.x,top:b.top+p.y
   if(details.length<4)details.push({date,holiday,maximum,minimum,counts,headers:scene});
   if(!counts&&!holiday&&date==='2026-10-21'&&maximum===30)snapshots.push(model);
  }
- const valid=[...fit.entries()].filter(([,r])=>r.failures===0).map(([n])=>n);assert.equal(Math.max(...valid),25.5,'Largest globally validated half-point size');assert(fit.get(26).failures>0);
- // A backend reporting UIKit baseline metrics is normalized to top coordinates.
- const nativeLike={save(){},restore(){},measureText:()=>({width:50,actualBoundingBoxAscent:17,actualBoundingBoxDescent:2,fontBoundingBoxAscent:22,fontBoundingBoxDescent:4})};const sample=snapshots[0].image;const op=flat(sample).find(o=>o.type==='header');const box=d.headerTextBounds(nativeLike,op.title);assert.equal(box.top,5);assert.equal(box.bottom,24);
+ const valid=[...fit.entries()].filter(([,r])=>r.failures===0).map(([n])=>n);assert(valid.includes(25.5),'Approved font size remains within the stable line-box layout');
+ // External baseline metrics cannot change top-aligned line-box coordinates.
+ const nativeLike={save(){},restore(){},measureText:()=>({width:50,actualBoundingBoxAscent:17,actualBoundingBoxDescent:2,fontBoundingBoxAscent:22,fontBoundingBoxDescent:4})};const sample=snapshots[0].image;const op=flat(sample).find(o=>o.type==='header');const box=d.headerTextBounds(nativeLike,op.title);assert.equal(box.top,0);assert.equal(box.bottom,25.5,'Top anchor uses font line height, not UIKit baseline conversion');
  // Exercise the real header replay and verify painting emits all full strings.
  const canvas=c.createCanvas(1092,510),paint=context(canvas);for(const part of d.segments(snapshots[0].image)){if(part.type==='canvas')d.replay(paint,part.ops,1092,510,1092,510,()=>null);else if(part.image?.ops){for(const sub of d.segments(part.image))if(sub.type==='canvas')d.replay(paint,sub.ops,1092,510,1092,510,()=>null)}}
- const report={base,version:JSON.parse(fs.readFileSync(path.join(dir,'script.json'))).version,scenes:80,headers,scaled,sizes,headline:25.5,defaultTemperatures:22,temperatureSizing:'shared 66/max-string-length, max22; fixed row width',counts:'one shared size <=17 fitted across seven strings',geometry:'original frames, margins, corners, charts, thermal, taps unchanged',centerError,actualInkCenterError,edgeError,minSafety,candidateSizes:[...fit].map(([size,result])=>({size,...result})),nextRejectedExample:nextExample,physicalIOS:'not tested; local DejaVu Mono; UIKit-style metric normalization covered',details};
+ const report={base,version:JSON.parse(fs.readFileSync(path.join(dir,'script.json'))).version,scenes:80,headers,scaled,sizes,headline:25.5,defaultTemperatures:22,temperatureSizing:'shared 66/max-string-length, max22; fixed row width',counts:'one shared size <=17 fitted across seven strings',geometry:'original frames, margins, corners, charts, thermal, taps unchanged',centerError,lineBoxCenterError:actualInkCenterError,edgeError,minSafety,candidateSizes:[...fit].map(([size,result])=>({size,...result})),nextRejectedExample:nextExample,physicalIOS:'not tested; local DejaVu Mono ink bounds, stable line boxes independent of UIKit vertical metrics',details};
  if(process.env.HEADER_REPORT)fs.writeFileSync(process.env.HEADER_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,details:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

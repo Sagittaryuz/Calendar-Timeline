@@ -1,0 +1,849 @@
+{
+  "version": "0.3.20",
+  "base": "b2ed8f618deed6e20375fb925db2bfda53c10638",
+  "physicalCapture": {
+    "inspected": true,
+    "observation": "All first header lines clipped at top; temperature/count rows and agenda/thermal body remain visible.",
+    "personalAgendaCopied": false
+  },
+  "cause": {
+    "confirmedCodeChange": "0.3.19 converted external vertical font metrics into top-anchor offsets and nested text in translated contexts. The Web Canvas tests did not cover incompatible baseline/anchor measurement conventions.",
+    "phoneMetricValues": "not recorded; exact ascent/descent values from phone unknown"
+  },
+  "fix": {
+    "headline": 25.5,
+    "vertical": "uniform line boxes; external ascent/descent cannot affect Y",
+    "drawing": "absolute text points and clip rectangles, as in working 0.3.18; no translated header text context",
+    "scope": "drawing adapter only, plus version markers; engine, frames, margins, corners, data, Bridge and intents unchanged"
+  },
+  "regression": {
+    "base": "b2ed8f618deed6e20375fb925db2bfda53c10638",
+    "font": 25.5,
+    "scenes": 3,
+    "prior": "all 21 title origins negative",
+    "hotfix": "all 21 title origins positive; vertical axes independent of metric convention",
+    "nativeMetrics": "simulated baseline values, not measured on physical phone",
+    "rows": [
+      {
+        "day": 26,
+        "outputs": [
+          {
+            "version": "0.3.19",
+            "positions": [
+              {
+                "text": "DOM 25",
+                "x": 46.02771759033203,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SEG 26",
+                "x": 187.76820373535156,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "TER 27",
+                "x": 343.9437255859375,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "QUA 28",
+                "x": 500.1192626953125,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "QUI 29",
+                "x": 656.2947998046875,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SEX 30",
+                "x": 812.4703369140625,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SAB 31",
+                "x": 954.2108154296875,
+                "y": -14.1112642288208
+              }
+            ]
+          },
+          {
+            "version": "0.3.20",
+            "positions": [
+              {
+                "text": "DOM 25",
+                "x": 46.02771718163068,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SEG 26",
+                "x": 187.76820555245536,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "TER 27",
+                "x": 343.9437341238839,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "QUA 28",
+                "x": 500.1192626953125,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "QUI 29",
+                "x": 656.2947912667411,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SEX 30",
+                "x": 812.4703198381696,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SAB 31",
+                "x": 954.2108082089943,
+                "y": 15.04373553719008
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "day": 25,
+        "outputs": [
+          {
+            "version": "0.3.19",
+            "positions": [
+              {
+                "text": "DOM 25",
+                "x": 46.02771759033203,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SEG 26",
+                "x": 187.76820373535156,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "TER 27",
+                "x": 343.9437255859375,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "QUA 28",
+                "x": 500.1192626953125,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "QUI 29",
+                "x": 656.2947998046875,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SEX 30",
+                "x": 812.4703369140625,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SAB 31",
+                "x": 954.2108154296875,
+                "y": -14.1112642288208
+              }
+            ]
+          },
+          {
+            "version": "0.3.20",
+            "positions": [
+              {
+                "text": "DOM 25",
+                "x": 46.02771718163068,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SEG 26",
+                "x": 187.76820555245536,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "TER 27",
+                "x": 343.9437341238839,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "QUA 28",
+                "x": 500.1192626953125,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "QUI 29",
+                "x": 656.2947912667411,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SEX 30",
+                "x": 812.4703198381696,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SAB 31",
+                "x": 954.2108082089943,
+                "y": 15.04373553719008
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "day": 31,
+        "outputs": [
+          {
+            "version": "0.3.19",
+            "positions": [
+              {
+                "text": "DOM 25",
+                "x": 46.02771759033203,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SEG 26",
+                "x": 187.76820373535156,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "TER 27",
+                "x": 343.9437255859375,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "QUA 28",
+                "x": 500.1192626953125,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "QUI 29",
+                "x": 656.2947998046875,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SEX 30",
+                "x": 812.4703369140625,
+                "y": -14.1112642288208
+              },
+              {
+                "text": "SAB 31",
+                "x": 954.2108154296875,
+                "y": -14.1112642288208
+              }
+            ]
+          },
+          {
+            "version": "0.3.20",
+            "positions": [
+              {
+                "text": "DOM 25",
+                "x": 46.02771718163068,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SEG 26",
+                "x": 187.76820555245536,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "TER 27",
+                "x": 343.9437341238839,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "QUA 28",
+                "x": 500.1192626953125,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "QUI 29",
+                "x": 656.2947912667411,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SEX 30",
+                "x": 812.4703198381696,
+                "y": 15.04373553719008
+              },
+              {
+                "text": "SAB 31",
+                "x": 954.2108082089943,
+                "y": 15.04373553719008
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "base": "334bf949ebdfdd489da6e2b9bce0b3bb079d8bd3",
+    "version": "0.3.20",
+    "scenes": 80,
+    "headers": 560,
+    "scaled": 3920,
+    "sizes": [
+      [
+        338,
+        158,
+        false
+      ],
+      [
+        364,
+        170,
+        false
+      ],
+      [
+        402,
+        186,
+        false
+      ],
+      [
+        715,
+        342,
+        true
+      ],
+      [
+        744,
+        348,
+        true
+      ],
+      [
+        1064,
+        510,
+        true
+      ],
+      [
+        980,
+        400,
+        true
+      ]
+    ],
+    "headline": 25.5,
+    "defaultTemperatures": 22,
+    "temperatureSizing": "shared 66/max-string-length, max22; fixed row width",
+    "counts": "one shared size <=17 fitted across seven strings",
+    "geometry": "original frames, margins, corners, charts, thermal, taps unchanged",
+    "centerError": 1.1368683772161603e-13,
+    "lineBoxCenterError": 7.105427357601002e-15,
+    "edgeError": 0,
+    "minSafety": 3.116222810534264,
+    "candidateSizes": [
+      {
+        "size": 24,
+        "minSafety": 2.7105830093381655,
+        "failures": 0
+      },
+      {
+        "size": 24.5,
+        "minSafety": 2.8469817206059744,
+        "failures": 0
+      },
+      {
+        "size": 25,
+        "minSafety": 2.9821917936115376,
+        "failures": 0
+      },
+      {
+        "size": 25.5,
+        "minSafety": 3.116222810534264,
+        "failures": 0
+      },
+      {
+        "size": 26,
+        "minSafety": 1.7001083208829186,
+        "failures": 0
+      },
+      {
+        "size": 26.5,
+        "minSafety": 0.4952861408692115,
+        "failures": 14
+      },
+      {
+        "size": 27,
+        "minSafety": -1.7126217869185894,
+        "failures": 80
+      },
+      {
+        "size": 28,
+        "minSafety": -5.771650961723708,
+        "failures": 80
+      },
+      {
+        "size": 30,
+        "minSafety": -13.250556359173743,
+        "failures": 80
+      },
+      {
+        "size": 38,
+        "minSafety": -38.26522219330559,
+        "failures": 80
+      }
+    ],
+    "physicalIOS": "not tested; local DejaVu Mono ink bounds, stable line boxes independent of UIKit vertical metrics",
+    "details": [
+      {
+        "date": "2026-10-18",
+        "holiday": false,
+        "maximum": 30,
+        "minimum": 20,
+        "counts": false,
+        "headers": [
+          {
+            "day": "DOM 18",
+            "frame": {
+              "x": 0,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 46.02771718163068,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 47.02771718163068,
+                  "right": 136.7891917910057,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 17.15763678042289,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 18.15763678042289,
+                  "right": 136.7891917910057,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 20.799097879464284,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 21.799097879464284,
+                  "right": 133.14773069196428,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 18.15763678042289,
+                "right": 136.7891917910057,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 3.116222810534264
+          },
+          {
+            "day": "SEG 19",
+            "frame": {
+              "x": 156.17552857142857,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 187.76820555245536,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 188.76820555245536,
+                  "right": 278.52968016183036,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 173.33316535185145,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 174.33316535185145,
+                  "right": 292.96472036243426,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 176.97462645089286,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 177.97462645089286,
+                  "right": 289.32325926339286,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 174.33316535185145,
+                "right": 292.96472036243426,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 11.343051943440074
+          },
+          {
+            "day": "TER 20",
+            "frame": {
+              "x": 312.35105714285714,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 343.9437341238839,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 344.9437341238839,
+                  "right": 434.7052087332589,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 329.50869392328,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 330.50869392328,
+                  "right": 449.14024893386284,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 333.1501550223214,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 334.1501550223214,
+                  "right": 445.4987878348214,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 330.50869392328,
+                "right": 449.14024893386284,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 11.343051943440074
+          },
+          {
+            "day": "QUA 21",
+            "frame": {
+              "x": 468.5265857142857,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 499.6192626953125,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 500.6192626953125,
+                  "right": 591.3807373046875,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 485.6842224947086,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 486.6842224947086,
+                  "right": 605.3157775052914,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 489.32568359375,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 490.32568359375,
+                  "right": 601.67431640625,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 486.6842224947086,
+                "right": 605.3157775052914,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 11.343051943440074
+          },
+          {
+            "day": "QUI 22",
+            "frame": {
+              "x": 624.7021142857143,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 656.2947912667411,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 657.2947912667411,
+                  "right": 747.0562658761161,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 641.8597510661372,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 642.8597510661372,
+                  "right": 761.49130607672,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 645.5012121651786,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 646.5012121651786,
+                  "right": 757.8498449776786,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 642.8597510661372,
+                "right": 761.49130607672,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 11.343051943440074
+          },
+          {
+            "day": "SEX 23",
+            "frame": {
+              "x": 780.8776428571429,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 812.4703198381696,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 813.4703198381696,
+                  "right": 903.2317944475446,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 798.0352796375657,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 799.0352796375657,
+                  "right": 917.6668346481486,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 801.6767407366071,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 802.6767407366071,
+                  "right": 914.0253735491071,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 799.0352796375657,
+                "right": 917.6668346481486,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 11.343051943440074
+          },
+          {
+            "day": "SAB 24",
+            "frame": {
+              "x": 937.0531714285714,
+              "y": 2,
+              "width": 154.94682857142857,
+              "height": 96.58677685950413
+            },
+            "fonts": [
+              25.5,
+              22,
+              17
+            ],
+            "plan": {
+              "title": {
+                "x": 954.2108082089943,
+                "y": 15.04373553719008,
+                "bounds": {
+                  "left": 955.2108082089943,
+                  "right": 1045.9722828183694,
+                  "top": 15.04373553719008,
+                  "bottom": 40.54373553719008
+                }
+              },
+              "weather": {
+                "x": 954.2108082089943,
+                "y": 22.54373553719008,
+                "bounds": {
+                  "left": 955.2108082089943,
+                  "right": 1073.842363219577,
+                  "top": 42.54373553719008,
+                  "bottom": 67.04304132231405
+                }
+              },
+              "count": {
+                "x": 957.8522693080357,
+                "y": 68.54304132231405,
+                "bounds": {
+                  "left": 958.8522693080357,
+                  "right": 1070.2009021205358,
+                  "top": 68.54304132231405,
+                  "bottom": 85.54304132231405
+                }
+              },
+              "block": {
+                "left": 955.2108082089943,
+                "right": 1073.842363219577,
+                "top": 15.04373553719008,
+                "bottom": 85.54304132231405
+              },
+              "rowTops": [
+                15.04373553719008,
+                42.54373553719008,
+                68.54304132231405
+              ]
+            },
+            "margin": 3.116222810534282
+          }
+        ]
+      }
+    ]
+  },
+  "build": "20 modules syntax/imports PASS",
+  "suite": "npm run test:scripting PASS including counterfactual native-anchor regression",
+  "visual": "PASS with local substitute font",
+  "package": {
+    "name": "Calendar-Timeline-Scripting-0.3.20.scripting",
+    "files": 25,
+    "crc": "PASS",
+    "bytes": "all equal to distributed sources",
+    "sha256": "9244790fb2c270cbfe905d356917cf295a40dc278d0396f12ee1d3dcd108f214",
+    "unchangedFilesVs0319": [
+      "app_intents.tsx",
+      "bridge-agenda.ts",
+      "bridge-attempts.ts",
+      "bridge-auto.ts",
+      "bridge-client.ts",
+      "bridge-event-reader.ts",
+      "bridge-protocol.ts",
+      "bridge-read-state.ts",
+      "bridge-real.ts",
+      "bridge.tsx",
+      "diagonal-canvas.js",
+      "graph-view.tsx",
+      "host.ts",
+      "index.tsx",
+      "intent.tsx",
+      "original-engine.js",
+      "rect-raster.js",
+      "selection.ts",
+      "timeline-view.tsx",
+      "widget-refresh.ts",
+      "widget.tsx"
+    ]
+  },
+  "preview": {
+    "library_file_id": "libfile_34b07c04e7948191aeb34412cb42821e",
+    "file_id": "file_00000000429481f4b34cd412ea95a09a",
+    "version": 3,
+    "name": "anchor-before-after-0.3.20.png",
+    "kind": "simulated baseline measurements + DejaVu Mono top-anchored raster; not physical SFMono"
+  },
+  "nativeAcceptance": "pending physical iPhone/iPad retest after update; no claim of a device-tested hotfix",
+  "ci": "No Scripting CI configured; Android workflow unchanged."
+}

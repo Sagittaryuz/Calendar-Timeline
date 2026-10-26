@@ -24,7 +24,7 @@ const compile=s=>new (Object.getPrototypeOf(async function(){}).constructor)('ho
  }
  const rows=[['Hoje comum | QUA 21, preto',21,null,30,20],['Hoje sábado | SAB 24, azul',24,null,30,20],['Hoje domingo | DOM 18, vermelho',18,null,30,20],['Hoje feriado | QUA 21',21,'2026-10-21',30,20],['Textos curtos | 9º e -2º',21,null,9,-2],['Textos longos | -12º e -19º',21,null,-12,-19],['Sem clima | --º e --º',21,null,null,null]];
  const sheet=canvas.createCanvas(2240,110+rows.length*177),ctx=sheet.getContext('2d');ctx.fillStyle='#17191F';ctx.fillRect(0,0,sheet.width,sheet.height);
- ctx.fillStyle='white';ctx.font='bold 27px sans-serif';ctx.fillText('Calendar Timeline | diagnóstico de tipografia',20,34);ctx.font='19px sans-serif';ctx.fillText('Esquerda: 0.3.18. Direita: 0.3.19, títulos 25,5; conjunto centrado em X e Y.',20,65);ctx.fillStyle='#FFCC66';ctx.fillText('SIMULAÇÃO LOCAL: DejaVu Mono substitui SFMono; não é captura iOS. Contorno e caixas são os do motor.',20,92);
+ ctx.fillStyle='white';ctx.font='bold 27px sans-serif';ctx.fillText('Calendar Timeline | diagnóstico de tipografia',20,34);ctx.font='19px sans-serif';ctx.fillText('Esquerda: 0.3.18. Direita: 0.3.20, títulos 25,5; caixas de linha estáveis em X e Y.',20,65);ctx.fillStyle='#FFCC66';ctx.fillText('SIMULAÇÃO LOCAL: DejaVu Mono substitui SFMono; não é captura iOS. Contorno e caixas são os do motor.',20,92);
  const report=[];
  for(let i=0;i<rows.length;i++){
   const [label,day,holiday,maximum,minimum]=rows[i],now=new Date(2026,9,day,12),holidays=new Set(holiday?[holiday]:[]);
@@ -44,10 +44,10 @@ const compile=s=>new (Object.getPrototypeOf(async function(){}).constructor)('ho
     const l=r.layout;ctx.save();ctx.strokeStyle='#54DCFF';ctx.setLineDash([3,3]);ctx.strokeRect(x+l.x,y+31+l.top,l.width,r.size);ctx.strokeStyle='#FFC754';ctx.strokeRect(x+l.temperatureLeft,y+31+l.temperatureY,l.temperatureRight-l.temperatureLeft,l.temperatureSize);ctx.restore();
    }
    ctx.fillStyle=j?'#FFCC66':'#A9B5C7';ctx.font='14px sans-serif';ctx.fillText(j?'25,5 em todos; mesmos quadros, centros e eixos de linha comuns':'0.3.18: 38 em todos, DOM/SAB mais baixos | ciano: título, amarelo: linha 2',x,y+164);
-   report.push({case:label,variant:j?'centered0319':'current0317',captures});
+   report.push({case:label,variant:j?'stable0320':'current0317',captures});
   }
  }
- fs.writeFileSync(path.join(output,'Calendar-Timeline-typography-0.3.19.png'),sheet.toBuffer('image/png'));
- fs.writeFileSync(path.join(output,'preview-0.3.19-layout.json'),JSON.stringify({baseline:'6460bb70a8085c51cf408c790f03385c7030ed4b',nativeFont:'SFMono-Heavy',fontSubstitute:'DejaVu Sans Mono Bold',report},null,2));
+ fs.writeFileSync(path.join(output,'Calendar-Timeline-typography-0.3.20.png'),sheet.toBuffer('image/png'));
+ fs.writeFileSync(path.join(output,'preview-0.3.20-layout.json'),JSON.stringify({baseline:'6460bb70a8085c51cf408c790f03385c7030ed4b',nativeFont:'SFMono-Heavy',fontSubstitute:'DejaVu Sans Mono Bold',report},null,2));
  console.log('Preview and measured layout report ready.');
 })();

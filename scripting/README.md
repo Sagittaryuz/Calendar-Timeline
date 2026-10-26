@@ -1,3 +1,17 @@
+## Atualização 0.3.20 — hotfix do corte físico dos títulos
+
+A captura física da 0.3.19 mostrou todos os títulos cortados pelo topo, não apenas DOM/SAB. Temperaturas, contagens e o corpo continuavam visíveis. A validação anterior com Canvas Web não reproduziu o runtime do Scripting e foi insuficiente.
+
+Causa no código: a 0.3.19 passou a transformar métricas verticais de fonte em offsets para texto ancorado no topo, além de posicionar grupos em contextos traduzidos. O Scripting mede com UIKit e desenha por âncoras SwiftUI; a conversão presumiu a mesma convenção do Canvas Web. Não foram registrados os valores exatos de ascent/descent retornados pelo iPhone, portanto não se atribui ao aparelho um valor de métrica inferido pela simulação.
+
+Correção restrita ao adaptador: as posições verticais usam caixas de linha uniformes e deixam de depender de ascent/descent externos. Pontos de texto, retângulos de recorte, imagens e caminhos recebem coordenadas absolutas, seguindo o caminho de desenho da 0.3.18 que já funcionava. Mantidos os títulos 25,5, centralização das caixas de linha nos dois eixos, eixos comuns de linha, DOM direita / SAB esquerda de L2. Não houve redução adicional de fonte, deslocamento exclusivo de fim de semana ou alteração dos quadros, margens, cantos, gráficos, curva térmica, dados, Bridge ou toques.
+
+Teste novo `scripting-header-native-anchor.cjs`: carrega o adaptador real da 0.3.19 e combina métricas de baseline simuladas com desenho ancorado no topo. A versão antiga emite os 21 títulos em Y negativo nas três seleções; o hotfix emite todos em Y positivo e igual, independentemente da convenção de métricas verticais. Na reprodução escolhida, Y passa de −14,11 para +15,04 unidades. Esses números são da simulação, não de medição no iPhone. O teste é parte da suíte ativa e teria falhado na 0.3.19.
+
+Compilação/imports dos 20 módulos, suíte ativa, verificação visual e pacote CRC/bytes de 25 arquivos aprovados. Os 80 cenários de geometria e conteúdo continuam aprovados; a folga mínima dos glifos no raster local foi 3,12 unidades. As métricas de tinta locais agora são verificadas separadamente das caixas usadas pelo layout, evitando tratar baseline calculada como prova de pixels desenhados. [Relatório](../docs/header-anchor-hotfix-0.3.20.json).
+
+Atualize o mesmo projeto pelo [Git da branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), sem apagar armazenamento ou refazer pareamento. A prévia de regressão usa DejaVu Mono e métricas simuladas, explicitamente identificadas; não é uma captura SFMono. O hotfix ainda precisa de reteste físico no Scripting instalado. Não há CI Scripting configurado. O pacote foi validado localmente; upload de asset de release anteriormente bloqueado por HTTP 401 não foi repetido.
+
 ## Atualização 0.3.19 — fonte menor e centralização nos dois eixos
 
 Os sete títulos passam de 38 para **25,5 unidades** do motor (8,5 pontos no widget de 364 × 170). É o maior tamanho uniforme aprovado na busca local em passos de 0,5; 26 já invade o contorno de DOM/SAB ao centrar o conjunto. Preserva SFMono-Heavy, sem compressão de glifos nem espaçamento negativo entre letras.

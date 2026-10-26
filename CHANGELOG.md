@@ -1,3 +1,9 @@
+## Scripting 0.3.20 — 2026-10-26
+
+- Corrige a regressão da 0.3.19 que cortou todos os títulos no aparelho: remove a conversão de métricas verticais externas em offsets e desenha o cabeçalho com coordenadas absolutas.
+- Mantém fonte 25,5, caixas de linha centradas, quadros originais, margens, cantos, dados, Bridge, curva térmica e toques.
+- Novo teste contrafactual reproduz Y negativo no adaptador real anterior e passa no hotfix; compilação, suíte, visual e pacote aprovados localmente. Captura física inspecionada; reteste do hotfix no iOS ainda pendente.
+
 ## Scripting 0.3.19 — 2026-10-26
 
 - Reduz todos os títulos para SFMono-Heavy 25,5, o maior valor uniforme validado em passos de 0,5, sem comprimir glifos.

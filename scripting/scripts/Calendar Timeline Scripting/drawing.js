@@ -195,10 +195,10 @@ export function headerTextBounds(ctx,op,text=op.text,cache){
   const width=Number.isFinite(m.width)?m.width:text.length*font.size*0.62;
   const left=Number.isFinite(m.actualBoundingBoxLeft)?-m.actualBoundingBoxLeft:0;
   const right=Number.isFinite(m.actualBoundingBoxRight)?m.actualBoundingBoxRight:width;
-  // UIKit reports baseline metrics; Web Canvas may already apply textBaseline.
-  const offset=m.actualBoundingBoxAscent>=0&&m.fontBoundingBoxAscent>font.size/2?m.fontBoundingBoxAscent:0;
-  const top=Number.isFinite(m.actualBoundingBoxAscent)?offset-m.actualBoundingBoxAscent:0;
-  const bottom=Number.isFinite(m.actualBoundingBoxDescent)?offset+m.actualBoundingBoxDescent:font.size;
+  // Scripting measures UIKit baseline metrics but draws through SwiftUI
+  // anchors. Do not turn those vertical metrics into top-anchor offsets.
+  // The stable 0.3.18 renderer positioned top-aligned text by its line box.
+  const top=0,bottom=font.size;
   const r=op.rect,anchor=op.point.x+(r?(op.state.align==='right'?r.width:op.state.align==='center'?r.width/2:0):0);
   const x=anchor-(op.state.align==='right'?width:op.state.align==='center'?width/2:0);
   return {left:x+left,right:x+right,top:op.point.y+top,bottom:op.point.y+bottom};
@@ -231,12 +231,21 @@ export function headerPlan(ctx,op){
   const block=unionHeaderBounds([plan.title.bounds,plan.weather.bounds,plan.count.bounds]);plan.block.left=block.left;plan.block.right=block.right;
   ctx.restore();return plan;
 }
+function offsetHeaderOp(op,x,y){
+  return {...op,
+    ...(op.point?{point:{x:op.point.x+x,y:op.point.y+y}}:{}),
+    ...(op.rect?{rect:{...op.rect,x:op.rect.x+x,y:op.rect.y+y}}:{}),
+    ...(op.path?{path:op.path.map(([method,...args])=>[method,...args.map((v,i)=>v+(i%2?y:x))])}:{})};
+}
 function replayHeader(ctx,op,resolveSymbol){
   const plan=headerPlan(ctx,op),parts=[['title',{size:{width:1092,height:510},ops:[op.title]}],['weather',op.weather],['count',{size:{width:1092,height:510},ops:[op.count]}]];
-  for(const [name,image]of parts){ctx.save();ctx.translate(plan[name].x,plan[name].y);
-    for(const part of segments(image)){
+  for(const [name,image]of parts){
+    // Use absolute points and clip rectangles, as in the working renderer.
+    // Avoid nesting text anchors inside a translated header context.
+    const shifted={...image,ops:image.ops.map(o=>offsetHeaderOp(o,plan[name].x,plan[name].y))};
+    for(const part of segments(shifted)){
       if(part.type==='canvas')replay(ctx,part.ops,1092,510,1092,510,resolveSymbol);
       else if(part.image?.native)ctx.drawImage({image:part.image.native},part.rect.x,part.rect.y,part.rect.width,part.rect.height);
-    }ctx.restore();
+    }
   }
 }
