@@ -81,7 +81,8 @@ export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymb
   for(const op of ops){
     const s=op.state,r=op.rect;
     if(s){ctx.fillStyle=s.fill.css();ctx.strokeStyle=s.stroke.css();ctx.lineWidth=s.width;}
-    if(op.type==='fillRect'||op.type==='strokeRect')ctx[op.type](r.x,r.y,r.width,r.height);
+    if(op.type==='header')replayHeader(ctx,op,resolveSymbol);
+    else if(op.type==='fillRect'||op.type==='strokeRect')ctx[op.type](r.x,r.y,r.width,r.height);
     else if(op.type==='fillEllipse'||op.type==='strokeEllipse'){
       ctx.beginPath();ctx.ellipse(r.x+r.width/2,r.y+r.height/2,r.width/2,r.height/2,0,0,Math.PI*2,false);
       ctx[op.type==='fillEllipse'?'fill':'stroke']();
@@ -183,4 +184,59 @@ export function segments(image,viewport={x:0,y:0,width:image.size.width,height:i
   }
   flush();if(!cached){cached=new Map();segmentCache.set(image,cached)}
   if(cached.size>=4)cached.clear();cached.set(key,result);return result;
+}
+
+function unionHeaderBounds(boxes){return {left:Math.min(...boxes.map(b=>b.left)),right:Math.max(...boxes.map(b=>b.right)),top:Math.min(...boxes.map(b=>b.top)),bottom:Math.max(...boxes.map(b=>b.bottom))};}
+const headerMeasureCache=new WeakMap();
+export function headerTextBounds(ctx,op,text=op.text,cache){
+  const font=op.state.font;ctx.font={name:font.name,size:font.size};ctx.textAlign='left';ctx.textBaseline='top';
+  const key=font.name+':'+font.size+':'+text;
+  let m=cache?.get(key);if(!m){m=ctx.measureText(text);cache?.set(key,m)}
+  const width=Number.isFinite(m.width)?m.width:text.length*font.size*0.62;
+  const left=Number.isFinite(m.actualBoundingBoxLeft)?-m.actualBoundingBoxLeft:0;
+  const right=Number.isFinite(m.actualBoundingBoxRight)?m.actualBoundingBoxRight:width;
+  // UIKit reports baseline metrics; Web Canvas may already apply textBaseline.
+  const offset=m.actualBoundingBoxAscent>=0&&m.fontBoundingBoxAscent>font.size/2?m.fontBoundingBoxAscent:0;
+  const top=Number.isFinite(m.actualBoundingBoxAscent)?offset-m.actualBoundingBoxAscent:0;
+  const bottom=Number.isFinite(m.actualBoundingBoxDescent)?offset+m.actualBoundingBoxDescent:font.size;
+  const r=op.rect,anchor=op.point.x+(r?(op.state.align==='right'?r.width:op.state.align==='center'?r.width/2:0):0);
+  const x=anchor-(op.state.align==='right'?width:op.state.align==='center'?width/2:0);
+  return {left:x+left,right:x+right,top:op.point.y+top,bottom:op.point.y+bottom};
+}
+function headerWeatherBounds(ctx,op,cache){
+  const texts=op.weather.ops.filter(o=>o.type==='text').map(o=>headerTextBounds(ctx,o,o.text,cache));
+  const vector=op.shared.icons[op.weekday]??{left:0,right:0,top:0,bottom:0};
+  return unionHeaderBounds([...texts,vector]);
+}
+// All seven cards share native row metrics; only their horizontal internal
+// alignment differs. The measured block is centered in each visible card.
+export function headerPlan(ctx,op){
+  ctx.save();
+  const s=op.shared;let cache=headerMeasureCache.get(s);if(!cache){cache=new Map();headerMeasureCache.set(s,cache)}
+  const title=headerTextBounds(ctx,op.title,op.title.text,cache),count=headerTextBounds(ctx,op.count,op.count.text,cache),weather=headerWeatherBounds(ctx,op,cache);
+  const titleRows=s.headlines.map(t=>headerTextBounds(ctx,op.title,t,cache));
+  const countRows=s.counts.map(t=>headerTextBounds(ctx,op.count,t,cache));
+  const temperature=op.weather.ops.find(o=>o.type==='text');
+  const weatherRows=[...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons];
+  const a=unionHeaderBounds(titleRows),b=unionHeaderBounds(weatherRows),c=unionHeaderBounds(countRows);
+  const h1=a.bottom-a.top,h2=b.bottom-b.top,h3=c.bottom-c.top;
+  const height=h1+s.gap+h2+s.rowGap+h3,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
+  const y1=top-a.top,y2=top+h1+s.gap-b.top,y3=top+h1+s.gap+h2+s.rowGap-c.top;
+  const relativeTitleX=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
+  const combinedLeft=Math.min(weather.left,title.left+relativeTitleX),combinedRight=Math.max(weather.right,title.right+relativeTitleX);
+  const weatherX=center-(combinedLeft+combinedRight)/2,titleX=relativeTitleX+weatherX;
+  const countX=center-(count.left+count.right)/2;
+  const shift=(box,x,y)=>({left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
+  const plan={title:{x:titleX,y:y1,bounds:shift(title,titleX,y1)},weather:{x:weatherX,y:y2,bounds:shift(weather,weatherX,y2)},count:{x:countX,y:y3,bounds:shift(count,countX,y3)},block:{left:0,right:0,top,bottom:top+height},rowTops:[top,top+h1+s.gap,top+h1+s.gap+h2+s.rowGap]};
+  const block=unionHeaderBounds([plan.title.bounds,plan.weather.bounds,plan.count.bounds]);plan.block.left=block.left;plan.block.right=block.right;
+  ctx.restore();return plan;
+}
+function replayHeader(ctx,op,resolveSymbol){
+  const plan=headerPlan(ctx,op),parts=[['title',{size:{width:1092,height:510},ops:[op.title]}],['weather',op.weather],['count',{size:{width:1092,height:510},ops:[op.count]}]];
+  for(const [name,image]of parts){ctx.save();ctx.translate(plan[name].x,plan[name].y);
+    for(const part of segments(image)){
+      if(part.type==='canvas')replay(ctx,part.ops,1092,510,1092,510,resolveSymbol);
+      else if(part.image?.native)ctx.drawImage({image:part.image.native},part.rect.x,part.rect.y,part.rect.width,part.rect.height);
+    }ctx.restore();
+  }
 }

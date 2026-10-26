@@ -3,7 +3,7 @@ const fs=require('fs'),path=require('path'),{pathToFileURL}=require('url');
 const root=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
 const output=path.resolve(__dirname,'../work/typography-review');fs.mkdirSync(output,{recursive:true});
 const canvas=require('@napi-rs/canvas');
-const source=require('child_process').execFileSync('git',['show','6460bb7:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
+const source=require('child_process').execFileSync('git',['show','334bf94:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
 const candidate=fs.readFileSync(path.join(root,'original-engine.js'),'utf8');
 
 const compile=s=>new (Object.getPrototypeOf(async function(){}).constructor)('host','options',s.replace('export async function renderOriginal(host, options = {}) {','').replace(/}\s*$/,''));
@@ -24,7 +24,7 @@ const compile=s=>new (Object.getPrototypeOf(async function(){}).constructor)('ho
  }
  const rows=[['Hoje comum | QUA 21, preto',21,null,30,20],['Hoje sábado | SAB 24, azul',24,null,30,20],['Hoje domingo | DOM 18, vermelho',18,null,30,20],['Hoje feriado | QUA 21',21,'2026-10-21',30,20],['Textos curtos | 9º e -2º',21,null,9,-2],['Textos longos | -12º e -19º',21,null,-12,-19],['Sem clima | --º e --º',21,null,null,null]];
  const sheet=canvas.createCanvas(2240,110+rows.length*177),ctx=sheet.getContext('2d');ctx.fillStyle='#17191F';ctx.fillRect(0,0,sheet.width,sheet.height);
- ctx.fillStyle='white';ctx.font='bold 27px sans-serif';ctx.fillText('Calendar Timeline | diagnóstico de tipografia',20,34);ctx.font='19px sans-serif';ctx.fillText('Esquerda: 0.3.17. Direita: 38 px em todos; ajuste interno apenas em DOM/SAB.',20,65);ctx.fillStyle='#FFCC66';ctx.fillText('SIMULAÇÃO LOCAL: DejaVu Mono substitui SFMono; não é captura iOS. Contorno e caixas são os do motor.',20,92);
+ ctx.fillStyle='white';ctx.font='bold 27px sans-serif';ctx.fillText('Calendar Timeline | diagnóstico de tipografia',20,34);ctx.font='19px sans-serif';ctx.fillText('Esquerda: 0.3.18. Direita: 0.3.19, títulos 25,5; conjunto centrado em X e Y.',20,65);ctx.fillStyle='#FFCC66';ctx.fillText('SIMULAÇÃO LOCAL: DejaVu Mono substitui SFMono; não é captura iOS. Contorno e caixas são os do motor.',20,92);
  const report=[];
  for(let i=0;i<rows.length;i++){
   const [label,day,holiday,maximum,minimum]=rows[i],now=new Date(2026,9,day,12),holidays=new Set(holiday?[holiday]:[]);
@@ -33,16 +33,21 @@ const compile=s=>new (Object.getPrototypeOf(async function(){}).constructor)('ho
   for(const [j,src] of [source,candidate].entries()){
    const captures=[];const instrument=src.replace('const layout=weekHeaderLayout(date,card,headlineSize);','const layout=weekHeaderLayout(date,card,headlineSize);host.probe(date,card,headlineSize,layout);');
    const model=await compile(instrument)({...host,probe:(date,card,size,layout)=>captures.push({date:date.toISOString().slice(0,10),card,size,layout})},options);
+   if(j){
+    const mc=canvas.createCanvas(1,1).getContext('2d'),meas=new Proxy(mc,{set(o,k,v){o[k]=k==='font'&&typeof v==='object'?`${v.size}px "${v.name.includes('Regular')?'ReviewMonoRegular':'ReviewMono'}"`:v;return true},get(o,k){const v=o[k];return typeof v==='function'?v.bind(o):v}});
+    const flat=image=>image.ops.flatMap(o=>o.image?.ops?[o,...flat(o.image)]:[o]);
+    for(const op of flat(model.image).filter(o=>o.type==='header')){const p=d.headerPlan(meas,op);captures.push({date:op.title.text,card:op.frame,size:op.title.state.font.size,layout:{x:p.title.bounds.left,top:p.title.bounds.top,width:p.title.bounds.right-p.title.bounds.left,temperatureLeft:p.weather.bounds.left,temperatureRight:p.weather.bounds.right,temperatureY:p.weather.bounds.top,temperatureSize:p.weather.bounds.bottom-p.weather.bounds.top},plan:p});}
+   }
    const img=paint(model.image),x=20+j*1110;ctx.drawImage(img,0,0,1092,110,x,y+31,1092,110);
    for(const r of captures){
     // Actual advance boxes, rather than card-center assertions.
     const l=r.layout;ctx.save();ctx.strokeStyle='#54DCFF';ctx.setLineDash([3,3]);ctx.strokeRect(x+l.x,y+31+l.top,l.width,r.size);ctx.strokeStyle='#FFC754';ctx.strokeRect(x+l.temperatureLeft,y+31+l.temperatureY,l.temperatureRight-l.temperatureLeft,l.temperatureSize);ctx.restore();
    }
-   ctx.fillStyle=j?'#FFCC66':'#A9B5C7';ctx.font='14px sans-serif';ctx.fillText(j?'38 px sem compressão de glifos; espaço interno ajustado em DOM/SAB':'Hoje maior; demais menores | ciano: título, amarelo: linha 2',x,y+164);
-   report.push({case:label,variant:j?'uniform0318':'current0317',captures});
+   ctx.fillStyle=j?'#FFCC66':'#A9B5C7';ctx.font='14px sans-serif';ctx.fillText(j?'25,5 em todos; mesmos quadros, centros e eixos de linha comuns':'0.3.18: 38 em todos, DOM/SAB mais baixos | ciano: título, amarelo: linha 2',x,y+164);
+   report.push({case:label,variant:j?'centered0319':'current0317',captures});
   }
  }
- fs.writeFileSync(path.join(output,'Calendar-Timeline-typography-0.3.18.png'),sheet.toBuffer('image/png'));
- fs.writeFileSync(path.join(output,'preview-0.3.18-layout.json'),JSON.stringify({baseline:'6460bb70a8085c51cf408c790f03385c7030ed4b',nativeFont:'SFMono-Heavy',fontSubstitute:'DejaVu Sans Mono Bold',report},null,2));
+ fs.writeFileSync(path.join(output,'Calendar-Timeline-typography-0.3.19.png'),sheet.toBuffer('image/png'));
+ fs.writeFileSync(path.join(output,'preview-0.3.19-layout.json'),JSON.stringify({baseline:'6460bb70a8085c51cf408c790f03385c7030ed4b',nativeFont:'SFMono-Heavy',fontSubstitute:'DejaVu Sans Mono Bold',report},null,2));
  console.log('Preview and measured layout report ready.');
 })();

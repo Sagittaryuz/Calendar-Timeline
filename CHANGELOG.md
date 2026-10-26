@@ -1,3 +1,10 @@
+## Scripting 0.3.19 — 2026-10-26
+
+- Reduz todos os títulos para SFMono-Heavy 25,5, o maior valor uniforme validado em passos de 0,5, sem comprimir glifos.
+- Centra o conjunto horizontal e verticalmente, com métricas comuns de linha e bordas DOM direita / SAB esquerda alinhadas a L2.
+- Mantém os quadros originais, margens, cantos, charts, curva térmica, Bridge, dados e toques; não aplica a proposta de recuo/redimensionamento rejeitada.
+- Compilação, suíte, visual, 80 cenas e pacote de 25 arquivos aprovados localmente. SFMono/WidgetKit físico pendente. Evidências em docs/header-centering-0.3.19.json.
+
 ## Scripting 0.3.18 — 2026-10-26
 
 - Uniformiza os sete títulos em SFMono-Heavy, 38 unidades do motor, sem exceção por hoje/fundo/feriado.

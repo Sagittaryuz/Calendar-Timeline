@@ -1,3 +1,17 @@
+## Atualização 0.3.19 — fonte menor e centralização nos dois eixos
+
+Os sete títulos passam de 38 para **25,5 unidades** do motor (8,5 pontos no widget de 364 × 170). É o maior tamanho uniforme aprovado na busca local em passos de 0,5; 26 já invade o contorno de DOM/SAB ao centrar o conjunto. Preserva SFMono-Heavy, sem compressão de glifos nem espaçamento negativo entre letras.
+
+Os quadros mantêm integralmente posição, largura, altura, margens e cantos da 0.3.18. Não foi aplicado o recuo lateral de 48 nem o arredondamento alternativo da proposta rejeitada. O Canvas mede os textos, compartilha as métricas das três linhas entre os sete dias e centra o bloco em X e Y no quadro visível. O ajuste de 2 unidades do traço selecionado é considerado para manter o mesmo centro visual. As linhas têm os mesmos eixos verticais em todos os dias. DOM alinha a borda direita de L1 à de L2; SAB alinha as bordas esquerdas. Contagens ficam centradas; cores e regras de feriados permanecem.
+
+A linha de temperaturas mantém largura estável, inclusive com valores curtos, negativos ou ausentes. Sua fonte é comum aos sete dias, até 22 unidades, reduzida proporcionalmente quando a maior string ultrapassa três caracteres. Contagens usam um único tamanho comum até 17, ajustado pela maior contagem da semana; todos os valores são preservados. Os ícones conservam seu tamanho. O espaçamento entre linhas considera suas bordas reais para evitar sobreposição.
+
+Validação: 80 cenas com hoje comum/sábado/domingo/feriado, viradas de mês/ano, temperaturas curtas/negativas/ausentes e contagens de até quatro dígitos; 560 cabeçalhos e 3.920 transformações em sete tamanhos. Centros X/Y e bordas DOM/SAB coincidiram até a precisão numérica local; menor folga até o contorno foi 1,65 unidade. A comparação completa das operações fora dos cabeçalhos, geometria dos quadros, charts, curva térmica e toques é idêntica à 0.3.18. Compilação/imports dos 20 módulos, suíte ativa, visual e pacote CRC/bytes de 25 arquivos aprovados. [Relatório](../docs/header-centering-0.3.19.json). Gerar comparação: `node tools/preview-header-typography.cjs`.
+
+O posicionamento usa `measureText` do [Canvas nativo documentado](https://scriptingapp.github.io/guide/Changelog/3.1.0/Canvas%20(Web%202D%20drawing%20context)/), com cache de medições por conjunto. Normaliza métricas de baseline UIKit e usa largura/caixa de fonte quando limites de tinta laterais não são fornecidos. Testes locais usam DejaVu Mono; não equivalem à medição de SFMono no iOS. A documentação também registra possível diferença entre medição UIKit e desenho SwiftUI; encaixe final no iPhone/iPad físico permanece pendente.
+
+Atualize o mesmo projeto pelo [Git da branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando Storage, Keychain e pareamento. Bridge, dados, charts, curva térmica, sete seleções e cliques da 0.3.17 permanecem. Não há CI Scripting configurado. O pacote `.scripting` foi validado localmente; upload de asset de release anteriormente bloqueado por HTTP 401 não foi repetido sem nova evidência de acesso.
+
 ## Atualização 0.3.18 — títulos com o mesmo estilo
 
 Todos os sete títulos usam `SFMono-Heavy` com 38 unidades no motor de 1092 × 510, o estilo maior que já era usado em hoje nos dias comuns. A diferença anterior era de tamanho (26 nos demais), não de família/peso, e não era provocada pelo fundo preto. A regra agora independe de hoje, seleção, fundo e feriado.

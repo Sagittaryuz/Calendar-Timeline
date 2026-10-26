@@ -5190,32 +5190,27 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
       {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},
       new Color(timelineBackgroundColorForDate(date)));
   }
-  const headlineSize=weekHeaderHeadlineSize(date);
-  const layout=weekHeaderLayout(date,card,headlineSize);
-  const {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight}=layout;
-  const weekend=date.getDay()===0||date.getDay()===6;
-  if(date.getDay()===0)ctx.setTextAlignedRight();
-  else if(date.getDay()===6)ctx.setTextAlignedLeft();
-  else ctx.setTextAlignedCenter();
-  ctx.setFont(Font.blackMonospacedSystemFont(headlineSize));
-  ctx.setTextColor(titleWeekdayColor(date,loadResult.holidayDates));
-  ctx.drawTextInRect(headline,new Rect(weekend?(date.getDay()===0?card.x+2:temperatureLeft):card.x+3,layout.top,weekend?(date.getDay()===0?temperatureRight-card.x-2:card.x+card.width-2-temperatureLeft):card.width-6,card.y+card.height-3-layout.top),layout.tracking);
-  ctx.setTextAlignedCenter();
-  const temperatureY=layout.temperatureY;
-  ctx.setFont(Font.blackMonospacedSystemFont(temperatureSize));
-  ctx.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
-  if(date.getDay()===6)ctx.setTextAlignedLeft();
-  ctx.drawTextInRect(maximum,new Rect(temperatureLeft,temperatureY,maxWidth,card.y+card.height-3-temperatureY));
-  ctx.setTextAlignedCenter();
-  drawTitleWeatherIcon(ctx,titleForecastForDay(date),temperatureLeft+maxWidth+gap/2,
-    temperatureY+temperatureSize*0.56,scaleVertical(24));
-  ctx.setTextColor(new Color(SETTINGS.minimumTemperatureColor));
-  if(date.getDay()===0)ctx.setTextAlignedRight();
-  ctx.drawTextInRect(minimum,new Rect(temperatureRight-minWidth,temperatureY,minWidth,card.y+card.height-3-temperatureY));
-  const countY=layout.countY;
-  ctx.setFont(Font.regularMonospacedSystemFont(smallSize));ctx.setTextAlignedCenter();
-  ctx.setTextColor(new Color('#D1D1D6',0.96));
-  ctx.drawTextInRect(summary,new Rect(card.x+8,countY,card.width-16,smallSize*1.2));
+  const fields=weekHeaderLayout(date,card),shared=weekHeaderStyle();
+  const ink=new DrawContext();ink.size=new Size(CANVAS.width,CANVAS.height);ink.opaque=false;ink.respectScreenScale=false;
+  const text=(value,font,color,width)=>{
+    ink.setFont(font);ink.setTextColor(color);ink.setTextAlignedLeft();
+    ink.drawTextInRect(value,new Rect(0,0,width,100));
+    return ink.getImage().ops.splice(-1)[0];
+  };
+  const title=text(fields.headline,Font.blackMonospacedSystemFont(shared.titleSize),titleWeekdayColor(date,loadResult.holidayDates),300);
+  ink.ops=[];
+  ink.setFont(Font.blackMonospacedSystemFont(shared.temperatureSize));ink.setTextAlignedLeft();
+  ink.setTextColor(new Color(SETTINGS.maximumTemperatureColor));
+  ink.drawTextInRect(fields.maximum,new Rect(0,20,fields.maxWidth,80));
+  drawTitleWeatherIcon(ink,titleForecastForDay(date),fields.maxWidth+fields.gap/2,
+    20+shared.temperatureSize*0.56,scaleVertical(24));
+  ink.setTextColor(new Color(SETTINGS.minimumTemperatureColor));ink.setTextAlignedRight();
+  ink.drawTextInRect(fields.minimum,new Rect(fields.maxWidth+fields.gap,20,fields.minWidth,80));
+  const weather=ink.getImage();ink.ops=[];
+  const count=text(fields.summary,Font.regularMonospacedSystemFont(shared.countSize),new Color('#D1D1D6',0.96),300);
+  shared.icons.push(headerVectorBounds(weather.ops.filter(o=>o.type!=='text')));
+  ctx.op('header',{rect:card,frame:{x:card.x,y:WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2,width:card.width,height:TITLE_CARD_HEIGHT},
+    weekday:date.getDay(),title,weather,count,shared});
   if(!isSelected){
     const image={...ctx.getImage(),outerClip:dayCardNeighbourClip()};
     parent.drawImageInRect(image,new Rect(0,0,CANVAS.width,CANVAS.height));
@@ -12898,37 +12893,36 @@ function dayCardNeighbourClip() {
   path.closeSubpath();return dayCardNeighbourClip.cache=path.commands;
 }
 
-function weekHeaderLayout(date,card,headlineSize) {
+function weekHeaderFields(date) {
   const daily=titleDailyTemperatureForDay(date);
   const temp=value=>{const n=finiteWeatherNumber(value);return n===null?'--º':`${Math.round(n)}º`};
-  const maximum=temp(daily?.maximum),minimum=temp(daily?.minimum);
-  const counts=titleScheduleCountsForDay(date),summary=`E: ${counts.events} | L: ${counts.reminders}`;
-  const headline=`${shortWeekday(date)} ${String(date.getDate()).padStart(2,'0')}`;
-  const temperatureSize=scaleFontSize(21),smallSize=Math.min(scaleFontSize(16),(card.width-16)/(summary.length*0.62));
-  const weekend=date.getDay()===0||date.getDay()===6;
-  const maxWidth=maximum.length*temperatureSize*0.62,minWidth=minimum.length*temperatureSize*0.62;
-  const inset=scaleVertical(3);
-  const gap=weekend?Math.min(scaleVertical(38),Math.max(scaleVertical(26),card.width-2*inset-maxWidth-minWidth)):scaleVertical(38);
-  const temperatureWidth=maxWidth+gap+minWidth;
-  const temperatureLeft=date.getDay()===0?card.x+card.width-inset-temperatureWidth:
-    date.getDay()===6?card.x+inset:card.x+(card.width-temperatureWidth)/2;
-  const temperatureRight=temperatureLeft+temperatureWidth;
-  // Keep the 38 px glyphs intact. Only the inner spacing of the two rounded
-  // end cards changes; native Canvas measures the tracked title at draw time.
-  const tracking=weekend?-scaleVertical(3):0;
-  const height=headlineSize+scaleVertical(1.5)+temperatureSize+scaleVertical(1.5)+smallSize*1.2;
-  const bottom=card.y+card.height;
-  const top=weekend?bottom-scaleVertical(71):card.y+(card.height-height)/2;
-  const width=headline.length*headlineSize*0.60+(headline.length-1)*tracking;
-  const temperatureY=weekend?bottom-scaleVertical(38.5):top+headlineSize+scaleVertical(1.5);
-  const countY=weekend?bottom-smallSize*1.1-scaleVertical(2):temperatureY+temperatureSize+scaleVertical(1.5);
-  const x=date.getDay()===0?temperatureRight-width:date.getDay()===6?temperatureLeft:card.x+(card.width-width)/2;
-  return {maximum,minimum,summary,headline,temperatureSize,smallSize,gap,maxWidth,minWidth,temperatureLeft,temperatureRight,top,x,width,temperatureY,countY,height,tracking};
+  const counts=titleScheduleCountsForDay(date);
+  return {headline:`${shortWeekday(date)} ${String(date.getDate()).padStart(2,'0')}`,
+    maximum:temp(daily?.maximum),minimum:temp(daily?.minimum),summary:`E: ${counts.events} | L: ${counts.reminders}`};
 }
-
-function weekHeaderHeadlineSize() {
-  // Every day uses the former ordinary-today style, including holidays.
-  return scaleFontSize(36);
+function weekHeaderStyle() {
+  if(weekHeaderStyle.cache)return weekHeaderStyle.cache;
+  const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleWeekStart(),i)));
+  const countSize=Math.min(scaleFontSize(16),...days.map(d=>(titleDayCardRect(0).width-16)/(d.summary.length*0.62)));
+  const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
+  return weekHeaderStyle.cache={titleSize:25.5,temperatureSize,countSize,
+    headlines:days.map(d=>d.headline),counts:days.map(d=>d.summary),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:2,rowGap:1.5};
+}
+function weekHeaderLayout(date,card) {
+  const fields=weekHeaderFields(date),style=weekHeaderStyle();
+  const maxWidth=fields.maximum.length*style.temperatureSize*0.62,minWidth=fields.minimum.length*style.temperatureSize*0.62;
+  const gap=scaleFontSize(21)*3*0.62*2+scaleVertical(38)-maxWidth-minWidth;
+  return {...fields,maxWidth,minWidth,gap};
+}
+function headerVectorBounds(ops) {
+  let top=Infinity,bottom=-Infinity,left=Infinity,right=-Infinity;
+  for(const op of ops){
+    const pad=op.type.startsWith('stroke')?(op.state?.width??0)/2:0;
+    const points=op.rect?[[op.rect.x,op.rect.y],[op.rect.x+op.rect.width,op.rect.y+op.rect.height]]:
+      (op.path??[]).flatMap(([, ...p])=>Array.from({length:p.length/2},(_,i)=>[p[i*2],p[i*2+1]]));
+    for(const [x,y]of points){left=Math.min(left,x-pad);right=Math.max(right,x+pad);top=Math.min(top,y-pad);bottom=Math.max(bottom,y+pad)}
+  }
+  return Number.isFinite(top)?{left,right,top,bottom}:{left:0,right:0,top:0,bottom:0};
 }
 
 }

@@ -63,40 +63,18 @@ async function main(){
    if(day!==24)assert(points.some(p=>Math.abs(p[1]-(right+r))<0.1&&Math.abs(p[2]-bridgeY)<0.1),'Right outward bridge curve');
   }
   const headerOps=[...model.image.ops,...model.image.ops.filter(o=>o.type==='image'&&o.rect.y===0&&o.image.size.height===510).flatMap(o=>o.image.ops??[])];
-  const headlineSizes=[];
-  for(const card of model.header){
-   const texts=headerOps.filter(o=>o.type==='text'&&o.point.y<100&&o.point.x>=card.x&&o.point.x<card.x+card.width);
-   assert(texts.length>=3,'Three header rows');
-   const top=Math.min(...texts.map(o=>o.point.y)),bottom=Math.max(...texts.map(o=>o.point.y+o.state.font.size));
-   assert(bottom<card.y+card.height-2,'Header stays inside its lower frame');
-   const rows=[...new Set(texts.map(t=>t.point.y))].sort((a,b)=>a-b);
-   assert.equal(rows.length,3,'Exactly three header rows');
-   const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
-   headlineSizes.push({date:card.date,size:title[0].state.font.size});
-   assert(title[0].state.font.size>=26,'First row retains its hierarchy');
-   if(!/^(DOM|SAB)/.test(title[0].text))assert(Math.abs((rows[0]+rows[2]+counts[0].state.font.size*1.2)/2-(card.y+card.height/2))<0.01,'Ordinary three-row groups retain their centered alignment');
-   assert(temps[0].state.font.size>=22&&counts[0].state.font.size>=17,'Second and third rows enlarged');
-   assert(title[0].state.font.size>temps[0].state.font.size,`First row remains larger and fits contour: ${card.date}`);
-   assert(counts[0].state.font.size>=14&&counts[0].state.font.size<temps[0].state.font.size,'Third row enlarged and below temperature size');
-   assert.match(counts[0].text,/^E: \d+ \| L: \d+$/);
-   const icon=headerOps.find(o=>o.type==='fillEllipse'&&o.state.fill.hex==='FFDE00'&&
-     o.rect.x>temps[0].point.x&&o.rect.x+o.rect.width<temps[1].point.x&&
-     Math.abs(o.rect.y+o.rect.height/2-(rows[1]+temps[0].state.font.size*0.56))<1);
-   assert(icon,'Weather icon between maximum and minimum in every card');
-   const center=card.x+card.width/2;
-   const weekday=new Date(card.date+'T12:00:00').getDay();
-   assert.equal(title[0].state.align,weekday===0?'right':weekday===6?'left':'center');
-   if(weekday===0)assert(Math.abs(title[0].rect.x+title[0].rect.width-(temps[1].rect.x+temps[1].rect.width))<0.01,'Sunday headline aligns with right temperature edge');
-   else if(weekday===6)assert(Math.abs(title[0].rect.x-temps[0].rect.x)<0.01,'Saturday headline aligns with left temperature edge');
-   else assert(Math.abs(title[0].rect.x+title[0].rect.width/2-center)<0.01,'Weekday headline remains centered');
-   assert.equal(counts[0].state.align,'center');
-   assert(Math.abs(counts[0].rect.x+counts[0].rect.width/2-center)<0.01,'Counts centered in every card');
-   assert.equal(temps[0].state.align,weekday===6?'left':'center');assert.equal(temps[1].state.align,weekday===0?'right':'center');
-   if(weekday!==0&&weekday!==6)assert(Math.abs((temps[0].rect.x+temps[1].rect.x+temps[1].rect.width)/2-center)<0.01,'Ordinary temperature/icon groups keep their approved centering');
+  const cards=headerOps.filter(o=>o.type==='header');assert.equal(cards.length,7);
+  const nativeMetrics=native.createCanvas(1,1).getContext('2d');
+  const metricContext=new Proxy(nativeMetrics,{set(o,k,v){o[k]=k==='font'&&typeof v==='object'?`bold ${v.size}px Arial`:v;return true},get(o,k){const v=o[k];return typeof v==='function'?v.bind(o):v}});
+  let rows;
+  for(const card of cards){
+    assert.equal(card.title.state.font.size,25.5);assert(!card.title.tracking);
+    const plan=d.headerPlan(metricContext,card);rows??=plan.rowTops;assert.deepEqual(plan.rowTops,rows);
+    assert(Math.abs((plan.block.left+plan.block.right)/2-card.frame.x-card.frame.width/2)<1e-8);
+    assert(Math.abs((plan.block.top+plan.block.bottom)/2-card.frame.y-card.frame.height/2)<1e-8);
+    if(card.weekday===0)assert(Math.abs(plan.title.bounds.right-plan.weather.bounds.right)<1e-8);
+    if(card.weekday===6)assert(Math.abs(plan.title.bounds.left-plan.weather.bounds.left)<1e-8);
   }
-  assert.equal(new Set(headlineSizes.filter(x=>x.date!=='2026-10-22').map(x=>x.size)).size,1,'Same ordinary headline size including weekends');
-  assert(headlineSizes.every(x=>x.size===38),'Every title uses the former ordinary-today size');
-  assert(headlineSizes.find(x=>x.date==='2026-10-22').size<=38,'Today slightly smaller than the previous 41');
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
   for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');
