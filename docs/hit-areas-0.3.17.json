@@ -144,5 +144,20 @@
     "sha256": "0aa8aeba6a583cb2898e7c01f50915d223b8ff7427d5c06d4274490b9c9841ea"
   },
   "instructions": "No AGENTS.md or local .agents/skills files present in supplied workspace/repository; owner instructions from delegation applied.",
-  "ci": "No Scripting CI workflow in this branch; only manually triggered Android publication on main. No runs on baseline SHA."
+  "ci": "No Scripting CI workflow in this branch; only manually triggered Android publication on main. No runs on baseline SHA.",
+  "publication": {
+    "codeCommit": "43ee2e439942e33d84c2e8d69056f83616247c98",
+    "branch": "scripting",
+    "remoteVersion": "0.3.17",
+    "mainPreserved": "191d229f0963ae5b6413d7f6acca204eef88f0d5",
+    "workflowRunsOnCodeCommit": [],
+    "releaseAsset": {
+      "state": "blocked",
+      "action": "gh release create scripting-v0.3.17-alpha.1 with Calendar-Timeline-Scripting-0.3.17.scripting",
+      "target": "https://uploads.github.com/repos/Sagittaryuz/Calendar-Timeline/releases/423774131/assets",
+      "reason": "HTTP 401: Bad credentials",
+      "attempts": 1,
+      "postcheck": "Release ID 423774131 returns 404; tag/release 0.3.17 absent; no retry or authentication changes."
+    }
+  }
 }
