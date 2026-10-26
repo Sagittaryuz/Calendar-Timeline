@@ -70,7 +70,7 @@ export class DrawContext {
   fillPath(){this.op('fillPath',{path:this.path});this.path=[];}
   strokePath(){this.op('strokePath',{path:this.path});this.path=[];}
   drawText(text,point){this.op('text',{text:String(text),point});}
-  drawTextInRect(text,rect){this.op('text',{text:String(text),point:new Point(rect.x,rect.y),rect});}
+  drawTextInRect(text,rect,tracking=0){this.op('text',{text:String(text),point:new Point(rect.x,rect.y),rect,...(tracking?{tracking}:{})});}
   drawImageAtPoint(image,p){this.drawImageInRect(image,new Rect(p.x,p.y,image.size.width,image.size.height));}
   drawImageInRect(image,rect){this.flushRects();this.ops.push({type:'image',image,rect});}
   getImage(){this.flushRects();return {size:{...this.size},ops:this.ops.slice()};}
@@ -91,7 +91,15 @@ export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymb
     } else if(op.type==='text'){
       ctx.save();if(r){ctx.beginPath();ctx.rect(r.x,r.y,r.width,r.height);ctx.clip();}
       ctx.font={name:s.font.name,size:s.font.size};ctx.fillStyle=s.text.css();ctx.textBaseline='top';ctx.textAlign=s.align;
-      ctx.fillText(op.text,op.point.x+(r?(s.align==='center'?r.width/2:s.align==='right'?r.width:0):0),op.point.y);ctx.restore();
+      const anchor=op.point.x+(r?(s.align==='center'?r.width/2:s.align==='right'?r.width:0):0);
+      if(op.tracking){
+        const chars=Array.from(op.text),advances=chars.map(char=>ctx.measureText(char).width);
+        const width=advances.reduce((a,b)=>a+b,0)+(chars.length-1)*op.tracking;
+        let x=anchor-(s.align==='right'?width:s.align==='center'?width/2:0);
+        ctx.textAlign='left';
+        chars.forEach((char,i)=>{ctx.fillText(char,x,op.point.y);x+=advances[i]+op.tracking;});
+      }else ctx.fillText(op.text,anchor,op.point.y);
+      ctx.restore();
     } else if(op.type==='symbol'){
       const image=resolveSymbol(op.symbol,s.fill.css());
       if(image)ctx.drawImage({image},r.x,r.y,r.width,r.height);

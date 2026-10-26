@@ -1,3 +1,9 @@
+## Scripting 0.3.18 — 2026-10-26
+
+- Uniformiza os sete títulos em SFMono-Heavy, 38 unidades do motor, sem exceção por hoje/fundo/feriado.
+- Ajusta apenas espaçamento interno e posições das linhas em DOM/SAB, mantendo seus alinhamentos por L2 e os limites externos. Não comprime os glifos.
+- Mantém os cliques 0.3.17, Bridge, dados, contorno e curva térmica. Compilação, suíte, visual, 40 cenas tipográficas e pacote de 25 arquivos aprovados localmente; iOS físico pendente. Relatório: docs/header-typography-0.3.18.json.
+
 ## Scripting 0.3.17 — 2026-10-26
 
 - Restaura abertura direta do Calendário nos charts de eventos/lembretes.

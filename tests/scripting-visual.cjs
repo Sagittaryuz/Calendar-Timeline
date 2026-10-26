@@ -74,7 +74,7 @@ async function main(){
    const title=texts.filter(t=>t.point.y===rows[0]),temps=texts.filter(t=>t.point.y===rows[1]),counts=texts.filter(t=>t.point.y===rows[2]);
    headlineSizes.push({date:card.date,size:title[0].state.font.size});
    assert(title[0].state.font.size>=26,'First row retains its hierarchy');
-   assert(Math.abs((rows[0]+rows[2]+counts[0].state.font.size*1.2)/2-(card.y+card.height/2))<0.01,'All three rows vertically centered as one group');
+   if(!/^(DOM|SAB)/.test(title[0].text))assert(Math.abs((rows[0]+rows[2]+counts[0].state.font.size*1.2)/2-(card.y+card.height/2))<0.01,'Ordinary three-row groups retain their centered alignment');
    assert(temps[0].state.font.size>=22&&counts[0].state.font.size>=17,'Second and third rows enlarged');
    assert(title[0].state.font.size>temps[0].state.font.size,`First row remains larger and fits contour: ${card.date}`);
    assert(counts[0].state.font.size>=14&&counts[0].state.font.size<temps[0].state.font.size,'Third row enlarged and below temperature size');
@@ -91,11 +91,11 @@ async function main(){
    else assert(Math.abs(title[0].rect.x+title[0].rect.width/2-center)<0.01,'Weekday headline remains centered');
    assert.equal(counts[0].state.align,'center');
    assert(Math.abs(counts[0].rect.x+counts[0].rect.width/2-center)<0.01,'Counts centered in every card');
-   assert(temps.every(t=>t.state.align==='center'),'Each temperature centered in its own box');
-   assert(Math.abs((temps[0].rect.x+temps[1].rect.x+temps[1].rect.width)/2-center)<0.01,'Temperature/icon group centered in every card');
+   assert.equal(temps[0].state.align,weekday===6?'left':'center');assert.equal(temps[1].state.align,weekday===0?'right':'center');
+   if(weekday!==0&&weekday!==6)assert(Math.abs((temps[0].rect.x+temps[1].rect.x+temps[1].rect.width)/2-center)<0.01,'Ordinary temperature/icon groups keep their approved centering');
   }
   assert.equal(new Set(headlineSizes.filter(x=>x.date!=='2026-10-22').map(x=>x.size)).size,1,'Same ordinary headline size including weekends');
-  assert(headlineSizes.find(x=>x.date==='2026-10-22').size>headlineSizes.find(x=>x.date==='2026-10-21').size,'Today uses more available headline space');
+  assert(headlineSizes.every(x=>x.size===38),'Every title uses the former ordinary-today size');
   assert(headlineSizes.find(x=>x.date==='2026-10-22').size<=38,'Today slightly smaller than the previous 41');
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
@@ -137,7 +137,7 @@ async function main(){
   assert.equal(model.timelineBackground,expected,'Holiday/weekend takes precedence over today');
   const selected=model.header.find(c=>c.selected),image=paint(model.image),pixels=image.getContext('2d');
   const rgb=expected.slice(1).match(/../g).map(x=>parseInt(x,16));
-  assert.deepEqual(Array.from(pixels.getImageData(Math.round(selected.x+selected.width/2),92,1,1).data).slice(0,3),rgb,'Selected card uses the same special-date background');
+  assert.deepEqual(Array.from(pixels.getImageData(Math.round(selected.x+selected.width-10),90,1,1).data).slice(0,3),rgb,'Selected card uses the same special-date background');
   assert.deepEqual(Array.from(pixels.getImageData(540,400,1,1).data).slice(0,3),rgb,'Timeline uses the special-date background');
   if(holiday)fs.writeFileSync(path.join(out,`scripting-${version}-holiday-${day}.png`),image.toBuffer('image/png'));
  }

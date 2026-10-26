@@ -1,3 +1,15 @@
+## Atualização 0.3.18 — títulos com o mesmo estilo
+
+Todos os sete títulos usam `SFMono-Heavy` com 38 unidades no motor de 1092 × 510, o estilo maior que já era usado em hoje nos dias comuns. A diferença anterior era de tamanho (26 nos demais), não de família/peso, e não era provocada pelo fundo preto. A regra agora independe de hoje, seleção, fundo e feriado.
+
+Os dois cartões de extremidade mantêm o quadro, contorno e margens externas. Apenas seu espaço interno muda: espaçamento entre letras de −3,161 unidades, título ligeiramente abaixo e linhas de temperatura/contagem reposicionadas dentro do mesmo quadro. Os glifos continuam em 38, sem escala horizontal. O Canvas mede os avanços reais antes de posicionar cada letra. Domingo conserva a borda direita do título alinhada à borda direita da linha de temperaturas; sábado conserva as bordas esquerdas. Os dias úteis mantêm o alinhamento central aprovado. A largura do ícone é preservada e o vão interno se ajusta para temperaturas negativas mais longas.
+
+Orientação de manutenção: usar um único tamanho de título, sem exceção por hoje/cor. Conferir as bordas de L1/L2 e os glifos, em vez de deduzir o alinhamento pelo centro do cartão. Não resolver recorte diminuindo a fonte nem ampliando o quadro. A solução mantém as famílias/pesos das três linhas e as cores anteriores.
+
+Validação local: 40 cenas, incluindo hoje comum/sábado/domingo/feriado, mudanças de mês/ano, temperaturas curtas/negativas/ausentes; 280 cabeçalhos medidos e 1.960 transformações em sete tamanhos. Nenhuma cobertura de tinta do título foi perdida no raster local. Bordas das caixas de avanço de DOM/SAB coincidem com L2; as bordas de tinta individuais podem diferir por side bearings dos glifos (até 1,37 unidades na fonte substituta). Operações fora do cabeçalho, margens, contornos, curva térmica, agenda e geometria de toques idênticos à 0.3.17. Compilação/imports dos 20 módulos, suíte ativa, visual e pacote de 25 arquivos aprovados. [Relatório](../docs/header-typography-0.3.18.json); gerar comparação com `node tools/preview-header-typography.cjs`.
+
+Atualize o mesmo projeto pelo [Git da branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), mantendo Storage, Keychain e pareamento. Os cliques da 0.3.17 permanecem: charts abrem Calendário, horas/temperatura atualizam e sete cartões selecionam os dias. Não há CI Scripting configurado. A prévia usa DejaVu Mono como substituta local; SFMono, compilação/encaixe e toque no iPhone/iPad físico ainda exigem confirmação. O pacote `.scripting` foi validado localmente; o upload de assets de release anteriormente bloqueado por HTTP 401 não foi repetido sem nova evidência de acesso.
+
 ## Atualização 0.3.17 — áreas de toque
 
 Charts de eventos/lembretes abrem diretamente o Calendário (`calshow://`). A atualização existente fica somente na legenda inferior de horas e na faixa de temperaturas/curva térmica; continua voltando para hoje e solicitando clima novo. Os sete cartões mantêm suas ações de seleção.

@@ -3,7 +3,7 @@ const {pathToFileURL}=require('node:url');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
-const baseline=cp.execFileSync('git',['show','0519c3d:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'}).replace('topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0','topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0').replace('topRight:Math.max(0,radii.topRight-2)},','topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},');
+const baseline=cp.execFileSync('git',['show','6460bb7:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'}).replace('topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0','topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0').replace('topRight:Math.max(0,radii.topRight-2)},','topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},');
 function compile(text){return new AsyncFunction('host','options',text.replace('export async function renderOriginal(host, options = {}) {','') .replace(/}\s*$/,''));}
 const current=compile(source),previous=compile(baseline);
 const now=new Date(2026,9,22,12),astronomy={latitude:-16.68,longitude:-49.25},weather={hours:[],daily:{}};
@@ -16,8 +16,9 @@ async function main(){
  const fitBefore=await fits(baseline),fitAfter=await fits(source);assert(fitAfter<fitBefore/2);
  // Compare every recorded visual operation except the two requested titles.
  const oldModel=await previous(host,fixture),newModel=await current(host,fixture);
- const clean=image=>({...image,ops:image.ops.filter(o=>!(o.type==='text'&&/^(DOM|SAB) \d\d$/i.test(o.text))).map(o=>o.image?.ops?{...o,image:clean(o.image)}:o)});
- assert.deepEqual(JSON.parse(JSON.stringify(clean(newModel.image))),JSON.parse(JSON.stringify(clean(oldModel.image))),'All other drawing operations remain identical');
+ const noHeader=text=>compile(text.replace('function drawTitleDayCard(ctx,date,card,isSelected,isLast) {','function drawTitleDayCard(ctx,date,card,isSelected,isLast) { return;'));
+ const oldBody=await noHeader(baseline)(host,fixture),newBody=await noHeader(source)(host,fixture);
+ assert.deepEqual(JSON.parse(JSON.stringify(newBody.image)),JSON.parse(JSON.stringify(oldBody.image)),'Every drawing operation outside the requested header remains identical to 0.3.17');
  let drawings=0;class CountDraw extends d.DrawContext{constructor(){super();drawings++}}
  const prepared=await current({...host,DrawContext:CountDraw},{...fixture,prepareOnly:true});assert.equal(drawings,0);assert.equal(prepared.image,null);assert.equal(prepared.focusDate,newModel.focusDate);assert.deepEqual(prepared.sourceStatus,newModel.sourceStatus);
  // Deferred native reads prove agenda and location overlap without clock thresholds.

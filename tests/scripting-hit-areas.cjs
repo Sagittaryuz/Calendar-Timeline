@@ -14,7 +14,10 @@ function engine(source,probe=false){
  if(probe)source=source.replace('return {hourLegend:', 'return {probe:{chartTop:CANVAS.timelineTop+timelineChartTop(),chartBottom:CANVAS.timelineTop+timelineChartBottom(),thermalTop:CANVAS.timelineTop+thermalTemperatureLabelTopY(),thermalBottom:CANVAS.timelineTop+thermalBandBottomY()},hourLegend:');
  return new AsyncFunction('host','options',source.replace('export async function renderOriginal(host, options = {}) {','').replace(/}\s*$/,''));
 }
-const current=engine(fs.readFileSync(path.join(dir,'original-engine.js'),'utf8'),true);
+const currentSource=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
+const current=engine(currentSource,true);
+const withoutHeader=s=>engine(s.replace('function drawTitleDayCard(ctx,date,card,isSelected,isLast) {','function drawTitleDayCard(ctx,date,card,isSelected,isLast) { return;'));
+const currentBody=withoutHeader(currentSource),previousBody=withoutHeader(cp.execFileSync('git',['show',baseline+':scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{cwd:root,encoding:'utf8'}));
 const previous=engine(cp.execFileSync('git',['show',baseline+':scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{cwd:root,encoding:'utf8'}));
 const sizes=[[338,158,false],[364,170,false],[402,186,false],[715,342,true],[744,348,true],[1064,510,true],[980,400,true]];
 function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<rect.y+rect.height}
@@ -28,8 +31,8 @@ function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<
   const reminder={...event,kind:'reminder',identifier:'reminder',title:'Synthetic reminder',start:new Date(+start+2*3600000),end:new Date(+start+3*3600000)};
   const options={now:+now,focusDate:+focus,loadResult:{items:populated?[event,reminder]:[],holidayDates:new Set(),error:null},astronomy:{latitude:0,longitude:0},hourlyWeather:{hours:populated?Array.from({length:25},(_,i)=>({timestamp:+focus+i*3600000,temperature:25+5*Math.sin(i/4),rainChance:i%8===0?80:0,rainMM:i%8===0?2:0,cloudiness:15,symbol:'d0'})):[],daily:{}},holidayDates:new Set()};
   const model=await current(host,options),old=await previous(host,options);
-  assert.equal(JSON.stringify(model.image),JSON.stringify(old.image),'Every drawing operation stays identical to 0.3.16');
-  const {probe,thermalBand,...rest}=model;assert.equal(JSON.stringify(rest),JSON.stringify(old),'Existing geometry, agenda and model metadata unchanged');
+  assert.equal(JSON.stringify((await currentBody(host,options)).image),JSON.stringify((await previousBody(host,options)).image),'Drawing outside the intentionally restyled headers stays identical to 0.3.16');
+  const {probe,thermalBand,image,...rest}=model;const {image:oldImage,...oldRest}=old;assert.equal(JSON.stringify(rest),JSON.stringify(oldRest),'Existing geometry, agenda and model metadata unchanged');
   assert.equal(thermalBand.y,probe.thermalTop);assert.equal(thermalBand.y+thermalBand.height,probe.thermalBottom);
   assert(probe.chartBottom<thermalBand.y);assert(thermalBand.y+thermalBand.height<=model.hourLegend.y);
   if(!scenes)geometries.push({header:model.header.map(({x,y,width,height})=>({x,y,width,height})),charts:{top:probe.chartTop,bottom:probe.chartBottom},thermalBand,hourLegend:model.hourLegend});
@@ -74,5 +77,5 @@ function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<
   await definitions.CalendarTimelineRefresh.perform();assert.equal(values.get('selected-day').date,today);assert.equal(values.get('manual-refresh').state,'requested');assert(values.get('calendar-force-weather')>0);
  }
  assert.equal(calls.filter(c=>c==='reload').length,20);assert.equal(calls.filter(c=>c==='bridge').length,10);
- console.log(JSON.stringify({baseline,scenes,trees,points,sizes,geometries,drawing:'byte-identical serialized operations',repeatIntents:20,nativeGestureArbitration:'pending physical iOS'},null,2));
+ console.log(JSON.stringify({baseline,scenes,trees,points,sizes,geometries,drawing:'byte-identical operations outside restyled headers',repeatIntents:20,nativeGestureArbitration:'pending physical iOS'},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1});
