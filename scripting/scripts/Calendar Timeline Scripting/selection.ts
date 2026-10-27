@@ -10,12 +10,8 @@ export function parseLocalDay(value: unknown): Date | null {
 }
 
 export function resolveFocus(saved: unknown, now = new Date()): Date {
-  const record = saved as {date?: unknown; selectedOn?: unknown} | null
-  // A choice lasts for the current real day; midnight restores today automatically.
-  const chosen = record?.selectedOn === localDay(now) ? parseLocalDay(record.date) : null
-  const week=weekRange(now)
-  if (!chosen || chosen < week.start || chosen >= week.end) return new Date(now.getFullYear(),now.getMonth(),now.getDate())
-  return chosen
+  // Older imported widgets may still carry a selected-day record. Ignore it.
+  return new Date(now.getFullYear(),now.getMonth(),now.getDate())
 }
 
 export function validateSelection(value: unknown, now = new Date()): string {
@@ -29,4 +25,9 @@ export function weekRange(now=new Date()){
   const start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-now.getDay())
   const end=new Date(start);end.setDate(end.getDate()+7)
   return {start,end}
+}
+
+// Only our retired navigation preference is removed; agenda/Bridge caches remain.
+export function clearTimelineSelection(storage=Storage){
+  try{storage.remove('selected-day')}catch{}
 }

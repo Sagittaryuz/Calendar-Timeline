@@ -14,11 +14,11 @@ async function main(){
     const touched=Storage.get<number>('calendar-local-touch')??0
     if(!(Date.now()>=touched&&Date.now()-touched<15000))await autoSynchronize({origin:'widget',budgetMS:8000})
     const forced=Storage.get<number>('calendar-force-weather')??0
-    const model=await loadModel({background:true,forceWeather:Date.now()>=forced&&Date.now()-forced<15000}),{width,height}=Widget.displaySize
+    const model=await loadModel({background:true,forceWeather:forced>0}),{width,height}=Widget.displaySize
     if(forced)Storage.set('calendar-force-weather',0)
     Storage.set('widget-diagnostic',{version:VERSION,phase:'present-requested',at:Date.now()})
     Widget.present(<TimelineView model={model} width={width} height={height} extraLarge={family==='systemExtraLarge'}/>,
-      {policy:'after',date:new Date(Date.now()+60*1000)})
+      {policy:'after',date:new Date((Math.floor(Date.now()/60000)+1)*60000)})
   }catch(error){
     const detail=failureDetails(error)
     try{Storage.set('widget-diagnostic',{version:VERSION,phase:'failed-before-present',at:Date.now(),error:detail})}catch{}

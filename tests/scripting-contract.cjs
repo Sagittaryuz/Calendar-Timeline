@@ -51,7 +51,7 @@ async function main(){
   assert.equal(select.resolveFocus(null,today).getHours(),0,'Today is a fixed full-day overview');
   for(const day of ['2026-10-18','2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24'])assert.equal(select.validateSelection(day,today),day);
   for(const day of ['2026-10-17','2026-10-25'])assert.throws(()=>select.validateSelection(day,today));
-  assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-22'},today)),'2026-10-23');
+  assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-22'},today)),'2026-10-22');
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-21'},today)),'2026-10-22');
   for(const bad of ['2026-02-30','2026-13-01','invalid',null,{},'2020-01-01'])assert.throws(()=>select.validateSelection(bad,today));
   const {createHost}=load('host'),host=createHost(today);
@@ -73,13 +73,12 @@ async function main(){
   assert.equal(requests,0,'Invalid destinations are rejected before sending');
   assert.equal((await new host.Request('https://api.open-meteo.com/v1/forecast').loadJSON()).ok,true);
   const intent=load('app_intents').SelectDay;const now=new Date();
-  await intent.perform({date:select.localDay(now)});assert.equal(reloads,1);assert.equal(store.get('selected-day').selectedOn,select.localDay(now));
-  await assert.rejects(()=>intent.perform({date:'2020-01-01'}));assert.equal(reloads,1);
+  await intent.perform({date:select.localDay(now)});assert.equal(reloads,1);assert(!store.has('selected-day'));
+  await intent.perform({date:'2020-01-01'});assert.equal(reloads,2);assert(!store.has('selected-day'));
   const header=Array.from({length:7},(_,i)=>({date:`2026-10-${18+i}`,label:'Dia',x:i*156,y:4,width:150,height:100}));
   const view=load('timeline-view').TimelineView({model:{width:1092,height:510,image:{},header},width:364,height:170});
-  assert.equal(view.children[0].type,'Link');assert.equal(view.children[0].props.url,'calshow://','Charts open Calendar directly');
-  const buttons=view.children[1];assert.equal(buttons.length,7);
-  buttons.forEach((button,i)=>assert.equal(button.props.intent.params.date,header[i].date,'Day buttons retain independent selection intents'));
+  assert.equal(view.children[1].type,'Link');assert.equal(view.children[1].props.url,'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1','Charts request reload through the foreground Calendar handoff');
+  assert(!JSON.stringify(view).includes('CalendarTimelineSelectDay'),'Seven headers have no day action');
   const masked=load('graph-view').GraphView({image:{size:{width:1092,height:510},ops:[],outerClip:[['moveTo',4,4],['lineTo',1088,4],['closePath']]},width:364,height:170});
   assert.equal(masked.props.mask.type,'Canvas','Root graphic uses a contour mask');
   const clipCalls=[],clipContext=new Proxy({}, {get:(_,key)=>(...args)=>clipCalls.push([key,...args])});

@@ -20,7 +20,7 @@ async function main(){
       const start=new Date(focus);start.setHours(14,0,0,0);
       const item={kind:'event',identifier:'synthetic',title:'Reunião de teste',start,end:new Date(+start+3600000),color:'#0A84FF',calendarTitle:'Teste',isAllDay:false};
       const loadResult={items:populated?[item]:[],holidayDates:new Set(),todayEventCount:populated?1:0,todayReminderCount:0,error:null};
-      const options={now:+now,focusDate:+focus,loadResult,astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()};
+      const options={rolling:false,now:+now,focusDate:+focus,loadResult,astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()};
       if(process.env.WEATHER_FIXTURE==='1')options.hourlyWeather.hours=Array.from({length:49},(_,i)=>({
         timestamp:+focus+i*3600000,temperature:25+5*Math.sin(i/4),rainChance:i%8===0?80:0,rainMM:i%8===0?2:0,
         rainRate:i%8===0?2:0,cloudiness:i%8===0?85:15,symbol:i%8===0?'d5':'d0'}));
@@ -55,7 +55,7 @@ async function main(){
   let fixedSlots;
   for(let day=18;day<=24;day++)for(const hour of [3,20]){
     const now=new Date(2026,9,22,hour),focus=new Date(2026,9,day,15,18);
-    const m=await renderOriginal(host,{now:+now,focusDate:+focus,loadResult:{items:[],holidayDates:new Set(),error:null},astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()});
+    const m=await renderOriginal(host,{rolling:false,now:+now,focusDate:+focus,loadResult:{items:[],holidayDates:new Set(),error:null},astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()});
     const slots=m.header.map(d=>({date:d.date,x:d.x,width:d.width}));
     fixedSlots??=slots;assert.deepEqual(slots,fixedSlots,'Weekday positions must not follow time or selection');
     assert.equal(m.header.find(d=>d.selected).date,`2026-10-${day}`);
@@ -74,7 +74,7 @@ async function main(){
     today:async()=>fixtures.filter(e=>e.startDate<at(23)&&e.endDate>at(22))},
     Reminder:{incompleteDueBetween:async()=>[],incompleteDueToday:async()=>[],scheduled:async()=>[]}};
   for(const day of [22,23,24]){
-    const model=await renderOriginal(liveHost,{now:+at(22,23),focusDate:+at(day),
+    const model=await renderOriginal(liveHost,{rolling:false,now:+at(22,23),focusDate:+at(day),
       astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()});
     assert.deepEqual(model.sourceStatus.schedule,{event:true,reminder:true},'Exercise live agenda path');
     const labels=[];function collect(image){for(const op of image.ops){if(op.type==='text')labels.push(op.text);if(op.type==='image'&&op.image.ops)collect(op.image)}}collect(model.image);
@@ -87,7 +87,7 @@ async function main(){
   }
   console.log('PASS: live agenda navigation respects all-day exclusive ends, true multi-day and overnight events.');
   assert(generated.includes('function drawEventArrivalGuides() {}'),'No event-arrival countdowns');
-  console.log('PASS: seven fixed Sun-Sat hit targets; all seven selections; no clock movement; full local day; no event/end-of-day countdowns.');
+  console.log('PASS: static engine fixtures preserve seven Sun-Sat frames and focus rendering; separate rolling suite covers active time; no event/end-of-day countdowns.');
   console.log(`PASS: ${count} complete original-engine renders; empty/populated, navigation, weekend, year boundary.`);
   console.log(`Replay validated; maximum ${maxOps} operations / ${maxLayers} Canvas layers in synthetic scenarios. Device memory/performance unverified.`);
   if(process.env.RASTER_BATCH==='1'){

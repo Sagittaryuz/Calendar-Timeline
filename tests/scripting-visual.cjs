@@ -38,18 +38,18 @@ async function main(){
   const focus=new Date(2026,9,day),at=h=>new Date(2026,9,day,h);
   const items=[{kind:'event',identifier:'a',title:'EVENTO ROSA',start:at(10),end:at(14),color:'#FF2D55',isAllDay:false},
    {kind:'reminder',identifier:'b',title:'LEMBRETE LARANJA',start:at(8),end:at(16),color:'#FF9500',priority:1,sourceIsAllDay:false,isAllDay:false}];
-  const options={now:+now,focusDate:+focus,loadResult:{items,holidayDates:new Set(),error:null},
+  const options={rolling:false,now:+now,focusDate:+focus,loadResult:{items,holidayDates:new Set(),error:null},
    astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:Object.fromEntries(
      Array.from({length:7},(_,i)=>[`2026-10-${18+i}`,{minimum:20,maximum:30,symbol:'d0'}]))},holidayDates:new Set()};
   const model=await renderOriginal(host,options),ops=[],blurs=[];
   function visit(image){if(image.blurRadius)blurs.push(image);for(const op of image.ops){ops.push(op);if(op.type==='image'&&!op.image.native&&!op.image.symbol)visit(op.image)}}visit(model.image);
   assert.equal(blurs.length,0,'No blur on any selected day');
   assert.equal(model.timelineBackground,day===22?'#000000':day===24?'#0D3F68':day===18?'#521720':'#3B3C3E');
-  assert.equal(model.nowMarker===null,day!==22);
+  assert.equal(model.nowMarker,null);
   if(day===22){
-   assert.equal(model.nowMarker.x,1092*12.5/24);
+
    for(const hex of ['FF2D55','FF9500'])assert(ops.some(o=>o.type==='fillRect'&&o.state.fill.hex.toUpperCase()===hex&&o.rect.width>=3&&o.rect.width<=5),'Source-colored start line: '+hex);
-   assert(ops.some(o=>o.type==='fillRect'&&o.state.fill.hex==='30D158'&&o.rect.height>300),'Green time marker spans timeline');
+   assert(!ops.some(o=>o.type==='fillRect'&&o.state.fill.hex==='30D158'&&o.rect.height>300),'Green time marker removed');
   }
   const contour=ops.find(o=>o.type==='strokePath'&&o.state.stroke.hex==='FFFFFF'&&o.state.stroke.alpha===0.96);
   assert(contour,'Continuous selected-day frame');
@@ -77,7 +77,7 @@ async function main(){
   }
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
-  for(const name of ['drawWeekdayBadgesOnTop','drawCurrentDayBoundaryBadgeOnForeground'])assert(source.includes(`function ${name}() {}`),'No bottom weekday circle');
+  assert(!ops.some(o=>o.type==='text'&&/^(DOM|SEG|TER|QUA|QUI|SEX|SAB)$/.test(o.text)&&o.rect?.y>400),'Static comparison has no midnight badge');
   const image=paint(model.image),pixels=image.getContext('2d');
   if(day!==18){
    const bridgeY=points.find(p=>Math.abs(p[1]-4)<0.01&&p[2]>selected.height&&p[2]<200)[2];
@@ -120,6 +120,6 @@ async function main(){
   if(holiday)fs.writeFileSync(path.join(out,`scripting-${version}-holiday-${day}.png`),image.toBuffer('image/png'));
  }
  fs.writeFileSync(path.join(out,`scripting-${version}-review.png`),sheet.toBuffer('image/png'));
- console.log('PASS: no blur, joined frame with both outward bridge curves, daily backgrounds, source colors, green now marker, in-bounds contour. Local Canvas review images saved; iOS rendering unverified.');
+ console.log('PASS: static comparison keeps joined frame, daily backgrounds, source colors and in-bounds contour; green marker removed. Rolling/blur/badge validated separately. Local Canvas review images saved; iOS rendering unverified.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

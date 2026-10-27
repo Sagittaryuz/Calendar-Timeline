@@ -16,6 +16,6 @@ const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripti
  const sdk={Widget:{family:'systemMedium',displaySize:{width:338,height:170},present:()=>{}},Text:'Text'};
  const deps={scripting:sdk,'./bridge-auto':{autoSynchronize:async()=>bridge++},'./model':{loadModel:async()=>{loads++;return model}},'./timeline-view':{TimelineView:()=>{}},'./diagnostics':{VERSION:'fixture',failureDetails:String}};
  const code=transformSync(fs.readFileSync(path.join(dir,'widget.tsx'),'utf8').replace(/main\(\)\s*$/,'module.exports=main'),{loader:'tsx',format:'cjs',jsxFactory:'createElement'}).code;
- vm.runInNewContext(code,{module:m,exports:m.exports,require:id=>deps[id],createElement:()=>({}),Date,Storage:{get:k=>values.get(k),set:()=>true}});await m.exports();assert.equal(bridge,0,'Day tap does not wait for bridge');assert.equal(loads,1,'One native agenda render');
- console.log('PASS touch/render: Sun/Sat lower corners, overlap label removed, one neighbor mask, memoized Canvas segments, day tap reload without bridge wait. Physical latency pending.');
+ vm.runInNewContext(code,{module:m,exports:m.exports,require:id=>deps[id],createElement:()=>({}),Date,Storage:{get:k=>values.get(k),set:()=>true}});await m.exports();assert.equal(bridge,0,'Local tap render does not wait for bridge');assert.equal(loads,1,'One native agenda render');
+ console.log('PASS touch/render: Sun/Sat lower corners, overlap label removed, one neighbor mask, memoized Canvas segments, local tap reload without bridge wait. Physical latency pending.');
 })().catch(e=>{console.error(e);process.exitCode=1});

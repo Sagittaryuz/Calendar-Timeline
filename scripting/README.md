@@ -1,3 +1,15 @@
+## Atualização 0.3.21 — timeline móvel e regras históricas
+
+A timeline de 24h volta a começar no horário real de cada render. Os sete quadros ficam nas posições aprovadas, com a tipografia 25,5 e os mesmos alinhamentos internos; o toque para escolher outro dia foi removido. A migração ignora e remove somente `selected-day`, preservando agenda, lembretes, configurações e dados da Bridge. Intents antigos ainda em widgets já renderizados solicitam atualização de hoje sem selecionar uma data.
+
+O canto inferior direito interno encolhe conforme a virada se aproxima, chega a zero e inverte pelo sinal da distância. O canto externo de sábado conserva seu contorno calibrado. Retornam a linha/círculo de mudança do dia e o blur do contexto de amanhã enquanto houver evento com horário ainda válido ou lembrete pendente de hoje (também em falha de leitura). Eventos de dia inteiro/aniversários, itens encerrados e itens somente de amanhã não ativam o blur. Charts começados hoje continuam nítidos sobre ele. A extensão histórica de lembretes começa após o meio-dia e termina às 6h de amanhã, somente para pendência elegível já devida, vencida ou sem horário; altera a cópia do desenho. Eventos mantêm a duração real. A linha verde do horário atual foi removida.
+
+Charts abrem o Calendário pelo handoff já suportado do Scripting: preparação de dados aguardada por até 1,2 segundo, pedido de `Widget.reloadAll()` e uma única abertura `calshow://`. Offline/timeout preserva cache e navegação. O próximo render consome o pedido de clima fresco mesmo se o iOS o atrasar. Horas e curva térmica preservam o intent de atualização e a ordem da Bridge. Não há nova ação nos quadros.
+
+`Widget.present` solicita execução após o próximo minuto; o iOS decide quando executá-la. Não há animação contínua, loop ou promessa de atualização por minuto. APIs: [Scripting Widget](https://scriptingapp.github.io/guide/Widget/Widget%20API), [AppIntent](https://scriptingapp.github.io/guide/AppIntent), [política WidgetKit](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date).
+
+Validação: suíte ativa, importação/compilação de 20 módulos, geometria em 59 cenas UTC e 59 em America/New_York, 7 dimensões de hit areas, timeout/offline/repetição, migração e regressão do corte físico anterior. A comparação usa dados fictícios e DejaVu Mono, não captura iOS. O círculo segue a coordenada temporal verdadeira e recebe o recorte externo nas bordas do viewport; não foi movido para dentro artificialmente. SFMono físico, gestos nativos e decisões de atualização do iOS continuam sem teste no aparelho. [Registro e medidas](../docs/timeline-restoration-0.3.21.json).
+
 ## Atualização 0.3.20 — hotfix do corte físico dos títulos
 
 A captura física da 0.3.19 mostrou todos os títulos cortados pelo topo, não apenas DOM/SAB. Temperaturas, contagens e o corpo continuavam visíveis. A validação anterior com Canvas Web não reproduziu o runtime do Scripting e foi insuficiente.

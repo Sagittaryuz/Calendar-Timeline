@@ -1,0 +1,685 @@
+{
+  "scenes": 59,
+  "shiftPerHour": 45.5,
+  "header": "exact recorded header operations equal 0.3.20",
+  "rules": "Production always follows now; old selection safely retired. Internal static fixtures preserve approved frame and typography comparison. Historical noon/06 reminder carryover on drawing copies; future-only blur; no green current-time line.",
+  "states": [
+    {
+      "day": 25,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 20.665820617477763,
+      "midnightX": 152.425,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 152.425,
+        "radius": 1.478171428571443,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 20.68248728414443,
+      "midnightX": 151.66666666666669,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 151.66666666666669,
+        "radius": 0.7198380952381171,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 25,
+      "h": 20.699153950811095,
+      "midnightX": 150.90833333333333,
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 150.90833333333333,
+        "radius": 0.03849523809523703,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 273,
+        "radius": 34.12235714285714,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 17.233391418105704,
+      "midnightX": 307.8833333333333,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 307.8833333333333,
+        "radius": 0.7609761904761854,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 17.25005808477237,
+      "midnightX": 307.125,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 307.125,
+        "radius": 0.0026428571428596115,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 26,
+      "h": 17.266724751439035,
+      "midnightX": 306.3666666666667,
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 306.3666666666667,
+        "radius": 0.7556904761904661,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 13.800962218733646,
+      "midnightX": 464.09999999999997,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 464.09999999999997,
+        "radius": 0.8021142857142536,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 13.817628885400314,
+      "midnightX": 463.34166666666664,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 463.34166666666664,
+        "radius": 0.04378095238092783,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 27,
+      "h": 13.834295552066981,
+      "midnightX": 462.5833333333333,
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 462.5833333333333,
+        "radius": 0.7145523809523979,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 10.36853301936159,
+      "midnightX": 620.3166666666666,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 620.3166666666666,
+        "radius": 0.8432523809523218,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 10.385199686028258,
+      "midnightX": 619.5583333333333,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 619.5583333333333,
+        "radius": 0.08491904761899605,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 28,
+      "h": 10.401866352694926,
+      "midnightX": 618.8,
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 618.8,
+        "radius": 0.6734142857143297,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 819,
+        "radius": 43.351057142857144,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 6.936103819989534,
+      "midnightX": 776.5333333333334,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 776.5333333333334,
+        "radius": 0.8843904761905605,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 6.952770486656201,
+      "midnightX": 775.775,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 775.775,
+        "radius": 0.1260571428571211,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 29,
+      "h": 6.969437153322867,
+      "midnightX": 775.0166666666667,
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 775.0166666666667,
+        "radius": 0.6322761904762046,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 3.5036746206174776,
+      "midnightX": 932.75,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 932.75,
+        "radius": 0.9255285714285719,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 3.520341287284144,
+      "midnightX": 931.9916666666667,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 931.9916666666667,
+        "radius": 0.16719523809524617,
+        "direction": 1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 30,
+      "h": 3.537007953950811,
+      "midnightX": 931.2333333333333,
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 931.2333333333333,
+        "radius": 0.5911380952380796,
+        "direction": -1,
+        "outerEdge": false
+      }
+    },
+    {
+      "day": 31,
+      "h": 0,
+      "midnightX": 1092,
+      "bridge": {
+        "edge": 1088,
+        "boundary": 1092,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      }
+    },
+    {
+      "day": 31,
+      "h": 6,
+      "midnightX": 819,
+      "bridge": {
+        "edge": 1088,
+        "boundary": 819,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      }
+    },
+    {
+      "day": 31,
+      "h": 12,
+      "midnightX": 546,
+      "bridge": {
+        "edge": 1088,
+        "boundary": 546,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      }
+    },
+    {
+      "day": 31,
+      "h": 18,
+      "midnightX": 273,
+      "bridge": {
+        "edge": 1088,
+        "boundary": 273,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      }
+    },
+    {
+      "day": 31,
+      "h": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridge": {
+        "edge": 1088,
+        "boundary": 0.7583333333333334,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      }
+    }
+  ],
+  "physicalIOS": "not tested",
+  "version": "0.3.21",
+  "libraryPreview": {
+    "library_file_id": "libfile_8bf2b756c2e88191adb60010d44dcc10",
+    "file_id": "file_00000000648c8210a3f1c76983ce4b0c",
+    "version": 0,
+    "type": "synthetic Canvas comparison; DejaVu Mono, not an iOS capture"
+  },
+  "touches": {
+    "headers": "no active day-selection hit targets; cached legacy intents reload present day only",
+    "charts": "foreground Scripting handoff, await data preparation <=1200ms, request reloadAll, open calshow once",
+    "hoursAndThermal": "existing refresh intent and Bridge order preserved",
+    "weatherFlag": "consumed by next successful render, survives delayed iOS scheduling",
+    "migration": "remove only selected-day; ignore selection even if removal fails"
+  },
+  "schedule": "Widget.present after next minute boundary; iOS controls execution. No continuous animation, timeline entries API, background loop, or guaranteed minute cadence.",
+  "historicalEvidence": [
+    "Calendar Timeline: rolling window and futureTimelineBlur rule",
+    "99c0e73^: pendingDayCarryoverEnabled, local noon cutoff and tomorrow 06 end",
+    "3bcb13b: signed-distance right bridge, shrinking to zero then inverting",
+    "3f4199d: approved stable header line-box anchors preserved"
+  ],
+  "limits": [
+    "No physical iPhone or iPad test. Native SFMono and WidgetKit hit arbitration/suspension remain unverified.",
+    "Midnight circle follows the true divider; near viewport edges the existing outer widget contour naturally clips it.",
+    "Saturday uses its existing calibrated outer corner rather than an internal right bridge.",
+    "OS may postpone or coalesce reload requests. Foreground preparation timeout cannot cancel an already issued native read; late model persistence and duplicate navigation/reload are suppressed."
+  ],
+  "timezones": [
+    "UTC",
+    "America/New_York"
+  ],
+  "validation": {
+    "activeSuiteExitCode": 0,
+    "syntaxAndImports": 20,
+    "archiveRootFiles": 25,
+    "archiveCRCAndByteEquality": true,
+    "archiveSHA256": "3e03d2f41759af1ff961e6cdb7cc673ef11c182fc4b5266207c7d08071b4fdb3",
+    "typographyRegression": "560 headers / 3920 scaled scenarios, unchanged stable line boxes",
+    "rightCorner": "real stroke endpoint checked against signed bridge radius, before/during/after all internal days"
+  }
+}

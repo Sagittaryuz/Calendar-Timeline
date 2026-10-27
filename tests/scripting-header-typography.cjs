@@ -1,3 +1,4 @@
+function normalize(image){return JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!(o?.type==='fillRect'&&o.state?.fill?.hex==='30D158'&&o.rect?.height>300)):v)}
 // Real engine/replay; local font is a substitute, not a native iOS certification.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),cp=require('node:child_process'),{pathToFileURL}=require('node:url'),c=require('@napi-rs/canvas');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting'),base='334bf949ebdfdd489da6e2b9bce0b3bb079d8bd3';
@@ -22,10 +23,10 @@ function translated(b,p){return {left:b.left+p.x,right:b.right+p.x,top:b.top+p.y
  for(const date of ['2026-10-18','2026-10-21','2026-10-24','2026-11-01','2026-12-31'])for(const holiday of [false,true])for(const [maximum,minimum]of [[30,20],[9,-2],[-12,-19],[null,null]])for(const counts of [false,true]){
   const now=new Date(date+'T12:00:00'),h=new Set(holiday?[date]:[]),start=new Date(+now);start.setDate(start.getDate()-start.getDay());
   const keys=Array.from({length:7},(_,i)=>{const t=new Date(+start);t.setDate(t.getDate()+i);return t.toISOString().slice(0,10)});
-  const options={now:+now,focusDate:+now,loadResult:{items:[],holidayDates:h,error:null,scheduleCountsByDay:Object.fromEntries(keys.map((key,i)=>[key,{events:counts?[0,1,12,123,1234,7,88][i]:0,reminders:counts?[1234,23,1,98,4,123,0][i]:0}]))},astronomy:{latitude:0,longitude:0},hourlyWeather:{hours:[],daily:Object.fromEntries(keys.map(key=>[key,{maximum,minimum,symbol:counts?'d7':'d0'}]))},holidayDates:h};
+  const options={rolling:false,now:+now,focusDate:+now,loadResult:{items:[],holidayDates:h,error:null,scheduleCountsByDay:Object.fromEntries(keys.map((key,i)=>[key,{events:counts?[0,1,12,123,1234,7,88][i]:0,reminders:counts?[1234,23,1,98,4,123,0][i]:0}]))},astronomy:{latitude:0,longitude:0},hourlyWeather:{hours:[],daily:Object.fromEntries(keys.map(key=>[key,{maximum,minimum,symbol:counts?'d7':'d0'}]))},holidayDates:h};
   const model=await run(host,options),before=await previous(host,options),groups=flat(model.image).filter(o=>o.type==='header');assert.equal(groups.length,7);
-  for(const k of ['header','hourLegend','thermalBand','contour','timelineBackground','nowMarker','panel'])assert.deepEqual(model[k],before[k],k+' unchanged');
-  assert.equal(JSON.stringify((await body(host,options)).image),JSON.stringify((await oldBody(host,options)).image),'Every operation outside header unchanged');
+  for(const k of ['header','hourLegend','thermalBand','contour','timelineBackground','panel'])assert.deepEqual(model[k],before[k],k+' unchanged');
+  assert.equal(JSON.stringify(normalize((await body(host,options)).image)),JSON.stringify(normalize((await oldBody(host,options)).image)),'Every operation outside header unchanged');
   let commonRows;const scene=[];
   for(const op of groups){
    assert.equal(op.title.state.font.name,'SFMono-Heavy');assert.equal(op.title.state.font.size,25.5);assert(!op.title.tracking,'No tracking or glyph compression');assert.equal(op.frame.width,model.header[op.weekday].width);assert.equal(op.frame.y,2);

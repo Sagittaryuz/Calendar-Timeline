@@ -5,6 +5,7 @@ import { BridgeLauncher, showBridge } from './bridge'
 import { autoSynchronize } from './bridge-auto'
 import { refreshFromWidget } from './widget-refresh'
 import { loadModel } from './model'
+import { clearTimelineSelection } from './selection'
 import { VERSION, failureDetails } from './diagnostics'
 
 async function main(){
@@ -13,8 +14,9 @@ async function main(){
   try{
     if(Script.queryParameters.refresh==='1'){
       await refreshFromWidget({
-        sync:()=>autoSynchronize({origin:'widget-touch',force:true,budgetMS:10000}),
-        load:()=>loadModel({background:true,prepareOnly:true}),reload:()=>Widget.reloadAll(),open:(url:string)=>Safari.openURL(url),
+        request:()=>{clearTimelineSelection();Storage.set('calendar-local-touch',Date.now());Storage.set('calendar-force-weather',Date.now())},
+        prepare:(isCurrent:()=>boolean)=>loadModel({background:true,forceWeather:true,prepareOnly:true,shouldPersist:isCurrent}),
+        reload:()=>Widget.reloadAll(),open:(url:string)=>Safari.openURL(url),
         failed:()=>Storage.set('widget-tap-diagnostic',{at:Date.now(),state:'local-render-failed'})
       })
       return

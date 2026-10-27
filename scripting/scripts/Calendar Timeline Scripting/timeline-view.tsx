@@ -1,6 +1,6 @@
 import { Button, Link, Rectangle, ZStack } from 'scripting'
 import { GraphView } from './graph-view'
-import { SelectDay, RefreshCalendar } from './app_intents'
+import { RefreshCalendar } from './app_intents'
 
 export function timelineLayout(modelWidth:number,modelHeight:number,width:number,height:number,extraLarge=false){
   if(![modelWidth,modelHeight,width,height].every(n=>Number.isFinite(n)&&n>0))throw Error('Dimensões da timeline inválidas.')
@@ -10,14 +10,14 @@ export function timelineLayout(modelWidth:number,modelHeight:number,width:number
 }
 export function TimelineView({model,width,height,extraLarge=false}:{model:any;width:number;height:number;extraLarge?:boolean}){
   const layout=timelineLayout(model.width,model.height,width,height,extraLarge),{sx,sy}=layout
+  const headerBottom=Math.max(0,...model.header.map((day:any)=>day.y+day.height))
   return <ZStack alignment="topLeading" frame={{width,height}} clipped widgetBackground="#0A0A0B">
-    <Link url="calshow://" accessibilityLabel="Abrir Calendário pelos eventos e lembretes" {...(extraLarge?{frame:{width:layout.width,height:layout.height},position:{x:width/2,y:height/2}}:{})}><GraphView image={model.image} width={layout.width} height={layout.height}/></Link>
-    {model.header.map((day:any)=><Button key={day.date} intent={SelectDay({date:day.date})}
-      buttonStyle="plain" accessibilityLabel={`Mostrar ${day.label}, ${day.date}`}
-      frame={{width:day.width*sx,height:day.height*sy}}
-      position={{x:layout.left+(day.x+day.width/2)*sx,y:layout.top+(day.y+day.height/2)*sy}}>
-      <Rectangle fill="black" opacity={0.001} frame={{width:day.width*sx,height:day.height*sy}}/>
-    </Button>)}
+    <ZStack frame={{width:layout.width,height:layout.height}} position={{x:width/2,y:height/2}}><GraphView image={model.image} width={layout.width} height={layout.height}/></ZStack>
+    <Link url="scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1" accessibilityLabel="Abrir Calendário pelos eventos e lembretes"
+      frame={{width:layout.width,height:(model.height-headerBottom)*sy}}
+      position={{x:width/2,y:layout.top+(headerBottom+(model.height-headerBottom)/2)*sy}}>
+      <Rectangle fill="black" opacity={0.001} frame={{width:layout.width,height:(model.height-headerBottom)*sy}}/>
+    </Link>
     {model.thermalBand?<Button intent={RefreshCalendar()} buttonStyle="plain" accessibilityLabel="Atualizar todos os widgets pela curva térmica"
       frame={{width:model.thermalBand.width*sx,height:model.thermalBand.height*sy}}
       position={{x:layout.left+(model.thermalBand.x+model.thermalBand.width/2)*sx,y:layout.top+(model.thermalBand.y+model.thermalBand.height/2)*sy}}>

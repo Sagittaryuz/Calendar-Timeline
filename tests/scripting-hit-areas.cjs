@@ -1,3 +1,4 @@
+function normalize(image){return JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!(o?.type==='fillRect'&&o.state?.fill?.hex==='30D158'&&o.rect?.height>300)):v)}
 // Real engine + production UI tree. Dispatch below models frontmost sibling
 // hit testing; it cannot prove WidgetKit gesture arbitration on an iOS device.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),cp=require('node:child_process'),assert=require('node:assert/strict');
@@ -11,7 +12,7 @@ vm.runInNewContext(code,{module:moduleObject,exports:moduleObject.exports,requir
 const {TimelineView,timelineLayout}=moduleObject.exports;
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 function engine(source,probe=false){
- if(probe)source=source.replace('return {hourLegend:', 'return {probe:{chartTop:CANVAS.timelineTop+timelineChartTop(),chartBottom:CANVAS.timelineTop+timelineChartBottom(),thermalTop:CANVAS.timelineTop+thermalTemperatureLabelTopY(),thermalBottom:CANVAS.timelineTop+thermalBandBottomY()},hourLegend:');
+ if(probe)source=source.replace('return {temporal:', 'return {probe:{chartTop:CANVAS.timelineTop+timelineChartTop(),chartBottom:CANVAS.timelineTop+timelineChartBottom(),thermalTop:CANVAS.timelineTop+thermalTemperatureLabelTopY(),thermalBottom:CANVAS.timelineTop+thermalBandBottomY()},temporal:');
  return new AsyncFunction('host','options',source.replace('export async function renderOriginal(host, options = {}) {','').replace(/}\s*$/,''));
 }
 const currentSource=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
@@ -29,18 +30,18 @@ function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<
   const now=new Date(2026,9,21,12),focus=new Date(2026,9,day),start=new Date(+focus+10*3600000);
   const event={kind:'event',identifier:'event',title:'Synthetic event',start,end:new Date(+start+3600000),color:'#0A84FF',calendarTitle:'Test',isAllDay:false};
   const reminder={...event,kind:'reminder',identifier:'reminder',title:'Synthetic reminder',start:new Date(+start+2*3600000),end:new Date(+start+3*3600000)};
-  const options={now:+now,focusDate:+focus,loadResult:{items:populated?[event,reminder]:[],holidayDates:new Set(),error:null},astronomy:{latitude:0,longitude:0},hourlyWeather:{hours:populated?Array.from({length:25},(_,i)=>({timestamp:+focus+i*3600000,temperature:25+5*Math.sin(i/4),rainChance:i%8===0?80:0,rainMM:i%8===0?2:0,cloudiness:15,symbol:'d0'})):[],daily:{}},holidayDates:new Set()};
+  const options={rolling:false,now:+now,focusDate:+focus,loadResult:{items:populated?[event,reminder]:[],holidayDates:new Set(),error:null},astronomy:{latitude:0,longitude:0},hourlyWeather:{hours:populated?Array.from({length:25},(_,i)=>({timestamp:+focus+i*3600000,temperature:25+5*Math.sin(i/4),rainChance:i%8===0?80:0,rainMM:i%8===0?2:0,cloudiness:15,symbol:'d0'})):[],daily:{}},holidayDates:new Set()};
   const model=await current(host,options),old=await previous(host,options);
-  assert.equal(JSON.stringify((await currentBody(host,options)).image),JSON.stringify((await previousBody(host,options)).image),'Drawing outside the intentionally restyled headers stays identical to 0.3.16');
-  const {probe,thermalBand,image,...rest}=model;const {image:oldImage,...oldRest}=old;assert.equal(JSON.stringify(rest),JSON.stringify(oldRest),'Existing geometry, agenda and model metadata unchanged');
+  assert.equal(JSON.stringify(normalize((await currentBody(host,options)).image)),JSON.stringify(normalize((await previousBody(host,options)).image)),'Drawing outside the intentionally restyled headers stays identical to 0.3.16');
+  const {probe,temporal,nowMarker,thermalBand,image,...rest}=model;const {nowMarker:oldMarker,image:oldImage,...oldRest}=old;assert.equal(JSON.stringify(rest),JSON.stringify(oldRest),'Existing geometry, agenda and model metadata unchanged');
   assert.equal(thermalBand.y,probe.thermalTop);assert.equal(thermalBand.y+thermalBand.height,probe.thermalBottom);
   assert(probe.chartBottom<thermalBand.y);assert(thermalBand.y+thermalBand.height<=model.hourLegend.y);
   if(!scenes)geometries.push({header:model.header.map(({x,y,width,height})=>({x,y,width,height})),charts:{top:probe.chartTop,bottom:probe.chartBottom},thermalBand,hourLegend:model.hourLegend});
   for(const [width,height,extraLarge] of sizes){
    const view=TimelineView({model,width,height,extraLarge}),layout=timelineLayout(model.width,model.height,width,height,extraLarge);
-   const nodes=view.children.flat().filter(Boolean),link=nodes[0],buttons=nodes.slice(1);
-   assert.equal(link.type,'Link');assert.equal(link.props.url,'calshow://');assert.equal(link.props.intent,undefined);
-   assert.equal(buttons.length,9);assert.equal(link.children.length,1);assert.equal(typeof link.children[0].type,'function','Rendering tree untouched');
+   const nodes=view.children.flat().filter(Boolean),graphic=nodes[0],link=nodes[1],buttons=nodes.slice(2);
+   assert.equal(link.type,'Link');assert.equal(link.props.url,'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1');assert.equal(link.props.intent,undefined);
+   assert.equal(buttons.length,2);assert.equal(link.children.length,1);assert.equal(typeof graphic.children[0].type,'function','Rendering tree untouched');
    const targets=buttons.map(node=>{assert.equal(node.type,'Button');assert.equal(node.props.url,undefined);assert.equal(node.children[0].type,'Rectangle');assert.equal(node.children[0].props.opacity,0.001);const {frame,position}=node.props;return {node,x:position.x-frame.width/2,y:position.y-frame.height/2,width:frame.width,height:frame.height}});
    for(let i=0;i<targets.length;i++){
     const a=targets[i];assert(a.x>=-1e-8&&a.y>=-1e-8&&a.x+a.width<=width+1e-8&&a.y+a.height<=height+1e-8);
@@ -49,13 +50,13 @@ function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<
    function dispatch(x,y){
     const px=layout.left+x*layout.sx,py=layout.top+y*layout.sy;
     const hits=targets.filter(r=>contains(r,px,py));assert(hits.length<=1,'No double intent');points++;
-    return hits.length?hits[0].node.props.intent:link.props.url;
+    const lr={x:link.props.position.x-link.props.frame.width/2,y:link.props.position.y-link.props.frame.height/2,...link.props.frame};return hits.length?hits[0].node.props.intent:contains(lr,px,py)?link.props.url:null;
    }
    for(const [i,dayRect] of model.header.entries())for(let repeat=0;repeat<3;repeat++){
-    const action=dispatch(dayRect.x+dayRect.width/2,dayRect.y+dayRect.height/2);assert.equal(action.name,'CalendarTimelineSelectDay');assert.equal(action.params.date,model.header[i].date);
+    const action=dispatch(dayRect.x+dayRect.width/2,dayRect.y+dayRect.height/2);assert.equal(action,null,'Header touches have no navigation');
    }
    for(const x of [1,156,546,936,1091])for(const y of [probe.chartTop+0.01,(probe.chartTop+probe.chartBottom)/2,probe.chartBottom-0.01,thermalBand.y-0.01,thermalBand.y+0.01,probe.thermalBottom-0.01,probe.thermalBottom+0.01,model.hourLegend.y-0.01,model.hourLegend.y+0.01,model.hourLegend.y+model.hourLegend.height-0.01,model.hourLegend.y+model.hourLegend.height+0.01]){
-    const expected=contains(thermalBand,x,y)||contains(model.hourLegend,x,y)?'CalendarTimelineRefresh':'calshow://';
+    const expected=contains(thermalBand,x,y)||contains(model.hourLegend,x,y)?'CalendarTimelineRefresh':'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1';
     for(let repeat=0;repeat<3;repeat++){const result=dispatch(x,y);assert.equal(typeof result==='string'?result:result.name,expected)}
    }
    trees++;
@@ -69,13 +70,13 @@ function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<
  const {transformSync}=require('esbuild');
  const source=transformSync(fs.readFileSync(path.join(dir,'app_intents.tsx'),'utf8'),{loader:'tsx',format:'cjs'}).code;
  const selection=transformSync(fs.readFileSync(path.join(dir,'selection.ts'),'utf8'),{loader:'ts',format:'cjs'}).code,sm={exports:{}};
- vm.runInNewContext(selection,{module:sm,exports:sm.exports,Date});
- vm.runInNewContext(source,{module:m,exports:m.exports,Date,Storage:{set:(k,v)=>{values.set(k,v);return true}},require:name=>name==='scripting'?{...sdk,Widget:{reloadAll:()=>calls.push('reload')}}:name==='./selection'?sm.exports:{autoSynchronize:async()=>calls.push('bridge')}});
+ const store={get:k=>values.get(k),remove:k=>values.delete(k),set:(k,v)=>{values.set(k,v);return true}};vm.runInNewContext(selection,{module:sm,exports:sm.exports,Date,Storage:store});
+ vm.runInNewContext(source,{module:m,exports:m.exports,Date,Storage:store,require:name=>name==='scripting'?{...sdk,Widget:{reloadAll:()=>calls.push('reload')}}:name==='./selection'?sm.exports:{autoSynchronize:async()=>calls.push('bridge')}});
  const today=sm.exports.localDay(new Date());
  for(let i=0;i<10;i++){
-  await definitions.CalendarTimelineSelectDay.perform({date:today});assert.equal(values.get('selected-day').date,today);
-  await definitions.CalendarTimelineRefresh.perform();assert.equal(values.get('selected-day').date,today);assert.equal(values.get('manual-refresh').state,'requested');assert(values.get('calendar-force-weather')>0);
+  await definitions.CalendarTimelineSelectDay.perform({date:today});assert(!values.has('selected-day'));
+  await definitions.CalendarTimelineRefresh.perform();assert(!values.has('selected-day'));assert.equal(values.get('manual-refresh').state,'requested');assert(values.get('calendar-force-weather')>0);
  }
  assert.equal(calls.filter(c=>c==='reload').length,20);assert.equal(calls.filter(c=>c==='bridge').length,10);
- console.log(JSON.stringify({baseline,scenes,trees,points,sizes,geometries,drawing:'byte-identical operations outside restyled headers',repeatIntents:20,nativeGestureArbitration:'pending physical iOS'},null,2));
+ console.log(JSON.stringify({baseline,scenes,trees,points,sizes,geometries,drawing:'static body unchanged except removed green marker; no header navigation',repeatIntents:20,nativeGestureArbitration:'pending physical iOS'},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1});

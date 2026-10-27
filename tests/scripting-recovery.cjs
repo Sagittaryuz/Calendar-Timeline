@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_pro
 const relative='scripting/scripts/Calendar Timeline Scripting/',root=path.resolve(__dirname,'..'),dir=path.join(root,relative),base='565bba1';
 const old=cp.execFileSync('git',['ls-tree','-r','--name-only',base,'--',relative],{cwd:root,encoding:'utf8'}).trim().split('\n').map(p=>path.basename(p));
 assert.deepEqual(fs.readdirSync(dir).sort(),old.sort(),'Active package contains exactly the original 25 files');
-const changed=new Set(['diagnostics.ts','script.json','widget.tsx','index.tsx','timeline-view.tsx','bridge-client.ts','bridge-real.ts','original-engine.js','app_intents.tsx','model.ts','drawing.js']);let identical=0;
+const changed=new Set(['diagnostics.ts','script.json','widget.tsx','index.tsx','timeline-view.tsx','bridge-client.ts','bridge-real.ts','original-engine.js','app_intents.tsx','model.ts','drawing.js','widget-refresh.ts','selection.ts']);let identical=0;
 for(const name of old)if(!changed.has(name)){assert(fs.readFileSync(path.join(dir,name)).equals(cp.execFileSync('git',['show',base+':'+relative+name],{cwd:root})),name+' must match the original byte for byte');identical++}
 const descriptor=JSON.parse(fs.readFileSync(path.join(dir,'script.json'),'utf8'));assert(fs.readFileSync(path.join(dir,'diagnostics.ts'),'utf8').includes("VERSION='"+descriptor.version+"'"));
 assert(!fs.readFileSync(path.join(dir,'index.tsx'),'utf8').includes('day-screen'));assert(!fs.readFileSync(path.join(dir,'widget.tsx'),'utf8').includes('pro-common'));

@@ -39,7 +39,9 @@ const cache=new Map();function load(name){if(cache.has(name))return cache.get(na
  queryRows=[{...edited,notes:'ct-bridge-command:somebody-else'}];await assert.rejects(client.synchronize(),/vínculo/);
  queryRows=[edited];mode='hanging';const started=Date.now();await assert.rejects(client.synchronize({budgetMS:200}),/Tempo de espera excedido/);assert(Date.now()-started<1000,'Bounded network wait');
  mode='offline';assert.equal((await auto.autoSynchronize({origin:'widget',force:true})).state,'deferred');assert(!JSON.stringify(values.get('bridge-auto-state')).includes('synthetic-token'));
- const order=[];await touch.refreshFromWidget({sync:async()=>{order.push('sync');throw Error('offline')},load:async()=>{order.push('local');throw Error('local unavailable')},failed:()=>order.push('diagnostic'),reload:()=>{order.push('reload');reloads++},open:async url=>{assert.equal(url,'calshow://');order.push('calendar');return true}});
- assert.deepEqual(order,['sync','local','diagnostic','reload','calendar']);assert.equal(reloads,1);
+ const order=[];await touch.refreshFromWidget({request:()=>order.push('request'),sync:async()=>{order.push('sync');throw Error('offline')},load:async()=>{order.push('local');throw Error('local unavailable')},failed:()=>order.push('diagnostic'),reload:()=>{order.push('reload');reloads++},open:async url=>{assert.equal(url,'calshow://');order.push('calendar');return true}});
+ assert.deepEqual(order,['request','reload','calendar']);assert.equal(reloads,1);
+ const fallback=[];await touch.refreshFromWidget({request:()=>{throw Error('storage offline')},reload:()=>{fallback.push('reload');throw Error('reload unavailable')},failed:()=>fallback.push('diagnostic'),open:async()=>{fallback.push('calendar');return true}});assert.deepEqual(fallback,['diagnostic','reload','diagnostic','calendar']);
+ await assert.rejects(touch.refreshFromWidget({reload(){},open:async()=>false}),/não conseguiu abrir/);
  console.log('PASS: EDITADO replaces stale get(id), completed reminder upload, personal events excluded, missing/ambiguous/relinked events fail safely, timeout, automatic consent/throttle/offline handling, widget refresh and Calendar opening despite cloud/local errors. Native iPhone confirmation still required.');
 })().catch(e=>{console.error(e);process.exitCode=1});

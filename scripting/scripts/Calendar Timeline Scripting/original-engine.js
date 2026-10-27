@@ -73,6 +73,7 @@ const SETTINGS = {
   blurredWeekdayTimelineOverlayColor: "#565759",
   // Desfoque de foco aplicado somente aos dias posteriores
   // enquanto ainda houver compromissos ou pendências válidas hoje.
+  pendingDayCarryoverEnabled: true,
   futureTimelineBlurEnabled: true,
   futureTimelineBlurDownsampleFactor: 0.24,
   futureTimelineBlurTintColor: "#111216",
@@ -160,6 +161,8 @@ const THERMAL_COLOR_STOPS = [
 const TIMELINE_ROW_SHARE_GAP_MS = 6 * 60 * 60 * 1000;
 const EVENT_STARTING_SOON_WINDOW_MS = 30 * 60 * 1000;
 const ALL_DAY_REMINDER_DISPLAY_START_HOUR = 6;
+const PENDING_DAY_CARRYOVER_CUTOFF_HOUR=12;
+const PENDING_DAY_CARRYOVER_END_HOUR=6;
 const WEATHER_HOUR_MS = 60 * 60 * 1000;
 const WEATHER_QUARTER_MS = 15 * 60 * 1000;
 const WEATHER_EDGE_TOLERANCE_MS = 90 * 60 * 1000;
@@ -376,7 +379,7 @@ function titleWeekStart() {
 }
 
 function titleTodayCardIndex() {
-  return windowStart.getDay();
+  return focusDay.getDay();
 }
 
 // Raio estrutural comum: 52 unidades da geometria-base,
@@ -488,8 +491,11 @@ const refreshRequested = (args.queryParameters ?? {}).refresh === "1";
 const requestedHours =
   (args.queryParameters ?? {}).hours ?? args.widgetParameter;
 const windowHours = parseWindowHours(requestedHours);
-const windowStart = startOfDay(new Date(options.focusDate ?? now));
-const windowEnd = addDays(windowStart, 1);
+const focusDay = startOfDay(new Date(options.focusDate ?? now));
+// The seven day cards stay fixed. Only today's 24-hour viewport follows time.
+const rollingToday = options.rolling !== false && dateKey(focusDay) === dateKey(now);
+const windowStart = rollingToday ? new Date(now) : new Date(focusDay);
+const windowEnd = rollingToday ? new Date(+windowStart + windowHours*3600000) : addDays(focusDay,1);
 // Agenda is independent of location. Weather and holidays share only location.
 options.onPhase?.("agenda, localização, clima e feriados");
 const widgetFamily = config.runsInWidget ? config.widgetFamily : null;
@@ -513,7 +519,6 @@ const widget = options.prepareOnly ? {backgroundImage:null} : isAccessoryFamily(
 
 
 const header = [];
-const focusDay = startOfDay(windowStart);
 for (let index = 0; index < TITLE_CARD_COUNT; index++) {
   const date = addDays(titleWeekStart(), index);
   const rect = titleDayCardRect(index);
@@ -526,13 +531,13 @@ const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeigh
 // Hit geometry only: these are the same local bounds used to draw the
 // temperature labels and curve, translated into the root image coordinates.
 const thermalY=CANVAS.timelineTop+thermalTemperatureLabelTopY();
-return {hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
+return {temporal:{rolling:rollingToday,focusDay:dateKey(focusDay),midnightX:timeToX(addDays(startOfDay(windowStart),1)),rightBridge:currentDayRollingBridge()},hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
   thermalBand:{x:CANVAS.plotLeft,y:thermalY,width:timelineWidth(),height:CANVAS.timelineTop+thermalBandBottomY()-thermalY},
   panel:{day:dateKey(windowStart),...titleScheduleCountsForDay(windowStart),freshness:loadResult.freshness,rows:selectedItems.slice(0,6).map(item=>({kind:item.kind,title:String(item.title??'').slice(0,120),time:item.isAllDay?'Dia todo':`${String(item.start.getHours()).padStart(2,'0')}:${String(item.start.getMinutes()).padStart(2,'0')}`}))},
   image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
   version: WIDGET_BUILD_VERSION, focusDate: dateKey(windowStart), windowStart:windowStart.getTime(), windowEnd:windowEnd.getTime(),
   selectedDayIsToday:dateKey(windowStart)===dateKey(now), timelineBackground:timelineBackgroundColorForDate(windowStart),
-  nowMarker:dateKey(windowStart)===dateKey(now)?{x:CANVAS.plotLeft+timeToX(now),color:'#30D158'}:null,
+  nowMarker:null,
   contour:{inset:WIDGET_CONTOUR.strokeInset,width:CANVAS.width,height:CANVAS.height},
   sourceStatus: {schedule: loadResult.sourceStatus, partialErrors: loadResult.partialErrors,
     weather: hourlyWeather.freshness}, weatherSnapshot: hourlyWeather, locationSnapshot: astronomy};
@@ -2771,6 +2776,7 @@ function prepareTimelineItems(items, referenceDate) {
   const prepared = items.map((item) => {
     const copy = { ...item };
     limitReminderChartToDay(copy, referenceDate);
+    if(rollingToday)applyPendingDayCarryover(copy,referenceDate);
     return copy;
   });
   const events = prepared.filter(
@@ -2825,6 +2831,75 @@ function limitReminderChartToDay(item, referenceDate) {
   delete item.isPendingDayCarryover;
   return item;
 }
+
+function isPendingDayCarryoverCandidate(item, referenceDate) {
+  if (!SETTINGS.pendingDayCarryoverEnabled || item?.isCompleted===true) return false;
+  if (
+    !item ||
+    item.kind !== "reminder" ||
+    !(item.start instanceof Date) ||
+    !(item.end instanceof Date)
+  ) {
+    return false;
+  }
+
+  const reference =
+    referenceDate instanceof Date ? referenceDate : now;
+  const todayStart = startOfDay(reference);
+  const tomorrowStart = addDays(todayStart, 1);
+  const cutoff = dateAtHour(
+    todayStart,
+    PENDING_DAY_CARRYOVER_CUTOFF_HOUR
+  );
+  const startMs = item.start.getTime();
+  const endMs = item.end.getTime();
+  const referenceMs = reference.getTime();
+
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    reference < cutoff ||
+    endMs <= todayStart.getTime() ||
+    startMs >= tomorrowStart.getTime()
+  ) {
+    return false;
+  }
+
+  // Reminder.scheduled/incompleteDue* retorna somente lembretes pendentes.
+  // Lembretes sem horário vencem ao longo do dia; os com horário só entram
+  // depois que o horário devido já passou.
+  return (
+    item.isOverdue ||
+    item.sourceIsAllDay ||
+    startMs <= referenceMs
+  );
+}
+
+
+function pendingDayCarryoverEnd(referenceDate) {
+  return dateAtHour(
+    addDays(startOfDay(referenceDate), 1),
+    PENDING_DAY_CARRYOVER_END_HOUR
+  );
+}
+
+
+function applyPendingDayCarryover(item, referenceDate) {
+  if (!isPendingDayCarryoverCandidate(item, referenceDate)) {
+    return item;
+  }
+
+  const targetEnd = pendingDayCarryoverEnd(referenceDate);
+  if (
+    !(item.end instanceof Date) ||
+    item.end.getTime() < targetEnd.getTime()
+  ) {
+    item.end = targetEnd;
+  }
+  item.isPendingDayCarryover = true;
+  return item;
+}
+
 
 function isBirthdayItem(item) {
   if (item?.kind !== "event") return false;
@@ -3784,6 +3859,7 @@ async function renderWidget(items, loadError) {
   // A restauração dos cantos e a moldura podem cobrir a borda inferior
   // do círculo quando ele encosta na linha branca. Recompõe somente o
   // círculo da virada depois da moldura, usando o mesmo centro da legenda.
+  if(rollingToday)drawCurrentDayBoundaryVerticalOverlay(contentCtx,items);
   drawCurrentDayBoundaryBadgeOnForeground(contentCtx);
 
   // A borda da Lua é redesenhada após o contorno externo da timeline.
@@ -3828,7 +3904,17 @@ async function drawDayEndCapsules(ctx) {
 }
 
 function shouldBlurFutureTimeline() {
-  return false;
+  if (!rollingToday) return false;
+  if (!SETTINGS.futureTimelineBlurEnabled) return false;
+
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return false;
+
+  // Sem conseguir verificar o Calendário/Lembretes, mantém o futuro
+  // protegido até que a leitura volte a funcionar.
+  if (loadResult?.error) return true;
+
+  return hasBlockingTodayTimelineItems(loadResult?.items ?? []);
 }
 
 function hasBlockingTodayTimelineItems(items) {
@@ -3873,7 +3959,7 @@ function hasBlockingTodayTimelineItems(items) {
 
     // Os itens retornados pelo EventKit são lembretes incompletos.
     // Lembretes sem horário continuam sendo pendências válidas.
-    return item.kind === "reminder";
+    return item.kind === "reminder" && item.isCompleted !== true;
   });
 }
 
@@ -4005,7 +4091,45 @@ function currentDayBoundaryBadgeCenterY() {
   return currentDayFrameMetrics().bottomLineCenterY - DAY_CHANGE_CIRCLE_DIAMETER / 2 + 1;
 }
 
-function drawCurrentDayBoundaryBadgeOnForeground() {}
+function drawCurrentDayBoundaryBadgeOnForeground(ctx) {
+  if(!rollingToday)return;
+  const metrics = futureTimelineBlurMetrics();
+  if (metrics.width <= 0) return;
+
+  const boundaryDate = addDays(startOfDay(windowStart), 1);
+  const localX = timelineLegendCenterX(boundaryDate);
+  if (
+    localX < 0 ||
+    localX > timelineWidth()
+  ) {
+    return;
+  }
+
+  const centerX = CANVAS.plotLeft + localX;
+  const centerY = currentDayBoundaryBadgeCenterY();
+  const style = dayBadgeStyle(
+    boundaryDate,
+    loadResult.holidayDates
+  );
+  const badge = dayLegendCircleRect(centerX, centerY);
+  const fontSize = scaleFontSize(20);
+  const textWidth = DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
+
+  ctx.setFillColor(style.background);
+  ctx.fillEllipse(badge);
+  ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+  ctx.setTextColor(style.text);
+  ctx.setTextAlignedCenter();
+  ctx.drawTextInRect(
+    shortWeekday(boundaryDate),
+    centeredDayLegendTextRect(
+      centerX,
+      centerY,
+      textWidth,
+      fontSize
+    )
+  );
+}
 
 function restoreRoundedSideCorners(
   ctx,
@@ -4138,6 +4262,8 @@ function currentDayUnifiedShape(path = new Path()) {
   const radius=Math.min(WIDGET_COMMON_CORNER_RADIUS,(bridgeY-c.y)/2);
   const leftRadius=first?0:Math.min(radius,Math.max(0,left-inset));
   const rightRadius=last?0:Math.min(radius,Math.max(0,CANVAS.width-inset-right));
+  const rollingBridge=currentDayRollingBridge();
+  const activeRightRadius=rollingBridge?rollingBridge.radius:rightRadius;
   const contour=widgetLeftContourPoints(inset);
   const upper=contour.slice(0,65);
   path.move(first?upper[0]:new Point(left,c.y));
@@ -4145,8 +4271,11 @@ function currentDayUnifiedShape(path = new Path()) {
     path.addLine(new Point(CANVAS.width-upper[0].x,c.y));
     for(const p of upper.slice(1))path.addLine(new Point(CANVAS.width-p.x,p.y));
   }else{
-    path.addLine(new Point(right,c.y));path.addLine(new Point(right,bridgeY-rightRadius));
-    if(rightRadius)appendContourArc(path,right+rightRadius,bridgeY-rightRadius,rightRadius,rightRadius,Math.PI,Math.PI/2);
+    path.addLine(new Point(right,c.y));path.addLine(new Point(right,bridgeY-activeRightRadius));
+    if(activeRightRadius){
+      const sign=rollingBridge?.direction??1;
+      appendContourArc(path,right+sign*activeRightRadius,bridgeY-activeRightRadius,activeRightRadius,activeRightRadius,sign>0?Math.PI:0,Math.PI/2);
+    }
     path.addLine(new Point(CANVAS.width-inset,bridgeY));
   }
   for(const p of contour.filter(p=>p.y>=bridgeY))path.addLine(new Point(CANVAS.width-p.x,p.y));
@@ -4160,6 +4289,18 @@ function currentDayUnifiedShape(path = new Path()) {
     path.addLine(new Point(left,c.y));
   }
   path.closeSubpath();return path;
+}
+
+function currentDayRollingBridge(){
+  if(!rollingToday)return null;
+  const card=titleDayCardRect(titleTodayCardIndex()),inset=WIDGET_CONTOUR.strokeInset;
+  const edge=card.x+card.width-inset,boundary=timeToX(addDays(startOfDay(windowStart),1));
+  // The last card already follows the calibrated outer widget corner, as in
+  // the historical fixed-header path; it must not fold through its text.
+  if(titleTodayCardIndex()===6)return {edge,boundary,radius:0,direction:1,outerEdge:true};
+  const maxRadius=Math.min(WIDGET_COMMON_CORNER_RADIUS,(dayBoundaryMoonBorderTopY()-card.y)/2);
+  const m=currentDayBridgeMetrics(card,boundary,dayBoundaryMoonBorderTopY(),maxRadius,'right',inset);
+  return {edge,boundary,radius:m.bridgeRadius,direction:m.curveDirectionSign,outerEdge:false};
 }
 
 function currentDayUnifiedPolygon() {
@@ -4226,9 +4367,12 @@ function timelineBackgroundColorForDate(date, holidayDates = loadResult.holidayD
 }
 
 function drawTimelineBackground(ctx, localToTimeline = false) {
-  ctx.setFillColor(new Color(timelineBackgroundColorForDate(windowStart)));
-  ctx.fillRect(new Rect(localToTimeline ? 0 : CANVAS.plotLeft,
-    localToTimeline ? 0 : CANVAS.timelineTop, timelineWidth(), timelineHeight()));
+  for(let day=startOfDay(windowStart);day<windowEnd;day=addDays(day,1)){
+    const end=addDays(day,1),x0=Math.max(0,timeToX(day)),x1=Math.min(timelineWidth(),timeToX(end));
+    if(x1<=x0)continue;
+    ctx.setFillColor(new Color(timelineBackgroundColorForDate(day)));
+    ctx.fillRect(new Rect((localToTimeline?0:CANVAS.plotLeft)+x0,localToTimeline?0:CANVAS.timelineTop,x1-x0,timelineHeight()));
+  }
 }
 
 function widgetGradientColorAtY(y) {
@@ -5121,7 +5265,7 @@ function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
   // O traço contínuo fica acima de qualquer chart, inclusive os que
   // atravessam a virada. Astro e círculo preservam seus limites.
   if (lineBottom <= lineTop) return;
-  ctx.setFillColor(lineColor);
+  ctx.setFillColor(hourGridLineColor(addDays(startOfDay(windowStart),1)));
   ctx.fillRect(new Rect(rasterLeftX, lineTop, rasterWidth, lineBottom - lineTop));
 }
 
@@ -9377,6 +9521,8 @@ function drawTimelineDayBoundariesOnTop(ctx) {
   for (const tick of hourTicks()) {
     if (tick.getHours() !== 0) continue;
 
+    // The next divider is composed once in the foreground, above blur/charts.
+    if(rollingToday && dateKey(tick)===dateKey(addDays(startOfDay(windowStart),1)))continue;
     const x = timelineLegendCenterX(tick);
     const rasterWidth = Math.max(1, Math.round(lineWidth));
     // O início inteiro impede que o antialiasing reduza visualmente
@@ -9394,7 +9540,45 @@ function drawTimelineDayBoundariesOnTop(ctx) {
   }
 }
 
-function drawWeekdayBadgesOnTop() {}
+function drawWeekdayBadgesOnTop(ctx) {
+  if(!rollingToday)return;
+  // A legenda foi reduzida para caber com folga dentro do círculo de 44 px.
+  const fontSize = scaleFontSize(20);
+  const centerY = dayChangeLegendCenterY();
+  const textWidth =
+    DAY_CHANGE_CIRCLE_DIAMETER - scaleVertical(4);
+
+  for (const tick of hourTicks()) {
+    if (tick.getHours() !== 0) continue;
+
+    // A virada imediatamente seguinte é recomposta no canvas principal,
+    // depois da moldura, para que o círculo encoste nela sem ser mascarado.
+    if (
+      dateKey(tick) ===
+      dateKey(addDays(startOfDay(windowStart), 1))
+    ) {
+      continue;
+    }
+
+    const x = timelineLegendCenterX(tick);
+    const style = dayBadgeStyle(tick, loadResult.holidayDates);
+    const badge = dayLegendCircleRect(x, centerY);
+    ctx.setFillColor(style.background);
+    ctx.fillEllipse(badge);
+    ctx.setFont(Font.blackRoundedSystemFont(fontSize));
+    ctx.setTextColor(style.text);
+    ctx.setTextAlignedCenter();
+    ctx.drawTextInRect(
+      shortWeekday(tick),
+      centeredDayLegendTextRect(
+        x,
+        centerY,
+        textWidth,
+        fontSize
+      )
+    );
+  }
+}
 
 
 function drawFixedDaylightGlow(ctx, weather) {
@@ -12858,13 +13042,7 @@ function cleanTitle(value, fallback) {
   return title || fallback;
 }
 
-function drawCurrentTimeMarker(ctx) {
-  if (dateKey(windowStart) !== dateKey(now)) return;
-  const x = timeToX(now),width = scaleVertical(3);
-  if (x < 0 || x >= timelineWidth()) return;
-  ctx.setFillColor(new Color('#30D158'));
-  ctx.fillRect(new Rect(Math.max(0,Math.min(timelineWidth()-width,x-width/2)),0,width,timelineHeight()-WIDGET_CONTOUR.strokeInset*2));
-}
+function drawCurrentTimeMarker() {}
 
 function dayCardNeighbourClip() {
   if(dayCardNeighbourClip.cache)return dayCardNeighbourClip.cache;

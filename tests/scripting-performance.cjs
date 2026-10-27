@@ -1,3 +1,4 @@
+function normalize(image){return JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!(o?.type==='fillRect'&&o.state?.fill?.hex==='30D158'&&o.rect?.height>300)):v)}
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict');
 const {pathToFileURL}=require('node:url');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
@@ -7,7 +8,7 @@ const baseline=cp.execFileSync('git',['show','6460bb7:scripting/scripts/Calendar
 function compile(text){return new AsyncFunction('host','options',text.replace('export async function renderOriginal(host, options = {}) {','') .replace(/}\s*$/,''));}
 const current=compile(source),previous=compile(baseline);
 const now=new Date(2026,9,22,12),astronomy={latitude:-16.68,longitude:-49.25},weather={hours:[],daily:{}};
-const fixture={now:+now,focusDate:+now,loadResult:{items:[],holidayDates:new Set(),error:null},astronomy,hourlyWeather:weather,holidayDates:new Set()};
+const fixture={rolling:false,now:+now,focusDate:+now,loadResult:{items:[],holidayDates:new Set(),error:null},astronomy,hourlyWeather:weather,holidayDates:new Set()};
 async function main(){
  const d=await import(pathToFileURL(path.join(dir,'drawing.js')).href);
  const host={...d,DateFormatter:class{string(date){return String(date.getDate())}},Keychain:{contains:()=>false},FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>false})},SFSymbol:{named:symbol=>({image:{symbol,size:{width:30,height:30}},applyFont(){}})}};
@@ -18,7 +19,7 @@ async function main(){
  const oldModel=await previous(host,fixture),newModel=await current(host,fixture);
  const noHeader=text=>compile(text.replace('function drawTitleDayCard(ctx,date,card,isSelected,isLast) {','function drawTitleDayCard(ctx,date,card,isSelected,isLast) { return;'));
  const oldBody=await noHeader(baseline)(host,fixture),newBody=await noHeader(source)(host,fixture);
- assert.deepEqual(JSON.parse(JSON.stringify(newBody.image)),JSON.parse(JSON.stringify(oldBody.image)),'Every drawing operation outside the requested header remains identical to 0.3.17');
+ assert.deepEqual(normalize(newBody.image),normalize(oldBody.image),'Every drawing operation outside the requested header remains identical to 0.3.17');
  let drawings=0;class CountDraw extends d.DrawContext{constructor(){super();drawings++}}
  const prepared=await current({...host,DrawContext:CountDraw},{...fixture,prepareOnly:true});assert.equal(drawings,0);assert.equal(prepared.image,null);assert.equal(prepared.focusDate,newModel.focusDate);assert.deepEqual(prepared.sourceStatus,newModel.sourceStatus);
  // Deferred native reads prove agenda and location overlap without clock thresholds.
