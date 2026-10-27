@@ -5387,6 +5387,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
     fillTitleCardShape(ctx,new Rect(card.x+2,card.y+2,card.width-4,card.height-4),
       {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},
       new Color(timelineBackgroundColorForDate(date)));
+    drawAdjacentInvertedCorner(ctx,date,card);
   }
   const fields=weekHeaderLayout(date,card),shared=weekHeaderStyle();
   const ink=new DrawContext();ink.size=new Size(CANVAS.width,CANVAS.height);ink.opaque=false;ink.respectScreenScale=false;
@@ -13100,6 +13101,23 @@ function cleanTitle(value, fallback) {
 
 function drawCurrentTimeMarker() {}
 
+// Only the next card's lower-left corner may occupy the exposed cusp.
+// Its image remains clipped by the same normal offset as every neighbour.
+function drawAdjacentInvertedCorner(ctx,date,card){
+  const bridge=currentDayRollingBridge();
+  if(!bridge||bridge.outerEdge||bridge.direction>=0||date.getDay()!==titleTodayCardIndex()+1||bridge.radius<=0)return;
+  const inset=WIDGET_CONTOUR.strokeInset;
+  const top=Math.max(card.y+2,dayBoundaryMoonBorderTopY()-bridge.radius-(inset-scaleVertical(3)/2));
+  const left=card.x-bridge.radius-inset,bottom=card.y+card.height;
+  if(top>=bottom)return;
+  ctx.setFillColor(new Color('#303136',0.82));
+  ctx.fillRect(new Rect(left,top,card.x+2-left,bottom-top));
+  if(bottom-top>4){
+    ctx.setFillColor(new Color(timelineBackgroundColorForDate(date)));
+    ctx.fillRect(new Rect(left,top+2,card.x+2-left,bottom-top-4));
+  }
+}
+
 function dayCardNeighbourClip() {
   if(dayCardNeighbourClip.cache)return dayCardNeighbourClip.cache;
   const path=new Path();
@@ -13117,11 +13135,32 @@ function dayCardNeighbourClip() {
   // Offset the actual superellipse polyline along its normals. Shrinking
   // radii alone would change the gap around this non-circular profile.
   const normal=(a,b)=>{const length=Math.hypot(b.x-a.x,b.y-a.y);return {x:(b.y-a.y)/length,y:(a.x-b.x)/length}};
-  const points=vertices.map((p,i)=>{
+  let points=vertices.map((p,i)=>{
     const a=normal(vertices[(i+vertices.length-1)%vertices.length],p),b=normal(p,vertices[(i+1)%vertices.length]);
     const factor=offset/Math.max(1e-6,1+a.x*b.x+a.y*b.y);
     return new Point(p.x+(a.x+b.x)*factor,p.y+(a.y+b.y)*factor);
-  }).reverse();
+  });
+  const bridge=currentDayRollingBridge();
+  if(bridge&&!bridge.outerEdge&&bridge.radius>1e-7&&(bridge.direction<0||bridge.radius<=offset)){
+    // Inward tangents meet the timeline in a cusp; a local miter there is
+    // unbounded. A shoulder smaller than its offset also collapses. Resolve
+    // both against the parallel timeline plane, preserving the clear gap.
+    const y=dayBoundaryMoonBorderTopY(),endX=bridge.edge+bridge.direction*bridge.radius;
+    const end=vertices.findIndex(p=>Math.abs(p.x-endX)<1e-8&&Math.abs(p.y-y)<1e-8);
+    const plane=y-offset;
+    if(end>0&&bridge.radius<=offset){
+      const start=vertices.findIndex(p=>Math.abs(p.x-bridge.edge)<1e-8&&Math.abs(p.y-(y-bridge.radius))<1e-8);
+      if(start>0)points=[...points.slice(0,start),new Point(bridge.edge+offset,plane),...points.slice(end+1)];
+    }else if(end>0)for(let i=1;i<=end;i++){
+      const a=points[i-1],b=points[i];
+      if(a.y<plane&&b.y>=plane){
+        const t=(plane-a.y)/(b.y-a.y),join=new Point(a.x+t*(b.x-a.x),plane);
+        points=[...points.slice(0,i),join,...points.slice(end+1)];break;
+      }
+    }
+  }
+
+  points.reverse();
   path.move(points[0]);
   for(const p of points.slice(1))path.addLine(p);
   path.closeSubpath();return dayCardNeighbourClip.cache=path.commands;
@@ -13139,12 +13178,12 @@ function weekHeaderStyle() {
   const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleWeekStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
   return weekHeaderStyle.cache={titleSize:29,temperatureSize,
-    headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,weekendInset:35,circlePadding:2,circleStroke:2};
+    headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};
 }
 function weekHeaderLayout(date,card) {
   const fields=weekHeaderFields(date),style=weekHeaderStyle();
   const maxWidth=fields.maximum.length*style.temperatureSize*0.62,minWidth=fields.minimum.length*style.temperatureSize*0.62;
-  const gap=scaleFontSize(21)*3*0.62*2+scaleVertical(28)-maxWidth-minWidth;
+  const gap=scaleFontSize(21)*3*0.62*2+scaleVertical(40)-maxWidth-minWidth;
   return {...fields,maxWidth,minWidth,gap};
 }
 function headerVectorBounds(ops) {

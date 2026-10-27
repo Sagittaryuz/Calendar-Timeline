@@ -2,7 +2,7 @@
 const fs=require('node:fs'),cp=require('node:child_process'),assert=require('node:assert/strict'),c=require('@napi-rs/canvas');
 const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
 const old=cp.execFileSync('git',['show','e6c7305:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
-const normal=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>o.type!=='header'):v);
+const normal=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>o.type!=='header'&&!(o.type==='image'&&o.image?.outerClip&&o.rect?.y===0&&o.image?.size?.height===510)):v);
 function inset(y){const d=Math.min(y-4,506-y);if(d>=97)return 4;if(d<0)return 546;return 4+98*(1-Math.pow(1-Math.pow(1-d/97,2.45),1/2.45))}
 (async()=>{
  const {d,host,options}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');
@@ -23,8 +23,8 @@ function inset(y){const d=Math.min(y-4,506-y);if(d>=97)return 4;if(d<0)return 54
   for(const h of groups){
    assert(h.twoRows);assert.equal(h.count,undefined,'No third-row display operation');assert.equal(h.title.state.font.size,29);assert.equal(h.word.state.font.name,h.isToday?'SFMono-Heavy':'SFMono-Regular');assert.equal(h.number.state.font.name,h.word.state.font.name);assert.equal(h.number.state.text.hex,h.isToday?'FF3B30':h.word.state.text.hex);
    const p=d.headerPlan(ctx,h);rows??=p.rowTops;assert.deepEqual(p.rowTops,rows);assert.equal(p.rowTops.length,2);
-   if(h.weekday!==0&&h.weekday!==6)assert(Math.abs((p.block.left+p.block.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert(Math.abs((p.block.top+p.block.bottom)/2-h.frame.y-h.frame.height/2)<1e-7);
-   const text=p.title.bounds,w=p.weather.bounds;if(h.weekday===0)assert(Math.abs(text.left-w.left)<1e-7,'Sunday LEFT');else if(h.weekday===6)assert(Math.abs(text.right-w.right)<1e-7,'Saturday RIGHT');else for(const b of [text,w])assert(Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert(Math.abs(p.number.x-p.word.x-p.spacing.wordAdvance-p.spacing.spaceAdvance)<1e-7,'Uniform typographic space, independent of circle');
+   assert(Math.abs((p.block.left+p.block.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert(Math.abs((p.block.top+p.block.bottom)/2-h.frame.y-h.frame.height/2)<1e-7);
+   const text=p.title.bounds,w=p.weather.bounds;if(h.weekday===0)assert(Math.abs(text.right-w.right)<1e-7,'Sunday RIGHT');else if(h.weekday===6)assert(Math.abs(text.left-w.left)<1e-7,'Saturday LEFT');else for(const b of [text,w])assert(Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert(Math.abs(p.number.x-p.word.x-p.spacing.wordAdvance-p.spacing.spaceAdvance)<1e-7,'Uniform typographic space, independent of circle');
    const temps=h.weather.ops.filter(o=>o.type==='text'),low=temps.find(o=>o.state.text.hex==='64D2FF'),high=temps.find(o=>o.state.text.hex==='FF6961');
    assert.equal(low.text,minimum===null?'--º':`${minimum}º`);assert.equal(high.text,maximum===null?'--º':`${maximum}º`);assert(low.point.x<high.point.x,'Minimum left / maximum right');assert.equal(high.state.text.hex,'FF6961');assert.equal(low.state.text.hex,'64D2FF');
    if(h.isToday){const one={...h,number:{...h.number,text:'1'},shared:{...h.shared,dates:['1','2','3','4','5','6','7']}};const q=d.headerPlan(ctx,one);assert(safety(q,one)>=1.5);assert(Math.abs((q.number.ink.left+q.number.ink.right)/2-q.circle.x-q.circle.width/2)<1e-7,'Single digit remains centered in circle');}

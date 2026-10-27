@@ -265,16 +265,16 @@ function twoRowHeaderPlan(ctx,op){
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
   const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
-  // New weekend rule: Sunday LEFT, Saturday RIGHT. The circle is decoration
-  // and never changes text advance, spacing, or alignment anchors.
-  const edgeInset=s.weekendInset??35;
-  const place=box=>op.weekday===0?op.frame.x+edgeInset-box.left:op.weekday===6?op.frame.x+op.frame.width-edgeInset-box.right:center-(box.left+box.right)/2;
-  const tx=place(title),wx=place(weather),wy=top+rowHeight+s.gap-row2.top;
+  // Weekend text rows share an internal edge inside a centred block.
+  // Sunday RIGHT / Saturday LEFT; the disk never changes text advance.
+  const relative=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
+  const commonLeft=Math.min(weather.left,title.left+relative),commonRight=Math.max(weather.right,title.right+relative);
+  const wx=center-(commonLeft+commonRight)/2,tx=wx+relative,wy=top+rowHeight+s.gap-row2.top;
   const shift=(box,x,y)=>({...box,left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
   const positionedNumber=shift(number,tx+numberX,top+textY-number.top),positionedInk=shift(numberInk,tx+numberX,top+textY-number.top);
   const circle=op.isToday?{x:(positionedInk.left+positionedInk.right-diskDiameter)/2,y:(positionedInk.top+positionedInk.bottom-diskDiameter)/2,width:diskDiameter,height:diskDiameter}:null;
   const visualTitle=unionHeaderBounds([shift(title,tx,top),...(circle?[{left:circle.x,right:circle.x+circle.width,top:circle.y,bottom:circle.y+circle.height}]:[])]);
-  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:visualTitle},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:positionedNumber,ink:positionedInk},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle,circleFilled:!!circle,spacing:{spaceAdvance,wordAdvance,numberAdvance:numberX},alignment:op.weekday===0?'left':op.weekday===6?'right':'center',block:{left:Math.min(tx+title.left,wx+weather.left),right:Math.max(tx+title.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
+  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:visualTitle},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:positionedNumber,ink:positionedInk},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle,circleFilled:!!circle,spacing:{spaceAdvance,wordAdvance,numberAdvance:numberX},alignment:op.weekday===0?'right':op.weekday===6?'left':'center',block:{left:Math.min(tx+title.left,wx+weather.left),right:Math.max(tx+title.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
   ctx.restore();return result;
 }
 

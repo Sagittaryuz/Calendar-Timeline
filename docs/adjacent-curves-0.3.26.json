@@ -1,0 +1,1025 @@
+{
+  "version": "0.3.26",
+  "scenes": 63,
+  "samples": 6231,
+  "approvedGap": 1.2287,
+  "gapError": 1.0880185641326534e-13,
+  "maxCoordinate": 1090.8092785123968,
+  "cusps": 25,
+  "geometry": "one common master curve, normal offset by half stroke + approved gap; inward cusp trimmed against offset timeline plane; only following lower-left corner extended",
+  "frames": "same seven original frames, no horizontal or vertical movement",
+  "states": [
+    {
+      "date": "2026-10-25T00:00:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T01:00:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 1046.5,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T06:00:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T12:00:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T13:47:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 464.8583333333333,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T13:49:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 463.34166666666664,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T14:00:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 455,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T18:00:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 263
+    },
+    {
+      "date": "2026-10-25T23:59:00.000Z",
+      "bridge": {
+        "edge": 150.94682857142857,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-26",
+          "left": 103.03606576151122,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 242
+    },
+    {
+      "date": "2026-10-26T00:00:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T01:00:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 1046.5,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T06:00:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T12:00:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T13:47:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 464.8583333333333,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T13:49:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 463.34166666666664,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T14:00:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 455,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-26T18:00:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 273,
+        "radius": 34.12235714285714,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-27",
+          "left": 274.2287,
+          "top": 65.73714698937425,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 240
+    },
+    {
+      "date": "2026-10-26T23:59:00.000Z",
+      "bridge": {
+        "edge": 307.12235714285714,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-27",
+          "left": 259.2115943329398,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-27T00:00:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-27T01:00:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 1046.5,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-27T06:00:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-27T12:00:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-27T13:47:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 464.8583333333333,
+        "radius": 1.5604476190475793,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 200
+    },
+    {
+      "date": "2026-10-27T13:49:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 463.34166666666664,
+        "radius": 0.04378095238092783,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 200
+    },
+    {
+      "date": "2026-10-27T14:00:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 455,
+        "radius": 8.297885714285712,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-28",
+          "left": 456.2287,
+          "top": 91.56161841794568,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 220
+    },
+    {
+      "date": "2026-10-27T18:00:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-28",
+          "left": 415.38712290436837,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-27T23:59:00.000Z",
+      "bridge": {
+        "edge": 463.2978857142857,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-28",
+          "left": 415.38712290436837,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-28T00:00:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-28T01:00:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 1046.5,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-28T06:00:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-28T12:00:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-29",
+          "left": 571.5626514757969,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-28T13:47:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 464.8583333333333,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-29",
+          "left": 571.5626514757969,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-28T13:49:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 463.34166666666664,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-29",
+          "left": 571.5626514757969,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-28T14:00:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 455,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-29",
+          "left": 571.5626514757969,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-28T18:00:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-29",
+          "left": 571.5626514757969,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-28T23:59:00.000Z",
+      "bridge": {
+        "edge": 619.4734142857143,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-29",
+          "left": 571.5626514757969,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-29T00:00:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-29T01:00:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 1046.5,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-29T06:00:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 819,
+        "radius": 43.351057142857144,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-29T12:00:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-30",
+          "left": 727.7381800472256,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-29T13:47:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 464.8583333333333,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-30",
+          "left": 727.7381800472256,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-29T13:49:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 463.34166666666664,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-30",
+          "left": 727.7381800472256,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-29T14:00:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 455,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-30",
+          "left": 727.7381800472256,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-29T18:00:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-30",
+          "left": 727.7381800472256,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-29T23:59:00.000Z",
+      "bridge": {
+        "edge": 775.6489428571429,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-30",
+          "left": 727.7381800472256,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T00:00:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 1092,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-30T01:00:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 1046.5,
+        "radius": 49.13946280991735,
+        "direction": 1,
+        "outerEdge": false
+      },
+      "extensions": [],
+      "points": 264
+    },
+    {
+      "date": "2026-10-30T06:00:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 819,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T12:00:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 546,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T13:47:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 464.8583333333333,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T13:49:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 463.34166666666664,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T14:00:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 455,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T18:00:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 273,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-30T23:59:00.000Z",
+      "bridge": {
+        "edge": 931.8244714285714,
+        "boundary": 0.7583333333333334,
+        "radius": 49.13946280991735,
+        "direction": -1,
+        "outerEdge": false
+      },
+      "extensions": [
+        {
+          "date": "2026-10-31",
+          "left": 883.913708618654,
+          "top": 50.72004132231404,
+          "bottom": 98.58677685950413
+        }
+      ],
+      "points": 243
+    },
+    {
+      "date": "2026-10-31T00:00:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 1092,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T01:00:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 1046.5,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T06:00:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 819,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T12:00:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 546,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T13:47:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 464.8583333333333,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T13:49:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 463.34166666666664,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T14:00:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 455,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T18:00:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 273,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    },
+    {
+      "date": "2026-10-31T23:59:00.000Z",
+      "bridge": {
+        "edge": 1088,
+        "boundary": 0.7583333333333334,
+        "radius": 0,
+        "direction": 1,
+        "outerEdge": true
+      },
+      "extensions": [],
+      "points": 262
+    }
+  ],
+  "physicalIOS": "not tested; local path geometry and raster-mask queries",
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.26.scripting",
+    "files": 25,
+    "crc": "passed",
+    "sourceBytes": "all identical",
+    "sha256": "7c4e3829759c32cee0c7dd4f401d286c6661ae9c8c550529615fa6234cb506ea"
+  },
+  "preview": {
+    "library_file_id": "libfile_0b606497523c81919025e4e53c6b129f",
+    "file_id": "file_00000000b80881f5ad78ee82b0443950",
+    "file_name": "comparison(5).png",
+    "version": 0,
+    "source": "synthetic data / DejaVu Mono; not a physical iPhone screenshot"
+  },
+  "fontDecision": {
+    "kept": 29,
+    "reason": "conditional increase rejected at fixed geometry; Saturday with negative temperatures",
+    "samples": [
+      {
+        "size": 29,
+        "min": 2.058973979551183,
+        "info": {
+          "day": 31,
+          "weekday": 6,
+          "name": "circle",
+          "b": {
+            "left": 1054.0479164979029,
+            "right": 1054.0479164979029,
+            "top": 21.255016448434233,
+            "bottom": 21.255016448434233
+          }
+        }
+      },
+      {
+        "size": 29.25,
+        "min": 0.5355339167931561,
+        "info": {
+          "day": 31,
+          "weekday": 6,
+          "name": "circle",
+          "b": {
+            "left": 1054.8255571376399,
+            "right": 1054.8255571376399,
+            "top": 20.708151677398497,
+            "bottom": 20.708151677398497
+          }
+        }
+      },
+      {
+        "size": 29.5,
+        "min": -0.3069389403037803,
+        "info": {
+          "day": 31,
+          "weekday": 6,
+          "name": "circle",
+          "b": {
+            "left": 1055.6031939626796,
+            "right": 1055.6031939626796,
+            "top": 20.66128690636276,
+            "bottom": 20.66128690636276
+          }
+        }
+      },
+      {
+        "size": 30,
+        "min": -1.992345932191256,
+        "info": {
+          "day": 31,
+          "weekday": 6,
+          "name": "circle",
+          "b": {
+            "left": 1057.1584828715481,
+            "right": 1057.1584828715481,
+            "top": 20.56755736429129,
+            "bottom": 20.56755736429129
+          }
+        }
+      }
+    ]
+  }
+}
