@@ -4,7 +4,7 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
 const old=cp.execFileSync('git',['show','4bec9e3:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
 const inject=s=>compile(s.replace('  return path;\n}\n\nfunction drawCurrentDayFrameOverlay','  host.frameProbe?.({headerSpan,bodySpan,right,bridgeY,commands:path.commands});return path;\n}\n\nfunction drawCurrentDayFrameOverlay'));
 const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.stroke.alpha===0.96;
-const normal=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!isFrame(o)):v);
+const normal=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!isFrame(o)&&o.type!=='header'):v);
 (async()=>{
  const {host,d,options}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');host.DrawContext=class extends d.DrawContext{makeRaster=crop=>({native:{sha256:require('node:crypto').createHash('sha256').update(encodePNG(crop)).digest('hex')},size:{width:crop.width,height:crop.height}})};
  const render=inject(raw),before=inject(old);let probe;host.frameProbe=p=>probe=p;const states=[];let gapsFixed=0;

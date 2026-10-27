@@ -5402,7 +5402,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
     return ink.getImage().ops.splice(-1)[0];
   };
   const isToday=dateKey(date)===dateKey(now);
-  const title=text(fields.headline,isToday?Font.blackMonospacedSystemFont(shared.titleSize):Font.regularMonospacedSystemFont(shared.titleSize),titleWeekdayColor(date,loadResult.holidayDates),300);
+  const title=text(fields.headline,new Font(isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold',shared.titleSize),titleWeekdayColor(date,loadResult.holidayDates),300);
   const weekday=text(shortWeekday(date),title.state.font,titleWeekdayColor(date,loadResult.holidayDates),300);
   const number=text(String(date.getDate()).padStart(2,'0'),title.state.font,titleWeekdayColor(date,loadResult.holidayDates),300);
   ink.ops=[];

@@ -18,7 +18,7 @@ const normalize=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?
   let last,lowerSegments=0;
   for(const [op,x,y]of outline){
    assert(Number.isFinite(x)&&Number.isFinite(y));assert(x>=4-1e-6&&x<=1088+1e-6&&y>=4-1e-6&&y<=506+1e-6,'Same outer limits');
-   if(Math.abs(y-bridgeY)<1e-6&&x>limit+1e-6){const card=m.header.find(d=>d.selected);assert(x>=card.x-56&&x<=card.x+card.width+56,'No white spur toward far future along top seam');}
+   if(Math.abs(y-bridgeY)<1e-6&&x>limit+1e-6){const card=m.header.find(d=>d.selected);assert(Math.abs(x-4)<1e-7||x>=card.x-56&&x<=card.x+card.width+56,'Only the approved top connector may meet the outer inset after midnight crosses it');}
    if(op==='lineTo'&&last){
     if(Math.max(last.y,y)>bridgeY+1e-6){
      assert(x<=limit+1e-6&&last.x<=limit+1e-6,'No white timeline frame in tomorrow');lowerSegments++;

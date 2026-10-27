@@ -18,6 +18,15 @@ export class Color {
   static black(){return new Color('000000');}
   css(){const h=this.hex;return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${this.alpha})`;}
 }
+// Canvas custom fonts resolve a PostScript face, not Scriptable's system-font factory.
+// Use public iOS faces with an intrinsic weight; no undocumented fontWeight field.
+const CANVAS_FONT_FACES=Object.freeze({
+  'SFMono-Heavy':'Menlo-Bold','SFMono-Regular':'Menlo-Regular',
+  'SFProRounded-Black':'AvenirNext-Heavy','SFProRounded-Bold':'AvenirNext-Bold',
+  'SFProRounded-Regular':'AvenirNext-Regular','SFProText-Bold':'HelveticaNeue-Bold',
+  'SFProText-Medium':'HelveticaNeue-Medium',
+});
+export function canvasFont(font){return {name:CANVAS_FONT_FACES[font.name]??font.name,size:font.size};}
 export class Font {
   constructor(name,size){Object.assign(this,{name,size});}
   static blackMonospacedSystemFont(n){return new Font('SFMono-Heavy',n);}
@@ -91,7 +100,7 @@ export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymb
       ctx[op.type==='fillPath'?'fill':'stroke']();
     } else if(op.type==='text'){
       ctx.save();if(r){ctx.beginPath();ctx.rect(r.x,r.y,r.width,r.height);ctx.clip();}
-      ctx.font={name:s.font.name,size:s.font.size};ctx.fillStyle=s.text.css();ctx.textBaseline='top';ctx.textAlign=s.align;
+      ctx.font=canvasFont(s.font);ctx.fillStyle=s.text.css();ctx.textBaseline='top';ctx.textAlign=s.align;
       const anchor=op.point.x+(r?(s.align==='center'?r.width/2:s.align==='right'?r.width:0):0);
       if(op.tracking){
         const chars=Array.from(op.text),advances=chars.map(char=>ctx.measureText(char).width);
@@ -118,7 +127,7 @@ export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymb
     else if(op.type==='capsules'){
       for(const entry of op.entries){
         ctx.save();ctx.translate(entry.x,op.centerY);ctx.rotate(Math.PI/2);
-        ctx.font={name:'SFProText-Heavy',size:op.fontSize};
+        ctx.font=canvasFont({name:'SFProRounded-Black',size:op.fontSize});
         const metrics=ctx.measureText(entry.label),length=Math.max(op.height,Math.ceil(metrics.width+12)),half=op.width/2;
         ctx.beginPath();ctx.moveTo(-length/2+half,-half);ctx.lineTo(length/2-half,-half);
         ctx.arc(length/2-half,0,half,-Math.PI/2,Math.PI/2,false);ctx.lineTo(-length/2+half,half);
@@ -189,7 +198,7 @@ export function segments(image,viewport={x:0,y:0,width:image.size.width,height:i
 function unionHeaderBounds(boxes){return {left:Math.min(...boxes.map(b=>b.left)),right:Math.max(...boxes.map(b=>b.right)),top:Math.min(...boxes.map(b=>b.top)),bottom:Math.max(...boxes.map(b=>b.bottom))};}
 const headerMeasureCache=new WeakMap();
 export function headerTextBounds(ctx,op,text=op.text,cache){
-  const font=op.state.font;ctx.font={name:font.name,size:font.size};ctx.textAlign='left';ctx.textBaseline='top';
+  const font=op.state.font;ctx.font=canvasFont(font);ctx.textAlign='left';ctx.textBaseline='top';
   const key=font.name+':'+font.size+':'+text;
   let m=cache?.get(key);if(!m){m=ctx.measureText(text);cache?.set(key,m)}
   const width=Number.isFinite(m.width)?m.width:text.length*font.size*0.62;
@@ -256,7 +265,9 @@ function twoRowHeaderPlan(ctx,op){
   const word=headerTextBounds(ctx,op.word,op.word.text,cache),number=headerTextBounds(ctx,op.number,op.number.text,cache),weather=headerWeatherBounds(ctx,op,cache),numberInk=headerInkBounds(ctx,op.number,cache);
   const size=op.title.state.font.size;
   const metric=(name,text)=>{const spec={...op.word,state:{...op.word.state,font:{name,size}}};headerTextBounds(ctx,spec,text,cache);return cache.get(name+':'+size+':'+text)};
-  const spaceAdvance=Math.max(1,metric('SFMono-Regular','0 0').width-metric('SFMono-Regular','00').width,metric('SFMono-Heavy','0 0').width-metric('SFMono-Heavy','00').width);
+  const faces=op.word.state.font.name.startsWith('AvenirNextCondensed')
+    ? ['AvenirNextCondensed-DemiBold','AvenirNextCondensed-Heavy'] : ['SFMono-Regular','SFMono-Heavy'];
+  const spaceAdvance=Math.max(1,...faces.map(name=>metric(name,'0 0').width-metric(name,'00').width));
   headerTextBounds(ctx,op.word,op.word.text,cache);const wordAdvance=cache.get(op.word.state.font.name+':'+size+':'+op.word.text).width;
   const numberX=wordAdvance+spaceAdvance,wordX=0;
   const rowHeight=size*(s.diskScale??1.375)+(s.diskPadding??1.5),textY=(rowHeight-size)/2;
