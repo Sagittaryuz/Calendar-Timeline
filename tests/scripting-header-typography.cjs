@@ -1,8 +1,9 @@
+// Archived three-row geometry fixture; active two-row coverage is scripting-header-two-rows.cjs.
 function normalize(image){return JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!(o?.type==='fillRect'&&o.state?.fill?.hex==='30D158'&&o.rect?.height>300)):v)}
 // Real engine/replay; local font is a substitute, not a native iOS certification.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),cp=require('node:child_process'),{pathToFileURL}=require('node:url'),c=require('@napi-rs/canvas');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting'),base='334bf949ebdfdd489da6e2b9bce0b3bb079d8bd3';
-const raw=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8'),old=cp.execFileSync('git',['show',base+':scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
+const raw=cp.execFileSync('git',['show','e6c7305:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'}),old=cp.execFileSync('git',['show',base+':scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
 const compile=s=>new(Object.getPrototypeOf(async function(){}).constructor)('host','options',s.replace('export async function renderOriginal(host, options = {}) {','').replace(/}\s*$/,''));
 const run=compile(raw),previous=compile(old),skip=s=>compile(s.replace('function drawTitleDayCard(ctx,date,card,isSelected,isLast) {','function drawTitleDayCard(ctx,date,card,isSelected,isLast) { return;'));
 const body=skip(raw),oldBody=skip(old);

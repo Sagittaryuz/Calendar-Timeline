@@ -211,6 +211,7 @@ function headerWeatherBounds(ctx,op,cache){
 // All seven cards share native row metrics; only their horizontal internal
 // alignment differs. The measured block is centered in each visible card.
 export function headerPlan(ctx,op){
+  if(op.twoRows)return twoRowHeaderPlan(ctx,op);
   ctx.save();
   const s=op.shared;let cache=headerMeasureCache.get(s);if(!cache){cache=new Map();headerMeasureCache.set(s,cache)}
   const title=headerTextBounds(ctx,op.title,op.title.text,cache),count=headerTextBounds(ctx,op.count,op.count.text,cache),weather=headerWeatherBounds(ctx,op,cache);
@@ -231,6 +232,33 @@ export function headerPlan(ctx,op){
   const block=unionHeaderBounds([plan.title.bounds,plan.weather.bounds,plan.count.bounds]);plan.block.left=block.left;plan.block.right=block.right;
   ctx.restore();return plan;
 }
+// Stable top-aligned line boxes also apply to the two-row header. The circle
+// participates in the first row's shared height, without UIKit baseline offsets.
+function twoRowHeaderPlan(ctx,op){
+  ctx.save();
+  const s=op.shared;let cache=headerMeasureCache.get(s);if(!cache){cache=new Map();headerMeasureCache.set(s,cache)}
+  const word=headerTextBounds(ctx,op.word,op.word.text,cache),number=headerTextBounds(ctx,op.number,op.number.text,cache),weather=headerWeatherBounds(ctx,op,cache);
+  const size=op.title.state.font.size,heavy={...op.number,state:{...op.number.state,font:{name:'SFMono-Heavy',size}}};
+  const dateWidth=Math.max(...s.dates.map(text=>{const b=headerTextBounds(ctx,heavy,text,cache);return b.right-b.left}));
+  const diameter=Math.hypot(dateWidth,size)+s.circlePadding*2,outerDiameter=diameter+s.circleStroke;
+  const rowHeight=outerDiameter,wordWidth=word.right-word.left,numberWidth=number.right-number.left;
+  const wordGap=(outerDiameter-dateWidth)/2+s.wordGap;
+  const numberX=wordWidth+wordGap-number.left;
+  const wordX=-word.left,textY=(rowHeight-size)/2;
+  const title={left:0,right:wordWidth+wordGap+numberWidth,top:textY,bottom:textY+size};
+  const circleLeft=wordWidth+wordGap+(numberWidth-outerDiameter)/2;
+  const visualTitle=op.isToday?{left:Math.min(0,circleLeft),right:Math.max(title.right,circleLeft+outerDiameter),top:0,bottom:rowHeight}:title;
+  const temperature=op.weather.ops.find(o=>o.type==='text');
+  const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
+  const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
+  const relative=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
+  const left=Math.min(weather.left,visualTitle.left+relative),right=Math.max(weather.right,visualTitle.right+relative);
+  const wx=center-(left+right)/2,tx=wx+relative,wy=top+rowHeight+s.gap-row2.top;
+  const shift=(b,x,y)=>({left:b.left+x,right:b.right+x,top:b.top+y,bottom:b.bottom+y});
+  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:shift(visualTitle,tx,top)},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:shift(number,tx+numberX,top+textY-number.top)},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle:op.isToday?{x:tx+circleLeft+s.circleStroke/2,y:top+s.circleStroke/2,width:diameter,height:diameter}:null,block:{left:center-(right-left)/2,right:center+(right-left)/2,top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
+  ctx.restore();return result;
+}
+
 function offsetHeaderOp(op,x,y){
   return {...op,
     ...(op.point?{point:{x:op.point.x+x,y:op.point.y+y}}:{}),
@@ -238,7 +266,17 @@ function offsetHeaderOp(op,x,y){
     ...(op.path?{path:op.path.map(([method,...args])=>[method,...args.map((v,i)=>v+(i%2?y:x))])}:{})};
 }
 function replayHeader(ctx,op,resolveSymbol){
-  const plan=headerPlan(ctx,op),parts=[['title',{size:{width:1092,height:510},ops:[op.title]}],['weather',op.weather],['count',{size:{width:1092,height:510},ops:[op.count]}]];
+  const plan=headerPlan(ctx,op);
+  if(op.twoRows){
+    const ops=[offsetHeaderOp(op.word,plan.word.x,plan.word.y),offsetHeaderOp(op.number,plan.number.x,plan.number.y),...op.weather.ops.map(o=>offsetHeaderOp(o,plan.weather.x,plan.weather.y))];
+    if(plan.circle)ops.unshift({type:'strokeEllipse',rect:plan.circle,state:{...op.title.state,stroke:new Color('FFFFFF'),width:op.shared.circleStroke}});
+    for(const part of segments({size:{width:1092,height:510},ops})){
+      if(part.type==='canvas')replay(ctx,part.ops,1092,510,1092,510,resolveSymbol);
+      else if(part.image?.native)ctx.drawImage({image:part.image.native},part.rect.x,part.rect.y,part.rect.width,part.rect.height);
+    }
+    return;
+  }
+  const parts=[['title',{size:{width:1092,height:510},ops:[op.title]}],['weather',op.weather],['count',{size:{width:1092,height:510},ops:[op.count]}]];
   for(const [name,image]of parts){
     // Use absolute points and clip rectangles, as in the working renderer.
     // Avoid nesting text anchors inside a translated header context.

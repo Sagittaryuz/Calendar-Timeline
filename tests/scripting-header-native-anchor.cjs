@@ -1,3 +1,4 @@
+// Historical 0.3.19 -> 0.3.20 counterfactual stays pinned; active two-row metrics are checked separately.
 // Regression model: UIKit baseline measurements + top-anchored drawing.
 // It reproduces the failure class; these are not the phone's captured metrics.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url'),c=require('@napi-rs/canvas');
@@ -5,7 +6,7 @@ const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripti
 function flat(image){return image.ops.flatMap(o=>o.image?.ops?[o,...flat(o.image)]:[o])}
 (async()=>{
  c.GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf','AnchorHeavy');c.GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf','AnchorRegular');
- const d=await import(pathToFileURL(path.join(dir,'drawing.js'))),engine=await import(pathToFileURL(path.join(dir,'original-engine.js')));
+ const d=await import(pathToFileURL(path.join(dir,'drawing.js'))),engine={renderOriginal:require('./scripting-rolling.cjs').compile(cp.execFileSync('git',['show','e6c7305:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'}))};
  let oldSource=cp.execFileSync('git',['show',base+':scripting/scripts/Calendar Timeline Scripting/drawing.js'],{encoding:'utf8'});
  for(const file of ['diagonal-canvas.js','rect-raster.js'])oldSource=oldSource.replace('./'+file,pathToFileURL(path.join(dir,file)).href);
  const previous=await import('data:text/javascript;base64,'+Buffer.from(oldSource).toString('base64'));

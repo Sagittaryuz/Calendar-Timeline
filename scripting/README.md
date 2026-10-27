@@ -1,3 +1,13 @@
+## Atualização 0.3.23 — quadros em duas linhas e destaque de hoje
+
+Removida somente a exibição da terceira linha E/L. Eventos, lembretes, contagens do modelo/painel e Bridge continuam preservados. A primeira linha passa de 25,5 para 28 em todos os quadros. Hoje usa SFMono-Heavy no nome do dia e no número, número vermelho e círculo branco de contorno somente ao redor do número; os demais dias usam SFMono-Regular, mantendo a distinção de peso e suas cores de dia/feriado. O texto de domingo mantém a borda direita alinhada à segunda linha; sábado mantém a esquerda. O círculo participa da reserva de espaço, sem deslocar esses alinhamentos de texto ou cobrir o nome.
+
+Na segunda linha, a mínima azul fica à esquerda e a máxima vermelha à direita. Mantidos valores, tamanhos adaptativos e ícones; quando falta um extremo, aparece `--º` somente nele e o outro valor disponível permanece. O formato numérico original com dois dígitos foi preservado. Não houve alteração nas dimensões dos quadros, moldura de hoje, curvas, timeline móvel, blur, extensões, toques ou Bridge.
+
+Validação: suíte ativa completa, 20 módulos compilados/importados, 96 cenas, 672 cabeçalhos e 4.704 combinações de escala. Cobertos hoje comum/sábado/domingo/feriado, viradas de mês/ano, dias civis de um e dois dígitos, caso isolado com um único glifo no círculo, valores negativos/ausentes, separação do círculo, ícones vetoriais/bitmap e regressão de ancoragem. Folga mínima no modelo local: 2,95 unidades do canvas; fonte 28,5 fica abaixo da reserva de 2 unidades e 29 corta o círculo de sábado. O preview usa dados fictícios e DejaVu Mono, não SFMono medido no iPhone. [Relatório e medidas](../docs/header-two-rows-0.3.23.json).
+
+Atualize pelo mesmo vínculo remoto, mantendo armazenamento e pareamento. A execução física da 0.3.23 e as decisões de refresh do iOS continuam sem confirmação no aparelho.
+
 ## Atualização 0.3.22 — moldura somente no conjunto de hoje
 
 A moldura branca agora envolve o quadro superior de hoje e a área da timeline até a próxima meia-noite, sem contornar a faixa de amanhã. Na 0.3.21 o stroke usava o mesmo polígono de largura integral empregado pelo fundo e pelas máscaras. A correção mantém esses fundos/máscaras e deriva somente o stroke: recorta o corpo na divisória e remove a borda compartilhada com o quadro. Quando a divisória já passou à esquerda do quadro, o contorno fica segmentado; uma ligação contínua acrescentaria uma área de amanhã ou criaria auto-interseção. O divisor existente continua responsável pelo trecho entre astro e círculo, evitando linha duplicada ou sobre texto.

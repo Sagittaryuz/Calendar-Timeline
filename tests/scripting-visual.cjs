@@ -68,7 +68,7 @@ async function main(){
   const metricContext=new Proxy(nativeMetrics,{set(o,k,v){o[k]=k==='font'&&typeof v==='object'?`bold ${v.size}px Arial`:v;return true},get(o,k){const v=o[k];return typeof v==='function'?v.bind(o):v}});
   let rows;
   for(const card of cards){
-    assert.equal(card.title.state.font.size,25.5);assert(!card.title.tracking);
+    assert.equal(card.title.state.font.size,28);assert(!card.title.tracking);
     const plan=d.headerPlan(metricContext,card);rows??=plan.rowTops;assert.deepEqual(plan.rowTops,rows);
     assert(Math.abs((plan.block.left+plan.block.right)/2-card.frame.x-card.frame.width/2)<1e-8);
     assert(Math.abs((plan.block.top+plan.block.bottom)/2-card.frame.y-card.frame.height/2)<1e-8);
