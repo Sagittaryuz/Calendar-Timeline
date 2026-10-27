@@ -5188,9 +5188,14 @@ function currentDayOutlinePath() {
       }else line(a,b);
     }
   };
-  // Remove their shared edge. If there is no overlap, these naturally remain
-  // two outlines rather than a self-intersecting path across tomorrow's area.
+  // Remove the shared edge once, then bridge only a disjoint top seam.
+  // The lower outline stays clipped to today, even after midnight's divider
+  // has passed to the left of the fixed header's lower-left shoulder.
   trace(header,bodySpan,false);trace(body,headerSpan,true);
+  if(headerSpan&&Math.max(inset,right)<headerSpan[0]-epsilon){
+    path.move(new Point(Math.max(inset,right),bridgeY));
+    path.addLine(new Point(headerSpan[0],bridgeY));
+  }
   return path;
 }
 

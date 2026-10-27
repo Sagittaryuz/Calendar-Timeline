@@ -1,0 +1,383 @@
+{
+  "version": "0.3.28",
+  "scenes": 59,
+  "gapsFixed": 21,
+  "regression": "0.3.27 leaves a disconnected top seam once midnight is left of today header shoulder",
+  "change": "one missing horizontal connector in existing single white stroke; all other commands and bitmaps unchanged",
+  "physicalIOS": "reference JPEG inspected; fix validated synthetically, no physical iPhone execution",
+  "states": [
+    {
+      "date": "2026-10-25T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T23:53:00.000Z",
+      "midnightX": 5.308333333333334,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T23:54:00.000Z",
+      "midnightX": 4.55,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-25T23:55:00.000Z",
+      "midnightX": 3.7916666666666665,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 111.03606576151122,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 111.03606576151122,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 111.03606576151122,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 111.03606576151122,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 111.03606576151122,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-26T21:32:00.000Z",
+      "midnightX": 112.23333333333333,
+      "headerStart": 111.03606576151122,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T21:33:00.000Z",
+      "midnightX": 111.475,
+      "headerStart": 111.03606576151122,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-26T21:34:00.000Z",
+      "midnightX": 110.71666666666667,
+      "headerStart": 111.03606576151122,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-27T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 267.2115943329398,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-27T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 267.2115943329398,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-27T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 267.2115943329398,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-27T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 267.2115943329398,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-27T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 267.2115943329398,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-27T18:06:00.000Z",
+      "midnightX": 268.45,
+      "headerStart": 267.2115943329398,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-27T18:07:00.000Z",
+      "midnightX": 267.69166666666666,
+      "headerStart": 267.2115943329398,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-27T18:08:00.000Z",
+      "midnightX": 266.93333333333334,
+      "headerStart": 267.2115943329398,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-28T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 423.38712290436837,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-28T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 423.38712290436837,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-28T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 423.38712290436837,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-28T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 423.38712290436837,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-28T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 423.38712290436837,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-28T14:40:00.000Z",
+      "midnightX": 424.6666666666667,
+      "headerStart": 423.38712290436837,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-28T14:41:00.000Z",
+      "midnightX": 423.90833333333336,
+      "headerStart": 423.38712290436837,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-28T14:42:00.000Z",
+      "midnightX": 423.15000000000003,
+      "headerStart": 423.38712290436837,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-29T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 579.5626514757969,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-29T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 579.5626514757969,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-29T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 579.5626514757969,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-29T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 579.5626514757969,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-29T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 579.5626514757969,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-29T11:14:00.000Z",
+      "midnightX": 580.8833333333333,
+      "headerStart": 579.5626514757969,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-29T11:15:00.000Z",
+      "midnightX": 580.125,
+      "headerStart": 579.5626514757969,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-29T11:16:00.000Z",
+      "midnightX": 579.3666666666667,
+      "headerStart": 579.5626514757969,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-30T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 735.7381800472256,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-30T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 735.7381800472256,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-30T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 735.7381800472256,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-30T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 735.7381800472256,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-30T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 735.7381800472256,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-30T07:48:00.000Z",
+      "midnightX": 737.1,
+      "headerStart": 735.7381800472256,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-30T07:49:00.000Z",
+      "midnightX": 736.3416666666667,
+      "headerStart": 735.7381800472256,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-30T07:50:00.000Z",
+      "midnightX": 735.5833333333334,
+      "headerStart": 735.7381800472256,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-31T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 891.913708618654,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-31T00:01:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 891.913708618654,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-31T12:00:00.000Z",
+      "midnightX": 546,
+      "headerStart": 891.913708618654,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-31T20:00:00.000Z",
+      "midnightX": 182,
+      "headerStart": 891.913708618654,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-31T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 891.913708618654,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-10-31T04:22:00.000Z",
+      "midnightX": 893.3166666666666,
+      "headerStart": 891.913708618654,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-31T04:23:00.000Z",
+      "midnightX": 892.5583333333333,
+      "headerStart": 891.913708618654,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-10-31T04:24:00.000Z",
+      "midnightX": 891.8,
+      "headerStart": 891.913708618654,
+      "gapFixed": true
+    },
+    {
+      "date": "2026-11-01T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 4,
+      "gapFixed": false
+    },
+    {
+      "date": "2026-12-31T23:59:00.000Z",
+      "midnightX": 0.7583333333333334,
+      "headerStart": 579.5626514757969,
+      "gapFixed": true
+    },
+    {
+      "date": "2027-01-01T00:00:00.000Z",
+      "midnightX": 1088,
+      "headerStart": 735.7381800472256,
+      "gapFixed": false
+    }
+  ],
+  "reference": {
+    "library_file_id": "libfile_873979bae2bc819198162af4dda5ee8b",
+    "file_name": "C40B735B-0F36-4B6B-BEDB-5246A7B0B7E8.jpeg",
+    "materialized": true,
+    "pixelsInspected": true
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.28.scripting",
+    "files": 25,
+    "crc": "passed",
+    "sourceBytes": "all identical",
+    "sha256": "9a012adc1cda8eeba814eac120274510e8abe818afd432870e0cac24fa393953"
+  },
+  "preview": {
+    "library_file_id": "libfile_98a1d03221988191afa14c581b607d54",
+    "file_id": "file_00000000fae081f5a7e8dddc82b153fe",
+    "file_name": "comparison(7).png",
+    "version": 0
+  }
+}

@@ -1,3 +1,11 @@
+## Atualização 0.3.28 — continuidade da linha superior
+
+A captura física enviada foi materializada e inspecionada. O vão aparece quando a divisória de meia-noite avança para a esquerda da curva inferior esquerda do quadro fixo de hoje: o traçado recortado deixava intencionalmente dois contornos separados. Agora o próprio traçado branco recebe somente a ligação horizontal entre essas extremidades, calculada pela geometria existente, sem coordenadas fixas da captura. Quando os contornos já se tocam, nenhum segmento é acrescentado. A ligação respeita o limite externo do widget no último minuto do dia.
+
+A moldura inferior continua restrita ao período de hoje; não se retomou o perímetro completo de amanhã. Sem preenchimento adicional, segunda camada ou mudança de espessura. Curvas, raios, gap dos quadros, títulos, fonte 29, cores/negrito, mínima/máxima, blur, movimento, dados, Bridge e ações permanecem idênticos.
+
+Validação: 59 cenas nos sete dias, antes/durante/depois do contato, último minuto, virada semanal e de ano; 21 estados com vão corrigido. Comparação com a 0.3.27 confirma todos os demais comandos e bitmaps idênticos, uma única operação de contorno branco, cobertura única da ligação e nenhuma extensão da borda inferior para amanhã. Compilação/importação de 20 módulos e pacote de 25 arquivos validados. [Registro e medidas](../docs/frame-continuity-0.3.28.json). A comparação usa dados fictícios e DejaVu Mono; a captura original foi somente referência privada. A correção não foi executada fisicamente no iPhone. Atualização pelo vínculo remoto existente, preservando dados e pareamento.
+
 ## Atualização 0.3.27 — hoje em negrito, sem disco
 
 Removido o disco/círculo branco do número de hoje e a cor vermelha especial dos dígitos. O número usa a cor normal do respectivo dia/quadro, como o nome da semana. Ambos continuam em SFMono-Heavy somente em hoje; demais dias mantêm o peso regular. Fonte 29 preservada.
