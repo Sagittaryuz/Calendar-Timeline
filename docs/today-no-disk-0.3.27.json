@@ -1,0 +1,293 @@
+{
+  "version": "0.3.27",
+  "scenes": 24,
+  "headers": 168,
+  "spaceError": 0,
+  "anchorError": 0,
+  "spaceAdvance": [
+    "17.460002899"
+  ],
+  "alignment": "Sunday RIGHT / Saturday LEFT inside centred block",
+  "weatherSpacing": "regular 40-unit spacing restored; fonts/values/icons retained",
+  "metricsModes": [
+    {
+      "name": "web-top",
+      "expectedCenter": 16.5,
+      "mode": "anchor-relative"
+    },
+    {
+      "name": "uikit-top-box",
+      "expectedCenter": 17.5,
+      "mode": "uikit-top-box"
+    },
+    {
+      "name": "uikit-baseline",
+      "expectedCenter": 17,
+      "mode": "uikit-baseline"
+    }
+  ],
+  "examples": [
+    {
+      "date": "2027-01-01",
+      "weekday": 5,
+      "number": "01",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "center",
+      "circle": null,
+      "word": {
+        "left": 806.7013188310896,
+        "right": 858.6202641435896,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 797.9815606293013,
+        "right": 918.720553656413,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-11-11",
+      "weekday": 3,
+      "number": "11",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "center",
+      "circle": null,
+      "word": {
+        "left": 494.3502616882324,
+        "right": 545.2692070007324,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 485.6305034864441,
+        "right": 606.3694965135559,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-10-28",
+      "weekday": 3,
+      "number": "28",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "center",
+      "circle": null,
+      "word": {
+        "left": 494.8502616882324,
+        "right": 545.7692070007324,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 485.6305034864441,
+        "right": 606.3694965135559,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-12-31",
+      "weekday": 4,
+      "number": "31",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "center",
+      "circle": null,
+      "word": {
+        "left": 650.525790259661,
+        "right": 700.444735572161,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 641.8060320578727,
+        "right": 762.5450250849844,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-11-01",
+      "weekday": 0,
+      "number": "01",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "right",
+      "circle": null,
+      "word": {
+        "left": 34.54343417573499,
+        "right": 85.46237948823499,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 17.103917772158425,
+        "right": 137.84291079927016,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-10-11",
+      "weekday": 0,
+      "number": "11",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "right",
+      "circle": null,
+      "word": {
+        "left": 34.54343417573499,
+        "right": 85.46237948823499,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 17.103917772158425,
+        "right": 137.84291079927016,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-06-28",
+      "weekday": 0,
+      "number": "28",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "right",
+      "circle": null,
+      "word": {
+        "left": 35.54343417573499,
+        "right": 86.46237948823499,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 17.103917772158425,
+        "right": 137.84291079927016,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2027-01-31",
+      "weekday": 0,
+      "number": "31",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "right",
+      "circle": null,
+      "word": {
+        "left": 34.54343417573499,
+        "right": 85.46237948823499,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 17.103917772158425,
+        "right": 137.84291079927016,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-08-01",
+      "weekday": 6,
+      "number": "01",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "left",
+      "circle": null,
+      "word": {
+        "left": 954.1570892007298,
+        "right": 1005.0760345132298,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 954.1570892007298,
+        "right": 1074.8960822278416,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-07-11",
+      "weekday": 6,
+      "number": "11",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "left",
+      "circle": null,
+      "word": {
+        "left": 954.1570892007298,
+        "right": 1005.0760345132298,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 954.1570892007298,
+        "right": 1074.8960822278416,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-11-28",
+      "weekday": 6,
+      "number": "28",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "left",
+      "circle": null,
+      "word": {
+        "left": 954.1570892007298,
+        "right": 1005.0760345132298,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 954.1570892007298,
+        "right": 1074.8960822278416,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    },
+    {
+      "date": "2026-10-31",
+      "weekday": 6,
+      "number": "31",
+      "spaceAdvance": 17.460002899169922,
+      "alignment": "left",
+      "circle": null,
+      "word": {
+        "left": 954.1570892007298,
+        "right": 1005.0760345132298,
+        "top": 23.29373553719008,
+        "bottom": 52.29373553719008
+      },
+      "weather": {
+        "left": 954.1570892007298,
+        "right": 1074.8960822278416,
+        "top": 58.98123553719008,
+        "bottom": 83.48054132231405
+      }
+    }
+  ],
+  "physicalIOS": "not tested; local DejaVu glyph measurements, native convention models; actual host measurements are used at runtime",
+  "removedDisk": true,
+  "positionsUnchanged": true,
+  "headerValidation": {
+    "scenes": 96,
+    "headers": 672,
+    "scaled": 4704,
+    "minSafety": 4.84313980941738
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.27.scripting",
+    "files": 25,
+    "crc": "passed",
+    "sourceBytes": "all identical",
+    "sha256": "2a41e4e66c41ac01c995c818f316d7e7d2884b24248dda9b40429befe210b812"
+  },
+  "preview": {
+    "library_file_id": "libfile_907b91b25c2c8191be580a3190092afd",
+    "file_id": "file_00000000529c81f7841c8f91d5adcbac",
+    "file_name": "comparison(6).png",
+    "version": 0
+  }
+}

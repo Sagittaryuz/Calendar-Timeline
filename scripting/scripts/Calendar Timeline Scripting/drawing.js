@@ -259,7 +259,6 @@ function twoRowHeaderPlan(ctx,op){
   const spaceAdvance=Math.max(1,metric('SFMono-Regular','0 0').width-metric('SFMono-Regular','00').width,metric('SFMono-Heavy','0 0').width-metric('SFMono-Heavy','00').width);
   headerTextBounds(ctx,op.word,op.word.text,cache);const wordAdvance=cache.get(op.word.state.font.name+':'+size+':'+op.word.text).width;
   const numberX=wordAdvance+spaceAdvance,wordX=0;
-  const diskDiameter=Math.max(number.right-number.left+2,size*(op.number.text.length<2?1.05:(s.diskScale??1.375))+(s.diskPadding??1.5));
   const rowHeight=size*(s.diskScale??1.375)+(s.diskPadding??1.5),textY=(rowHeight-size)/2;
   const title={left:Math.min(word.left,number.left+numberX),right:Math.max(word.right,number.right+numberX),top:textY,bottom:textY+size};
   const temperature=op.weather.ops.find(o=>o.type==='text');
@@ -272,7 +271,8 @@ function twoRowHeaderPlan(ctx,op){
   const wx=center-(commonLeft+commonRight)/2,tx=wx+relative,wy=top+rowHeight+s.gap-row2.top;
   const shift=(box,x,y)=>({...box,left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
   const positionedNumber=shift(number,tx+numberX,top+textY-number.top),positionedInk=shift(numberInk,tx+numberX,top+textY-number.top);
-  const circle=op.isToday?{x:(positionedInk.left+positionedInk.right-diskDiameter)/2,y:(positionedInk.top+positionedInk.bottom-diskDiameter)/2,width:diskDiameter,height:diskDiameter}:null;
+  // Preserve the common text line boxes; today has no decoration or extra reservation.
+  const circle=null;
   const visualTitle=unionHeaderBounds([shift(title,tx,top),...(circle?[{left:circle.x,right:circle.x+circle.width,top:circle.y,bottom:circle.y+circle.height}]:[])]);
   const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:visualTitle},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:positionedNumber,ink:positionedInk},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle,circleFilled:!!circle,spacing:{spaceAdvance,wordAdvance,numberAdvance:numberX},alignment:op.weekday===0?'right':op.weekday===6?'left':'center',block:{left:Math.min(tx+title.left,wx+weather.left),right:Math.max(tx+title.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
   ctx.restore();return result;

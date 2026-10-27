@@ -5399,7 +5399,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   const isToday=dateKey(date)===dateKey(now);
   const title=text(fields.headline,isToday?Font.blackMonospacedSystemFont(shared.titleSize):Font.regularMonospacedSystemFont(shared.titleSize),titleWeekdayColor(date,loadResult.holidayDates),300);
   const weekday=text(shortWeekday(date),title.state.font,titleWeekdayColor(date,loadResult.holidayDates),300);
-  const number=text(String(date.getDate()).padStart(2,'0'),title.state.font,isToday?new Color('#FF3B30'):titleWeekdayColor(date,loadResult.holidayDates),300);
+  const number=text(String(date.getDate()).padStart(2,'0'),title.state.font,titleWeekdayColor(date,loadResult.holidayDates),300);
   ink.ops=[];
   ink.setFont(Font.blackMonospacedSystemFont(shared.temperatureSize));ink.setTextAlignedRight();
   ink.setTextColor(new Color(SETTINGS.maximumTemperatureColor));

@@ -1,3 +1,11 @@
+## Atualização 0.3.27 — hoje em negrito, sem disco
+
+Removido o disco/círculo branco do número de hoje e a cor vermelha especial dos dígitos. O número usa a cor normal do respectivo dia/quadro, como o nome da semana. Ambos continuam em SFMono-Heavy somente em hoje; demais dias mantêm o peso regular. Fonte 29 preservada.
+
+A retirada não altera as posições de palavra, número ou temperaturas, o espaço tipográfico nem as caixas de linha comuns: o disco nunca entra no avanço do texto e agora não participa da caixa visual. Mantidos os blocos centralizados, domingo pela direita e sábado pela esquerda, curvas adjacentes, gap, moldura, blur, movimento, Bridge, dados e ações.
+
+Validação focada: 24 cenas/168 cabeçalhos comparados à 0.3.26 com posições e avanços idênticos; 96 cenas/672 cabeçalhos e 4.704 combinações de escala sem cortes; nenhuma elipse no desenho dos cabeçalhos. Nove casos da regra de blur e nove datas de hoje, compilação/importação de 20 módulos e pacote de 25 arquivos validados. [Evidências](../docs/today-no-disk-0.3.27.json). Preview com dados fictícios e DejaVu Mono; sem teste físico no iPhone. Atualize pelo mesmo vínculo remoto, preservando armazenamento e pareamento.
+
 ## Atualização 0.3.26 — curvas adjacentes e blocos centralizados
 
 Os quadros vizinhos acompanham a mesma curva-mestra da timeline por um contorno paralelo: meia espessura da moldura mais o gap original de **1,2287 unidades**. A máscara anterior tinha uma junção divergente quando o canto direito invertia e o preenchimento do próximo quadro terminava no retângulo original. A junção agora é resolvida contra o plano paralelo da timeline; somente o canto inferior esquerdo do próximo quadro ganha o preenchimento local necessário. Nenhum quadro muda de posição, tamanho ou distância entre slots.
