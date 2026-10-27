@@ -1,11 +1,13 @@
 const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs');
 const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
 const old=cp.execFileSync('git',['show','a1aa5d7:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
+// Match only the intentional current blur strengths in this historical outline comparison.
+const withCurrentBlur=s=>s.replace('futureTimelineBlurDownsampleFactor: 0.24','futureTimelineBlurDownsampleFactor: 0.5').replace('futureTimelineBlurTintOpacity: 0.36','futureTimelineBlurTintOpacity: 0.2');
 const instrument=s=>compile(s.replace('return {temporal:', 'return {frameProbe:{bridgeY:dayBoundaryMoonBorderTopY(),outline:currentDayOutlinePath().commands},temporal:'));
 const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.stroke.alpha===0.96;
 const normalize=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!isFrame(o)&&o.type!=='header'):v);
 (async()=>{
- const {host,options,d}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');host.DrawContext=class extends d.DrawContext{makeRaster=crop=>({native:{sha256:require('node:crypto').createHash('sha256').update(encodePNG(crop)).digest('hex')},size:{width:crop.width,height:crop.height}})};const render=instrument(raw),before=compile(old),states=[];
+ const {host,options,d}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');host.DrawContext=class extends d.DrawContext{makeRaster=crop=>({native:{sha256:require('node:crypto').createHash('sha256').update(encodePNG(crop)).digest('hex')},size:{width:crop.width,height:crop.height}})};const render=instrument(raw),before=compile(withCurrentBlur(old)),states=[];
  for(let day=25;day<=31;day++)for(const hour of [0,1,6,10+38/60,12,18,21,23+59/60]){
   const now=new Date(2026,9,day,0,Math.round(hour*60)),midnight=new Date(2026,9,day+1),start=new Date(2026,9,day,8);
   const items=[{kind:'event',identifier:'test',title:'SYNTHETIC EVENT',start,end:new Date(+midnight+7200000),color:'#FF9500',isAllDay:false}];

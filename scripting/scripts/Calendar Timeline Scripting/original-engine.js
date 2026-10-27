@@ -75,9 +75,9 @@ const SETTINGS = {
   // enquanto ainda houver compromissos ou pendências válidas hoje.
   pendingDayCarryoverEnabled: true,
   futureTimelineBlurEnabled: true,
-  futureTimelineBlurDownsampleFactor: 0.24,
+  futureTimelineBlurDownsampleFactor: 0.5,
   futureTimelineBlurTintColor: "#111216",
-  futureTimelineBlurTintOpacity: 0.36,
+  futureTimelineBlurTintOpacity: 0.2,
   // Fundos de sábado e domingo mais claros e totalmente sólidos.
   saturdayTimelineBackgroundColor: "#0D3F68",
   sundayTimelineBackgroundColor: "#521720",
@@ -13138,8 +13138,8 @@ function weekHeaderStyle() {
   if(weekHeaderStyle.cache)return weekHeaderStyle.cache;
   const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleWeekStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
-  return weekHeaderStyle.cache={titleSize:28,temperatureSize,
-    headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:3,wordGap:3,circlePadding:2,circleStroke:2};
+  return weekHeaderStyle.cache={titleSize:29,temperatureSize,
+    headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};
 }
 function weekHeaderLayout(date,card) {
   const fields=weekHeaderFields(date),style=weekHeaderStyle();

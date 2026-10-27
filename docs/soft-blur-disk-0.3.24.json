@@ -1,0 +1,116 @@
+{
+  "version": "0.3.24",
+  "blurScenes": 9,
+  "blurRadius": {
+    "before": 4.166666666666667,
+    "after": 2
+  },
+  "tintOpacity": {
+    "before": 0.36,
+    "after": 0.2
+  },
+  "disks": 9,
+  "minimumRadialClearance": 1.414729806884516,
+  "minReductionPercent": 14.538099373188828,
+  "maxReductionPercent": 14.538099373188828,
+  "positions": "both visible rows centered in every card; common row axes, font29; original card geometry retained",
+  "paint": "one solid opaque white disk before red digits; no stroke",
+  "cases": [
+    {
+      "date": "2026-10-25",
+      "number": "25",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-10-27",
+      "number": "27",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-10-28",
+      "number": "28",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-10-31",
+      "number": "31",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-08-01",
+      "number": "01",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-11-08",
+      "number": "08",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-12-30",
+      "number": "30",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2026-12-31",
+      "number": "31",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    },
+    {
+      "date": "2027-01-01",
+      "number": "01",
+      "diameter": 41.375,
+      "priorOuterDiameter": 48.41338619494709,
+      "reductionPercent": 14.538099373188828
+    }
+  ],
+  "physicalIOS": "not tested; DejaVu substitute and native-like anchor model",
+  "baseline": "cfc2507371177634513956c04024bb05beb882d1",
+  "validation": {
+    "activeSuiteExitCode": 0,
+    "syntaxAndImports": 20,
+    "headers": 672,
+    "scaledCases": 4704,
+    "blurApplicationCases": 9,
+    "diskCases": 9,
+    "solidPaintOrder": "opaque white fill first, red number after",
+    "outsideHeaders": "only radius and tint intensity differ; existing blur condition, shapes, timeline data and hit geometry unchanged",
+    "packageRootFiles": 25,
+    "CRCAndExactBytes": true,
+    "packageSHA256": "f220843f3368d93807946fb942367cdd23fb614c47bff057f4768bb302e72aa5"
+  },
+  "decisions": [
+    "Latest instruction supersedes old Sunday-right/Saturday-left alignment. Both rows now centered in all cards.",
+    "Font28 ->29, shared row reservation and baselines, no weekend-only vertical shift.",
+    "Circle is filled white, no outline. Diameter41.375 local units,14.538% smaller than former visible outer diameter48.413.",
+    "Disk surrounds painted digits; minimum measured radial clearance1.415 local units. Geometry and native measurements are approximations without an iPhone test.",
+    "Blur radius4.1667 ->2; veil opacity0.36 ->0.20. Application condition unchanged."
+  ],
+  "limits": [
+    "Synthetic preview uses DejaVu Mono, not native SFMono or a physical iPhone screenshot.",
+    "OS refresh scheduling unchanged; no continuous-animation or immediate-refresh guarantee."
+  ],
+  "preview": {
+    "library_file_id": "libfile_d520b17a56b48191ac9e7229988d2b85",
+    "file_id": "file_00000000fa908209a23402d96e05c107",
+    "file_name": "comparison(3).png",
+    "version": 0,
+    "type": "synthetic Canvas comparison, DejaVu Mono; not a physical iPhone image"
+  }
+}

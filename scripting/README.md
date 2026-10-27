@@ -1,3 +1,13 @@
+## Atualização 0.3.24 — centralização, disco de hoje e blur suave
+
+A primeira linha passa de 28 para 29. Ambas as linhas ficam centralizadas horizontalmente no próprio quadro, inclusive hoje, com eixos de linha comuns entre os dias. A instrução mais recente substitui os antigos alinhamentos especiais de domingo/sábado; não há deslocamento vertical exclusivo de fim de semana. Hoje mantém nome e número em negrito e número vermelho. O destaque agora é um disco branco sólido atrás somente dos dígitos, sem contorno, cerca de 14,5% menor. Mínima azul à esquerda, máxima vermelha à direita, ícones e demais dados preservados.
+
+O blur do trecho de amanhã foi suavizado: raio de 4,17 para 2 unidades locais e véu de 36% para 20%. A regra de aplicação não muda: pendências/compromissos válidos de hoje ou falha de leitura protegem o contexto futuro; itens começados hoje continuam nítidos. Moldura, movimento temporal, extensões, toques e Bridge não mudaram.
+
+Validação: suíte completa e 20 módulos compilados/importados; 96 cenas, 672 cabeçalhos e 4.704 escalas, mais 9 casos da regra de blur e 9 discos de datas. Verificados preenchimento branco opaco antes do número vermelho, circularidade, pixels dos dígitos dentro do disco, separação do nome/temperaturas, centros das duas linhas, domingo/sábado, datas largas, meses e ano. A fonte 29 preservou ao menos 1,63 unidades de folga no raster local; 29,5 caiu para 0,13 e 30,5 cortou conteúdo. Todos os pontos de texto continuam usando caixas de linha estáveis, sem aplicar offsets de baseline UIKit.
+
+[Geometria dos cabeçalhos](../docs/centered-days-0.3.24.json) · [Blur, disco e pacote](../docs/soft-blur-disk-0.3.24.json). Comparação com dados fictícios e DejaVu Mono: não é uma captura física nem certifica a métrica de SFMono no iPhone. Atualize pelo mesmo vínculo remoto, preservando armazenamento e pareamento; a política de atualização do iOS permanece a mesma.
+
 ## Atualização 0.3.23 — quadros em duas linhas e destaque de hoje
 
 Removida somente a exibição da terceira linha E/L. Eventos, lembretes, contagens do modelo/painel e Bridge continuam preservados. A primeira linha passa de 25,5 para 28 em todos os quadros. Hoje usa SFMono-Heavy no nome do dia e no número, número vermelho e círculo branco de contorno somente ao redor do número; os demais dias usam SFMono-Regular, mantendo a distinção de peso e suas cores de dia/feriado. O texto de domingo mantém a borda direita alinhada à segunda linha; sábado mantém a esquerda. O círculo participa da reserva de espaço, sem deslocar esses alinhamentos de texto ou cobrir o nome.

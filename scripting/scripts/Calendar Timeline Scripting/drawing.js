@@ -240,22 +240,30 @@ function twoRowHeaderPlan(ctx,op){
   const word=headerTextBounds(ctx,op.word,op.word.text,cache),number=headerTextBounds(ctx,op.number,op.number.text,cache),weather=headerWeatherBounds(ctx,op,cache);
   const size=op.title.state.font.size,heavy={...op.number,state:{...op.number.state,font:{name:'SFMono-Heavy',size}}};
   const dateWidth=Math.max(...s.dates.map(text=>{const b=headerTextBounds(ctx,heavy,text,cache);return b.right-b.left}));
-  const diameter=Math.hypot(dateWidth,size)+s.circlePadding*2,outerDiameter=diameter+s.circleStroke;
+  const diameter=Math.max(dateWidth+2,size*(s.diskScale??1.375)+(s.diskPadding??1.5)),outerDiameter=diameter;
   const rowHeight=outerDiameter,wordWidth=word.right-word.left,numberWidth=number.right-number.left;
   const wordGap=(outerDiameter-dateWidth)/2+s.wordGap;
   const numberX=wordWidth+wordGap-number.left;
   const wordX=-word.left,textY=(rowHeight-size)/2;
   const title={left:0,right:wordWidth+wordGap+numberWidth,top:textY,bottom:textY+size};
-  const circleLeft=wordWidth+wordGap+(numberWidth-outerDiameter)/2;
-  const visualTitle=op.isToday?{left:Math.min(0,circleLeft),right:Math.max(title.right,circleLeft+outerDiameter),top:0,bottom:rowHeight}:title;
+  const diskDiameter=Math.max(numberWidth+2,size*(s.diskScale??1.375)+(s.diskPadding??1.5));
+  const circleLeft=wordWidth+wordGap+(numberWidth-diskDiameter)/2;
+  const visualTitle=op.isToday?{left:Math.min(0,circleLeft),right:Math.max(title.right,circleLeft+diskDiameter),top:(rowHeight-diskDiameter)/2,bottom:(rowHeight+diskDiameter)/2}:title;
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
   const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
-  const relative=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
-  const left=Math.min(weather.left,visualTitle.left+relative),right=Math.max(weather.right,visualTitle.right+relative);
-  const wx=center-(left+right)/2,tx=wx+relative,wy=top+rowHeight+s.gap-row2.top;
+  const left=visualTitle.left,right=visualTitle.right;
+  const wx=center-(weather.left+weather.right)/2,tx=center-(left+right)/2,wy=top+rowHeight+s.gap-row2.top;
   const shift=(b,x,y)=>({left:b.left+x,right:b.right+x,top:b.top+y,bottom:b.bottom+y});
-  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:shift(visualTitle,tx,top)},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:shift(number,tx+numberX,top+textY-number.top)},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle:op.isToday?{x:tx+circleLeft+s.circleStroke/2,y:top+s.circleStroke/2,width:diameter,height:diameter}:null,block:{left:center-(right-left)/2,right:center+(right-left)/2,top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
+  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:shift(visualTitle,tx,top)},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:shift(number,tx+numberX,top+textY-number.top)},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle:op.isToday?{x:tx+circleLeft,y:top,width:diameter,height:diameter}:null,block:{left:Math.min(tx+visualTitle.left,wx+weather.left),right:Math.max(tx+visualTitle.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
+  // The same baseline is shared by all cards. The solid disk surrounds only
+  // this pair of digits, with measured glyph clearance (no baseline-metric offsets).
+  if(result.circle){
+    const diskDiameter=Math.max(numberWidth+2,size*(s.diskScale??1.375)+(s.diskPadding??1.5));
+    const centerX=(result.number.bounds.left+result.number.bounds.right)/2,centerY=(result.number.bounds.top+result.number.bounds.bottom)/2;
+    result.circle={x:centerX-diskDiameter/2,y:centerY-diskDiameter/2,width:diskDiameter,height:diskDiameter};
+    result.circleFilled=true;
+  }
   ctx.restore();return result;
 }
 
@@ -269,7 +277,7 @@ function replayHeader(ctx,op,resolveSymbol){
   const plan=headerPlan(ctx,op);
   if(op.twoRows){
     const ops=[offsetHeaderOp(op.word,plan.word.x,plan.word.y),offsetHeaderOp(op.number,plan.number.x,plan.number.y),...op.weather.ops.map(o=>offsetHeaderOp(o,plan.weather.x,plan.weather.y))];
-    if(plan.circle)ops.unshift({type:'strokeEllipse',rect:plan.circle,state:{...op.title.state,stroke:new Color('FFFFFF'),width:op.shared.circleStroke}});
+    if(plan.circle)ops.unshift({type:'fillEllipse',rect:plan.circle,state:{...op.title.state,fill:new Color('FFFFFF')}});
     for(const part of segments({size:{width:1092,height:510},ops})){
       if(part.type==='canvas')replay(ctx,part.ops,1092,510,1092,510,resolveSymbol);
       else if(part.image?.native)ctx.drawImage({image:part.image.native},part.rect.x,part.rect.y,part.rect.width,part.rect.height);
