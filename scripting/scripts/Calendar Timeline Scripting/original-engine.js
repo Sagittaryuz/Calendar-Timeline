@@ -5140,8 +5140,62 @@ function currentDayFrameHorizontalDirection(
   return "right";
 }
 
+// Intersect only the stroke with today's temporal region. The approved fill,
+// neighbor masks, typography and the widget's outer clip keep their geometry.
+function currentDayOutlinePath() {
+  if(!rollingToday)return currentDayUnifiedShape();
+  const inset=WIDGET_CONTOUR.strokeInset,bridgeY=dayBoundaryMoonBorderTopY();
+  const boundary=timeToX(addDays(startOfDay(windowStart),1));
+  const right=Math.min(CANVAS.width-inset,boundary),epsilon=1e-7;
+  const vertices=currentDayUnifiedShape().commands.filter(c=>c.length===3).map(([,x,y])=>({x,y}));
+  const clip=(input,axis,limit,keepLess)=>{
+    const output=[];
+    if(!input.length)return output;
+    let previous=input.at(-1),previousInside=keepLess?previous[axis]<limit:previous[axis]>=limit;
+    for(const point of input){
+      const inside=keepLess?point[axis]<limit:point[axis]>=limit;
+      if(inside!==previousInside){
+        const t=(limit-previous[axis])/(point[axis]-previous[axis]);
+        output.push({x:previous.x+t*(point.x-previous.x),y:previous.y+t*(point.y-previous.y)});
+      }
+      if(inside)output.push(point);
+      previous=point;previousInside=inside;
+    }
+    return output;
+  };
+  const header=clip(vertices,'y',bridgeY,true);
+  const body=right>inset?clip(clip(vertices,'y',bridgeY,false),'x',right,true):[];
+  const span=points=>{const xs=points.filter(p=>Math.abs(p.y-bridgeY)<epsilon).map(p=>p.x);return xs.length?[Math.min(...xs),Math.max(...xs)]:null};
+  const headerSpan=span(header),bodySpan=span(body),path=new Path();
+  const trace=(points,sharedSpan,isBody)=>{
+    let last=null;
+    const line=(a,b)=>{
+      if(Math.hypot(b.x-a.x,b.y-a.y)<epsilon)return;
+      if(!last||Math.hypot(last.x-a.x,last.y-a.y)>epsilon)path.move(new Point(a.x,a.y));
+      path.addLine(new Point(b.x,b.y));last=b;
+    };
+    for(let i=0;i<points.length;i++){
+      const a=points[i],b=points[(i+1)%points.length];
+      // The existing foreground divider already spans astro -> weekday badge.
+      // Do not draw a second vertical stroke through the moon or badge text.
+      if(isBody&&boundary<CANVAS.width-inset&&Math.abs(a.x-right)<epsilon&&Math.abs(b.x-right)<epsilon){last=null;continue;}
+      if(sharedSpan&&Math.abs(a.y-bridgeY)<epsilon&&Math.abs(b.y-bridgeY)<epsilon){
+        const lo=Math.min(a.x,b.x),hi=Math.max(a.x,b.x),[s0,s1]=sharedSpan;
+        const pieces=[[lo,Math.min(hi,s0)],[Math.max(lo,s1),hi]].filter(([x0,x1])=>x1-x0>epsilon);
+        if(b.x<a.x)pieces.reverse();
+        for(const [x0,x1]of pieces)line({x:b.x<a.x?x1:x0,y:bridgeY},{x:b.x<a.x?x0:x1,y:bridgeY});
+        if(!pieces.length)last=null;
+      }else line(a,b);
+    }
+  };
+  // Remove their shared edge. If there is no overlap, these naturally remain
+  // two outlines rather than a self-intersecting path across tomorrow's area.
+  trace(header,bodySpan,false);trace(body,headerSpan,true);
+  return path;
+}
+
 function drawCurrentDayFrameOverlay(ctx) {
-  ctx.addPath(currentDayUnifiedShape());
+  ctx.addPath(currentDayOutlinePath());
   ctx.setStrokeColor(new Color('#FFFFFF',0.96));
   ctx.setLineWidth(scaleVertical(3));ctx.strokePath();
 }

@@ -1,0 +1,436 @@
+{
+  "version": "0.3.22",
+  "populatedComparisons": 56,
+  "additionalColumnPassages": 77,
+  "midnightAndYearCases": 4,
+  "unchanged": "every recorded operation except white frame; same metadata and touch geometry",
+  "nativeIOS": "not tested; synthetic Canvas/font substitution",
+  "states": [
+    {
+      "day": 25,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 266
+    },
+    {
+      "day": 25,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 224
+    },
+    {
+      "day": 25,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 25,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 25,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 25,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 25,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 200
+    },
+    {
+      "day": 25,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    },
+    {
+      "day": 26,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 267
+    },
+    {
+      "day": 26,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 225
+    },
+    {
+      "day": 26,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 26,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 26,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 26,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 26,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 26,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    },
+    {
+      "day": 27,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 267
+    },
+    {
+      "day": 27,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 225
+    },
+    {
+      "day": 27,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 27,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 27,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 27,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 27,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 27,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    },
+    {
+      "day": 28,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 267
+    },
+    {
+      "day": 28,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 225
+    },
+    {
+      "day": 28,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 203
+    },
+    {
+      "day": 28,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 28,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 28,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 28,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 28,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    },
+    {
+      "day": 29,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 267
+    },
+    {
+      "day": 29,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 225
+    },
+    {
+      "day": 29,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 29,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 29,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 29,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 29,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 29,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    },
+    {
+      "day": 30,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 267
+    },
+    {
+      "day": 30,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 225
+    },
+    {
+      "day": 30,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 202
+    },
+    {
+      "day": 30,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 30,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 30,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 30,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 30,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    },
+    {
+      "day": 31,
+      "hour": 0,
+      "midnightX": 1092,
+      "bridgeY": 102.2789256198347,
+      "commands": 266
+    },
+    {
+      "day": 31,
+      "hour": 1,
+      "midnightX": 1046.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 224
+    },
+    {
+      "day": 31,
+      "hour": 6,
+      "midnightX": 819,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 31,
+      "hour": 10.633333333333333,
+      "midnightX": 608.1833333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 31,
+      "hour": 12,
+      "midnightX": 546,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 31,
+      "hour": 18,
+      "midnightX": 273,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 31,
+      "hour": 21,
+      "midnightX": 136.5,
+      "bridgeY": 102.2789256198347,
+      "commands": 201
+    },
+    {
+      "day": 31,
+      "hour": 23.983333333333334,
+      "midnightX": 0.7583333333333334,
+      "bridgeY": 102.2789256198347,
+      "commands": 133
+    }
+  ],
+  "baseline": "a1aa5d766163b3cea187214190e0689dae33ae25",
+  "cause": "White stroke reused the full-width polygon for selected-day fill and neighbor masks, so it also enclosed tomorrow.",
+  "solution": "Stroke only the union of the selected header and the lower body clipped at next midnight; remove shared seam; separate components after their contact ends. Retain original fill, masks and signed corner shape. The existing divider alone draws the vertical segment between moon and weekday badge.",
+  "timezones": [
+    "UTC",
+    "America/New_York"
+  ],
+  "privatePhysicalReference": "Inspected Calendar widget only; observed current white contour extending across tomorrow. Screenshot does not prove installed version. No screenshot or personal agenda included in generated deliverables.",
+  "preview": {
+    "library_file_id": "libfile_ed262448aa408191a0c80426348cd3fb",
+    "file_id": "file_000000002cb081f5a72d313af1420ad1",
+    "file_name": "comparison(1).png",
+    "version": 0,
+    "type": "synthetic Canvas comparison, DejaVu Mono; not a physical iOS capture"
+  },
+  "package": {
+    "rootFiles": 25,
+    "CRCAndExactBytes": true,
+    "sha256": "9f61d2af6d402647f6d47485685ee47a36b2be1beaff56a6ee82785274d3f716"
+  },
+  "limits": [
+    "Native SFMono and WidgetKit rendering have not been tested on an iPhone for this change.",
+    "Near midnight the tiny remaining current-day area follows the existing external clip; the outline may split from the fixed header.",
+    "The OS still decides when to render. No refresh cadence or continuous animation is promised."
+  ],
+  "validation": {
+    "activeSuiteExitCode": 0,
+    "syntaxAndImports": 20,
+    "packageCRCAndExactBytes": true,
+    "visualStaticRegression": "passed",
+    "comparisonsWithAgendaPerTimezone": 56,
+    "extraColumnPassagesPerTimezone": 77,
+    "midnightYearCasesPerTimezone": 4
+  }
+}

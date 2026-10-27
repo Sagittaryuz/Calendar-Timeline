@@ -1,3 +1,11 @@
+## Atualização 0.3.22 — moldura somente no conjunto de hoje
+
+A moldura branca agora envolve o quadro superior de hoje e a área da timeline até a próxima meia-noite, sem contornar a faixa de amanhã. Na 0.3.21 o stroke usava o mesmo polígono de largura integral empregado pelo fundo e pelas máscaras. A correção mantém esses fundos/máscaras e deriva somente o stroke: recorta o corpo na divisória e remove a borda compartilhada com o quadro. Quando a divisória já passou à esquerda do quadro, o contorno fica segmentado; uma ligação contínua acrescentaria uma área de amanhã ou criaria auto-interseção. O divisor existente continua responsável pelo trecho entre astro e círculo, evitando linha duplicada ou sobre texto.
+
+Preservados movimento, fontes/posições, curvas dos quadros, marcador de virada, blur, extensões, toques e Bridge. A comparação automatizada confere todas as operações restantes, incluindo SHA-256 dos bitmaps de retângulos. Passaram 56 comparações com agenda, 77 passagens nas sete colunas e 4 casos de meia-noite/ano; a suíte de movimento também continua aprovada. [Medidas e registro](../docs/today-frame-0.3.22.json).
+
+A captura física recebida foi usada apenas como referência privada do contorno indevido; ela não comprova a versão instalada. O preview de antes/depois contém dados fictícios e fonte substituta DejaVu Mono. A correção ainda não foi executada no iPhone; não há garantia nova de cadência de refresh do iOS. Atualize pelo mesmo vínculo remoto, preservando o armazenamento e o pareamento.
+
 ## Atualização 0.3.21 — timeline móvel e regras históricas
 
 A timeline de 24h volta a começar no horário real de cada render. Os sete quadros ficam nas posições aprovadas, com a tipografia 25,5 e os mesmos alinhamentos internos; o toque para escolher outro dia foi removido. A migração ignora e remove somente `selected-day`, preservando agenda, lembretes, configurações e dados da Bridge. Intents antigos ainda em widgets já renderizados solicitam atualização de hoje sem selecionar uma data.

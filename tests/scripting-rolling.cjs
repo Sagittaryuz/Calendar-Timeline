@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
 const raw=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
 const compile=s=>new(Object.getPrototypeOf(async function(){}).constructor)('host','options',s.replace('export async function renderOriginal(host, options = {}) {','').replace(/}\s*$/,''));
-const probe=s=>compile(s.replace('return {temporal:',`return {test:{blur:shouldBlurFutureTimeline(),prepared:preparedItems,chosen:selectedItems,segments:preparedItems.map(i=>timelineBarSegments(i,Math.max(0,timeToX(i.start)),Math.min(timelineWidth(),timeToX(i.end))))},temporal:`));
+const probe=s=>compile(s.replace('return {temporal:',`return {test:{bridgeY:dayBoundaryMoonBorderTopY(),blur:shouldBlurFutureTimeline(),prepared:preparedItems,chosen:selectedItems,segments:preparedItems.map(i=>timelineBarSegments(i,Math.max(0,timeToX(i.start)),Math.min(timelineWidth(),timeToX(i.end))))},temporal:`));
 const flatten=image=>image.ops.flatMap(o=>o.image?.ops?[o,...flatten(o.image)]:[o]);
 async function fixture(){
  const d=await import(pathToFileURL(path.join(dir,'drawing.js')).href);
@@ -27,7 +27,7 @@ async function main(){
    assert(!model.test.blur,'Empty future remains sharp');
    if(h>0)assert(ops.some(o=>o.type==='text'&&o.text===['DOM','SEG','TER','QUA','QUI','SEX','SAB'][(now.getDay()+1)%7]),'Midnight weekday circle label restored');
    const b=model.temporal.rightBridge;
-   if(!b.outerEdge){const stroke=ops.find(o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.stroke.alpha===0.96);const points=stroke.path.filter(p=>p.length===3);const bridgeY=points.find(p=>Math.abs(p[1]-1088)<1e-8&&p[2]>100&&p[2]<200)?.[2]??points.find(p=>Math.abs(p[1]-1088)<1e-8&&p[2]>90&&p[2]<200)?.[2];assert(points.some(p=>Math.abs(p[1]-(b.edge+b.direction*b.radius))<1e-6&&Math.abs(p[2]-bridgeY)<1e-6),'Actual contour endpoint follows shrinking/inverted right bridge');}
+   if(!b.outerEdge){const stroke=ops.find(o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.stroke.alpha===0.96);const points=stroke.path.filter(p=>p.length===3);const bridgeY=model.test.bridgeY;assert(points.some(p=>Math.abs(p[1]-(b.edge+b.direction*b.radius))<1e-6&&Math.abs(p[2]-bridgeY)<1e-6),'Actual contour endpoint follows shrinking/inverted right bridge');}
    assert(b.radius>=0&&b.radius<=55);if(!b.outerEdge&&Math.abs(b.boundary-b.edge)>1e-6)assert.equal(b.direction,Math.sign(b.boundary-b.edge));
    const finite=o=>{if(typeof o==='number')assert(Number.isFinite(o));else if(o&&typeof o==='object')for(const [k,v]of Object.entries(o))if(k!=='shared')finite(v)};finite(model.image.outerClip);
    states.push({day,h,midnightX:model.temporal.midnightX,bridge:b});scenes++;
