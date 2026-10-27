@@ -70,9 +70,9 @@ async function main(){
   for(const card of cards){
     assert.equal(card.title.state.font.size,29);assert(!card.title.tracking);
     const plan=d.headerPlan(metricContext,card);rows??=plan.rowTops;assert.deepEqual(plan.rowTops,rows);
-    assert(Math.abs((plan.block.left+plan.block.right)/2-card.frame.x-card.frame.width/2)<1e-8);
+    if(card.weekday!==0&&card.weekday!==6)assert(Math.abs((plan.block.left+plan.block.right)/2-card.frame.x-card.frame.width/2)<1e-8);
     assert(Math.abs((plan.block.top+plan.block.bottom)/2-card.frame.y-card.frame.height/2)<1e-8);
-    for(const bounds of [plan.title.visualBounds,plan.weather.bounds])assert(Math.abs((bounds.left+bounds.right)/2-card.frame.x-card.frame.width/2)<1e-8);
+    if(card.weekday===0)assert(Math.abs(plan.title.bounds.left-plan.weather.bounds.left)<1e-8);else if(card.weekday===6)assert(Math.abs(plan.title.bounds.right-plan.weather.bounds.right)<1e-8);else for(const b of [plan.title.bounds,plan.weather.bounds])assert(Math.abs((b.left+b.right)/2-card.frame.x-card.frame.width/2)<1e-8);
   }
   assert(model.image.outerClip?.length>200,'Complete contour clips nested content');
   const source=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');

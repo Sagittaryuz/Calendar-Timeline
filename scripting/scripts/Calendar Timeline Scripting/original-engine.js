@@ -13139,12 +13139,12 @@ function weekHeaderStyle() {
   const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleWeekStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
   return weekHeaderStyle.cache={titleSize:29,temperatureSize,
-    headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};
+    headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,weekendInset:35,circlePadding:2,circleStroke:2};
 }
 function weekHeaderLayout(date,card) {
   const fields=weekHeaderFields(date),style=weekHeaderStyle();
   const maxWidth=fields.maximum.length*style.temperatureSize*0.62,minWidth=fields.minimum.length*style.temperatureSize*0.62;
-  const gap=scaleFontSize(21)*3*0.62*2+scaleVertical(38)-maxWidth-minWidth;
+  const gap=scaleFontSize(21)*3*0.62*2+scaleVertical(28)-maxWidth-minWidth;
   return {...fields,maxWidth,minWidth,gap};
 }
 function headerVectorBounds(ops) {

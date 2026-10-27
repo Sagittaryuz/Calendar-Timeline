@@ -1,0 +1,46 @@
+{
+  "version": "0.3.25",
+  "scenes": 96,
+  "headers": 672,
+  "scaled": 4704,
+  "font": 29,
+  "oldFont": 28,
+  "weights": "today Heavy, other days Regular",
+  "minSafety": 3.5013595426351003,
+  "minRingWordGap": 13.963294982910156,
+  "minRingWeatherGap": 3.44677734375,
+  "candidates": [
+    {
+      "size": 28,
+      "minSafety": 3.3728015446820336
+    },
+    {
+      "size": 28.5,
+      "minSafety": 3.19322930506155
+    },
+    {
+      "size": 29,
+      "minSafety": 3.5130974438918656
+    },
+    {
+      "size": 29.5,
+      "minSafety": 2.644618610670932
+    },
+    {
+      "size": 30,
+      "minSafety": 2.458148449473356
+    },
+    {
+      "size": 30.5,
+      "minSafety": 2.270996083592536
+    },
+    {
+      "size": 31,
+      "minSafety": 2.583155361308627
+    }
+  ],
+  "dateFormat": "original two-digit date retained; tests cross single-digit civil dates, month/year",
+  "nativeIOS": "not tested; DejaVu Mono raster and simulated baseline metrics",
+  "baseline": "656677269c65023beebddfb8f331ba5aacdbce88",
+  "actualIOS": "not run on physical iPhone; native Canvas metrics are measured at runtime"
+}

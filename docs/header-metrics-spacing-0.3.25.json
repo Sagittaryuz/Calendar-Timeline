@@ -1,0 +1,61 @@
+{
+  "version": "0.3.25",
+  "scenes": 24,
+  "headers": 168,
+  "inkCenterError": 0,
+  "spaceError": 0,
+  "anchorError": 0,
+  "spaceAdvance": [
+    "17.460002899"
+  ],
+  "weekendInset": 35,
+  "weatherSpacing": "only gaps around existing icon compacted, fonts/values/icons retained",
+  "metricsModes": [
+    {
+      "name": "web-top",
+      "expectedCenter": 16.5,
+      "mode": "anchor-relative"
+    },
+    {
+      "name": "uikit-top-box",
+      "expectedCenter": 17.5,
+      "mode": "uikit-top-box"
+    },
+    {
+      "name": "uikit-baseline",
+      "expectedCenter": 17,
+      "mode": "uikit-baseline"
+    }
+  ],
+  "physicalIOS": "not tested; local DejaVu glyph measurements, native convention models; actual host measurements are used at runtime",
+  "baseline": "656677269c65023beebddfb8f331ba5aacdbce88",
+  "actualIOS": "not run on physical iPhone; native Canvas metrics are measured at runtime",
+  "cause": "0.3.24 centered the disk on nominal font-size height and allowed the decoration envelope to affect row placement. Text spacing used ink widths and a disk-related gap.",
+  "solution": "Measure glyph/text bounds, adapt anchor-relative versus UIKit metric convention only for the disk; preserve top-aligned text coordinates. Place the number after the weekday advance plus one common measured space. Align text independently from the disk.",
+  "weekendRule": "Sunday LEFT / Saturday RIGHT, both rows share text edge at35 local units from their corresponding card side; today follows same rule. Other days centered.",
+  "weatherAdjustment": "Only the horizontal space around the same weather icon is compacted: scaleVertical38 ->28. Font sizes, icons, colors and values remain unchanged. This creates safe room for the new weekend anchors while preserving font29.",
+  "validation": {
+    "activeSuiteExitCode": 0,
+    "syntaxAndImports": 20,
+    "headerCases": 96,
+    "scaledCases": 4704,
+    "focusedMetricsCases": 24,
+    "focusedHeaders": 168,
+    "rootFiles": 25,
+    "archiveCRCAndExactBytes": true,
+    "archiveSHA256": "4c1672b6f1959d136e04dc8cb573646df4b6ba0c393ed6a120a4ffdbf8d6792e"
+  },
+  "apiReference": "https://scriptingapp.github.io/guide/Changelog/3.1.0/Canvas%20%28Web%202D%20drawing%20context%29/index.md",
+  "limits": [
+    "No optical/manual offset is added. The runtime uses Canvas measurements; UIKit measurement and SwiftUI rendering may differ slightly, as documented by Scripting.",
+    "The PNG uses synthetic data and DejaVu Mono; it is not a native SFMono/iPhone capture.",
+    "Original frame geometry, font29, soft blur, min/max order, timeline, Bridge and interactions retained."
+  ],
+  "preview": {
+    "library_file_id": "libfile_94fd24155170819185ba4055e68d63e7",
+    "file_id": "file_00000000a4bc820c8a6b9ef0d30093ac",
+    "file_name": "comparison(4).png",
+    "version": 0,
+    "type": "synthetic header comparison; not native iOS"
+  }
+}

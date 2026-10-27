@@ -1,3 +1,13 @@
+## Atualização 0.3.25 — centro medido, espaço uniforme e nova regra dos fins de semana
+
+O disco branco é centrado na caixa medida do número vermelho, em vez da altura nominal da fonte. As métricas do Canvas são adaptadas à convenção de ancoragem reportada pelo host; essa conversão afeta somente o disco, sem mover o texto por offsets de baseline. O número vem depois do avanço do nome do dia e de um espaço tipográfico comum, medido nos dois pesos. Ligar/desligar a decoração não altera avanço, posições ou espaçamento do texto.
+
+Nova regra explícita: **domingo, ambas as linhas à esquerda; sábado, ambas à direita**. Hoje segue a regra do próprio dia; os demais dias continuam centralizados. O alinhamento é pelas bordas do texto; o disco não entra no cálculo do avanço. Mantida a fonte 29. Para acomodar os cantos sem reduzir fonte, o recuo interno seguro é 35 unidades nos fins de semana e foram compactadas apenas as folgas horizontais ao redor do ícone da segunda linha. Temperaturas, cores, tamanhos e ícones permanecem iguais; mínima à esquerda e máxima à direita. Moldura, blur leve, timeline móvel, dados, Bridge e interações preservados.
+
+Validação: suíte completa, 20 módulos compilados/importados, 96 cenas de cabeçalho e 4.704 escalas, mais 24 cenas focadas/168 cabeçalhos. Os testes específicos medem erro zero no centro do disco, no avanço do espaço e nas bordas de alinhamento; cobrem dias úteis/domingo/sábado com 01/11/28/31, meio-dia/fim do dia e três convenções de métricas. Folga mínima local nos cantos: 3,5 unidades. Comparação de operações/bitmaps confirma corpo da timeline inalterado.
+
+[Medidas e diagnóstico](../docs/header-metrics-spacing-0.3.25.json) · [Limites dos cabeçalhos](../docs/header-alignment-0.3.25.json). Preview com dados fictícios e DejaVu Mono. Não houve teste físico no iPhone; a documentação do Canvas informa que medição UIKit e desenho SwiftUI podem variar ligeiramente. Atualize pelo mesmo vínculo remoto, preservando armazenamento e pareamento.
+
 ## Atualização 0.3.24 — centralização, disco de hoje e blur suave
 
 A primeira linha passa de 28 para 29. Ambas as linhas ficam centralizadas horizontalmente no próprio quadro, inclusive hoje, com eixos de linha comuns entre os dias. A instrução mais recente substitui os antigos alinhamentos especiais de domingo/sábado; não há deslocamento vertical exclusivo de fim de semana. Hoje mantém nome e número em negrito e número vermelho. O destaque agora é um disco branco sólido atrás somente dos dígitos, sem contorno, cerca de 14,5% menor. Mínima azul à esquerda, máxima vermelha à direita, ícones e demais dados preservados.

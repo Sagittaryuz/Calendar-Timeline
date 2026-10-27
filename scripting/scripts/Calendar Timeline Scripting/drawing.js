@@ -232,38 +232,49 @@ export function headerPlan(ctx,op){
   const block=unionHeaderBounds([plan.title.bounds,plan.weather.bounds,plan.count.bounds]);plan.block.left=block.left;plan.block.right=block.right;
   ctx.restore();return plan;
 }
-// Stable top-aligned line boxes also apply to the two-row header. The circle
-// participates in the first row's shared height, without UIKit baseline offsets.
+// Canvas text draws through SwiftUI anchors, while its measured bounds come
+// from UIKit. Measure both conventions without applying offsets to text itself.
+export function headerInkBounds(ctx,op,cache){
+  const box=headerTextBounds(ctx,op,op.text,cache),font=op.state.font;
+  const key=font.name+':'+font.size+':'+op.text;
+  const m=cache?.get(key)??ctx.measureText(op.text);
+  const alphabeticKey=key+':alphabetic';let baseline=cache?.get(alphabeticKey);
+  if(!baseline){ctx.textBaseline='alphabetic';baseline=ctx.measureText(op.text);cache?.set(alphabeticKey,baseline)}
+  ctx.textBaseline='top';
+  const ascent=Number(m.actualBoundingBoxAscent),descent=Number(m.actualBoundingBoxDescent);
+  if(!Number.isFinite(ascent)||!Number.isFinite(descent)||ascent+descent<=0||ascent+descent>font.size*2)return {...box,metricMode:'line-box-fallback'};
+  const anchorRelative=Math.abs(ascent-Number(baseline.actualBoundingBoxAscent))>1e-7||Math.abs(descent-Number(baseline.actualBoundingBoxDescent))>1e-7;
+  // A UIKit rectangle whose origin is already zero needs no baseline shift.
+  const baselineOffset=anchorRelative||ascent===0?0:Number(m.fontBoundingBoxAscent);
+  if(!Number.isFinite(baselineOffset))return {...box,metricMode:'line-box-fallback'};
+  return {...box,top:op.point.y+baselineOffset-ascent,bottom:op.point.y+baselineOffset+descent,metricMode:anchorRelative?'anchor-relative':ascent===0?'uikit-top-box':'uikit-baseline'};
+}
+
 function twoRowHeaderPlan(ctx,op){
   ctx.save();
   const s=op.shared;let cache=headerMeasureCache.get(s);if(!cache){cache=new Map();headerMeasureCache.set(s,cache)}
-  const word=headerTextBounds(ctx,op.word,op.word.text,cache),number=headerTextBounds(ctx,op.number,op.number.text,cache),weather=headerWeatherBounds(ctx,op,cache);
-  const size=op.title.state.font.size,heavy={...op.number,state:{...op.number.state,font:{name:'SFMono-Heavy',size}}};
-  const dateWidth=Math.max(...s.dates.map(text=>{const b=headerTextBounds(ctx,heavy,text,cache);return b.right-b.left}));
-  const diameter=Math.max(dateWidth+2,size*(s.diskScale??1.375)+(s.diskPadding??1.5)),outerDiameter=diameter;
-  const rowHeight=outerDiameter,wordWidth=word.right-word.left,numberWidth=number.right-number.left;
-  const wordGap=(outerDiameter-dateWidth)/2+s.wordGap;
-  const numberX=wordWidth+wordGap-number.left;
-  const wordX=-word.left,textY=(rowHeight-size)/2;
-  const title={left:0,right:wordWidth+wordGap+numberWidth,top:textY,bottom:textY+size};
-  const diskDiameter=Math.max(numberWidth+2,size*(s.diskScale??1.375)+(s.diskPadding??1.5));
-  const circleLeft=wordWidth+wordGap+(numberWidth-diskDiameter)/2;
-  const visualTitle=op.isToday?{left:Math.min(0,circleLeft),right:Math.max(title.right,circleLeft+diskDiameter),top:(rowHeight-diskDiameter)/2,bottom:(rowHeight+diskDiameter)/2}:title;
+  const word=headerTextBounds(ctx,op.word,op.word.text,cache),number=headerTextBounds(ctx,op.number,op.number.text,cache),weather=headerWeatherBounds(ctx,op,cache),numberInk=headerInkBounds(ctx,op.number,cache);
+  const size=op.title.state.font.size;
+  const metric=(name,text)=>{const spec={...op.word,state:{...op.word.state,font:{name,size}}};headerTextBounds(ctx,spec,text,cache);return cache.get(name+':'+size+':'+text)};
+  const spaceAdvance=Math.max(1,metric('SFMono-Regular','0 0').width-metric('SFMono-Regular','00').width,metric('SFMono-Heavy','0 0').width-metric('SFMono-Heavy','00').width);
+  headerTextBounds(ctx,op.word,op.word.text,cache);const wordAdvance=cache.get(op.word.state.font.name+':'+size+':'+op.word.text).width;
+  const numberX=wordAdvance+spaceAdvance,wordX=0;
+  const diskDiameter=Math.max(number.right-number.left+2,size*(op.number.text.length<2?1.05:(s.diskScale??1.375))+(s.diskPadding??1.5));
+  const rowHeight=size*(s.diskScale??1.375)+(s.diskPadding??1.5),textY=(rowHeight-size)/2;
+  const title={left:Math.min(word.left,number.left+numberX),right:Math.max(word.right,number.right+numberX),top:textY,bottom:textY+size};
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
   const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
-  const left=visualTitle.left,right=visualTitle.right;
-  const wx=center-(weather.left+weather.right)/2,tx=center-(left+right)/2,wy=top+rowHeight+s.gap-row2.top;
-  const shift=(b,x,y)=>({left:b.left+x,right:b.right+x,top:b.top+y,bottom:b.bottom+y});
-  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:shift(visualTitle,tx,top)},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:shift(number,tx+numberX,top+textY-number.top)},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle:op.isToday?{x:tx+circleLeft,y:top,width:diameter,height:diameter}:null,block:{left:Math.min(tx+visualTitle.left,wx+weather.left),right:Math.max(tx+visualTitle.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
-  // The same baseline is shared by all cards. The solid disk surrounds only
-  // this pair of digits, with measured glyph clearance (no baseline-metric offsets).
-  if(result.circle){
-    const diskDiameter=Math.max(numberWidth+2,size*(s.diskScale??1.375)+(s.diskPadding??1.5));
-    const centerX=(result.number.bounds.left+result.number.bounds.right)/2,centerY=(result.number.bounds.top+result.number.bounds.bottom)/2;
-    result.circle={x:centerX-diskDiameter/2,y:centerY-diskDiameter/2,width:diskDiameter,height:diskDiameter};
-    result.circleFilled=true;
-  }
+  // New weekend rule: Sunday LEFT, Saturday RIGHT. The circle is decoration
+  // and never changes text advance, spacing, or alignment anchors.
+  const edgeInset=s.weekendInset??35;
+  const place=box=>op.weekday===0?op.frame.x+edgeInset-box.left:op.weekday===6?op.frame.x+op.frame.width-edgeInset-box.right:center-(box.left+box.right)/2;
+  const tx=place(title),wx=place(weather),wy=top+rowHeight+s.gap-row2.top;
+  const shift=(box,x,y)=>({...box,left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
+  const positionedNumber=shift(number,tx+numberX,top+textY-number.top),positionedInk=shift(numberInk,tx+numberX,top+textY-number.top);
+  const circle=op.isToday?{x:(positionedInk.left+positionedInk.right-diskDiameter)/2,y:(positionedInk.top+positionedInk.bottom-diskDiameter)/2,width:diskDiameter,height:diskDiameter}:null;
+  const visualTitle=unionHeaderBounds([shift(title,tx,top),...(circle?[{left:circle.x,right:circle.x+circle.width,top:circle.y,bottom:circle.y+circle.height}]:[])]);
+  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:visualTitle},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:positionedNumber,ink:positionedInk},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle,circleFilled:!!circle,spacing:{spaceAdvance,wordAdvance,numberAdvance:numberX},alignment:op.weekday===0?'left':op.weekday===6?'right':'center',block:{left:Math.min(tx+title.left,wx+weather.left),right:Math.max(tx+title.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
   ctx.restore();return result;
 }
 
