@@ -20,12 +20,12 @@ function normalize(image){return JSON.parse(JSON.stringify(image),function(k,v){
  for(const date of ['2026-10-25','2026-10-27','2026-10-28','2026-10-31','2026-08-01','2026-11-08','2026-12-30','2026-12-31','2027-01-01']){
   const now=new Date(date+'T12:00:00'),o=options(now);const m=await render(host,o);
   for(const h of flatten(m.image).filter(o=>o.type==='header')){
-   const p=d.headerPlan(ctx,h);const t=p.title.bounds,w=p.weather.bounds;if(h.weekday===0)assert(Math.abs(t.right-w.right)<1e-7);else if(h.weekday===6)assert(Math.abs(t.left-w.left)<1e-7);else for(const b of [t,w])assert(Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert.equal(h.title.state.font.size,29);assert.equal(h.number.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');
+   const p=d.headerPlan(ctx,h);const t=p.title.bounds,w=p.weather.bounds;if(h.weekday===0)assert(Math.abs(t.right-w.right)<1e-7);else if(h.weekday===6)assert(Math.abs(t.left-w.left)<1e-7);else for(const b of [t,w])assert(Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert.equal(h.title.state.font.size,38);assert.equal(h.number.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');
    assert.equal(p.circle,null);assert.equal(p.circleFilled,false);assert.equal(h.number.state.text.hex,h.word.state.text.hex);
    const calls=[];let ellipses=0;const backend=new Proxy(ctx,{get(o,k){if(k==='drawImage')return ()=>{};if(k==='ellipse')return ()=>{ellipses++};if(k==='fillText')return (text,x,y)=>calls.push({text,x,y});return o[k]},set(o,k,v){o[k]=v;return true}});d.replay(backend,[h],1092,510,1092,510,()=>null);assert.equal(ellipses,0,'No disk/ring painted on any header');assert.equal(calls.length,4);
    if(h.isToday){cases.push({date,number:h.number.text,color:h.number.state.text.hex,font:h.number.state.font.name,circle:p.circle});todayScenes++;}
   }
  }
- const report={version:'0.3.29',blurScenes,blurRadius:{before:1/0.24,after:2},tintOpacity:{before:0.36,after:0.2},todayScenes,positions:'Sunday RIGHT / Saturday LEFT / weekdays CENTER; uniform space, measured number ink center, font29',paint:'no date disk/ring; day-semantic text color, today Heavy',cases,physicalIOS:'not tested; Barlow/Open Sans/DejaVu substitutes and native-like anchor model'};
+ const report={version:'0.3.30',blurScenes,blurRadius:{before:1/0.24,after:2},tintOpacity:{before:0.36,after:0.2},todayScenes,positions:'Sunday RIGHT / Saturday LEFT / weekdays CENTER; uniform space, measured number ink center, font38',paint:'no date disk/ring; day-semantic text color, today Heavy',cases,physicalIOS:'not tested; Barlow/Open Sans/DejaVu substitutes and native-like anchor model'};
  if(process.env.SOFT_REPORT)fs.writeFileSync(process.env.SOFT_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,cases:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

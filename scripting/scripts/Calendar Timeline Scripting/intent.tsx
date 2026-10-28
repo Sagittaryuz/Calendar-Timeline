@@ -1,11 +1,4 @@
-import { Script, Widget } from 'scripting'
-import { configuration, synchronize } from './bridge-client'
-async function run(){
- try{
-  if(!configuration()||!Storage.get<boolean>('test-scope-consent'))throw Error('Abra o projeto no Scripting e conclua o pareamento primeiro.')
-  const report=await synchronize()
-  Widget.reloadAll()
-  Script.exit(report)
- }catch(error:any){Script.exit({ok:false,error:String(error?.message??error)})}
-}
-run()
+import { Script } from 'scripting'
+// Compatibility entry for existing shortcuts: never claim/replay remote work.
+// Stored credentials, journals, outboxes and native records remain untouched.
+Script.exit({ok:false,disabled:true,reason:'Calendar Timeline Bridge foi retirada. O widget continua lendo a agenda e os lembretes localmente.'})

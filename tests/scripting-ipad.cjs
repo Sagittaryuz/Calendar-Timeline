@@ -18,7 +18,7 @@ for(const size of [0,-1,NaN,Infinity])assert.throws(()=>timelineLayout(1092,510,
   const dependencies={scripting:native,'./bridge-auto':{autoSynchronize:async()=>{calls++}},'./model':{loadModel:async()=>model},'./timeline-view':{TimelineView},'./diagnostics':{VERSION:'test',failureDetails:String}};
   const source=fs.readFileSync(path.join(root,'widget.tsx'),'utf8').replace(/main\(\)\s*$/,'module.exports=main');
   vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,jsxFactory:'createElement'}}).outputText,{module:m,exports:m.exports,require:name=>dependencies[name],createElement:(type,props,...children)=>({type,props,children}),Storage:{get:()=>null,set:()=>true},Date});
-  await m.exports();assert(presented);assert.equal(calls,family==='systemSmall'?0:1);if(family!=='systemSmall'){assert.equal(presented.props.extraLarge,family==='systemExtraLarge');assert.equal(presented.props.width,744)}
+  await m.exports();assert(presented);assert.equal(calls,0,'Widget never starts Bridge');if(family!=='systemSmall'){assert.equal(presented.props.extraLarge,family==='systemExtraLarge');assert.equal(presented.props.width,744)}
  }
  console.log('PASS iPad: actual widget accepts extralarge/medium, other sizes fail visibly; full display bounds, proportional drawing and seven inert day cards across four landscape sizes. Physical iPad remains unverified.');
 })().catch(e=>{console.error(e);process.exitCode=1});

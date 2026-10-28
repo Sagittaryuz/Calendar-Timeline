@@ -1,0 +1,59 @@
+{
+  "version": "0.3.30",
+  "repeatRefreshes": 20,
+  "refresh20MS": 0.48343599999999753,
+  "injectedBridge3200MS": {
+    "beforeMS": 3206.06805,
+    "afterBridgeCalls": 0
+  },
+  "legacyIntent": "disabled without reading credentials or consuming pending work",
+  "legacyRoutes": "bridge/configure open local screen",
+  "protectedStorageKeys": 7,
+  "bundles": [
+    {
+      "entry": "widget.tsx",
+      "bytes": 433064,
+      "modules": 12
+    },
+    {
+      "entry": "index.tsx",
+      "bytes": 430745,
+      "modules": 10
+    },
+    {
+      "entry": "app_intents.tsx",
+      "bytes": 2257,
+      "modules": 2
+    },
+    {
+      "entry": "intent.tsx",
+      "bytes": 291,
+      "modules": 1
+    }
+  ],
+  "render": "host/navigation/renderer unchanged; engine differs only in first-row size 29\u219238",
+  "physicalIOS": "not measured; injected latency demonstrates removed dependency only",
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.30.scripting",
+    "files": 16,
+    "crc": "passed",
+    "sourceBytes": "all identical",
+    "sha256": "96fe5d3f14272e7bb7e1a8861f3d422b2d719241c5e63aeef2480b4bcc4a7aed",
+    "beforeSourceBytes": 513985,
+    "afterSourceBytes": 466759,
+    "retiredModules": 9
+  },
+  "header": {
+    "fontBefore": 29,
+    "fontAfter": 38,
+    "secondLine": "unchanged",
+    "alignment": "DOM right / SAB left, centred common block",
+    "minimumLocalClearance": 5.177892316800303
+  },
+  "preview": {
+    "library_file_id": "libfile_5f47257d87c48191b0f2c311ca3b922d",
+    "file_id": "file_00000000ffe481f5a7a4344a15a5e2d7",
+    "file_name": "comparison(9).png",
+    "version": 0
+  }
+}

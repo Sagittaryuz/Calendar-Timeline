@@ -77,6 +77,6 @@ function contains(rect,x,y){return x>=rect.x&&x<rect.x+rect.width&&y>=rect.y&&y<
   await definitions.CalendarTimelineSelectDay.perform({date:today});assert(!values.has('selected-day'));
   await definitions.CalendarTimelineRefresh.perform();assert(!values.has('selected-day'));assert.equal(values.get('manual-refresh').state,'requested');assert(values.get('calendar-force-weather')>0);
  }
- assert.equal(calls.filter(c=>c==='reload').length,20);assert.equal(calls.filter(c=>c==='bridge').length,10);
+ assert.equal(calls.filter(c=>c==='reload').length,20);assert.equal(calls.filter(c=>c==='bridge').length,0);
  console.log(JSON.stringify({baseline,scenes,trees,points,sizes,geometries,drawing:'static body unchanged except removed green marker; no header navigation',repeatIntents:20,nativeGestureArbitration:'pending physical iOS'},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1});

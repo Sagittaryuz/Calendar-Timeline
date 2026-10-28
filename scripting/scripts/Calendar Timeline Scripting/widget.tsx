@@ -1,5 +1,4 @@
 import { Widget, Text } from 'scripting'
-import { autoSynchronize } from './bridge-auto'
 import { loadModel } from './model'
 import { TimelineView } from './timeline-view'
 import { VERSION, failureDetails } from './diagnostics'
@@ -11,8 +10,6 @@ async function main(){
     return
   }
   try{
-    const touched=Storage.get<number>('calendar-local-touch')??0
-    if(!(Date.now()>=touched&&Date.now()-touched<15000))await autoSynchronize({origin:'widget',budgetMS:8000})
     const forced=Storage.get<number>('calendar-force-weather')??0
     const model=await loadModel({background:true,forceWeather:forced>0}),{width,height}=Widget.displaySize
     if(forced)Storage.set('calendar-force-weather',0)

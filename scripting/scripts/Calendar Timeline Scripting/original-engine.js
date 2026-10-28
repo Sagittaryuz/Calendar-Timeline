@@ -13182,7 +13182,7 @@ function weekHeaderStyle() {
   if(weekHeaderStyle.cache)return weekHeaderStyle.cache;
   const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleWeekStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
-  return weekHeaderStyle.cache={titleSize:29,temperatureSize,
+  return weekHeaderStyle.cache={titleSize:38,temperatureSize,
     headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};
 }
 function weekHeaderLayout(date,card) {

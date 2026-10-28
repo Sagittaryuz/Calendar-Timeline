@@ -1,5 +1,4 @@
 import { AppIntentManager, AppIntentProtocol, Widget } from 'scripting'
-import { autoSynchronize } from './bridge-auto'
 import { clearTimelineSelection } from './selection'
 
 export const SelectDay = AppIntentManager.register({
@@ -21,7 +20,6 @@ export const RefreshCalendar=AppIntentManager.register({
     try{
       clearTimelineSelection()
       Storage.set('calendar-force-weather',Date.now())
-      await autoSynchronize({origin:'refresh-button',force:true,budgetMS:4500})
       Storage.set('manual-refresh',{at:Date.now(),state:'requested'})
     }catch{
       Storage.set('manual-refresh',{at:Date.now(),state:'failed-cache-preserved'})
