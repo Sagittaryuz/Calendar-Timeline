@@ -1,0 +1,51 @@
+{
+  "version": "0.3.32",
+  "parentVersion": "0.3.31",
+  "repository": "Sagittaryuz/Calendar-Timeline",
+  "branch": "scripting",
+  "change": "Activate the lower touch region with the Weathergraph URL supplied by the user; upper Calendar route and all drawing/layout operations stay unchanged.",
+  "routes": {
+    "upper": "calshow://",
+    "lower": "weathergraph://",
+    "split": "Bottom edge of the last rendered event/reminder chart; stable reserved chart-block limit when none are rendered."
+  },
+  "schemeEvidence": {
+    "source": "User supplied weathergraph:// and identified it as the official Weathergraph URL scheme.",
+    "publicDocumentation": "The Weathergraph public site/FAQ checked here do not document the scheme; no native iPhone launch was available to confirm OS registration.",
+    "appInstalled": "Required for app launch. Installation was not inspectable from this executor.",
+    "universalLink": "https://weathergraph.app was not used. The site's published Apple association covers /in-app-events/*; it does not declare the root page as an app route."
+  },
+  "validation": {
+    "fullSuite": "npm run test:scripting passed.",
+    "build": "npm run build:scripting passed; 11 modules compiled/imported.",
+    "touchScenes": 72,
+    "hitTestPoints": 2016,
+    "supportedSizes": 7,
+    "drawingComparisons": 24,
+    "targets": ["calshow://", "weathergraph://"],
+    "boundary": "Adjacent regions share one split; tested on both sides and near the edge. No overlapping target area.",
+    "emptyCharts": "Uses stable fallback at y=388.5266115702479 of a 510-unit canvas.",
+    "ipad": "Four landscape sizes preserve proportional geometry and both link targets.",
+    "physicalIOS": "Not executed; tests cover the actual engine's chart rectangles and rendered JSX link contract with synthetic events and weather."
+  },
+  "preview": {
+    "libraryFileId": "libfile_1b0b45f231cc81919540ac31d1a0650f",
+    "fileId": "file_00000000176081f5ada3dc286d9bd868",
+    "fileName": "comparison(20261028-114718).png",
+    "url": "https://chatgpt.com/api/library/files/libfile_1b0b45f231cc81919540ac31d1a0650f/download",
+    "description": "Five synthetic comparisons. Color overlays show tap regions in the preview only; they are not drawn on the widget."
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.32.scripting",
+    "files": 16,
+    "sourceBytes": 465805,
+    "archiveBytes": 127975,
+    "crc": "passed",
+    "sha256": "cebdbc7e802f76da1a7b0da68ebf612853435c688cba0b199194a216086448ab"
+  },
+  "publication": {
+    "updateUrl": "https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting",
+    "ciRuns": 0,
+    "note": "No CI workflow is configured for the Scripting project on this branch."
+  }
+}

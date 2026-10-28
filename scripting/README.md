@@ -1,3 +1,11 @@
+## Atualização 0.3.32 — abrir Weathergraph pela região inferior
+
+A área superior continua abrindo o Calendário por `calshow://`. A área inferior, abaixo do último chart desenhado (ou do limite reservado quando não há barras), agora usa `weathergraph://`, o esquema informado pelo usuário para abrir o app Weathergraph. As duas regiões continuam adjacentes e sem sobreposição; posição, conteúdo e desenho permanecem iguais à 0.3.31.
+
+O esquema foi fornecido pelo usuário. Não localizei documentação pública do próprio Weathergraph que o confirme, então a validação comprova a URL entregue ao `Link` e a geometria, não o registro do esquema no iOS. O app precisa estar instalado no iPhone para abrir. Não há teste físico. `https://weathergraph.app` não foi usado como fallback: a associação publicada no domínio contempla somente caminhos `/in-app-events/*`, não a página inicial. Fontes verificadas: [site oficial](https://weathergraph.app/) e [arquivo oficial de associação](https://weathergraph.app/.well-known/apple-app-site-association).
+
+Validação: 72 cenas sintéticas, 2.016 pontos de hit testing em sete dimensões e 24 comparações de desenho iguais à versão anterior; nos sete tamanhos, os dois `Link`s entregam `calshow://` e `weathergraph://` com a divisão preservada. A cena sem charts mantém o limite lógico estável. Sem render no iPhone; a abertura requer confirmação física no aparelho. [Registro de navegação e teste](../docs/touch-regions-0.3.32.json).
+
 ## Atualização 0.3.31 — navegação sem refresh e regiões pelos charts
 
 Todos os toques do widget deixam de solicitar refresh: as áreas antigas de curva/horas não têm mais Button/AppIntent de atualização. O Calendário usa Link direto `calshow://`, sem iniciar o projeto, buscar dados ou aguardar preparação. Os nomes de intents antigos permanecem registrados somente como compatibilidade e abrem Calendário uma vez, sem Storage, seleção, modelo ou reload. O link legado `refresh=1` também apenas navega. Flags antigos de clima forçado ficam preservados, mas são ignorados pelo widget. A execução normal do iOS continua carregando os dados locais e solicitando a próxima atualização; não foi aplicada outra otimização do modelo.

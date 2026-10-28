@@ -8,7 +8,7 @@ const model={width:1092,height:510,image:{},touchSplit:{y:300},hourLegend:{x:0,y
 const medium=timelineLayout(1092,510,364,170);assert.equal(medium.width,364);assert.equal(medium.height,170);assert.equal(medium.left,0);assert.equal(medium.top,0);
 for(const [width,height] of [[715,342],[744,348],[1064,510],[980,400]]){
  const fit=timelineLayout(1092,510,width,height,true);assert(Math.abs(fit.sx-fit.sy)<1e-12,'iPad drawing must keep its proportions');assert(fit.left>=0&&fit.top>=0);assert(fit.left+fit.width<=width+1e-8);assert(fit.top+fit.height<=height+1e-8);
- const view=TimelineView({model,width,height,extraLarge:true}),link=view.children[1][0],graphic=view.children[0];assert.equal(view.props.frame.width,width);assert.equal(link.type,'Link');assert.equal(link.props.url,'calshow://');assert.equal(link.props.position.x,width/2);assert.equal(graphic.props.position.y,height/2);assert(Math.abs(link.props.position.y-link.props.frame.height/2-fit.top)<1e-8);assert(Math.abs(link.props.frame.height-300*fit.sy)<1e-8);assert.equal(view.children[1][1],null,'Unverified Weathergraph target is inactive');
+ const view=TimelineView({model,width,height,extraLarge:true}),[link,weatherLink]=view.children[1],graphic=view.children[0];assert.equal(view.props.frame.width,width);assert.equal(link.type,'Link');assert.equal(link.props.url,'calshow://');assert.equal(link.props.position.x,width/2);assert.equal(graphic.props.position.y,height/2);assert(Math.abs(link.props.position.y-link.props.frame.height/2-fit.top)<1e-8);assert(Math.abs(link.props.frame.height-300*fit.sy)<1e-8);assert.equal(weatherLink.type,'Link');assert.equal(weatherLink.props.url,'weathergraph://');assert(Math.abs(weatherLink.props.position.y-(fit.top+(300+105)*fit.sy))<1e-8);assert(Math.abs(weatherLink.props.frame.height-210*fit.sy)<1e-8);
  assert(!JSON.stringify(view).includes('CalendarTimelineSelectDay'));
 }
 for(const size of [0,-1,NaN,Infinity])assert.throws(()=>timelineLayout(1092,510,size,348,true));
@@ -20,5 +20,5 @@ for(const size of [0,-1,NaN,Infinity])assert.throws(()=>timelineLayout(1092,510,
   vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,jsxFactory:'createElement'}}).outputText,{module:m,exports:m.exports,require:name=>dependencies[name],createElement:(type,props,...children)=>({type,props,children}),Storage:{get:()=>null,set:()=>true},Date});
   await m.exports();assert(presented);assert.equal(calls,0,'Widget never starts Bridge');if(family!=='systemSmall'){assert.equal(presented.props.extraLarge,family==='systemExtraLarge');assert.equal(presented.props.width,744)}
  }
- console.log('PASS iPad: actual widget accepts extralarge/medium, other sizes fail visibly; full display bounds, proportional drawing and seven inert day cards across four landscape sizes. Physical iPad remains unverified.');
+ console.log('PASS iPad: actual widget accepts extralarge/medium, other sizes fail visibly; full display bounds, proportional drawing and both touch routes across four landscape sizes. Physical iPad remains unverified.');
 })().catch(e=>{console.error(e);process.exitCode=1});

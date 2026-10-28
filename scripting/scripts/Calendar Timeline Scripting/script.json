@@ -2,6 +2,6 @@
   "name": "Calendar Timeline Scripting",
   "icon": "calendar",
   "color": "#0A0A0B",
-  "version": "0.3.31",
+  "version": "0.3.32",
   "description": "Agenda e lembretes locais do iPhone e iPad em uma timeline com previsão do tempo. Sem sincronização Calendar Timeline Bridge ou comandos remotos."
 }

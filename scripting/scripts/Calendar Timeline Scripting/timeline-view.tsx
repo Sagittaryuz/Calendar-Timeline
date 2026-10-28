@@ -1,8 +1,8 @@
 import { Link, Rectangle, ZStack } from 'scripting'
 import { GraphView } from './graph-view'
 
-// No supported main-app route was verified; never guess a custom URL scheme.
-export const WEATHERGRAPH_URL:string|null=null
+// Deep link supplied by the user; launch requires Weathergraph to be installed.
+export const WEATHERGRAPH_URL:string|null='weathergraph://'
 export function timelineLayout(modelWidth:number,modelHeight:number,width:number,height:number,extraLarge=false){
   if(![modelWidth,modelHeight,width,height].every(n=>Number.isFinite(n)&&n>0))throw Error('Dimensões da timeline inválidas.')
   const scale=Math.min(width/modelWidth,height/modelHeight)
