@@ -274,7 +274,7 @@ function twoRowHeaderPlan(ctx,op){
   const title={left:Math.min(word.left,number.left+numberX),right:Math.max(word.right,number.right+numberX),top:textY,bottom:textY+size};
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
-  const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
+  const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2+(op.weekday===0?5:op.weekday===6?-5:0);
   // Weekend text rows share an internal edge inside a centred block.
   // Sunday RIGHT / Saturday LEFT; the disk never changes text advance.
   const relative=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;

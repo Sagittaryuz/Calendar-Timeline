@@ -513,6 +513,7 @@ const preparedItems = prepareTimelineItems(loadResult.items, now);
 const timelineRowCounts = prepareTimelineRowCounts(preparedItems);
 const selectedItems = chooseItems(preparedItems, now, SETTINGS.maxItems, timelineRowCounts);
 options.onPhase?.("preparação do desenho");
+const renderedChartRects = [];
 const widget = options.prepareOnly ? {backgroundImage:null} : isAccessoryFamily(widgetFamily)
   ? makeAccessoryWidget(preparedItems, loadResult, widgetFamily)
   : await makeWidget(selectedItems, loadResult.error);
@@ -531,7 +532,10 @@ const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeigh
 // Hit geometry only: these are the same local bounds used to draw the
 // temperature labels and curve, translated into the root image coordinates.
 const thermalY=CANVAS.timelineTop+thermalTemperatureLabelTopY();
-return {temporal:{rolling:rollingToday,focusDay:dateKey(focusDay),midnightX:timeToX(addDays(startOfDay(windowStart),1)),rightBridge:currentDayRollingBridge()},hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
+const chartFallbackBottom=CANVAS.timelineTop+timelineChartBottom();
+const chartBottom=renderedChartRects.length?Math.max(...renderedChartRects.map(r=>r.y+r.height)):chartFallbackBottom;
+const touchSplitY=Math.max(0,Math.min(CANVAS.height,chartBottom));
+return {temporal:{rolling:rollingToday,focusDay:dateKey(focusDay),midnightX:timeToX(addDays(startOfDay(windowStart),1)),rightBridge:currentDayRollingBridge()},touchSplit:{y:touchSplitY,source:renderedChartRects.length?'rendered-charts':'reserved-chart-block',charts:renderedChartRects},hourLegend:{x:CANVAS.plotLeft,y:legendY,width:timelineWidth(),height:Math.min(legendHeight,CANVAS.height-legendY)},
   thermalBand:{x:CANVAS.plotLeft,y:thermalY,width:timelineWidth(),height:CANVAS.timelineTop+thermalBandBottomY()-thermalY},
   panel:{day:dateKey(windowStart),...titleScheduleCountsForDay(windowStart),freshness:loadResult.freshness,rows:selectedItems.slice(0,6).map(item=>({kind:item.kind,title:String(item.title??'').slice(0,120),time:item.isAllDay?'Dia todo':`${String(item.start.getHours()).padStart(2,'0')}:${String(item.start.getMinutes()).padStart(2,'0')}`}))},
   image: widget.backgroundImage, header, width: CANVAS.width, height: CANVAS.height,
@@ -12601,7 +12605,17 @@ function drawReminderMarker(ctx, centerX, centerY, diameter) {
   );
 }
 
+function recordTimelineChartRect(rect) {
+  // Record the final painted bars, including overflow and cross-day segments.
+  // Timelines use local panel coordinates; touch targets use root coordinates.
+  const visible=timelineVisibleContentBounds(rect.y,rect.height,0);
+  const x0=Math.max(0,visible.left,rect.x),x1=Math.min(timelineWidth(),visible.right,rect.x+rect.width);
+  const y0=Math.max(0,rect.y),y1=Math.min(timelineHeight(),rect.y+rect.height);
+  if(x1>x0&&y1>y0)renderedChartRects.push({x:CANVAS.plotLeft+x0,y:CANVAS.timelineTop+y0,width:x1-x0,height:y1-y0});
+}
+
 function drawTimelineBar(ctx, rect, color, item) {
+  recordTimelineChartRect(rect);
   const radius = isCompactMode() ? scaleVertical(6) : scaleVertical(7);
   const border = Math.min(scaleVertical(2),Math.max(scaleVertical(0.75),Math.min(rect.width,rect.height)/4));
   fillRoundedRect(ctx,rect,radius,new Color('#000000'));
@@ -12964,6 +12978,7 @@ function drawPendingDayCarryoverBorder(ctx, rect, chartRadius) {
 
   if (borderRect.width <= 1 || borderRect.height <= 1) return;
 
+  recordTimelineChartRect(new Rect(borderRect.x-borderWidth/2,borderRect.y-borderWidth/2,borderRect.width+borderWidth,borderRect.height+borderWidth));
   drawRoundedRectOutline(
     ctx,
     borderRect,

@@ -4,13 +4,14 @@ const ts=require(process.env.TYPESCRIPT_PATH||'typescript');
 const root=path.join(__dirname,'..'),dir=path.join(root,'scripting/scripts/Calendar Timeline Scripting');
 const store=new Map();
 const storage={get:k=>store.get(k)??null,set:(k,v)=>{store.set(k,v);return true},contains:k=>store.has(k),remove:k=>store.delete(k)};
-const modules=new Map();let reloads=0,writes=0,denied=false,requests=0;
+const modules=new Map();let opens=0;let reloads=0,writes=0,denied=false,requests=0;
 const calendar={identifier:'cal',title:'Pessoal',color:'#0088FF'};
 const dueDate=new Date(2026,9,23,9,30);
 let encodedBitmap;
 // Utilities exist globally, and deliberately do not exist in the UI module.
 // The old mock incorrectly exported these and hid the device's import failure.
 const globals={
+  Safari:{openURL:async url=>{assert.equal(url,'calshow://');opens++;return true}},
   CalendarEvent:{getAll:async()=>{if(denied)throw Error('Permissão negada');return [{identifier:'event',title:'Teste',startDate:dueDate,endDate:new Date(+dueDate+3600000),isAllDay:false,calendar}]}},
   Reminder:{getIncompletes:async()=>[{identifier:'reminder',title:'Tarefa',dueDateComponents:{date:dueDate,hour:9,minute:30},calendar,isCompleted:false,priority:5}]},
   DateFormatter:class{},Keychain:{},Location:{},
@@ -73,11 +74,11 @@ async function main(){
   assert.equal(requests,0,'Invalid destinations are rejected before sending');
   assert.equal((await new host.Request('https://api.open-meteo.com/v1/forecast').loadJSON()).ok,true);
   const intent=load('app_intents').SelectDay;const now=new Date();
-  await intent.perform({date:select.localDay(now)});assert.equal(reloads,1);assert(!store.has('selected-day'));
-  await intent.perform({date:'2020-01-01'});assert.equal(reloads,2);assert(!store.has('selected-day'));
+  await intent.perform({date:select.localDay(now)});assert.equal(reloads,0);assert.equal(opens,1);assert(!store.has('selected-day'));
+  await intent.perform({date:'2020-01-01'});assert.equal(reloads,0);assert.equal(opens,2);assert(!store.has('selected-day'));
   const header=Array.from({length:7},(_,i)=>({date:`2026-10-${18+i}`,label:'Dia',x:i*156,y:4,width:150,height:100}));
-  const view=load('timeline-view').TimelineView({model:{width:1092,height:510,image:{},header},width:364,height:170});
-  assert.equal(view.children[1].type,'Link');assert.equal(view.children[1].props.url,'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1','Charts request reload through the foreground Calendar handoff');
+  const view=load('timeline-view').TimelineView({model:{width:1092,height:510,image:{},header,touchSplit:{y:300}},width:364,height:170});
+  assert.equal(view.children[1][0].type,'Link');assert.equal(view.children[1][0].props.url,'calshow://','Calendar opens directly without refresh');
   assert(!JSON.stringify(view).includes('CalendarTimelineSelectDay'),'Seven headers have no day action');
   const masked=load('graph-view').GraphView({image:{size:{width:1092,height:510},ops:[],outerClip:[['moveTo',4,4],['lineTo',1088,4],['closePath']]},width:364,height:170});
   assert.equal(masked.props.mask.type,'Canvas','Root graphic uses a contour mask');

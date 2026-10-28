@@ -20,7 +20,7 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
    if(h.weekday===0){edge=Math.abs(a.right-b.right);assert.equal(p.alignment,'right')}
    else if(h.weekday===6){edge=Math.abs(a.left-b.left);assert.equal(p.alignment,'left')}
    else{edge=Math.max(Math.abs((a.left+a.right)/2-h.frame.x-h.frame.width/2),Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2));assert.equal(p.alignment,'center')}
-   assert(Math.abs((p.block.left+p.block.right)/2-h.frame.x-h.frame.width/2)<1e-7,'Common text block remains centred');
+   assert(Math.abs((p.block.left+p.block.right)/2-h.frame.x-h.frame.width/2-(h.weekday===0?5:h.weekday===6?-5:0))<1e-7,'Common text block keeps requested weekend offset');
    anchorError=Math.max(anchorError,edge);assert(edge<1e-7);
    assert.equal(p.circle,null);assert.equal(p.circleFilled,false);assert.deepEqual(p.title.visualBounds,p.title.bounds,'No decoration reserves extra width or height');assert.equal(h.number.state.text.hex,h.word.state.text.hex);if(h.isToday){assert.equal(h.number.state.font.name,'AvenirNextCondensed-Heavy');if(hour===12)examples.push({date,weekday:h.weekday,number:h.number.text,spaceAdvance:p.spacing.spaceAdvance,alignment:p.alignment,circle:p.circle,word:p.word.bounds,weather:p.weather.bounds});}
    headers++;

@@ -6,23 +6,10 @@ function load(name,deps,values=new Map()){
  const module={exports:{}};vm.runInNewContext(code,{module,exports:module.exports,require:name=>deps[name],Date,Storage:{remove:k=>values.delete(k),get:k=>values.get(k),set:(k,v)=>{values.set(k,v);return true}}});return module.exports;
 }
 (async()=>{
- for(const fail of [false,true]){
-  const values=new Map([['selected-day',{date:'2000-01-01',selectedOn:'2000-01-01'}]]),events=[],definitions={};
-  const today=load('selection.ts',{}).localDay(new Date());
-  const sdk={AppIntentManager:{register:d=>{definitions[d.name]=d;return ()=>({name:d.name})}},AppIntentProtocol:{AppIntent:0},Widget:{reloadAll:()=>events.push('reload')},ControlWidget:{reloadButtons:()=>events.push('control')}};
-  const deps={scripting:sdk,'./selection':load('selection.ts',{},values)};
-  deps['./bridge-auto']={autoSynchronize:async options=>{assert(options.force);assert(!values.has('selected-day'),'Retired navigation removed before network sync');throw Error('Bridge must never run')}};
-  deps['./model']={loadModel:async options=>{assert(options.background&&options.forceWeather);events.push('model');if(fail)throw Error('offline')}};
-  load('app_intents.tsx',deps,values);
-  await definitions['CalendarTimelineRefresh'].perform();
-  assert(!values.has('selected-day'));
-  assert(events.includes('reload'),'Refresh failure must still request redraw');
-  assert.deepEqual(events,['reload']);assert.equal(values.get('manual-refresh').state,'requested');assert(values.get('calendar-force-weather')>0,'Fresh weather is requested in the single widget render');
- }
  const values=new Map([['weather-model',{savedAt:Date.now(),weather:{hours:[{}]},location:{latitude:1,longitude:2}}]]);
  const calls=[];const deps={'./host':{createHost:()=>({renderWarnings:()=>[]})},'./selection':{resolveFocus:(_,now)=>now,clearTimelineSelection:()=>{}},'./diagnostics':{markPhase:()=>{}},'./original-engine':{renderOriginal:async(_,options)=>{calls.push(options);return {weatherSnapshot:{hours:[{}]},locationSnapshot:{latitude:1,longitude:2}}}}};
  const model=load('model.ts',deps,values);
  await model.loadModel({background:true});await model.loadModel({background:true,forceWeather:true});
  assert(calls[0].hourlyWeather,'Regular refresh reuses valid weather');assert.equal(calls[1].hourlyWeather,undefined,'Manual refresh must query weather instead of imposing the 15-minute cache');
- console.log('PASS manual refresh: actual intent requests current data, preserves offline status and reloads on success/failure. Native tap pending.');
+ console.log('PASS data cache: normal model reuses weather; internal force option bypasses cache. Widget taps do not call this option.');
 })().catch(e=>{console.error(e);process.exitCode=1});

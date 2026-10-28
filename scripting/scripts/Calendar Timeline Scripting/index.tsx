@@ -1,18 +1,12 @@
 import { Navigation, NavigationStack, ScrollView, VStack, Text, Script, Widget, useEffect, useState } from 'scripting'
-import { refreshFromWidget } from './widget-refresh'
+import { openCalendarFromWidget } from './widget-refresh'
 import { loadModel } from './model'
-import { clearTimelineSelection } from './selection'
 import { VERSION, failureDetails } from './diagnostics'
 
 async function main(){
   try{
     if(Script.queryParameters.refresh==='1'){
-      await refreshFromWidget({
-        request:()=>{clearTimelineSelection();Storage.set('calendar-local-touch',Date.now());Storage.set('calendar-force-weather',Date.now())},
-        prepare:(isCurrent:()=>boolean)=>loadModel({background:true,forceWeather:true,prepareOnly:true,shouldPersist:isCurrent}),
-        reload:()=>Widget.reloadAll(),open:(url:string)=>Safari.openURL(url),
-        failed:()=>Storage.set('widget-tap-diagnostic',{at:Date.now(),state:'local-render-failed'})
-      })
+      await openCalendarFromWidget((url:string)=>Safari.openURL(url))
       return
     }
     await Navigation.present(<Screen/>)
@@ -49,7 +43,7 @@ function Screen(){
       <Text>Calendário: {!model?'aguardando consulta':model.sourceStatus.schedule?.event===false?'acesso não confirmado':'consultado'}. Lembretes: {!model?'aguardando consulta':model.sourceStatus.schedule?.reminder===false?'acesso não confirmado':'consultado'}.</Text>
       <Text>Semana fixa de domingo a sábado. A timeline acompanha o horário atual em cada atualização permitida pelo iOS. Os quadros não selecionam outro dia.</Text>
       <Text>Eventos e lembretes são consultados novamente a cada execução. A atualização automática é solicitada após 1 minuto, sujeita ao iOS.</Text>
-      <Text>Os charts abrem o Calendário; curva térmica e legenda de horas solicitam atualização local. Na virada do dia, a próxima execução acompanha a nova data.</Text>
+      <Text>Até a borda inferior do último chart, o toque abre o Calendário sem atualizar. A região inferior está reservada ao Weathergraph, cuja abertura aguarda uma rota verificável. A atualização normal continua sujeita ao iOS.</Text>
       <Text>Esta versão ainda exige conferência visual e teste dos toques na Tela de Início.</Text>
       <Text>Último diagnóstico do widget: {Storage.get<any>('widget-diagnostic')?.error??Storage.get<any>('widget-diagnostic')?.phase??'sem registro'}.</Text>
     </VStack></ScrollView></NavigationStack>

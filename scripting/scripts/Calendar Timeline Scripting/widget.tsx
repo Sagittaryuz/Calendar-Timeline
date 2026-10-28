@@ -10,9 +10,7 @@ async function main(){
     return
   }
   try{
-    const forced=Storage.get<number>('calendar-force-weather')??0
-    const model=await loadModel({background:true,forceWeather:forced>0}),{width,height}=Widget.displaySize
-    if(forced)Storage.set('calendar-force-weather',0)
+    const model=await loadModel({background:true}),{width,height}=Widget.displaySize
     Storage.set('widget-diagnostic',{version:VERSION,phase:'present-requested',at:Date.now()})
     Widget.present(<TimelineView model={model} width={width} height={height} extraLarge={family==='systemExtraLarge'}/>,
       {policy:'after',date:new Date((Math.floor(Date.now()/60000)+1)*60000)})

@@ -1,0 +1,287 @@
+{
+  "version": "0.3.31",
+  "scenes": 72,
+  "points": 2016,
+  "bodyComparisons": 24,
+  "sizes": [
+    [
+      338,
+      158,
+      false
+    ],
+    [
+      364,
+      170,
+      false
+    ],
+    [
+      402,
+      186,
+      false
+    ],
+    [
+      715,
+      342,
+      true
+    ],
+    [
+      744,
+      348,
+      true
+    ],
+    [
+      1064,
+      510,
+      true
+    ],
+    [
+      980,
+      400,
+      true
+    ]
+  ],
+  "emptyFallback": 388.5266115702479,
+  "examples": [
+    {
+      "day": 25,
+      "kind": "empty",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 25,
+      "kind": "one",
+      "split": 198.83204487603302,
+      "charts": 1
+    },
+    {
+      "day": 25,
+      "kind": "six",
+      "split": 386.4191735537189,
+      "charts": 6
+    },
+    {
+      "day": 25,
+      "kind": "cross-day",
+      "split": 198.83204487603302,
+      "charts": 2
+    },
+    {
+      "day": 25,
+      "kind": "overflow",
+      "split": 386.4191735537189,
+      "charts": 7
+    },
+    {
+      "day": 25,
+      "kind": "birthday",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 25,
+      "kind": "outside",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 25,
+      "kind": "soon",
+      "split": 204.10063991735535,
+      "charts": 2
+    },
+    {
+      "day": 27,
+      "kind": "empty",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 27,
+      "kind": "one",
+      "split": 198.83204487603302,
+      "charts": 1
+    },
+    {
+      "day": 27,
+      "kind": "six",
+      "split": 386.4191735537189,
+      "charts": 6
+    },
+    {
+      "day": 27,
+      "kind": "cross-day",
+      "split": 198.83204487603302,
+      "charts": 2
+    },
+    {
+      "day": 27,
+      "kind": "overflow",
+      "split": 386.4191735537189,
+      "charts": 7
+    },
+    {
+      "day": 27,
+      "kind": "birthday",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 27,
+      "kind": "outside",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 27,
+      "kind": "soon",
+      "split": 204.10063991735535,
+      "charts": 2
+    },
+    {
+      "day": 31,
+      "kind": "empty",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 31,
+      "kind": "one",
+      "split": 198.83204487603302,
+      "charts": 1
+    },
+    {
+      "day": 31,
+      "kind": "six",
+      "split": 386.4191735537189,
+      "charts": 6
+    },
+    {
+      "day": 31,
+      "kind": "cross-day",
+      "split": 198.83204487603302,
+      "charts": 2
+    },
+    {
+      "day": 31,
+      "kind": "overflow",
+      "split": 386.4191735537189,
+      "charts": 7
+    },
+    {
+      "day": 31,
+      "kind": "birthday",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 31,
+      "kind": "outside",
+      "split": 388.5266115702479,
+      "charts": 0
+    },
+    {
+      "day": 31,
+      "kind": "soon",
+      "split": 204.10063991735535,
+      "charts": 2
+    }
+  ],
+  "weathergraph": "blocked: no verified main-app route; lower region deliberately inactive",
+  "physicalIOS": "not executed; actual engine rectangles and JSX links checked with synthetic data",
+  "headerValidation": {
+    "version": "0.3.31",
+    "scenes": 96,
+    "headers": 672,
+    "scaled": 4704,
+    "font": 38,
+    "oldFont": 29,
+    "weights": "today Heavy, other days DemiBold",
+    "minSafety": 8.910016373169995,
+    "minRingWordGap": null,
+    "minRingWeatherGap": null,
+    "candidates": [
+      {
+        "size": 29,
+        "minSafety": 11.948278123720911
+      },
+      {
+        "size": 32,
+        "minSafety": 11.948278123720911
+      },
+      {
+        "size": 34,
+        "minSafety": 11.660016373169995
+      },
+      {
+        "size": 36,
+        "minSafety": 10.285016373169995
+      },
+      {
+        "size": 38,
+        "minSafety": 8.910016373169995
+      },
+      {
+        "size": 40,
+        "minSafety": 5.496403555282498
+      },
+      {
+        "size": 42,
+        "minSafety": -0.18825272267264737
+      }
+    ],
+    "dateFormat": "original two-digit date retained; tests cross single-digit civil dates, month/year",
+    "nativeIOS": "not tested; Barlow Condensed / Open Sans / DejaVu substitutes and simulated baseline metrics"
+  },
+  "headerOffsets": {
+    "coordinateSpace": "1092\u00d7510 drawing canvas",
+    "Sunday": 5,
+    "Saturday": -5,
+    "others": 0,
+    "vertical": 0,
+    "font": 38
+  },
+  "navigation": {
+    "legacyNavigationsTested": 31,
+    "refreshCalls": 0,
+    "preparationCalls": 0,
+    "tapStorageMutations": 0,
+    "calendar": "calshow://",
+    "weathergraph": null
+  },
+  "weathergraphEvidence": {
+    "status": "blocked/unverified main-app route",
+    "checked": [
+      "https://weathergraph.app/",
+      "https://weathergraph.app/faq/",
+      "https://weathergraph.app/.well-known/apple-app-site-association"
+    ],
+    "association": {
+      "applinks": {
+        "apps": [],
+        "details": [
+          {
+            "appID": "B2VSNTJJ6L.com.tomaskafka.weathergraph",
+            "paths": [
+              "/in-app-events/*"
+            ]
+          }
+        ]
+      }
+    },
+    "action": "not executed; lower region inactive, no app substitution"
+  },
+  "preview": {
+    "library_file_id": "libfile_afd5a1da07dc81919ac61b8a1ab7399a",
+    "file_id": "file_00000000d3b081f5a26943e523ee5a20",
+    "file_name": "comparison(10).png",
+    "version": 0
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.31.scripting",
+    "files": 16,
+    "crc": "passed",
+    "sourceBytes": "all identical",
+    "sha256": "92480a36caf19d28d7b37f9adbcbc4e57a827903217b10b9a8f5066895825805"
+  }
+}
