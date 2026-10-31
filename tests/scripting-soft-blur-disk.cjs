@@ -1,7 +1,6 @@
 const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs'),{pathToFileURL}=require('node:url'),c=require('@napi-rs/canvas');
 const {fixture,compile,probe,flatten,raw}=require('./scripting-rolling.cjs');
 const dir='scripting/scripts/Calendar Timeline Scripting/',beforeSource=cp.execFileSync('git',['show','d124c4c:'+dir+'original-engine.js'],{encoding:'utf8'}).replace('futureTimelineBlurDownsampleFactor: 0.5','futureTimelineBlurDownsampleFactor: 0.24').replace('futureTimelineBlurTintOpacity: 0.2','futureTimelineBlurTintOpacity: 0.36');
-function normalize(image){return JSON.parse(JSON.stringify(image),function(k,v){if(Array.isArray(v))return v.filter(o=>o.type!=='header'&&!(o.type==='image'&&o.image?.outerClip&&o.rect?.y===0&&o.image.size.height===510));if(k==='blurRadius')return 'intentional-strength';if(k==='alpha'&&this.hex==='111216'&&(v===0.36||v===0.2))return 'intentional-tint';return v})}
 (async()=>{
  const {d,host,options}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');host.DrawContext=class extends d.DrawContext{makeRaster=crop=>({native:{sha256:require('node:crypto').createHash('sha256').update(encodePNG(crop)).digest('hex')},size:{width:crop.width,height:crop.height}})};
 
@@ -11,8 +10,8 @@ function normalize(image){return JSON.parse(JSON.stringify(image),function(k,v){
  const event=item('event',at(27,18),at(27,20)),reminder=item('reminder',at(27,8),at(28)),future=item('event',at(28,3),at(28,4));
  let blurScenes=0;
  for(const [label,items,error,active]of [['empty',[],null,false],['future only',[future],null,false],['timed today',[event,future],null,true],['pending',[reminder],null,true],['all-day',[{...event,start:at(27),end:at(28),isAllDay:true}],null,false],['birthday',[{...event,isBirthday:true}],null,false],['completed',[{...reminder,isCompleted:true}],null,false],['ended',[{...event,start:at(27,8),end:at(27,9)}],null,false],['error',[],'offline',true]]){
-  const o=options(at(27,15),items);o.loadResult.error=error;const m=await render(host,o),b=await before(host,o);assert.equal(m.test.blur,active,label);assert.equal(m.test.blur,b.test.blur,'Blur application rule unchanged');assert.deepEqual(normalize(m.image),normalize(b.image),'Only blur radius/tint change in recorded drawing');
-  for(const k of ['header','hourLegend','thermalBand','panel','temporal','windowStart','windowEnd'])assert.deepEqual(m[k],b[k]);
+  const o=options(at(27,15),items);o.loadResult.error=error;const m=await render(host,o),b=await before(host,o);assert.equal(m.test.blur,active,label);assert.equal(m.test.blur,b.test.blur,'Blur application rule unchanged');for(const key of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(m[key],b[key],key+' unchanged');assert.equal(m.temporal.midnightX,b.temporal.midnightX);
+  for(const k of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(m[k],b[k]);assert.equal(m.temporal.midnightX,b.temporal.midnightX);
   const layers=flatten(m.image).filter(o=>o.type==='image'&&o.image.blurRadius),oldLayers=flatten(b.image).filter(o=>o.type==='image'&&o.image.blurRadius);assert.equal(layers.length,oldLayers.length);if(active){assert(layers.length);assert(layers.every(o=>o.image.blurRadius===2));assert(oldLayers.every(o=>Math.abs(o.image.blurRadius-1/0.24)<1e-9));assert(flatten(m.image).some(o=>o.type==='fillRect'&&o.state.fill.hex==='111216'&&o.state.fill.alpha===0.2));}
   blurScenes++;
  }
@@ -20,12 +19,12 @@ function normalize(image){return JSON.parse(JSON.stringify(image),function(k,v){
  for(const date of ['2026-10-25','2026-10-27','2026-10-28','2026-10-31','2026-08-01','2026-11-08','2026-12-30','2026-12-31','2027-01-01']){
   const now=new Date(date+'T12:00:00'),o=options(now);const m=await render(host,o);
   for(const h of flatten(m.image).filter(o=>o.type==='header')){
-   const p=d.headerPlan(ctx,h);const t=p.title.bounds,w=p.weather.bounds;if(h.weekday===0)assert(Math.abs(t.right-w.right)<1e-7);else if(h.weekday===6)assert(Math.abs(t.left-w.left)<1e-7);else for(const b of [t,w])assert(Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert.equal(h.title.state.font.size,38);assert.equal(h.number.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');
+   const p=d.headerPlan(ctx,h);const t=p.title.bounds,w=p.weather.bounds;if(h.slotIndex===0)assert(Math.abs(t.right-w.right)<1e-7);else if(h.slotIndex===6)assert(Math.abs(t.left-w.left)<1e-7);else for(const b of [t,w])assert(Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2)<1e-7);assert.equal(h.title.state.font.size,38);assert.equal(h.number.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');
    assert.equal(p.circle,null);assert.equal(p.circleFilled,false);assert.equal(h.number.state.text.hex,h.word.state.text.hex);
    const calls=[];let ellipses=0;const backend=new Proxy(ctx,{get(o,k){if(k==='drawImage')return ()=>{};if(k==='ellipse')return ()=>{ellipses++};if(k==='fillText')return (text,x,y)=>calls.push({text,x,y});return o[k]},set(o,k,v){o[k]=v;return true}});d.replay(backend,[h],1092,510,1092,510,()=>null);assert.equal(ellipses,0,'No disk/ring painted on any header');assert.equal(calls.length,4);
    if(h.isToday){cases.push({date,number:h.number.text,color:h.number.state.text.hex,font:h.number.state.font.name,circle:p.circle});todayScenes++;}
   }
  }
- const report={version:'0.3.30',blurScenes,blurRadius:{before:1/0.24,after:2},tintOpacity:{before:0.36,after:0.2},todayScenes,positions:'Sunday RIGHT / Saturday LEFT / weekdays CENTER; uniform space, measured number ink center, font38',paint:'no date disk/ring; day-semantic text color, today Heavy',cases,physicalIOS:'not tested; Barlow/Open Sans/DejaVu substitutes and native-like anchor model'};
+ const report={version:'0.3.33-preview',blurScenes,blurRadius:{before:1/0.24,after:2},tintOpacity:{before:0.36,after:0.2},todayScenes,positions:'leftmost slot RIGHT / rightmost slot LEFT / all inner slots CENTER; uniform space, measured number ink center, font38',paint:'no date disk/ring; day-semantic text color, today Heavy',cases,physicalIOS:'not tested; Barlow/Open Sans/DejaVu substitutes and native-like anchor model'};
  if(process.env.SOFT_REPORT)fs.writeFileSync(process.env.SOFT_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,cases:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

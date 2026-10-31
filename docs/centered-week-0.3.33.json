@@ -1,0 +1,95 @@
+{
+  "version": "0.3.33",
+  "parentVersion": "0.3.32",
+  "repository": "Sagittaryuz/Calendar-Timeline",
+  "branch": "scripting",
+  "change": "Roll the seven upper day cards around the local current date while keeping the lower timeline on its existing rolling time window.",
+  "header": {
+    "slots": 7,
+    "range": "Three previous local civil days, today in slot index 3, three following local civil days.",
+    "dateArithmetic": "Uses Date.setDate through addDays; no millisecond/24-hour arithmetic to select header dates.",
+    "intraday": "Header dates and card positions stay fixed for the local civil day; they update on the next normal widget render after local midnight, subject to iOS scheduling.",
+    "alignment": {
+      "leftmostSlot": "Both title rows align right.",
+      "rightmostSlot": "Both title rows align left.",
+      "interiorSlots": "Title group remains centered.",
+      "weekdayRules": "No special Saturday/Sunday alignment offsets. Actual weekday and holiday semantics still drive content and color."
+    }
+  },
+  "timelineAndFrame": {
+    "timeline": "Existing lower 24-hour viewport continues to follow render time and is not recentered with the header.",
+    "outline": "One continuous white outline follows the centered today card and the moving timeline segment for today.",
+    "curves": "Existing common-radius/approved-gap neighbor geometry retained; next chronological slot controls the adjacent lower-left cusp."
+  },
+  "preserved": {
+    "calendarRoute": "calshow://",
+    "weathergraphRoute": "weathergraph://, supplied and confirmed by the user; launch needs Weathergraph installed.",
+    "touchRefresh": "Disabled; no refresh action was added.",
+    "bridge": "Removed integration stays removed.",
+    "other": "Existing blur, temperatures, charts, colors, fonts, event/reminder data, native storage, and timeline geometry remain."
+  },
+  "validation": {
+    "build": "npm run build:scripting passed: 11 modules compiled/imported; native iOS types remain pending device validation.",
+    "fullSuite": "npm run test:scripting passed.",
+    "centeredDates": {
+      "scenes": 12,
+      "timezone": "America/New_York",
+      "midnightTransitions": 4,
+      "dstDates": 4,
+      "coverage": "23:59 to 00:00, both DST transition dates, month/year changes, stable card geometry, independent timeline progression."
+    },
+    "headerLayout": {
+      "scenes": 96,
+      "headers": 672,
+      "scaledLayouts": 4704,
+      "minimumLocalTextSafety": 8.910016373169995,
+      "coverage": "Weekdays, weekend colors, holidays, date widths, missing/negative temperatures, and seven display sizes."
+    },
+    "adjacentCurves": {
+      "scenes": 63,
+      "geometrySamples": 6606,
+      "cuspExtensions": 42,
+      "approvedGap": 1.2287,
+      "maximumGapError": 1.0746958878371515e-13
+    },
+    "frameContinuity": {
+      "scenes": 59,
+      "singleWhiteFrame": true,
+      "closedConnectorCases": 22,
+      "lowerFrameLeakage": false
+    },
+    "touchAreas": {
+      "scenes": 72,
+      "hitTestPoints": 2016,
+      "displaySizes": 7,
+      "top": "Calendar via calshow://",
+      "bottom": "Weathergraph via weathergraph://",
+      "overlap": false,
+      "noChartsFallbackY": 388.5266115702479
+    },
+    "nativeIOS": "No physical iPhone or iPad test was run. Synthetic Canvas tests do not verify native font substitution, operating-system launch registration, or exact WidgetKit refresh timing."
+  },
+  "preview": {
+    "libraryFileId": "libfile_04b133f10b948191a608e9a90ac3f937",
+    "fileId": "file_00000000c98c81f5b611e8fca1740f08",
+    "fileName": "comparison(20261031-143903).png",
+    "localFile": "work/centered-week-0.3.33/comparison.png",
+    "sha256": "f649d341e1876364db153eb180e9c305bf13992f4138832ed98b0bf6a2adb1b0",
+    "description": "Synthetic before/after comparison for Tuesday, Saturday/month change, Sunday/DST transition, and New Year. DejaVu Mono substitutes for iOS font faces."
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.33.scripting",
+    "sourceFiles": 16,
+    "sourceBytes": 466644,
+    "archiveBytes": 129081,
+    "crc": "passed",
+    "sha256": "ee372f9bae696b613e89e9e4fefc66ac43f6a3488a16bcbcb639053fa96a86c6"
+  },
+  "publication": {
+    "updateUrl": "https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting",
+    "targetBranch": "scripting",
+    "mainAndAndroid": "Not modified.",
+    "ciRuns": 0,
+    "note": "This repository branch has an Android workflow only; no Scripting CI is configured."
+  }
+}

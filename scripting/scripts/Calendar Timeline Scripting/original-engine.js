@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.11.6";
+const WIDGET_BUILD_VERSION = "2026.10.31.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -373,13 +373,23 @@ function drawTightTitleText(ctx, text, x, y, size) {
 const TITLE_CARD_COUNT = 7;
 const TODAY_CARD_SOFT_CORNER_RADIUS = scaleVertical(6);
 
-function titleWeekStart() {
-  const today = startOfDay(now);
-  return addDays(today, -today.getDay());
+function titleTodayCardIndex() {
+  return Math.floor(TITLE_CARD_COUNT / 2);
 }
 
-function titleTodayCardIndex() {
-  return focusDay.getDay();
+function titleRangeStart() {
+  // Three prior local calendar days; the header is not tied to Sunday.
+  return addDays(focusDay, -titleTodayCardIndex());
+}
+
+function localCalendarDayOffset(date, referenceDate) {
+  const target = dateKey(date), base = startOfDay(referenceDate), baseKey = dateKey(base);
+  if (target === baseKey) return 0;
+  const direction = target > baseKey ? 1 : -1;
+  for (let count = 1; count <= TITLE_CARD_COUNT + 1; count++) {
+    if (dateKey(addDays(base, direction * count)) === target) return direction * count;
+  }
+  return null;
 }
 
 // Raio estrutural comum: 52 unidades da geometria-base,
@@ -492,7 +502,7 @@ const requestedHours =
   (args.queryParameters ?? {}).hours ?? args.widgetParameter;
 const windowHours = parseWindowHours(requestedHours);
 const focusDay = startOfDay(new Date(options.focusDate ?? now));
-// The seven day cards stay fixed. Only today's 24-hour viewport follows time.
+// Header dates use the local civil day. Only the lower 24-hour viewport follows the clock.
 const rollingToday = options.rolling !== false && dateKey(focusDay) === dateKey(now);
 const windowStart = rollingToday ? new Date(now) : new Date(focusDay);
 const windowEnd = rollingToday ? new Date(+windowStart + windowHours*3600000) : addDays(focusDay,1);
@@ -521,7 +531,7 @@ const widget = options.prepareOnly ? {backgroundImage:null} : isAccessoryFamily(
 
 const header = [];
 for (let index = 0; index < TITLE_CARD_COUNT; index++) {
-  const date = addDays(titleWeekStart(), index);
+  const date = addDays(titleRangeStart(), index);
   const rect = titleDayCardRect(index);
   const left = Math.max(0, rect.x), right = Math.min(CANVAS.width, rect.x + rect.width);
   if (right > left) header.push({date: dateKey(date), label: shortWeekday(date),
@@ -560,9 +570,9 @@ async function loadLiveWindow() {
     // nativos de acesso ao Calendário e aos Lembretes.
     // Lembretes sem horário podem chegar do EventKit como 00:00 UTC. Em
     // fusos negativos, isso aparece localmente na noite do dia anterior.
-    // Os cartões mostram a semana corrente completa. A consulta de dados precisa
-    // alcançar todos eles, mesmo quando a timeline visível tem só 24 horas.
-    const titleScheduleStart = titleWeekStart();
+    // Os sete cartões mostram três dias locais antes/depois de hoje. A consulta
+    // precisa alcançar toda essa faixa, embora a timeline inferior mantenha 24 h.
+    const titleScheduleStart = titleRangeStart();
     const titleScheduleEnd = addDays(
       titleScheduleStart,
       TITLE_CARD_COUNT
@@ -1310,7 +1320,7 @@ function weatherCacheHasFreshSamples(hours, cacheAge, fallbackFetchedAt) {
 
 function weatherCacheCoversPreviousWeekDays(payload) {
   const today = startOfDay(windowStart);
-  for (let day = titleWeekStart(); day < today; day = addDays(day, 1)) {
+  for (let day = titleRangeStart(); day < today; day = addDays(day, 1)) {
     const daily = payload?.daily?.[dateKey(day)];
     const minimum = finiteWeatherNumber(daily?.minimum);
     const maximum = finiteWeatherNumber(daily?.maximum);
@@ -2021,7 +2031,7 @@ function mergeHourlyWeatherHours(...hourSets) {
   }
 
   // Mantém o dia anterior para preservar extremos que ainda possam aparecer
-  // na semana corrente e limita o cache ao período necessário para os sete
+  // na faixa dos sete cartões e limita o cache ao período necessário para esses
   // cartões e para a janela máxima de 96 horas.
   const retentionStart = addDays(startOfDay(windowStart), -TITLE_CARD_COUNT).getTime();
   const retentionEnd = new Date(
@@ -2322,7 +2332,7 @@ async function loadAutomaticHolidays(location) {
   );
   const years = new Set();
   for (
-    let year = titleWeekStart().getFullYear();
+    let year = titleRangeStart().getFullYear();
     year <= coveredEnd.getFullYear();
     year++
   ) {
@@ -4261,8 +4271,8 @@ function currentDayUnifiedShape(path = new Path()) {
   const inset=WIDGET_CONTOUR.strokeInset,left=c.x+inset,right=c.x+c.width-inset;
   const bridgeY=dayBoundaryMoonBorderTopY();
   const first=titleTodayCardIndex()===0,last=titleTodayCardIndex()===6;
-  // Each shoulder is independent: Saturday keeps its left curve even
-  // though its right edge already follows the outer widget contour.
+  // Each shoulder follows the centered card and rolling timeline separately;
+  // semantic weekday color and shape still come from the actual date.
   const radius=Math.min(WIDGET_COMMON_CORNER_RADIUS,(bridgeY-c.y)/2);
   const leftRadius=first?0:Math.min(radius,Math.max(0,left-inset));
   const rightRadius=last?0:Math.min(radius,Math.max(0,CANVAS.width-inset-right));
@@ -4491,7 +4501,7 @@ function drawDatePanel(ctx, holidayDates) {
   // A área do título agora é uma faixa compacta de previsão. O restante
   // do desenho continua começando no mesmo ponto e não sofre deslocamento.
   const cardCount = TITLE_CARD_COUNT;
-  const firstDay = titleWeekStart();
+  const firstDay = titleRangeStart();
 
   for (let index = 0; index < cardCount; index++) {
     const date = addDays(firstDay, index);
@@ -4500,7 +4510,8 @@ function drawDatePanel(ctx, holidayDates) {
       date,
       titleDayCardRect(index),
       index === titleTodayCardIndex(),
-      index === cardCount - 1
+      index === cardCount - 1,
+      index
     );
   }
 }
@@ -5015,7 +5026,8 @@ function titleCardContentBounds(date, card, y, height) {
   let left = Math.max(card.x + 2, outer.left);
   let right = Math.min(card.x + card.width - 2, outer.right);
   const todayIndex = titleTodayCardIndex();
-  const index = todayIndex + Math.round((startOfDay(date) - startOfDay(windowStart)) / 86400000);
+  const dayOffset = localCalendarDayOffset(date, windowStart);
+  const index = dayOffset === null ? null : todayIndex + dayOffset;
   if (index === todayIndex - 1) {
     const m = currentDayFrameMetrics();
     const onLeft = index < todayIndex;
@@ -5038,7 +5050,8 @@ function titleCardContentBounds(date, card, y, height) {
 
 function drawAdjacentTitleCardCurve(ctx, date, card, color, borderColor) {
   const todayIndex = titleTodayCardIndex();
-  const index = todayIndex + Math.round((startOfDay(date) - startOfDay(windowStart)) / 86400000);
+  const dayOffset = localCalendarDayOffset(date, windowStart);
+  const index = dayOffset === null ? null : todayIndex + dayOffset;
   if (index !== todayIndex - 1) return;
   const m = currentDayFrameMetrics();
   const side = index < todayIndex ? "left" : "right";
@@ -5386,17 +5399,17 @@ function drawCurrentDayFrame(ctx) {
   );
 }
 
-function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
+function drawTitleDayCard(ctx,date,card,isSelected,isLast,slotIndex) {
   const parent=ctx;
   if(!isSelected){ctx=new DrawContext();ctx.size=new Size(CANVAS.width,CANVAS.height);ctx.opaque=false;ctx.respectScreenScale=false;}
   if(!isSelected){
-    const radii={topLeft:date.getDay()===0?TITLE_CARD_OUTER_CORNER_RADIUS:0,
+    const radii={topLeft:slotIndex===0?TITLE_CARD_OUTER_CORNER_RADIUS:0,
       topRight:isLast?TITLE_CARD_OUTER_CORNER_RADIUS:0,bottomLeft:0,bottomRight:0};
     fillTitleCardShape(ctx,card,radii,new Color('#303136',0.82));
     fillTitleCardShape(ctx,new Rect(card.x+2,card.y+2,card.width-4,card.height-4),
       {...radii,topLeft:Math.max(0,radii.topLeft-2),topRight:Math.max(0,radii.topRight-2),bottomLeft:Math.max(0,radii.bottomLeft-2),bottomRight:Math.max(0,radii.bottomRight-2)},
       new Color(timelineBackgroundColorForDate(date)));
-    drawAdjacentInvertedCorner(ctx,date,card);
+    drawAdjacentInvertedCorner(ctx,date,card,slotIndex);
   }
   const fields=weekHeaderLayout(date,card),shared=weekHeaderStyle();
   const ink=new DrawContext();ink.size=new Size(CANVAS.width,CANVAS.height);ink.opaque=false;ink.respectScreenScale=false;
@@ -5420,7 +5433,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast) {
   const weather=ink.getImage();ink.ops=[];
   shared.icons.push(headerVectorBounds(weather.ops.filter(o=>o.type!=='text')));
   ctx.op('header',{rect:card,frame:{x:card.x,y:WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2,width:card.width,height:TITLE_CARD_HEIGHT},
-    weekday:date.getDay(),title,word:weekday,number,isToday,twoRows:true,weather,shared});
+    weekday:date.getDay(),slotIndex,title,word:weekday,number,isToday,twoRows:true,weather,shared});
   if(!isSelected){
     const image={...ctx.getImage(),outerClip:dayCardNeighbourClip()};
     parent.drawImageInRect(image,new Rect(0,0,CANVAS.width,CANVAS.height));
@@ -13123,9 +13136,9 @@ function drawCurrentTimeMarker() {}
 
 // Only the next card's lower-left corner may occupy the exposed cusp.
 // Its image remains clipped by the same normal offset as every neighbour.
-function drawAdjacentInvertedCorner(ctx,date,card){
+function drawAdjacentInvertedCorner(ctx,date,card,slotIndex){
   const bridge=currentDayRollingBridge();
-  if(!bridge||bridge.outerEdge||bridge.direction>=0||date.getDay()!==titleTodayCardIndex()+1||bridge.radius<=0)return;
+  if(!bridge||bridge.outerEdge||bridge.direction>=0||slotIndex!==titleTodayCardIndex()+1||bridge.radius<=0)return;
   const inset=WIDGET_CONTOUR.strokeInset;
   const top=Math.max(card.y+2,dayBoundaryMoonBorderTopY()-bridge.radius-(inset-scaleVertical(3)/2));
   const left=card.x-bridge.radius-inset,bottom=card.y+card.height;
@@ -13195,7 +13208,7 @@ function weekHeaderFields(date) {
 }
 function weekHeaderStyle() {
   if(weekHeaderStyle.cache)return weekHeaderStyle.cache;
-  const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleWeekStart(),i)));
+  const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleRangeStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
   return weekHeaderStyle.cache={titleSize:38,temperatureSize,
     headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};

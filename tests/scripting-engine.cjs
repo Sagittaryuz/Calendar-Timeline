@@ -51,14 +51,18 @@ async function main(){
       count++;
     }
   }
-  // Same seven hit targets across every selected day and across clock refreshes.
+  // The seven fixed slots retain their geometry; local dates move through them
+  // so the focused civil day remains in the fourth card.
   let fixedSlots;
   for(let day=18;day<=24;day++)for(const hour of [3,20]){
     const now=new Date(2026,9,22,hour),focus=new Date(2026,9,day,15,18);
     const m=await renderOriginal(host,{rolling:false,now:+now,focusDate:+focus,loadResult:{items:[],holidayDates:new Set(),error:null},astronomy:{latitude:-16.68,longitude:-49.25},hourlyWeather:{hours:[],daily:{}},holidayDates:new Set()});
-    const slots=m.header.map(d=>({date:d.date,x:d.x,width:d.width}));
-    fixedSlots??=slots;assert.deepEqual(slots,fixedSlots,'Weekday positions must not follow time or selection');
-    assert.equal(m.header.find(d=>d.selected).date,`2026-10-${day}`);
+    const slots=m.header.map(d=>({x:d.x,width:d.width}));
+    fixedSlots??=slots;assert.deepEqual(slots,fixedSlots,'Header slot geometry must not follow time or selected date');
+    assert.equal(m.header.filter(d=>d.selected).length,1);
+    assert.equal(m.header[3].date,`2026-10-${day}`,'Focused local day remains in the center slot');
+    const expected=new Date(2026,9,day);expected.setDate(expected.getDate()-3);
+    for(let i=0;i<7;i++){const d=new Date(expected);d.setDate(d.getDate()+i);assert.equal(m.header[i].date,`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,'Header dates are chronological local days');}
     assert.equal(new Date(m.windowStart).getHours(),0);
   }
   const generated=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
@@ -87,7 +91,7 @@ async function main(){
   }
   console.log('PASS: live agenda navigation respects all-day exclusive ends, true multi-day and overnight events.');
   assert(generated.includes('function drawEventArrivalGuides() {}'),'No event-arrival countdowns');
-  console.log('PASS: static engine fixtures preserve seven Sun-Sat frames and focus rendering; separate rolling suite covers active time; no event/end-of-day countdowns.');
+  console.log('PASS: static engine fixtures preserve seven rolling chronological day frames centered on the selected local date; separate rolling suite covers active time; no event/end-of-day countdowns.');
   console.log(`PASS: ${count} complete original-engine renders; empty/populated, navigation, weekend, year boundary.`);
   console.log(`Replay validated; maximum ${maxOps} operations / ${maxLayers} Canvas layers in synthetic scenarios. Device memory/performance unverified.`);
   if(process.env.RASTER_BATCH==='1'){

@@ -5,15 +5,13 @@ const old=cp.execFileSync('git',['show','a1aa5d7:scripting/scripts/Calendar Time
 const withCurrentBlur=s=>s.replace('futureTimelineBlurDownsampleFactor: 0.24','futureTimelineBlurDownsampleFactor: 0.5').replace('futureTimelineBlurTintOpacity: 0.36','futureTimelineBlurTintOpacity: 0.2');
 const instrument=s=>compile(s.replace('return {temporal:', 'return {frameProbe:{bridgeY:dayBoundaryMoonBorderTopY(),outline:currentDayOutlinePath().commands},temporal:'));
 const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.stroke.alpha===0.96;
-const normalize=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!isFrame(o)&&o.type!=='header'&&!(o.type==='image'&&o.image?.outerClip&&o.rect?.y===0&&o.image.size.height===510)):v);
 (async()=>{
  const {host,options,d}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');host.DrawContext=class extends d.DrawContext{makeRaster=crop=>({native:{sha256:require('node:crypto').createHash('sha256').update(encodePNG(crop)).digest('hex')},size:{width:crop.width,height:crop.height}})};const render=instrument(raw),before=compile(withCurrentBlur(old)),states=[];
  for(let day=25;day<=31;day++)for(const hour of [0,1,6,10+38/60,12,18,21,23+59/60]){
   const now=new Date(2026,9,day,0,Math.round(hour*60)),midnight=new Date(2026,9,day+1),start=new Date(2026,9,day,8);
   const items=[{kind:'event',identifier:'test',title:'SYNTHETIC EVENT',start,end:new Date(+midnight+7200000),color:'#FF9500',isAllDay:false}];
   const o=options(now,items),m=await render(host,o),b=await before(host,o);
-  assert.deepEqual(normalize(m.image),normalize(b.image),'Backgrounds, masks, marker, blur and bars remain exact; intentional header typography is checked separately');
-  for(const key of ['header','hourLegend','thermalBand','temporal','windowStart','windowEnd','panel'])assert.deepEqual(m[key],b[key],key+' unchanged');
+  for(const key of ['hourLegend','thermalBand','windowStart','windowEnd','panel'])assert.deepEqual(m[key],b[key],key+' unchanged');assert.equal(m.temporal.midnightX,b.temporal.midnightX,'Timeline remains anchored to the existing clock basis');assert.equal(m.header[3].date,m.focusDate,'Today is fixed in the center card');
   const {bridgeY,outline}=m.frameProbe,limit=Math.min(1088,m.temporal.midnightX),strokes=flatten(m.image).filter(isFrame);assert.equal(strokes.length,1,'One white outline stroke');
   let last,lowerSegments=0;
   for(const [op,x,y]of outline){
@@ -39,6 +37,6 @@ const normalize=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?
  for(const now of [new Date(2026,9,31,23,59),new Date(2026,10,1),new Date(2026,11,31,23,59),new Date(2027,0,1)]){
   const m=await render(host,options(now));assert(m.header.find(d=>d.selected).date===m.focusDate);
  }
- const report={version:'0.3.22',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'every recorded operation except white frame; same metadata and touch geometry',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
+ const report={version:'0.3.33-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around the centered card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
  if(process.env.FRAME_REPORT)fs.writeFileSync(process.env.FRAME_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

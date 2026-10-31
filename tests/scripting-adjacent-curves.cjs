@@ -12,7 +12,7 @@ function crossed(a,b,c,d){const turn=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x
  let scenes=0,samples=0,gapError=0,maxCoordinate=0,cusps=0;const states=[];
  for(let day=25;day<=31;day++)for(const minute of [0,60,6*60,12*60,13*60+47,13*60+49,14*60,18*60,23*60+59]){
   const now=new Date(2026,9,day,0,minute),o=options(now);extensions=[];probe=null;
-  const m=await render(host,o),b=await before(host,o);assert.deepEqual(m.header,b.header,'No day frame/slot moves');assert.deepEqual(m.hourLegend,b.hourLegend);assert.deepEqual(m.thermalBand,b.thermalBand);assert.equal(m.temporal.midnightX,b.temporal.midnightX);
+  const m=await render(host,o),b=await before(host,o);assert.equal(m.header.length,7);assert.equal(m.header[3].date,m.focusDate);assert.deepEqual(m.header.map(h=>({x:h.x,width:h.width})),b.header.map(h=>({x:h.x,width:h.width})),'Header slot geometry stays fixed');assert.deepEqual(m.hourLegend,b.hourLegend);assert.deepEqual(m.thermalBand,b.thermalBand);assert.equal(m.temporal.midnightX,b.temporal.midnightX);
   assert(probe);const {vertices,points,offset,bridge,y,card,gap,halfStroke,maxRadius}=probe;
   assert.equal(gap,1.2287,'Approved raw card gap is unchanged');assert(Math.abs(offset-halfStroke-gap)<1e-10);
   assert(points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
@@ -31,11 +31,11 @@ function crossed(a,b,c,d){const turn=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x
    const outside={x:p.x+normal.x*0.05,y:p.y+normal.y*0.05};assert(mask.isPointInPath(outside.x,outside.y),'Outside of selected offset belongs to neighbour mask');
    const inside={x:p.x-normal.x*0.05,y:p.y-normal.y*0.05};assert(!mask.isPointInPath(inside.x,inside.y),'Clear gap remains unpainted');
   }
-  if(bridge.direction<0&&!bridge.outerEdge){assert(extensions.length<=1);if(extensions.length){assert.equal(new Date(extensions[0].date+'T12:00:00').getDay(),now.getDay()+1);assert(extensions[0].top>card.y+card.height/3,'Extension only affects lower corner');cusps++;}}
+  if(bridge.direction<0&&!bridge.outerEdge){assert(extensions.length<=1);if(extensions.length){const next=new Date(now);next.setDate(next.getDate()+1);assert.equal(extensions[0].date,`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-${String(next.getDate()).padStart(2,'0')}`);assert.equal(m.header[4].date,extensions[0].date,'The cusp follows the next chronological header slot');assert(extensions[0].top>card.y+card.height/3,'Extension only affects lower corner');cusps++;}}
   else assert.equal(extensions.length,0,'No extension before inversion or at the outer Saturday edge');
   states.push({date:now.toISOString(),bridge,extensions:extensions.map(e=>({date:e.date,left:e.left,top:e.top,bottom:e.bottom})),points:points.length});scenes++;
  }
  assert(samples>1000);assert(gapError<1e-6);assert(cusps>0);
- const report={version:'0.3.26',scenes,samples,approvedGap:1.2287,gapError,maxCoordinate,cusps,geometry:'one common master curve, normal offset by half stroke + approved gap; inward cusp trimmed against offset timeline plane; only following lower-left corner extended',frames:'same seven original frames, no horizontal or vertical movement',states,physicalIOS:'not tested; local path geometry and raster-mask queries'};
+ const report={version:'0.3.33-preview',scenes,samples,approvedGap:1.2287,gapError,maxCoordinate,cusps,geometry:'one common master curve, normal offset by half stroke + approved gap; inward cusp trimmed against offset timeline plane; only next chronological slot lower-left corner extended',frames:'centered today slot stays fixed while the continuous lower timeline advances',states,physicalIOS:'not tested; local path geometry and raster-mask queries'};
  if(process.env.ADJ_REPORT)fs.writeFileSync(process.env.ADJ_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,3 +1,15 @@
+## Atualização 0.3.33 — hoje no centro dos sete quadros
+
+Os quadros superiores passam a mostrar três datas locais anteriores, hoje na quarta posição e três datas seguintes. A faixa permanece fixa durante o dia e avança por datas civis com `setDate`, incluindo viradas de mês, ano e horário de verão; ela acompanha a próxima execução normal do widget pelo iOS. A timeline inferior continua usando seu relógio e janela de 24 horas existentes, sem ser recentralizada junto com os quadros.
+
+A moldura branca única continua ligando o quadro central de hoje à parte móvel correspondente a hoje na timeline. A validação percorre a conexão enquanto a meia-noite se move e mantém o mesmo raio/gap das curvas adjacentes. O alinhamento agora depende da posição: no primeiro quadro as linhas 1 e 2 alinham à direita; no último, à esquerda; os cinco quadros internos ficam centralizados. Fins de semana e feriados continuam usando suas cores e dados reais, sem compensação tipográfica por nome do dia.
+
+Foram preservados a área superior que abre Calendário, a área inferior `weathergraph://` (esquema informado pelo usuário), atualização por horário normal do iOS, ausência de refresh ao toque, Bridge removida, blur, fontes e temperaturas mín/máx. Não houve alteração de eventos, lembretes, layout da timeline, gráficos ou curva térmica.
+
+Validação: 12 cenas de calendário em `America/New_York`, quatro transições à meia-noite, ambos os dias de transição DST, mês/ano e slots estáveis; 96 cenas de tipografia/temperatura, 672 quadros e 4.704 escalas; 63 cenas de curvas com 6.606 amostras geométricas; 59 cenas de moldura com 22 junções fechadas; 72 cenários de toques e 2.016 pontos em sete dimensões. Suíte e importação do pacote Scripting aprovadas. Preview sintético comparativo salvo na Library como `comparison(20261031-143903).png` (Library file ID `libfile_04b133f10b948191a608e9a90ac3f937`) e localmente em `work/centered-week-0.3.33/comparison.png`. Não foi executado em iPhone; a prévia usa DejaVu Mono no lugar das fontes nativas, e a hora exata do redesenho depende do iOS.
+
+Atualize o mesmo projeto pelo [Git da branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), sem apagar dados nem reinstalar.
+
 ## Atualização 0.3.32 — abrir Weathergraph pela região inferior
 
 A área superior continua abrindo o Calendário por `calshow://`. A área inferior, abaixo do último chart desenhado (ou do limite reservado quando não há barras), agora usa `weathergraph://`, o esquema informado pelo usuário para abrir o app Weathergraph. As duas regiões continuam adjacentes e sem sobreposição; posição, conteúdo e desenho permanecem iguais à 0.3.31.

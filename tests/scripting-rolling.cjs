@@ -21,7 +21,7 @@ async function main(){
   for(const h of times){
    const now=new Date(+at(day)+h*3600000),o=options(now),model=await render(host,o),before=await old(host,o);
    assert.equal(model.windowStart,+new Date(now.setSeconds(0,0)));assert.equal(model.windowEnd-model.windowStart,86400000);assert.equal(model.nowMarker,null);
-   assert.deepEqual(model.header,before.header,'All seven fixed touch frames and selection preserved');
+   assert.equal(model.header.length,7,'All seven header/touch slots remain');assert.equal(model.header[3].date,model.focusDate,'Local today remains centered');assert.equal(model.header.filter(d=>d.selected).length,1);
    const headers=flatten(model.image).filter(o=>o.type==='header');assert.equal(headers.length,7,'Seven visual headers retained; typography checked by dedicated active suite');
    const ops=flatten(model.image);assert(!ops.some(o=>o.type==='fillRect'&&o.state.fill?.hex==='30D158'&&o.rect.height>300));
    assert(!model.test.blur,'Empty future remains sharp');
@@ -35,7 +35,7 @@ async function main(){
  }
  // Exact leftward movement uses real render time, without moving cards.
  const a=await render(host,options(at(26,10))),b=await render(host,options(at(26,11)));
- assert.equal(a.temporal.midnightX-b.temporal.midnightX,1092/24);assert.deepEqual(a.header,b.header);
+ assert.equal(a.temporal.midnightX-b.temporal.midnightX,1092/24);assert.deepEqual(a.header.map(({x,width,selected})=>({x,width,selected})),b.header.map(({x,width,selected})=>({x,width,selected})),'Header geometry remains static intraday');assert.deepEqual(a.header.map(d=>d.date),b.header.map(d=>d.date),'Civil-day header remains static intraday');
  const other=await render(host,options(at(26,11),[],{focusDate:+at(27)}));assert(!other.temporal.rolling);assert.equal(other.windowStart,+at(27));assert.equal(other.windowEnd,+at(28));
  const event=item('event',at(26,23),at(27,2));
  const pending=item('reminder',at(26,8),at(27),{sourceIsAllDay:false});
@@ -58,7 +58,7 @@ async function main(){
  for(const date of [new Date(2026,11,31,23,59),new Date(2027,0,1),new Date(2026,10,1),new Date(2026,2,8),new Date(2026,10,1,1,59),new Date(2026,10,1,2,1)]){
   const m=await render(host,options(date));assert.equal(m.windowEnd-m.windowStart,86400000);assert(m.temporal.midnightX>=0&&m.temporal.midnightX<=1092*25/24);scenes++;
  }
- const report={scenes,shiftPerHour:1092/24,header:'same seven visual and touch frames; active typography checked separately',rules:'production follows now; internal static fixtures retain civil day; historical noon/06 carryover on drawing copies; future-only blur; no green now line',states,physicalIOS:'not tested'};
+ const report={scenes,shiftPerHour:1092/24,header:'seven fixed slots with three prior/three future local civil days and today centered; active typography checked separately',rules:'production follows now; header remains fixed within local day; internal static fixtures retain civil day; historical noon/06 carryover on drawing copies; future-only blur; no green now line',states,physicalIOS:'not tested'};
  if(process.env.ROLLING_REPORT)fs.writeFileSync(process.env.ROLLING_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 }
 if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1});

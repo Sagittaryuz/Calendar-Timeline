@@ -196,6 +196,8 @@ export function segments(image,viewport={x:0,y:0,width:image.size.width,height:i
 }
 
 function unionHeaderBounds(boxes){return {left:Math.min(...boxes.map(b=>b.left)),right:Math.max(...boxes.map(b=>b.right)),top:Math.min(...boxes.map(b=>b.top)),bottom:Math.max(...boxes.map(b=>b.bottom))};}
+function headerSlotIndex(op){return Number.isInteger(op.slotIndex)?op.slotIndex:op.weekday;}
+function headerAlignment(op){const index=headerSlotIndex(op);return index===0?'right':index===6?'left':'center';}
 const headerMeasureCache=new WeakMap();
 export function headerTextBounds(ctx,op,text=op.text,cache){
   const font=op.state.font;ctx.font=canvasFont(font);ctx.textAlign='left';ctx.textBaseline='top';
@@ -214,7 +216,7 @@ export function headerTextBounds(ctx,op,text=op.text,cache){
 }
 function headerWeatherBounds(ctx,op,cache){
   const texts=op.weather.ops.filter(o=>o.type==='text').map(o=>headerTextBounds(ctx,o,o.text,cache));
-  const vector=op.shared.icons[op.weekday]??{left:0,right:0,top:0,bottom:0};
+  const vector=op.shared.icons[headerSlotIndex(op)]??{left:0,right:0,top:0,bottom:0};
   return unionHeaderBounds([...texts,vector]);
 }
 // All seven cards share native row metrics; only their horizontal internal
@@ -232,12 +234,13 @@ export function headerPlan(ctx,op){
   const h1=a.bottom-a.top,h2=b.bottom-b.top,h3=c.bottom-c.top;
   const height=h1+s.gap+h2+s.rowGap+h3,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2;
   const y1=top-a.top,y2=top+h1+s.gap-b.top,y3=top+h1+s.gap+h2+s.rowGap-c.top;
-  const relativeTitleX=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
+  const alignment=headerAlignment(op);
+  const relativeTitleX=alignment==='right'?weather.right-title.right:alignment==='left'?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
   const combinedLeft=Math.min(weather.left,title.left+relativeTitleX),combinedRight=Math.max(weather.right,title.right+relativeTitleX);
   const weatherX=center-(combinedLeft+combinedRight)/2,titleX=relativeTitleX+weatherX;
   const countX=center-(count.left+count.right)/2;
   const shift=(box,x,y)=>({left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
-  const plan={title:{x:titleX,y:y1,bounds:shift(title,titleX,y1)},weather:{x:weatherX,y:y2,bounds:shift(weather,weatherX,y2)},count:{x:countX,y:y3,bounds:shift(count,countX,y3)},block:{left:0,right:0,top,bottom:top+height},rowTops:[top,top+h1+s.gap,top+h1+s.gap+h2+s.rowGap]};
+  const plan={title:{x:titleX,y:y1,bounds:shift(title,titleX,y1)},weather:{x:weatherX,y:y2,bounds:shift(weather,weatherX,y2)},count:{x:countX,y:y3,bounds:shift(count,countX,y3)},block:{left:0,right:0,top,bottom:top+height},rowTops:[top,top+h1+s.gap,top+h1+s.gap+h2+s.rowGap],alignment};
   const block=unionHeaderBounds([plan.title.bounds,plan.weather.bounds,plan.count.bounds]);plan.block.left=block.left;plan.block.right=block.right;
   ctx.restore();return plan;
 }
@@ -274,10 +277,10 @@ function twoRowHeaderPlan(ctx,op){
   const title={left:Math.min(word.left,number.left+numberX),right:Math.max(word.right,number.right+numberX),top:textY,bottom:textY+size};
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
-  const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2+(op.weekday===0?5:op.weekday===6?-5:0);
-  // Weekend text rows share an internal edge inside a centred block.
-  // Sunday RIGHT / Saturday LEFT; the disk never changes text advance.
-  const relative=op.weekday===0?weather.right-title.right:op.weekday===6?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
+  const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2,alignment=headerAlignment(op);
+  // Only the two spatial edge slots use internal edge alignment; every
+  // weekday uses its real date for content and color, not for layout.
+  const relative=alignment==='right'?weather.right-title.right:alignment==='left'?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
   const commonLeft=Math.min(weather.left,title.left+relative),commonRight=Math.max(weather.right,title.right+relative);
   const wx=center-(commonLeft+commonRight)/2,tx=wx+relative,wy=top+rowHeight+s.gap-row2.top;
   const shift=(box,x,y)=>({...box,left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
@@ -285,7 +288,7 @@ function twoRowHeaderPlan(ctx,op){
   // Preserve the common text line boxes; today has no decoration or extra reservation.
   const circle=null;
   const visualTitle=unionHeaderBounds([shift(title,tx,top),...(circle?[{left:circle.x,right:circle.x+circle.width,top:circle.y,bottom:circle.y+circle.height}]:[])]);
-  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:visualTitle},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:positionedNumber,ink:positionedInk},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle,circleFilled:!!circle,spacing:{spaceAdvance,wordAdvance,numberAdvance:numberX},alignment:op.weekday===0?'right':op.weekday===6?'left':'center',block:{left:Math.min(tx+title.left,wx+weather.left),right:Math.max(tx+title.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
+  const result={title:{x:tx,y:top,bounds:shift(title,tx,top),visualBounds:visualTitle},word:{x:tx+wordX,y:top+textY-word.top,bounds:shift(word,tx+wordX,top+textY-word.top)},number:{x:tx+numberX,y:top+textY-number.top,bounds:positionedNumber,ink:positionedInk},weather:{x:wx,y:wy,bounds:shift(weather,wx,wy)},circle,circleFilled:!!circle,spacing:{spaceAdvance,wordAdvance,numberAdvance:numberX},alignment,block:{left:Math.min(tx+title.left,wx+weather.left),right:Math.max(tx+title.right,wx+weather.right),top,bottom:top+height},rowTops:[top,top+rowHeight+s.gap]};
   ctx.restore();return result;
 }
 

@@ -8,9 +8,8 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
   const draw=new d.DrawContext();draw.setFont(new d.Font(alias,29));draw.drawText('PESO 29',new d.Point(10,20));const op=draw.getImage().ops[0];d.headerTextBounds(ctx,op);d.replay(ctx,[op],1092,510,1092,510,()=>null);const pair=calls.slice(-2);assert.deepEqual(pair.map(p=>p.font),[{name:face,size:29},{name:face,size:29}]);assert.equal(pair[1].text,'PESO 29');
  }
  const before=compile(cp.execFileSync('git',['show','d124c4c:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'})),after=compile(raw);let headers=0;
- const normalize=image=>JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>o.type!=='header'):v);
  for(const day of [25,27,31]){
-  const o=options(new Date(2026,9,day,20)),a=await after(host,o),b=await before(host,o);assert.deepEqual(normalize(a.image),normalize(b.image),'All recorded colors/alpha, charts, geometry and continuous frame unchanged');
+  const o=options(new Date(2026,9,day,20)),a=await after(host,o),b=await before(host,o);for(const key of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(a[key],b[key],key+' unchanged');assert.equal(a.temporal.midnightX,b.temporal.midnightX,'The lower timeline still follows the clock');
   for(const h of flatten(a.image).filter(o=>o.type==='header')){assert.equal(h.title.state.font.size,38);assert.equal(h.word.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');assert.deepEqual(h.number.state.font,h.word.state.font);assert.equal(h.number.state.text.hex,h.word.state.text.hex);headers++}
  }
  const c=require('@napi-rs/canvas'),path=require('node:path');

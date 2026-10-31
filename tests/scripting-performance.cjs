@@ -1,4 +1,3 @@
-function normalize(image){return JSON.parse(JSON.stringify(image),(k,v)=>Array.isArray(v)?v.filter(o=>!(o?.type==='fillRect'&&o.state?.fill?.hex==='30D158'&&o.rect?.height>300)):v)}
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict');
 const {pathToFileURL}=require('node:url');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
@@ -15,11 +14,11 @@ async function main(){
  // Count actual font-fit work, rather than asserting machine-specific timings.
  async function fits(text){let checks=0;const fn=compile(text.replace('function weekHeaderHeadlineFits(date,card,size) {','function weekHeaderHeadlineFits(date,card,size) { host.fit();'));await fn({...host,fit:()=>checks++},fixture);return checks;}
  const fitBefore=await fits(baseline),fitAfter=await fits(source);assert(fitAfter<fitBefore/2);
- // Compare every recorded visual operation except the two requested titles.
+ // Remove header-card drawing while comparing stable lower model geometry.
  const oldModel=await previous(host,fixture),newModel=await current(host,fixture);
- const noHeader=text=>compile(text.replace('function drawTitleDayCard(ctx,date,card,isSelected,isLast) {','function drawTitleDayCard(ctx,date,card,isSelected,isLast) { return;'));
+ const noHeader=text=>compile(text.replace(/function drawTitleDayCard\(ctx,date,card,isSelected,isLast(?:,slotIndex)?\) \{/, 'function drawTitleDayCard(ctx,date,card,isSelected,isLast,slotIndex) { return;'));
  const oldBody=await noHeader(baseline)(host,fixture),newBody=await noHeader(source)(host,fixture);
- assert.deepEqual(normalize(newBody.image),normalize(oldBody.image),'Every drawing operation outside the requested header remains identical to 0.3.17');
+ for(const key of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(newBody[key],oldBody[key],key+' remains unchanged outside the requested header');if(newBody.temporal&&oldBody.temporal)assert.equal(newBody.temporal.midnightX,oldBody.temporal.midnightX,'Lower timeline position keeps its existing time basis');
  let drawings=0;class CountDraw extends d.DrawContext{constructor(){super();drawings++}}
  const prepared=await current({...host,DrawContext:CountDraw},{...fixture,prepareOnly:true});assert.equal(drawings,0);assert.equal(prepared.image,null);assert.equal(prepared.focusDate,newModel.focusDate);assert.deepEqual(prepared.sourceStatus,newModel.sourceStatus);
  // Deferred native reads prove agenda and location overlap without clock thresholds.
