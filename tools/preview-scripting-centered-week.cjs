@@ -8,10 +8,12 @@ const prefix='scripting/scripts/Calendar Timeline Scripting/';
  const {d,host,options}=await fixture(),{encodePNG}=await import('../scripting/scripts/Calendar%20Timeline%20Scripting/rect-raster.js');
  c.GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf','MonoHeavy');
  c.GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf','MonoRegular');
+ c.GlobalFonts.registerFromPath(path.join(__dirname,'../tests/fixtures/fonts/BarlowCondensed-SemiBold.ttf'),'CondensedSemi');
+ c.GlobalFonts.registerFromPath(path.join(__dirname,'../tests/fixtures/fonts/BarlowCondensed-Black.ttf'),'CondensedHeavy');
  host.DrawContext=class extends d.DrawContext{makeRaster=crop=>{const native=new c.Image();native.src=Buffer.from(encodePNG(crop));return {native,size:{width:crop.width,height:crop.height}}}};
  function paint(image){
   const canvas=c.createCanvas(Math.ceil(image.size.width),Math.ceil(image.size.height)),ctx=canvas.getContext('2d');
-  const bridge=new Proxy(ctx,{set(o,k,v){o[k]=k==='font'&&typeof v==='object'?`${v.name.endsWith('Regular')?'':'bold '}${v.size}px ${v.name.endsWith('Regular')?'MonoRegular':'MonoHeavy'}`:v;return true},get(o,k){if(k==='drawImage')return (src,...args)=>o.drawImage(src.image??src,...args);const v=o[k];return typeof v==='function'?v.bind(o):v}});
+  const bridge=new Proxy(ctx,{set(o,k,v){if(k==='font'&&typeof v==='object'){const face=v.name.startsWith('AvenirNextCondensed')?(v.name.endsWith('DemiBold')?'CondensedSemi':'CondensedHeavy'):(v.name.endsWith('Regular')?'MonoRegular':'MonoHeavy');o[k]=`${v.size}px ${face}`}else o[k]=v;return true},get(o,k){if(k==='drawImage')return (src,...args)=>o.drawImage(src.image??src,...args);const v=o[k];return typeof v==='function'?v.bind(o):v}});
   for(const part of d.segments(image)){if(part.type==='canvas')d.replay(bridge,part.ops,image.size.width,image.size.height,image.size.width,image.size.height,()=>null);else ctx.drawImage(paint(part.image),part.rect.x,part.rect.y,part.rect.width,part.rect.height)}
   if(image.outerClip){ctx.save();ctx.globalCompositeOperation='destination-in';ctx.beginPath();for(const [method,...args]of image.outerClip)ctx[method](...args);ctx.fillStyle='white';ctx.fill();ctx.restore()}
   if(image.blurRadius){const dest=c.createCanvas(canvas.width,canvas.height),blur=dest.getContext('2d');blur.filter=`blur(${image.blurRadius}px)`;blur.drawImage(canvas,0,0);return dest}
