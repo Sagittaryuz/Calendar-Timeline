@@ -1,0 +1,64 @@
+{
+  "version": "0.3.34",
+  "parentVersion": "0.3.33",
+  "repository": "Sagittaryuz/Calendar-Timeline",
+  "branch": "scripting",
+  "cause": {
+    "sharedBoundaryWidth": "DAY_BOUNDARY_LINE_WIDTH was 4 logical canvas pixels and supplied midnight dividers, celestial day-boundary rings, and frame geometry.",
+    "frameOverlay": "The Scripting frame overlay bypassed that helper and used scaleVertical(3), yielding 3.161 logical pixels.",
+    "scope": "The request applies only to the Calendar Timeline Scripting edition; the Scriptable source and main branch remain untouched."
+  },
+  "solution": {
+    "logicalCanvasStrokeWidth": 8,
+    "sharedBy": [
+      "Continuous white outline around today's centered card and its moving timeline region.",
+      "Day-change dividers, including the current-day vertical divider.",
+      "Moon rings drawn at midnight boundaries."
+    ],
+    "overlay": "drawCurrentDayFrameOverlay now uses dayBoundaryLineWidth().",
+    "adjacentCardClearance": "Neighbour clip offsets by half the shared stroke plus the existing 1.2287 px approved gap, preserving the gap while preventing adjacent fills from masking the thicker outline."
+  },
+  "preserved": {
+    "centeredRollingHeader": "Three local civil days before today, today in slot 4, and three after; stable intraday and updated on the next normal iOS widget render after local midnight.",
+    "lowerTimeline": "Continuous and independent of the header; not recentered.",
+    "alignments": "Leftmost card rows right-aligned; rightmost card rows left-aligned; interior cards centered.",
+    "other": "Card positions, data, colors, charts, temperatures, curves, Bridge removal, Calendar route, weathergraph:// route, disabled tap-refresh, and outer widget geometry."
+  },
+  "validation": {
+    "build": "npm run build:scripting passed; 11 TypeScript/TSX modules syntax-checked and imported.",
+    "fullSuite": "npm run test:scripting passed after updating the adjacent-curve test to use half of the shared 8 px stroke.",
+    "structuralLineTest": {
+      "scenes": 11,
+      "continuousFrameStrokes": 11,
+      "visibleWhiteDividerRects": 38,
+      "moonRingCases": 3,
+      "width": 8,
+      "coverage": "Intraday, weekend, daylight-saving date, month/year, frame edge and clipped ring geometry."
+    },
+    "adjacentCurves": {
+      "scenes": 63,
+      "geometrySamples": 6312,
+      "cusps": 42,
+      "approvedGap": 1.2287,
+      "maximumGapError": 1.0658141036401503e-13
+    },
+    "nativeIOS": "No physical iPhone or iPad test was run. The test checks logical drawing commands and synthetic geometry, not the native pixel raster."
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.34.scripting",
+    "sourceFiles": 16,
+    "sourceBytes": 466656,
+    "archiveBytes": 129088,
+    "sha256": "f44eb0ceae2b2fab1922bcb30c5945122737745e178f6b1e6aed058c2940f755",
+    "crc": "passed",
+    "allFilesMatchCheckout": true
+  },
+  "publication": {
+    "targetBranch": "scripting",
+    "updateUrl": "https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting",
+    "mainAndAndroid": "Not modified.",
+    "scriptableSource": "Not modified.",
+    "scriptingCI": "No Scripting CI workflow is configured."
+  },
+  "buildGeneratorNote": "The legacy engine generator reads the older root Scriptable source and would revert existing Scripting-only rolling-header changes. The active generated engine was updated narrowly and verified through the Scripting syntax/import check and complete test suite; the root Scriptable source was not changed."
+}

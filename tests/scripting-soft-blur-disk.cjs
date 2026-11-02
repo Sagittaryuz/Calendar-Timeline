@@ -25,6 +25,6 @@ const dir='scripting/scripts/Calendar Timeline Scripting/',beforeSource=cp.execF
    if(h.isToday){cases.push({date,number:h.number.text,color:h.number.state.text.hex,font:h.number.state.font.name,circle:p.circle});todayScenes++;}
   }
  }
- const report={version:'0.3.33-preview',blurScenes,blurRadius:{before:1/0.24,after:2},tintOpacity:{before:0.36,after:0.2},todayScenes,positions:'leftmost slot RIGHT / rightmost slot LEFT / all inner slots CENTER; uniform space, measured number ink center, font38',paint:'no date disk/ring; day-semantic text color, today Heavy',cases,physicalIOS:'not tested; Barlow/Open Sans/DejaVu substitutes and native-like anchor model'};
+ const report={version:'0.3.34-preview',blurScenes,blurRadius:{before:1/0.24,after:2},tintOpacity:{before:0.36,after:0.2},todayScenes,positions:'leftmost slot RIGHT / rightmost slot LEFT / all inner slots CENTER; uniform space, measured number ink center, font38',paint:'no date disk/ring; day-semantic text color, today Heavy',cases,physicalIOS:'not tested; Barlow/Open Sans/DejaVu substitutes and native-like anchor model'};
  if(process.env.SOFT_REPORT)fs.writeFileSync(process.env.SOFT_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,cases:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

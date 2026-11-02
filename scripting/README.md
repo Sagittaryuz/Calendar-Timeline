@@ -1,3 +1,13 @@
+## Atualização 0.3.34 — espessura estrutural de 8 px
+
+As linhas estruturais do Scripting agora usam **8 px do canvas lógico**: a moldura contínua que abraça o cartão central de hoje e sua região móvel da timeline, as divisórias de meia-noite e os aros de lua nas viradas. A causa da diferença era o caminho da moldura, que usava `scaleVertical(3)` (3,161 px lógicos), enquanto divisórias e aros recebiam `DAY_BOUNDARY_LINE_WIDTH` (4 px). A moldura agora usa `dayBoundaryLineWidth()` como os outros traços. O recorte dos quadros vizinhos considera metade da nova espessura mais o gap aprovado, para não cobrir a borda nem alterar esse gap.
+
+O ajuste é somente no Calendar Timeline Scripting. O Scriptable original, `main`, Android, a faixa superior móvel de três dias antes/hoje/três depois, seu avanço na data local, timeline contínua, alinhamentos por extremidade, dados, curvas, cores e toques permaneceram intactos. 8 px é medida no canvas de 1092×510; no widget médio de 364×170 isso escala para 2,67 pontos, sujeito ao renderizador nativo do Scripting.
+
+Validação sintética: 11 datas em três horários, fim de mês/ano e transição de horário de verão; 11 molduras contínuas, 38 divisórias, três formas de aro de lua, mais 63 cenas de curvas adjacentes com 6.312 amostras geométricas e erro máximo do gap de `1,07×10⁻¹³`. O teste dirigido confere `lineWidth` e larguras de retângulo diretamente no motor; testes de moldura, curvas, cabeçalho e toques cobrem regressões. A compilação checa 11 módulos. A execução física em iPhone não foi realizada.
+
+Atualize pelo [projeto Calendar Timeline na branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando os dados existentes.
+
 ## Atualização 0.3.33 — hoje no centro dos sete quadros
 
 Os quadros superiores passam a mostrar três datas locais anteriores, hoje na quarta posição e três datas seguintes. A faixa permanece fixa durante o dia e avança por datas civis com `setDate`, incluindo viradas de mês, ano e horário de verão; ela acompanha a próxima execução normal do widget pelo iOS. A timeline inferior continua usando seu relógio e janela de 24 horas existentes, sem ser recentralizada junto com os quadros.

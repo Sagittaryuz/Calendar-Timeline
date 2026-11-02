@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.10.31.1";
+const WIDGET_BUILD_VERSION = "2026.11.02.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -201,7 +201,7 @@ const WIDGET_CONTOUR = Object.freeze({
   textClearance: 8,
 });
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
-const DAY_BOUNDARY_LINE_WIDTH = 4;
+const DAY_BOUNDARY_LINE_WIDTH = 8;
 const WIDGET_LEFT_EDGE_RETRACTION = 1;
 // Expansão vertical do grid completo, em pixels do canvas lógico.
 // O topo acompanha a borda inferior da Lua; a base alcança o topo do círculo.
@@ -5219,7 +5219,7 @@ function currentDayOutlinePath() {
 function drawCurrentDayFrameOverlay(ctx) {
   ctx.addPath(currentDayOutlinePath());
   ctx.setStrokeColor(new Color('#FFFFFF',0.96));
-  ctx.setLineWidth(scaleVertical(3));ctx.strokePath();
+  ctx.setLineWidth(dayBoundaryLineWidth());ctx.strokePath();
 }
 
 function pendingDayCarryoverBorderOutset() {
@@ -13158,7 +13158,7 @@ function dayCardNeighbourClip() {
   path.addLine(new Point(CANVAS.width,CANVAS.height));path.addLine(new Point(0,CANVAS.height));path.closeSubpath();
   // Nonzero winding hole: keep adjacent cards outside the selected fill,
   // its half-stroke and the same clear gap used between header cards.
-  const offset=scaleVertical(3)/2+titleCardGap();
+  const offset=dayBoundaryLineWidth()/2+titleCardGap();
   const vertices=[];
   for(const [,x,y] of currentDayUnifiedShape().commands.filter(c=>c.length===3)){
     const previous=vertices[vertices.length-1];

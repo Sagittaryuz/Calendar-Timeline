@@ -28,6 +28,6 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
  }
  for(const date of ['2026-11-01T00:00:00','2026-12-31T23:59:00','2027-01-01T00:00:00'])await check(new Date(date));
  assert(gapsFixed>0);assert(states.some(s=>s.date.startsWith('2026-10-27T20:00')&&s.gapFixed),'Physical screenshot gap reproduced by synthetic geometry');
- const report={version:'0.3.33-preview',scenes:states.length,gapsFixed,regression:'frame continuity follows the centered fourth header slot while the lower timeline advances independently',change:'single continuous white path joins the centered day card to the moving today region; no extra stroke',physicalIOS:'synthetic geometry only; no physical iPhone execution',states};
+ const report={version:'0.3.34-preview',scenes:states.length,gapsFixed,regression:'frame continuity follows the centered fourth header slot while the lower timeline advances independently',change:'single continuous white path joins the centered day card to the moving today region; no extra stroke',physicalIOS:'synthetic geometry only; no physical iPhone execution',states};
  if(process.env.FRAME_CONTINUITY_REPORT)fs.writeFileSync(process.env.FRAME_CONTINUITY_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

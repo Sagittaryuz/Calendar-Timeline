@@ -17,5 +17,5 @@ const {fixture,compile,raw}=require('./scripting-rolling.cjs');
   }
   if(minute===720)examples.push({day,kind,split,charts:charts.length});scenes++;
  }
- const report={version:'0.3.33-preview',scenes,points,layoutComparisons,sizes,emptyFallback:fallback,examples,weathergraph:'weathergraph:// confirmed by user; lower region opens the app when installed',physicalIOS:'not executed; actual engine rectangles and JSX links checked with synthetic data'};if(process.env.HIT_REPORT)fs.writeFileSync(process.env.HIT_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,examples:undefined}));
+ const report={version:'0.3.34-preview',scenes,points,layoutComparisons,sizes,emptyFallback:fallback,examples,weathergraph:'weathergraph:// confirmed by user; lower region opens the app when installed',physicalIOS:'not executed; actual engine rectangles and JSX links checked with synthetic data'};if(process.env.HIT_REPORT)fs.writeFileSync(process.env.HIT_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,examples:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});
