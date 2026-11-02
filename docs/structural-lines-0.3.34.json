@@ -16,7 +16,8 @@
       "Moon rings drawn at midnight boundaries."
     ],
     "overlay": "drawCurrentDayFrameOverlay now uses dayBoundaryLineWidth().",
-    "adjacentCardClearance": "Neighbour clip offsets by half the shared stroke plus the existing 1.2287 px approved gap, preserving the gap while preventing adjacent fills from masking the thicker outline."
+    "adjacentCardClearance": "Neighbour clip offsets by half the shared stroke plus the existing 1.2287 px approved gap, preserving the gap while preventing adjacent fills from masking the thicker outline.",
+    "layoutAnchors": "DAY_BOUNDARY_LAYOUT_INSET remains 4 px; header card rectangles, text/icon anchors, hour legend, thermal band, and touch split compare byte-for-byte geometrically with 0.3.33."
   },
   "preserved": {
     "centeredRollingHeader": "Three local civil days before today, today in slot 4, and three after; stable intraday and updated on the next normal iOS widget render after local midnight.",
@@ -33,8 +34,9 @@
       "visibleWhiteDividerRects": 38,
       "moonRingCases": 3,
       "width": 8,
-      "coverage": "Intraday, weekend, daylight-saving date, month/year, frame edge and clipped ring geometry."
+      "coverage": "Intraday, weekend, daylight-saving date, month/year, frame edge, clipped ring geometry, and unchanged card/timeline/header anchor geometry."
     },
+    "layoutPreservation": "Seven header card rectangles, text/icon anchors, hour legend, thermal band, and touch split are exactly equal to the 0.3.33 baseline across all 11 scenes.",
     "adjacentCurves": {
       "scenes": 63,
       "geometrySamples": 6312,
@@ -47,9 +49,9 @@
   "package": {
     "file": "work/releases/Calendar-Timeline-Scripting-0.3.34.scripting",
     "sourceFiles": 16,
-    "sourceBytes": 466656,
-    "archiveBytes": 129088,
-    "sha256": "f44eb0ceae2b2fab1922bcb30c5945122737745e178f6b1e6aed058c2940f755",
+    "sourceBytes": 466791,
+    "archiveBytes": 129159,
+    "sha256": "21e6acc8cb005a80a215bef4025ce118bade13ae1c3f41c9944ee17bd1f77374",
     "crc": "passed",
     "allFilesMatchCheckout": true
   },

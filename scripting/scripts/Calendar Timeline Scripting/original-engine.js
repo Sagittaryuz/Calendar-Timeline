@@ -201,6 +201,8 @@ const WIDGET_CONTOUR = Object.freeze({
   textClearance: 8,
 });
 const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
+// Preserve the established card/timeline anchor while the structural strokes grow.
+const DAY_BOUNDARY_LAYOUT_INSET = 4;
 const DAY_BOUNDARY_LINE_WIDTH = 8;
 const WIDGET_LEFT_EDGE_RETRACTION = 1;
 // Expansão vertical do grid completo, em pixels do canvas lógico.
@@ -334,7 +336,7 @@ function titleHeaderFontSize() {
 function titleCardTypography() {
   // Usa a caixa dos cartões comuns, mesmo quando hoje ocupa uma extremidade.
   const card = titleDayCardRect(0);
-  const top = WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
+  const top = WIDGET_CONTOUR.strokeInset - DAY_BOUNDARY_LAYOUT_INSET / 2;
   const centerY = top + TITLE_CARD_HEIGHT / 2 + 10;
   const iconSize = scaleVertical(30);
   const lineGap = scaleVertical(3);
@@ -482,7 +484,7 @@ const TITLE_CARD_BASE_CLEAR_GAP = Math.max(
   0,
   CANVAS.timelineTop -
     (WIDGET_CONTOUR.strokeInset -
-      DAY_BOUNDARY_LINE_WIDTH / 2 +
+      DAY_BOUNDARY_LAYOUT_INSET / 2 +
       TITLE_CARD_HEIGHT + TITLE_CARD_HEIGHT_REDUCTION) -
     TIMELINE_OUTER_BORDER_WIDTH / 2
 );
@@ -4477,7 +4479,7 @@ function titleDayCardRect(index) {
   const titleCardTop =
     index === titleTodayCardIndex()
       ? WIDGET_CONTOUR.strokeInset
-      : WIDGET_CONTOUR.strokeInset - dayBoundaryLineWidth() / 2;
+      : WIDGET_CONTOUR.strokeInset - DAY_BOUNDARY_LAYOUT_INSET / 2;
   // O cartão atual termina na mesma altura dos demais. Seu topo lógico
   // fica 2 px abaixo por causa do contorno branco centrado; reduzir sua
   // altura preserva o alinhamento externo superior sem encurtar o vão.
@@ -4485,7 +4487,7 @@ function titleDayCardRect(index) {
     index === titleTodayCardIndex()
       ? Math.max(
           1,
-          TITLE_CARD_HEIGHT - dayBoundaryLineWidth() / 2
+          TITLE_CARD_HEIGHT - DAY_BOUNDARY_LAYOUT_INSET / 2
         )
       : TITLE_CARD_HEIGHT;
 
@@ -5432,7 +5434,7 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast,slotIndex) {
   ink.drawTextInRect(fields.minimum,new Rect(0,20,fields.minWidth,80));
   const weather=ink.getImage();ink.ops=[];
   shared.icons.push(headerVectorBounds(weather.ops.filter(o=>o.type!=='text')));
-  ctx.op('header',{rect:card,frame:{x:card.x,y:WIDGET_CONTOUR.strokeInset-dayBoundaryLineWidth()/2,width:card.width,height:TITLE_CARD_HEIGHT},
+  ctx.op('header',{rect:card,frame:{x:card.x,y:WIDGET_CONTOUR.strokeInset-DAY_BOUNDARY_LAYOUT_INSET/2,width:card.width,height:TITLE_CARD_HEIGHT},
     weekday:date.getDay(),slotIndex,title,word:weekday,number,isToday,twoRows:true,weather,shared});
   if(!isSelected){
     const image={...ctx.getImage(),outerClip:dayCardNeighbourClip()};
