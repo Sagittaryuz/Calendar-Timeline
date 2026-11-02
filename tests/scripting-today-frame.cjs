@@ -37,6 +37,6 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
  for(const now of [new Date(2026,9,31,23,59),new Date(2026,10,1),new Date(2026,11,31,23,59),new Date(2027,0,1)]){
   const m=await render(host,options(now));assert(m.header.find(d=>d.selected).date===m.focusDate);
  }
- const report={version:'0.3.34-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around the centered card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
+ const report={version:'0.3.35-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around the centered card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
  if(process.env.FRAME_REPORT)fs.writeFileSync(process.env.FRAME_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

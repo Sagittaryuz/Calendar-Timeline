@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.11.02.1";
+const WIDGET_BUILD_VERSION = "2026.11.02.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -204,6 +204,7 @@ const DAY_CHANGE_CIRCLE_VERTICAL_OFFSET = 2;
 // Preserve the established card/timeline anchor while the structural strokes grow.
 const DAY_BOUNDARY_LAYOUT_INSET = 4;
 const DAY_BOUNDARY_LINE_WIDTH = 8;
+const TODAY_FRAME_LINE_WIDTH = 6;
 const WIDGET_LEFT_EDGE_RETRACTION = 1;
 // Expansão vertical do grid completo, em pixels do canvas lógico.
 // O topo acompanha a borda inferior da Lua; a base alcança o topo do círculo.
@@ -4529,7 +4530,7 @@ function currentDayFrameMetrics() {
     CANVAS.timelineTop + weatherIconCenterY();
   const boundaryBottomY = CANVAS.height - WIDGET_CONTOUR.strokeInset;
   const cardBottomY = todayCard.y + todayCard.height;
-  const lineWidth = dayBoundaryLineWidth();
+  const lineWidth = todayFrameLineWidth();
   const bridgeY = dayBoundaryMoonBorderTopY();
   const bottomLineCenterY = CANVAS.height - WIDGET_CONTOUR.strokeInset;
   const frameRadius = Math.min(
@@ -5221,7 +5222,7 @@ function currentDayOutlinePath() {
 function drawCurrentDayFrameOverlay(ctx) {
   ctx.addPath(currentDayOutlinePath());
   ctx.setStrokeColor(new Color('#FFFFFF',0.96));
-  ctx.setLineWidth(dayBoundaryLineWidth());ctx.strokePath();
+  ctx.setLineWidth(todayFrameLineWidth());ctx.strokePath();
 }
 
 function pendingDayCarryoverBorderOutset() {
@@ -5325,9 +5326,9 @@ function chartsCrossingDayBoundaryVerticalSpans(items, boundaryDate) {
 function drawCurrentDayBoundaryVerticalOverlay(ctx, items = []) {
   const {
     boundaryX,
-    lineWidth,
     lineColor,
   } = currentDayFrameMetrics();
+  const lineWidth = dayBoundaryLineWidth();
 
   // A divisão vertical começa depois da borda inferior do astro e
   // termina no topo do círculo da legenda. O círculo continua sendo
@@ -11290,6 +11291,10 @@ function dayBoundaryLineWidth() {
   return DAY_BOUNDARY_LINE_WIDTH;
 }
 
+function todayFrameLineWidth() {
+  return TODAY_FRAME_LINE_WIDTH;
+}
+
 function hourGridLineColor(tick) {
   return tick.getHours() === 0
     ? dayBoundaryLineColor(tick, loadResult.holidayDates)
@@ -13160,7 +13165,7 @@ function dayCardNeighbourClip() {
   path.addLine(new Point(CANVAS.width,CANVAS.height));path.addLine(new Point(0,CANVAS.height));path.closeSubpath();
   // Nonzero winding hole: keep adjacent cards outside the selected fill,
   // its half-stroke and the same clear gap used between header cards.
-  const offset=dayBoundaryLineWidth()/2+titleCardGap();
+  const offset=todayFrameLineWidth()/2+titleCardGap();
   const vertices=[];
   for(const [,x,y] of currentDayUnifiedShape().commands.filter(c=>c.length===3)){
     const previous=vertices[vertices.length-1];

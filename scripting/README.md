@@ -1,3 +1,13 @@
+## Atualização 0.3.35 — moldura externa de 6 px
+
+A moldura contínua do dia de hoje agora usa **6 px do canvas lógico**. As divisórias de meia-noite, a divisória vertical do dia atual e os aros dos astros continuam com **8 px**. O motor mantém constantes independentes para esses dois traços; o recuo de layout continua em 4 px. O raio do caminho acompanha a metade da espessura da moldura e o recorte dos quadros vizinhos também usa essa metade, preservando o gap aprovado de 1,2287 px.
+
+O ajuste altera somente a moldura externa. A geometria dos cartões, textos, ícones, legenda, faixa térmica, hitboxes, timeline, dados, curvas, cores e toques foi preservada. A moldura continua sendo um único contorno contínuo ao redor do quadro de hoje e da região móvel de hoje na timeline.
+
+Validação sintética: 11 cenas dirigidas com 11 molduras de 6 px, 38 divisórias de 8 px e três casos de aros de 8 px; 63 cenas de curvas adjacentes com 6.396 amostras e erro máximo do gap de `9,95×10⁻¹⁴`; 56 comparações do quadro de hoje, 59 cenários de continuidade (22 junções) e 72 cenas de hitboxes. O teste compara cartões, âncoras, horários, faixa térmica e hitboxes com a geometria anterior. Não houve teste físico em iPhone/iPad.
+
+Atualize pelo [projeto Calendar Timeline na branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando os dados existentes. [Registro de causa, teste e pacote](../docs/frame-outline-0.3.35.json).
+
 ## Atualização 0.3.34 — espessura estrutural de 8 px
 
 As linhas estruturais do Scripting agora usam **8 px do canvas lógico**: a moldura contínua que abraça o cartão central de hoje e sua região móvel da timeline, as divisórias de meia-noite e os aros de lua nas viradas. A causa da diferença era o caminho da moldura, que usava `scaleVertical(3)` (3,161 px lógicos), enquanto divisórias e aros recebiam `DAY_BOUNDARY_LINE_WIDTH` (4 px). A moldura agora usa `dayBoundaryLineWidth()` como os outros traços. O recorte dos quadros vizinhos considera metade da nova espessura mais o gap aprovado, para não cobrir a borda nem alterar esse gap. `DAY_BOUNDARY_LAYOUT_INSET` continua em 4 px para manter as âncoras existentes dos cartões e da timeline.

@@ -1,0 +1,73 @@
+{
+  "version": "0.3.35",
+  "parentVersion": "0.3.34",
+  "repository": "Sagittaryuz/Calendar-Timeline",
+  "branch": "scripting",
+  "request": "Reduce only the continuous outer frame around today's card and moving timeline region to 6 logical canvas pixels.",
+  "cause": "Version 0.3.34 routed both the outer frame and day-boundary dividers/rings through one 8 px width. The frame now has its own width while boundary details retain the shared 8 px value.",
+  "geometry": {
+    "todayFrameWidth": 6,
+    "dayDividerAndMoonRingWidth": 8,
+    "layoutInset": 4,
+    "framePath": "The existing continuous outline path and card/timeline anchors are unchanged; the centered stroke is thinner by one logical pixel on each side.",
+    "adjacentCardClip": "Uses half the 6 px frame plus the existing 1.2287 px approved clear gap, so neighboring fills do not cover the outline and the gap remains constant.",
+    "verticalDayDivider": "Uses dayBoundaryLineWidth() directly and remains 8 px even where it is drawn over the frame area."
+  },
+  "preserved": [
+    "All seven card positions, dimensions, text and icon anchors.",
+    "Hour legend, thermal band, touch split, timeline movement, charts, weather and calendar data.",
+    "Centered rolling week, colors, alignments, frame continuity, curves, tap destinations and local-only behavior."
+  ],
+  "validation": {
+    "structuralLines": {
+      "scenes": 11,
+      "frameStrokes": 11,
+      "frameWidth": 6,
+      "whiteDividerRects": 38,
+      "dividerAndRingWidth": 8,
+      "moonRingCases": 3,
+      "canvasBounds": "The 6 px frame stroke and 8 px partial ring geometry remain within their tested logical canvas bounds.",
+      "layoutComparison": "Card positions, text/icon anchors, hour legend, thermal band, touch split, and timeline window match the 0.3.33 geometry across all 11 scenes."
+    },
+    "adjacentCurves": {
+      "scenes": 63,
+      "samples": 6396,
+      "approvedGap": 1.2287,
+      "maximumGapError": 9.947598300641403e-14,
+      "cusps": 42
+    },
+    "todayFrame": {
+      "populatedComparisons": 56,
+      "additionalColumnPassages": 77,
+      "midnightAndYearCases": 4
+    },
+    "frameContinuity": {
+      "scenes": 59,
+      "closedConnectors": 22
+    },
+    "touchAreas": {
+      "scenes": 72,
+      "points": 2016,
+      "sizes": 7
+    },
+    "suite": "npm run test:scripting passed.",
+    "build": "npm run build:scripting passed; 11 modules syntax-checked and imported.",
+    "auxiliaryVisualTest": "tests/scripting-visual.cjs has a pre-existing left-bridge-coordinate assertion failure; direct comparison of the same sampled point against the 0.3.34 engine yields the same 0.806 px miss. This assertion is outside the active Scripting suite and is unrelated to line width."
+  },
+  "package": {
+    "file": "work/releases/Calendar-Timeline-Scripting-0.3.35.scripting",
+    "sourceFiles": 16,
+    "sourceBytes": 466920,
+    "archiveBytes": 127853,
+    "sha256": "eb19a58db7c4aed24988d584fa2a9d31e5b2d98d374fc5b531a22b7a81606bfc",
+    "crc": "passed",
+    "allFilesMatchCheckout": true
+  },
+  "publication": {
+    "targetBranch": "scripting",
+    "updateUrl": "https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting",
+    "mainAndAndroid": "Not modified.",
+    "scriptingCI": "No Scripting CI workflow is configured."
+  },
+  "nativeIOS": "No physical iPhone/iPad test was run. Synthetic DrawContext geometry validates requested line widths and clipping, but not native iOS rasterization."
+}
