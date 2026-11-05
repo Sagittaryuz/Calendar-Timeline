@@ -1,14 +1,2 @@
-// All legacy tap paths navigate once without preparation, reload, or mutation.
-const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{transformSync}=require('esbuild');
-const dir='scripting/scripts/Calendar Timeline Scripting/';
-function load(name,deps,values,extra={}){const m={exports:{}};vm.runInNewContext(transformSync(fs.readFileSync(dir+name,'utf8').replace(/main\(\)\s*$/,'module.exports=main'),{loader:name.endsWith('tsx')?'tsx':'ts',format:'cjs',jsxFactory:'createElement'}).code,{module:m,exports:m.exports,require:n=>{assert(n in deps,n);return deps[n]},Date,Storage:{get:k=>values.get(k),set:()=>{throw Error('Unexpected tap mutation')},remove:()=>{throw Error('Unexpected tap deletion')}},createElement:()=>({}),...extra});return m.exports}
-(async()=>{
- const values=new Map([['calendar-force-weather',123],['selected-day',{date:'old'}],['weather-model',{preserve:true}]]),copy=JSON.stringify([...values]),trace=[],forbidden=()=>{throw Error('No tap refresh/preparation allowed')};
- const helper=load('widget-refresh.ts',{},values),open=async url=>{assert.equal(url,'calshow://');trace.push('calendar');return true};
- await helper.refreshFromWidget({open,request:forbidden,prepare:forbidden,reload:forbidden});assert.deepEqual(trace,['calendar']);
- const sdk={Script:{queryParameters:{refresh:'1'},exit:()=>trace.push('exit')},Widget:{reloadAll:forbidden}};const run=load('index.tsx',{'scripting':sdk,'./widget-refresh':helper,'./model':{loadModel:forbidden},'./diagnostics':{}},values,{Safari:{openURL:open}});
- for(let i=0;i<10;i++)await run();assert.equal(trace.filter(x=>x==='calendar').length,11);assert.equal(trace.filter(x=>x==='exit').length,10);
- const definitions={};load('app_intents.tsx',{'scripting':{AppIntentManager:{register:d=>definitions[d.name]=d},AppIntentProtocol:{AppIntent:0}},'./widget-refresh':helper},values,{Safari:{openURL:open}});for(let i=0;i<10;i++){await definitions.CalendarTimelineRefresh.perform();await definitions.CalendarTimelineSelectDay.perform({date:'2000-01-01'})}assert.equal(trace.filter(x=>x==='calendar').length,31);assert.equal(JSON.stringify([...values]),copy);
- let calls=0,presented=0;load('widget.tsx',{'scripting':{Widget:{family:'systemMedium',displaySize:{width:364,height:170},present:(element,policy)=>{assert(policy);presented++}},Text:'Text'},'./model':{loadModel:async o=>{assert(o.background);assert.equal(o.forceWeather,undefined,'Stale tap flags never force weather');calls++;return {}}},'./timeline-view':{TimelineView(){}},'./diagnostics':{VERSION:'fixture',failureDetails:String}},values,{Storage:{get:k=>values.get(k),set:(k,v)=>{assert.equal(k,'widget-diagnostic');return true}}})().then(()=>{});await new Promise(r=>setImmediate(r));assert.equal(calls,1);assert.equal(presented,1);assert.equal(JSON.stringify([...values]),copy);
- console.log('PASS tap migration: 31 navigations, zero refresh/preparation/storage mutations, old force flag ignored; normal iOS model execution retained. Native iOS dispatch pending.');
-})().catch(e=>{console.error(e);process.exitCode=1});
+// The previous no-refresh contract was replaced by the requested touch refresh.
+require('./scripting-tap-refresh.cjs');

@@ -1,3 +1,7 @@
+## 0.3.37 — atualizar agenda ao tocar
+
+O toque na área do Calendário consulta novamente eventos e lembretes e solicita recarga ao iOS antes de abrir o Calendário. A consulta tem limite de 1,2 segundo; em falha ou demora, a navegação continua e o iOS decide quando redesenhar. O clima mantém seu cache. Reteste no iPhone é necessário.
+
 ## 0.3.36 — limite de meia-noite dos lembretes
 
 A consulta de hoje não transforma em hoje lembretes cuja data é futura, inclusive os que vencem à meia-noite de amanhã. A compatibilidade com datas-base anteriores de recorrências permanece. Atualize pelo Git da branch scripting; a confirmação no iPhone ainda é necessária.

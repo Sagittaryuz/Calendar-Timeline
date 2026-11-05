@@ -78,7 +78,7 @@ async function main(){
   await intent.perform({date:'2020-01-01'});assert.equal(reloads,0);assert.equal(opens,2);assert(!store.has('selected-day'));
   const header=Array.from({length:7},(_,i)=>({date:`2026-10-${18+i}`,label:'Dia',x:i*156,y:4,width:150,height:100}));
   const view=load('timeline-view').TimelineView({model:{width:1092,height:510,image:{},header,touchSplit:{y:300}},width:364,height:170});
-  assert.equal(view.children[1][0].type,'Link');assert.equal(view.children[1][0].props.url,'calshow://','Calendar opens directly without refresh');
+  assert.equal(view.children[1][0].type,'Link');assert.equal(view.children[1][0].props.url,'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1','Calendar touch prepares the agenda before opening');
   assert(!JSON.stringify(view).includes('CalendarTimelineSelectDay'),'Seven headers have no day action');
   const masked=load('graph-view').GraphView({image:{size:{width:1092,height:510},ops:[],outerClip:[['moveTo',4,4],['lineTo',1088,4],['closePath']]},width:364,height:170});
   assert.equal(masked.props.mask.type,'Canvas','Root graphic uses a contour mask');

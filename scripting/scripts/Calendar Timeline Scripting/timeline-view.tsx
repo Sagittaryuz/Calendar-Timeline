@@ -12,7 +12,7 @@ export function timelineLayout(modelWidth:number,modelHeight:number,width:number
 export function timelineTouchRegions(model:any){
   const split=Math.max(0,Math.min(model.height,Number(model.touchSplit?.y)))
   if(!Number.isFinite(split))throw Error('Geometria dos charts ausente para os toques.')
-  return [{target:'calendar',url:'calshow://',x:0,y:0,width:model.width,height:split},
+  return [{target:'calendar',url:'scripting://run_single/Calendar%20Timeline%20Scripting?refresh=1',x:0,y:0,width:model.width,height:split},
     {target:'weathergraph',url:WEATHERGRAPH_URL,x:0,y:split,width:model.width,height:model.height-split}]
 }
 export function TimelineView({model,width,height,extraLarge=false}:{model:any;width:number;height:number;extraLarge?:boolean}){
