@@ -696,9 +696,15 @@ async function loadLiveWindow() {
     const rangeReminderViews = reminders.map((reminder) =>
       reminderOccurrenceView(reminder)
     );
-    const todayOccurrenceViews = todayRemindersRaw.map((reminder) =>
-      reminderOccurrenceView(reminder, todayStart)
-    );
+    const todayOccurrenceViews = todayRemindersRaw
+      // A consulta nativa pode incluir o limite final (00:00 de amanhã).
+      // Nunca transforme uma data futura em ocorrência de hoje; datas-base
+      // anteriores continuam permitindo a compatibilidade com recorrências.
+      .filter((reminder) => {
+        const dueDay = normalizedReminderDayStart(reminder);
+        return dueDay && dueDay <= todayStart;
+      })
+      .map((reminder) => reminderOccurrenceView(reminder, todayStart));
 
     const reminderOccurrenceKey = (reminder) => {
       const due = reminder.dueDate;

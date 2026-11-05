@@ -1,3 +1,7 @@
+## 0.3.36 — limite de meia-noite dos lembretes
+
+A consulta de hoje não transforma em hoje lembretes cuja data é futura, inclusive os que vencem à meia-noite de amanhã. A compatibilidade com datas-base anteriores de recorrências permanece. Atualize pelo Git da branch scripting; a confirmação no iPhone ainda é necessária.
+
 ## Atualização 0.3.35 — moldura externa de 6 px
 
 A moldura contínua do dia de hoje agora usa **6 px do canvas lógico**. As divisórias de meia-noite, a divisória vertical do dia atual e os aros dos astros continuam com **8 px**. O motor mantém constantes independentes para esses dois traços; o recuo de layout continua em 4 px. O raio do caminho acompanha a metade da espessura da moldura e o recorte dos quadros vizinhos também usa essa metade, preservando o gap aprovado de 1,2287 px.
