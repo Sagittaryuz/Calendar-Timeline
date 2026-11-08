@@ -1,0 +1,60 @@
+{
+  "version": "0.3.38",
+  "base": {
+    "branch": "scripting",
+    "version": "0.3.37",
+    "commit": "06a7470442a2721bbafda5f0282f095facaf1a13"
+  },
+  "cause": "A faixa superior dos sete quadros era montada em coordenadas fixas embora a timeline inferior usasse windowStart=agora. Assim, durante o dia, a divisória da próxima meia-noite avançava à esquerda enquanto o quadro de hoje permanecia estacionário.",
+  "solution": {
+    "file": "scripting/scripts/Calendar Timeline Scripting/original-engine.js",
+    "row": "Aplicar a todos os sete quadros o mesmo deslocamento horizontal, calculado pelo timeToX da próxima meia-noite local na janela temporal já usada pela timeline.",
+    "todayCardAnchor": "A borda interna esquerda do quadro de hoje acompanha a divisória: x + 4 = temporal.midnightX.",
+    "rate": "1092 / 24 = 45.5 unidades lógicas do canvas por hora no widget atual.",
+    "dates": "Três datas civis anteriores, hoje na quarta posição e três datas seguintes. A sequência continua usando aritmética local de calendário; os rótulos avançam na virada da data local.",
+    "clipping": "As coordenadas completas dos quadros podem sair do canvas. O GraphView mantém o recorte externo arredondado e os limites do Canvas recortam pixels; não são adicionadas reticências. O caminho da moldura é limitado ao contorno lógico do widget."
+  },
+  "sampleCoordinates": {
+    "timezone": "America/New_York",
+    "canvasWidth": 1092,
+    "normalDay": [
+      { "localTime": "00:00", "midnightX": 1092, "todayCardX": 1088 },
+      { "localTime": "06:00", "midnightX": 819, "todayCardX": 815 },
+      { "localTime": "12:00", "midnightX": 546, "todayCardX": 542 },
+      { "localTime": "18:00", "midnightX": 273, "todayCardX": 269 },
+      { "localTime": "23:59", "midnightX": 0.7583, "todayCardX": -3.2417 }
+    ],
+    "dstMidnight": {
+      "springForwardElapsedHours": 23,
+      "springForwardMidnightX": 1046.5,
+      "fallBackElapsedHours": 25,
+      "fallBackMidnightX": 1137.5
+    }
+  },
+  "preserved": {
+    "todayFrameWidth": 6,
+    "dayDividersAndAstroRingsWidth": 8,
+    "cardGap": 1.2287,
+    "boundedAgendaRefreshAndCalendarNavigation": "0.3.37 behavior retained; existing test now expects its scripting://run_single route before calshow.",
+    "other": "Timeline data, chart layout, fonts, weather, blur, Bridge removal, touch regions, and lower timeline origin/window remain unchanged."
+  },
+  "validation": {
+    "fullSuite": "npm run test:scripting passed after updating stale static-position and tap-route expectations.",
+    "build": "npm run build:scripting and npm run check:scripting passed; 11 Scripting modules checked for syntax/imports. Native types remain pending iPhone.",
+    "rolling": "59 scenes; all seven x positions move by 45.5 logical px/hour; date labels remain stable intraday.",
+    "localDatesAndDST": "12 America/New_York scenes, four local-midnight transitions, month/year boundaries, spring and fall DST midnight positions.",
+    "frame": "59 synthetic scenes; one continuous stroke, 51 directly checked shared header/timeline joins, path clipped to x=4..1088 and y=4..506.",
+    "adjacentCurves": "63 scenes, 5,466 geometry samples; approved 1.2287 px gap maximum error 1.97e-13.",
+    "headerSizes": "96 scenes, 672 headers, 4,704 scale checks; text alignment, content, fonts and temperature rows retained.",
+    "artifact": {
+      "file": "work/releases/Calendar-Timeline-Scripting-0.3.38.scripting",
+      "entries": 16,
+      "sha256": "5f339b12a6731a04108f0557692da084ddce38449205a6577370356af3bb289a",
+      "bytesAndCRCVerifiedAgainstSource": true
+    },
+    "packageTooling": "The 0.3.37 checkout uses the established 16-file source package. The separate Pro bundler stops because pro-common.ts is absent, and tests/scripting-package.cjs requires a generated build-manifest.json that this source package does not use. Those checks do not apply to this package format; the actual .scripting archive, CRCs, module syntax and imports were validated directly.",
+    "ci": "No Scripting workflow exists in .github/workflows; the only configured workflow publishes validated Android builds.",
+    "preview": "docs/previews/calendar-timeline-moving-header-0.3.38.png",
+    "physicalIOS": "Not tested. PNG uses synthetic events/weather and a desktop Canvas renderer with substitute fonts. Actual refresh cadence and pixel rasterization remain controlled by iOS/Scripting."
+  }
+}

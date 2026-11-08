@@ -26,8 +26,8 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
    last={x,y};
   }
   if(limit>5)assert(lowerSegments>0,'Today keeps its visible lower outline');
-  const points=outline.filter(c=>c.length===3),card=m.header.find(d=>d.selected);
-  assert(points.some(p=>p[2]===4&&p[1]>=card.x&&p[1]<=card.x+card.width),'Today card still outlined');
+  const points=outline.filter(c=>c.length===3),card=m.header.find(d=>d.selected),visibleCardLeft=Math.max(4,card.x+4),visibleCardRight=Math.min(1088,card.x+card.width-4);
+  if(visibleCardRight>visibleCardLeft)assert(points.some(p=>p[2]===4&&p[1]>=visibleCardLeft-1e-6&&p[1]<=visibleCardRight+1e-6),'Visible portion of the today card remains outlined');
   states.push({day,hour:now.getHours()+now.getMinutes()/60,midnightX:m.temporal.midnightX,bridgeY,commands:outline.length});
  }
  // Both sides of the header/body contact threshold in every weekday column.
@@ -37,6 +37,6 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
  for(const now of [new Date(2026,9,31,23,59),new Date(2026,10,1),new Date(2026,11,31,23,59),new Date(2027,0,1)]){
   const m=await render(host,options(now));assert(m.header.find(d=>d.selected).date===m.focusDate);
  }
- const report={version:'0.3.35-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around the centered card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
+ const report={version:'0.3.38-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around today’s moving card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
  if(process.env.FRAME_REPORT)fs.writeFileSync(process.env.FRAME_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

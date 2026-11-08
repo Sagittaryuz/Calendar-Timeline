@@ -51,8 +51,8 @@ async function main(){
       count++;
     }
   }
-  // The seven fixed slots retain their geometry; local dates move through them
-  // so the focused civil day remains in the fourth card.
+  // Nonrolling fixtures keep a fixed seven-slot layout; production rolling
+  // movement is verified separately against the active timeline's clock.
   let fixedSlots;
   for(let day=18;day<=24;day++)for(const hour of [3,20]){
     const now=new Date(2026,9,22,hour),focus=new Date(2026,9,day,15,18);
@@ -91,7 +91,7 @@ async function main(){
   }
   console.log('PASS: live agenda navigation respects all-day exclusive ends, true multi-day and overnight events.');
   assert(generated.includes('function drawEventArrivalGuides() {}'),'No event-arrival countdowns');
-  console.log('PASS: static engine fixtures preserve seven rolling chronological day frames centered on the selected local date; separate rolling suite covers active time; no event/end-of-day countdowns.');
+  console.log('PASS: nonrolling fixtures preserve seven chronological day frames; the active rolling suite checks timeline-synchronized movement; no event/end-of-day countdowns.');
   console.log(`PASS: ${count} complete original-engine renders; empty/populated, navigation, weekend, year boundary.`);
   console.log(`Replay validated; maximum ${maxOps} operations / ${maxLayers} Canvas layers in synthetic scenarios. Device memory/performance unverified.`);
   if(process.env.RASTER_BATCH==='1'){

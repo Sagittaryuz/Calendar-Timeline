@@ -36,7 +36,8 @@ function pathPoints(path){
     new Date(2026,11,31,23,59),new Date(2027,0,1,0)
   ];
   for(const now of dates){
-    const [before,model]=await Promise.all([previous(host,options(now)),render(host,options(now))]);
+    const structuralFixture=options(now,[],{rolling:false});
+    const [before,model]=await Promise.all([previous(host,structuralFixture),render(host,structuralFixture)]);
     const probe=model.strokeProbe,ops=flatten(model.image);
     assert.deepEqual(model.header.map(({x,y,width,height,selected})=>({x,y,width,height,selected})),
       before.header.map(({x,y,width,height,selected})=>({x,y,width,height,selected})),

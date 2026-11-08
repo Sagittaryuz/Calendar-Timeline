@@ -1,3 +1,17 @@
+## 0.3.38 — quadros acompanham o relógio da timeline
+
+Os sete quadros superiores agora deslizam horizontalmente junto com o mesmo eixo temporal da timeline. A borda interna esquerda do quadro de hoje acompanha a divisória da próxima meia-noite local: `x + 4 = temporal.midnightX` no canvas lógico. No canvas atual de 1092 px, isso move todos os quadros **45,5 px por hora**. A sequência continua sendo três dias anteriores, hoje na quarta posição e três dias seguintes; os rótulos só avançam na mudança da data civil local. A parte inferior da timeline continua com seu relógio e janela existentes, sem ser recentralizada.
+
+Os quadros que passam dos limites são cortados pela máscara arredondada externa já usada pelo `GraphView`; o motor preserva suas coordenadas completas e não substitui conteúdo por reticências. A moldura de hoje continua contínua, com **6 px**, acompanhando o quadro e a região de hoje. Divisórias e aros dos astros continuam em **8 px**. A posição respeita a duração temporal efetivamente usada na timeline, inclusive quando a próxima meia-noite fica além dos 1092 px durante a transição de horário de verão.
+
+A alteração preserva agenda, clima, tamanhos e pesos de fonte, alinhamentos por extremidade, curvas e gap entre quadros, blur, hitboxes e navegação. A atualização ao tocar na região do Calendário continua limitada a 1,2 s antes de abrir; o refresh normal continua sujeito ao agendamento do iOS. Assim, os quadros se movem quando o widget é renderizado novamente, não como animação contínua em tempo real na tela inicial.
+
+Validação sintética: 59 horários/estados de timeline e 12 cenas em `America/New_York`; o deslocamento dos sete quadros acompanha a timeline, com a borda de hoje a 4 px da divisória. Datas locais, meia-noite, mês/ano e ambos os limites DST foram verificados; a moldura permanece um único caminho conectado, com coordenadas recortadas ao canvas. Foram preservados o gap horizontal de 1,2287 px, 6 px da moldura e 8 px das divisórias/aros. Os testes usam dados artificiais e fontes substitutas; não houve teste físico em iPhone e o instante de redesenho continua sob controle do iOS.
+
+Prévia lado a lado (`0.3.37` estática / `0.3.38` móvel), com dados sintéticos e horários de 00:00 a 23:59: [`calendar-timeline-moving-header-0.3.38.png`](../docs/previews/calendar-timeline-moving-header-0.3.38.png). [Registro de causa, geometria e testes](../docs/moving-header-0.3.38.json).
+
+Atualize pelo [projeto Calendar Timeline na branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), sem apagar dados nem reinstalar.
+
 ## 0.3.37 — atualizar agenda ao tocar
 
 O toque na área do Calendário consulta novamente eventos e lembretes e solicita recarga ao iOS antes de abrir o Calendário. A consulta tem limite de 1,2 segundo; em falha ou demora, a navegação continua e o iOS decide quando redesenhar. O clima mantém seu cache. Reteste no iPhone é necessário.

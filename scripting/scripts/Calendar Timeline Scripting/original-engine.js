@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.11.02.2";
+const WIDGET_BUILD_VERSION = "2026.11.08.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -536,9 +536,8 @@ const header = [];
 for (let index = 0; index < TITLE_CARD_COUNT; index++) {
   const date = addDays(titleRangeStart(), index);
   const rect = titleDayCardRect(index);
-  const left = Math.max(0, rect.x), right = Math.min(CANVAS.width, rect.x + rect.width);
-  if (right > left) header.push({date: dateKey(date), label: shortWeekday(date),
-    x: left, y: rect.y, width: right-left, height: rect.height, selected: dateKey(date) === dateKey(focusDay)});
+  header.push({date: dateKey(date), label: shortWeekday(date),
+    x: rect.x, y: rect.y, width: rect.width, height: rect.height, selected: dateKey(date) === dateKey(focusDay)});
 }
 const legendHeight=legendTextHeight()+scaleVertical(8);
 const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeight/2);
@@ -4471,6 +4470,19 @@ function titleCardGap() {
   return TITLE_CARD_SPACING;
 }
 
+function titleCardRowOffset(cardWidth, cardGap) {
+  if (!rollingToday) return 0;
+  const staticTodayLeft =
+    CANVAS.marginX +
+    titleTodayCardIndex() * (cardWidth + cardGap);
+  const todayRegionRight =
+    CANVAS.plotLeft +
+    timeToX(addDays(startOfDay(windowStart), 1));
+  // The visible left edge of today's card follows the end of today's
+  // timeline segment. All seven cards inherit the same px/hour translation.
+  return todayRegionRight - WIDGET_CONTOUR.strokeInset - staticTodayLeft;
+}
+
 function titleDayCardRect(index) {
   const cardCount = TITLE_CARD_COUNT;
   const cardGap = titleCardGap();
@@ -4479,6 +4491,7 @@ function titleDayCardRect(index) {
   const cardWidth =
     (cardsRight - cardsLeft - cardGap * (cardCount - 1)) /
     cardCount;
+  const rowLeft = cardsLeft + titleCardRowOffset(cardWidth, cardGap);
 
   // A linha superior do dia atual é um traço centrado na borda,
   // então os demais quadros sobem metade da espessura para alinhar
@@ -4499,7 +4512,7 @@ function titleDayCardRect(index) {
       : TITLE_CARD_HEIGHT;
 
   return new Rect(
-    cardsLeft + index * (cardWidth + cardGap),
+    rowLeft + index * (cardWidth + cardGap),
     titleCardTop,
     cardWidth,
     titleCardHeight
@@ -5189,8 +5202,11 @@ function currentDayOutlinePath() {
     }
     return output;
   };
-  const header=clip(vertices,'y',bridgeY,true);
-  const body=right>inset?clip(clip(vertices,'y',bridgeY,false),'x',right,true):[];
+  const header=clip(clip(clip(vertices,'y',bridgeY,true),'x',inset,false),
+    'x',CANVAS.width-inset,true);
+  const body=right>inset
+    ?clip(clip(clip(vertices,'y',bridgeY,false),'x',right,true),'x',inset,false)
+    :[];
   const span=points=>{const xs=points.filter(p=>Math.abs(p.y-bridgeY)<epsilon).map(p=>p.x);return xs.length?[Math.min(...xs),Math.max(...xs)]:null};
   const headerSpan=span(header),bodySpan=span(body),path=new Path();
   const trace=(points,sharedSpan,isBody)=>{
@@ -5216,7 +5232,7 @@ function currentDayOutlinePath() {
   };
   // Remove the shared edge once, then bridge only a disjoint top seam.
   // The lower outline stays clipped to today, even after midnight's divider
-  // has passed to the left of the fixed header's lower-left shoulder.
+  // has passed to the left of the moving header card's lower-left shoulder.
   trace(header,bodySpan,false);trace(body,headerSpan,true);
   if(headerSpan&&Math.max(inset,right)<headerSpan[0]-epsilon){
     path.move(new Point(Math.max(inset,right),bridgeY));
