@@ -5,6 +5,18 @@ const raw=fs.readFileSync(path.join(dir,'original-engine.js'),'utf8');
 const compile=s=>new(Object.getPrototypeOf(async function(){}).constructor)('host','options',s.replace('export async function renderOriginal(host, options = {}) {','').replace(/}\s*$/,''));
 const probe=s=>compile(s.replace('return {temporal:',`return {test:{bridgeY:dayBoundaryMoonBorderTopY(),blur:shouldBlurFutureTimeline(),prepared:preparedItems,chosen:selectedItems,segments:preparedItems.map(i=>timelineBarSegments(i,Math.max(0,timeToX(i.start)),Math.min(timelineWidth(),timeToX(i.end))))},temporal:`));
 const flatten=image=>image.ops.flatMap(o=>o.image?.ops?[o,...flatten(o.image)]:[o]);
+function assertHeaderCoversEdges(header){
+ const gap=header[1].x-header[0].x-header[0].width;
+ for(const edge of [4,1088]){
+  const distance=header.some(card=>card.x<=edge&&card.x+card.width>=edge)?0:
+   Math.min(...header.flatMap(card=>[Math.abs(edge-card.x),Math.abs(edge-card.x-card.width)]));
+  assert(distance<=gap+1e-7,`Moving header reaches canvas edge ${edge} with at most its normal card gap`);
+ }
+ const visible=header.filter(card=>card.x+card.width>4&&card.x<1088);
+ assert(visible.length>0);assert.equal(visible[0].edgeAlignment,'right','First visible card aligns its paired lines at the right');
+ assert.equal(visible.at(-1).edgeAlignment,'left','Last visible card aligns its paired lines at the left');
+ for(const card of visible.slice(1,-1))assert.equal(card.edgeAlignment,'center','Interior visible cards stay centered');
+}
 async function fixture(){
  const d=await import(pathToFileURL(path.join(dir,'drawing.js')).href);
  const host={...d,DateFormatter:class{string(date){return String(date.getDate())}},Keychain:{contains:()=>false},FileManager:{local:()=>({documentsDirectory:()=>'/cache',joinPath:(a,b)=>a+'/'+b,fileExists:()=>false})},SFSymbol:{named:symbol=>({image:{symbol,size:{width:30,height:30}},applyFont(){}})}};
@@ -21,10 +33,10 @@ async function main(){
   for(const h of times){
    const now=new Date(+at(day)+h*3600000),o=options(now),model=await render(host,o),before=await old(host,o);
    assert.equal(model.windowStart,+new Date(now.setSeconds(0,0)));assert.equal(model.windowEnd-model.windowStart,86400000);assert.equal(model.nowMarker,null);
-   assert.equal(model.header.length,7,'All seven header/touch slots remain');assert.equal(model.header[3].date,model.focusDate,'Local today remains centered');assert.equal(model.header.filter(d=>d.selected).length,1);
-   assert(Math.abs(model.header[3].x+4-model.temporal.midnightX)<1e-7,'Today card’s visible left edge follows today’s timeline endpoint');
+   assert.equal(model.header.length,16,'The moving strip draws all dates needed to cover the viewport');assert.equal(model.header[8].date,model.focusDate,'Today keeps its temporal anchor at its natural moving position');assert.equal(model.header.filter(d=>d.selected).length,1);
+   assert(Math.abs(model.header[8].x+4-model.temporal.midnightX)<1e-7,'Today card’s visible left edge follows today’s timeline endpoint');assertHeaderCoversEdges(model.header);
    for(let i=0;i<6;i++)assert(Math.abs(model.header[i+1].x-model.header[i].x-model.header[i].width-1.2287)<1e-7,'Card width and approved gap stay constant while the ribbon moves');
-   const headers=flatten(model.image).filter(o=>o.type==='header');assert.equal(headers.length,7,'Seven visual headers retained; typography checked by dedicated active suite');
+   const headers=flatten(model.image).filter(o=>o.type==='header'),expectedHeaders=model.header.filter(card=>(card.x+card.width>4&&card.x<1088)||card.selected).length;assert.equal(headers.length,expectedHeaders,'The full 16-date range is modeled; only visible cards and today’s offscreen anchor are drawn');
    const ops=flatten(model.image);assert(!ops.some(o=>o.type==='fillRect'&&o.state.fill?.hex==='30D158'&&o.rect.height>300));
    assert(!model.test.blur,'Empty future remains sharp');
    if(h>0)assert(ops.some(o=>o.type==='text'&&o.text===['DOM','SEG','TER','QUA','QUI','SEX','SAB'][(now.getDay()+1)%7]),'Midnight weekday circle label restored');
@@ -38,8 +50,8 @@ async function main(){
  // The header ribbon uses the lower timeline's same px/hour time basis.
  const a=await render(host,options(at(26,10))),b=await render(host,options(at(26,11)));
  assert.equal(a.temporal.midnightX-b.temporal.midnightX,1092/24);assert.deepEqual(a.header.map(d=>d.date),b.header.map(d=>d.date),'Civil-day labels remain stable intraday');
- for(let i=0;i<7;i++){assert.equal(a.header[i].width,b.header[i].width);assert(Math.abs(a.header[i].x-b.header[i].x-1092/24)<1e-7,'Every day card moves left with the timeline');}
- assert(Math.abs(a.header[3].x+4-a.temporal.midnightX)<1e-7);assert(Math.abs(b.header[3].x+4-b.temporal.midnightX)<1e-7);
+ for(let i=0;i<a.header.length;i++){assert.equal(a.header[i].width,b.header[i].width);assert(Math.abs(a.header[i].x-b.header[i].x-1092/24)<1e-7,'Every day card moves left with the timeline');}assertHeaderCoversEdges(a.header);assertHeaderCoversEdges(b.header);
+ assert(Math.abs(a.header[8].x+4-a.temporal.midnightX)<1e-7);assert(Math.abs(b.header[8].x+4-b.temporal.midnightX)<1e-7);
  const other=await render(host,options(at(26,11),[],{focusDate:+at(27)}));assert(!other.temporal.rolling);assert.equal(other.windowStart,+at(27));assert.equal(other.windowEnd,+at(28));
  const event=item('event',at(26,23),at(27,2));
  const pending=item('reminder',at(26,8),at(27),{sourceIsAllDay:false});
@@ -62,7 +74,7 @@ async function main(){
  for(const date of [new Date(2026,11,31,23,59),new Date(2027,0,1),new Date(2026,10,1),new Date(2026,2,8),new Date(2026,10,1,1,59),new Date(2026,10,1,2,1)]){
   const m=await render(host,options(date));assert.equal(m.windowEnd-m.windowStart,86400000);assert(m.temporal.midnightX>=0&&m.temporal.midnightX<=1092*25/24);scenes++;
  }
- const report={scenes,shiftPerHour:1092/24,header:'seven chronological slots with three prior/three future local civil days; today card visible edge follows the lower timeline’s local-midnight boundary and all cards translate 45.5 logical px/hour; labels remain stable intraday',rules:'production follows now; date labels advance on local date change; internal static fixtures retain civil day; historical noon/06 carryover on drawing copies; future-only blur; no green now line',states,physicalIOS:'not tested'};
+ const report={scenes,shiftPerHour:1092/24,header:'16 chronological local civil dates: eight prior, today, seven future; today follows the lower timeline boundary and all cards translate 45.5 logical px/hour; the visible strip reaches both canvas edges while today may naturally be outside the viewport',rules:'production follows now; labels advance on local date change; internal static fixtures retain seven-day civil range; historical noon/06 carryover on drawing copies; future-only blur; no green now line',states,physicalIOS:'not tested'};
  if(process.env.ROLLING_REPORT)fs.writeFileSync(process.env.ROLLING_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 }
 if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1});

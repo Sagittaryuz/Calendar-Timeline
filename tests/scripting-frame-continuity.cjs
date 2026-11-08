@@ -9,7 +9,7 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
 const render=inject(raw),before=inject(old);let probe;host.frameProbe=p=>probe=p;const states=[];let overlaps=0,gapsFixed=0;
  async function check(now){
   const o=options(now),b=await before(host,o),prior=probe,m=await render(host,o),p=probe;
-  for(const key of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(m[key],b[key]);assert.equal(m.temporal.midnightX,b.temporal.midnightX);assert.equal(m.header[3].date,m.focusDate);
+  for(const key of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(m[key],b[key]);assert.equal(m.temporal.midnightX,b.temporal.midnightX);assert.equal(m.header.find(d=>d.selected).date,m.focusDate);
   assert.equal(flatten(m.image).filter(isFrame).length,1,'Same single white stroke');
   const overlap=p.headerSpan&&p.bodySpan?Math.min(p.headerSpan[1],p.bodySpan[1])-Math.max(p.headerSpan[0],p.bodySpan[0]):null;
   if(overlap!==null&&overlap>=-1e-7)overlaps++;
@@ -32,6 +32,6 @@ const render=inject(raw),before=inject(old);let probe;host.frameProbe=p=>probe=p
  }
  for(const date of ['2026-11-01T00:00:00','2026-12-31T23:59:00','2027-01-01T00:00:00'])await check(new Date(date));
  assert(overlaps>0,'The frame continuously unites the moving today card and timeline through their shared edge');
- const report={version:'0.3.38-preview',scenes:states.length,joinedScenes:overlaps,gapsBridged:gapsFixed,regression:'today’s fourth card follows the timeline boundary; its outline stays one clipped path as both regions translate',change:'header and lower today-frame spans overlap at their seam; at most one connector is emitted, with no duplicate stroke',physicalIOS:'synthetic geometry only; no physical iPhone execution',states};
+ const report={version:'0.3.39-preview',scenes:states.length,joinedScenes:overlaps,gapsBridged:gapsFixed,regression:'today’s ninth chronological card follows the timeline boundary; its outline stays one clipped path as both regions translate',change:'header and lower today-frame spans overlap at their seam; at most one connector is emitted, with no duplicate stroke',physicalIOS:'synthetic geometry only; no physical iPhone execution',states};
  if(process.env.FRAME_CONTINUITY_REPORT)fs.writeFileSync(process.env.FRAME_CONTINUITY_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

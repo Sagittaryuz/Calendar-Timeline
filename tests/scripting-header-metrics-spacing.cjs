@@ -10,14 +10,14 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
  const dates=['2027-01-01','2026-11-11','2026-10-28','2026-12-31','2026-11-01','2026-10-11','2026-06-28','2027-01-31','2026-08-01','2026-07-11','2026-11-28','2026-10-31'];
  const examples=[];let scenes=0,headers=0,spaceError=0,anchorError=0;const spaces=new Set();
  for(const date of dates)for(const hour of [12,23]){
-  const now=new Date(date+`T${hour}:00:00`),o=options(now);const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-3);const key=t=>`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;o.hourlyWeather.daily=Object.fromEntries(Array.from({length:7},(_,i)=>{const t=new Date(start);t.setDate(t.getDate()+i);return [key(t),{minimum:20,maximum:30,symbol:'d0'}]}));
-  const m=await render(host,o),old=await prior(host,o);for(const k of ['thermalBand','hourLegend','panel','windowStart','windowEnd'])assert.deepEqual(m[k],old[k]);assert.equal(m.temporal.midnightX,old.temporal.midnightX);assert.equal(m.header.length,7);assert.equal(m.header[3].date,m.focusDate);assert.equal(m.header.filter(h=>h.selected).length,1);
+  const now=new Date(date+`T${hour}:00:00`),o=options(now);const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-8);const key=t=>`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;o.hourlyWeather.daily=Object.fromEntries(Array.from({length:16},(_,i)=>{const t=new Date(start);t.setDate(t.getDate()+i);return [key(t),{minimum:20,maximum:30,symbol:'d0'}]}));
+  const m=await render(host,o),old=await prior(host,o);for(const k of ['thermalBand','hourLegend','panel','windowStart','windowEnd'])assert.deepEqual(m[k],old[k]);assert.equal(m.temporal.midnightX,old.temporal.midnightX);assert.equal(m.header.length,16);assert.equal(m.header[8].date,m.focusDate);assert.equal(m.header.filter(h=>h.selected).length,1);
   for(const h of flatten(m.image).filter(o=>o.type==='header')){
    const p=d.headerPlan(ctx,h);const withoutDisk=d.headerPlan(ctx,{...h,isToday:false});for(const name of ['word','number','weather','spacing'])assert.deepEqual(p[name],withoutDisk[name],'Disk never changes text geometry or advance');
    const error=Math.abs(p.number.x-p.word.x-p.spacing.wordAdvance-p.spacing.spaceAdvance);spaceError=Math.max(spaceError,error);spaces.add(p.spacing.spaceAdvance.toFixed(9));assert(error<1e-7);
    const a=p.title.bounds,b=p.weather.bounds;let edge;
-   if(h.slotIndex===0){edge=Math.abs(a.right-b.right);assert.equal(p.alignment,'right')}
-   else if(h.slotIndex===6){edge=Math.abs(a.left-b.left);assert.equal(p.alignment,'left')}
+   if(h.edgeAlignment==='right'){edge=Math.abs(a.right-b.right);assert.equal(p.alignment,'right')}
+   else if(h.edgeAlignment==='left'){edge=Math.abs(a.left-b.left);assert.equal(p.alignment,'left')}
    else{edge=Math.max(Math.abs((a.left+a.right)/2-h.frame.x-h.frame.width/2),Math.abs((b.left+b.right)/2-h.frame.x-h.frame.width/2));assert.equal(p.alignment,'center')}
    assert(Math.abs((p.block.left+p.block.right)/2-h.frame.x-h.frame.width/2)<1e-7,'The text block is centered in the card without weekday compensation');
    anchorError=Math.max(anchorError,edge);assert(edge<1e-7);
@@ -30,6 +30,6 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
  for(const [name,top,alpha,fontAscent,expected]of [['web-top',[-6,27],[21,0],27,16.5],['uikit-top-box',[0,35],[0,35],27.5,17.5],['uikit-baseline',[21,0],[21,0],27.5,17]]){
   const mock={font:null,textBaseline:'top',measureText:text=>({width:text.length*17.46,actualBoundingBoxAscent:(mock.textBaseline==='alphabetic'?alpha:top)[0],actualBoundingBoxDescent:(mock.textBaseline==='alphabetic'?alpha:top)[1],fontBoundingBoxAscent:fontAscent})};const b=d.headerInkBounds(mock,h.number);assert.equal((b.top+b.bottom)/2,expected);assert.notEqual(expected,29/2,'Old nominal line-box center would fail');modes.push({name,expectedCenter:expected,mode:b.metricMode});
  }
- const report={version:'0.3.34-preview',scenes,headers,removedDisk:true,centeringRecomputed:true,spaceError,anchorError,spaceAdvance:[...spaces],alignment:'leftmost slot RIGHT / rightmost slot LEFT / interior slots CENTER; no weekday offsets',weatherSpacing:'regular 40-unit spacing restored; fonts/values/icons retained',metricsModes:modes,examples,physicalIOS:'not tested; local substitute glyph measurements, native convention models; actual host measurements are used at runtime'};
+ const report={version:'0.3.39-preview',scenes,headers,removedDisk:true,centeringRecomputed:true,spaceError,anchorError,spaceAdvance:[...spaces],alignment:'first visible RIGHT / last visible LEFT / interior visible cards CENTER; no weekday offsets',weatherSpacing:'regular 40-unit spacing restored; fonts/values/icons retained',metricsModes:modes,examples,physicalIOS:'not tested; local substitute glyph measurements, native convention models; actual host measurements are used at runtime'};
  if(process.env.ALIGN_REPORT)fs.writeFileSync(process.env.ALIGN_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,examples:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});

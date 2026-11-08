@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.11.08.1";
+const WIDGET_BUILD_VERSION = "2026.11.08.2";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -374,14 +374,31 @@ function drawTightTitleText(ctx, text, x, y, size) {
 }
 
 const TITLE_CARD_COUNT = 7;
+// Keep the existing seven-card size while rendering enough civil dates to
+// cover the viewport as the title row moves with the lower timeline.
+const MOVING_HEADER_PAST_DAYS = 8;
+const MOVING_HEADER_FUTURE_DAYS = 7;
+const MOVING_HEADER_CARD_COUNT =
+  MOVING_HEADER_PAST_DAYS + 1 + MOVING_HEADER_FUTURE_DAYS;
 const TODAY_CARD_SOFT_CORNER_RADIUS = scaleVertical(6);
 
 function titleTodayCardIndex() {
-  return Math.floor(TITLE_CARD_COUNT / 2);
+  return rollingToday
+    ? MOVING_HEADER_PAST_DAYS
+    : Math.floor(TITLE_CARD_COUNT / 2);
+}
+
+function titleHeaderCardCount() {
+  return rollingToday ? MOVING_HEADER_CARD_COUNT : TITLE_CARD_COUNT;
+}
+
+function titleScheduleRangeStart() {
+  return addDays(focusDay, -Math.floor(TITLE_CARD_COUNT / 2));
 }
 
 function titleRangeStart() {
-  // Three prior local calendar days; the header is not tied to Sunday.
+  // Use local civil dates so the selected card remains anchored to today's
+  // position while the complete moving strip covers both viewport edges.
   return addDays(focusDay, -titleTodayCardIndex());
 }
 
@@ -533,11 +550,13 @@ const widget = options.prepareOnly ? {backgroundImage:null} : isAccessoryFamily(
 
 
 const header = [];
-for (let index = 0; index < TITLE_CARD_COUNT; index++) {
+for (let index = 0; index < titleHeaderCardCount(); index++) {
   const date = addDays(titleRangeStart(), index);
   const rect = titleDayCardRect(index);
   header.push({date: dateKey(date), label: shortWeekday(date),
-    x: rect.x, y: rect.y, width: rect.width, height: rect.height, selected: dateKey(date) === dateKey(focusDay)});
+    x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+    edgeAlignment: titleHeaderEdgeAlignment(rect),
+    selected: dateKey(date) === dateKey(focusDay)});
 }
 const legendHeight=legendTextHeight()+scaleVertical(8);
 const legendY=Math.max(0,CANVAS.timelineTop+dayChangeLegendCenterY()-legendHeight/2);
@@ -572,9 +591,9 @@ async function loadLiveWindow() {
     // nativos de acesso ao Calendário e aos Lembretes.
     // Lembretes sem horário podem chegar do EventKit como 00:00 UTC. Em
     // fusos negativos, isso aparece localmente na noite do dia anterior.
-    // Os sete cartões mostram três dias locais antes/depois de hoje. A consulta
-    // precisa alcançar toda essa faixa, embora a timeline inferior mantenha 24 h.
-    const titleScheduleStart = titleRangeStart();
+    // Keep local EventKit reads bounded to the existing seven-day data span;
+    // extra offscreen title cards do not widen the schedule query.
+    const titleScheduleStart = titleScheduleRangeStart();
     const titleScheduleEnd = addDays(
       titleScheduleStart,
       TITLE_CARD_COUNT
@@ -1637,7 +1656,7 @@ async function loadOpenMeteoWeather(location) {
     "hourly=temperature_2m,precipitation_probability,precipitation,cloud_cover,weather_code,is_day",
     "daily=temperature_2m_min,temperature_2m_max,weather_code",
     `forecast_days=${forecastDays}`,
-    `past_days=${TITLE_CARD_COUNT - 1}`,
+    `past_days=${MOVING_HEADER_PAST_DAYS}`,
     "temperature_unit=celsius",
     "precipitation_unit=mm",
     `timezone=${encodeURIComponent(timezone)}`,
@@ -2041,7 +2060,7 @@ function mergeHourlyWeatherHours(...hourSets) {
   // Mantém o dia anterior para preservar extremos que ainda possam aparecer
   // na faixa dos sete cartões e limita o cache ao período necessário para esses
   // cartões e para a janela máxima de 96 horas.
-  const retentionStart = addDays(startOfDay(windowStart), -TITLE_CARD_COUNT).getTime();
+  const retentionStart = addDays(startOfDay(windowStart), -MOVING_HEADER_PAST_DAYS).getTime();
   const retentionEnd = new Date(
     weatherDataRequiredEnd().getTime() + 2 * 24 * 60 * 60 * 1000
   ).getTime();
@@ -2333,7 +2352,7 @@ async function loadAutomaticHolidays(location) {
 
   const titleCardsEnd = addDays(
     startOfDay(windowStart),
-    TITLE_CARD_COUNT
+    titleHeaderCardCount()
   );
   const coveredEnd = new Date(
     Math.max(windowEnd.getTime(), titleCardsEnd.getTime()) - 1
@@ -4479,8 +4498,20 @@ function titleCardRowOffset(cardWidth, cardGap) {
     CANVAS.plotLeft +
     timeToX(addDays(startOfDay(windowStart), 1));
   // The visible left edge of today's card follows the end of today's
-  // timeline segment. All seven cards inherit the same px/hour translation.
+  // timeline segment. Every title card inherits the same px/hour translation.
   return todayRegionRight - WIDGET_CONTOUR.strokeInset - staticTodayLeft;
+}
+
+function titleHeaderEdgeAlignment(card) {
+  const left = WIDGET_CONTOUR.strokeInset;
+  const right = CANVAS.width - WIDGET_CONTOUR.strokeInset;
+  const visibleCards = Array.from({length:titleHeaderCardCount()},(_,index)=>
+    titleDayCardRect(index)
+  ).filter(rect=>rect.x+rect.width>left&&rect.x<right);
+  if (!visibleCards.length) return 'center';
+  if (Math.abs(card.x-visibleCards[0].x)<1e-8) return 'right';
+  if (Math.abs(card.x-visibleCards.at(-1).x)<1e-8) return 'left';
+  return 'center';
 }
 
 function titleDayCardRect(index) {
@@ -4522,16 +4553,21 @@ function titleDayCardRect(index) {
 function drawDatePanel(ctx, holidayDates) {
   // A área do título agora é uma faixa compacta de previsão. O restante
   // do desenho continua começando no mesmo ponto e não sofre deslocamento.
-  const cardCount = TITLE_CARD_COUNT;
+  const cardCount = titleHeaderCardCount();
   const firstDay = titleRangeStart();
 
   for (let index = 0; index < cardCount; index++) {
     const date = addDays(firstDay, index);
+    const card = titleDayCardRect(index);
+    const isSelected = index === titleTodayCardIndex();
+    const intersectsVisibleWidth = card.x + card.width > WIDGET_CONTOUR.strokeInset &&
+      card.x < CANVAS.width - WIDGET_CONTOUR.strokeInset;
+    if (!intersectsVisibleWidth && !isSelected) continue;
     drawTitleDayCard(
       ctx,
       date,
-      titleDayCardRect(index),
-      index === titleTodayCardIndex(),
+      card,
+      isSelected,
       index === cardCount - 1,
       index
     );
@@ -5456,9 +5492,10 @@ function drawTitleDayCard(ctx,date,card,isSelected,isLast,slotIndex) {
   ink.setTextColor(new Color(SETTINGS.minimumTemperatureColor));ink.setTextAlignedLeft();
   ink.drawTextInRect(fields.minimum,new Rect(0,20,fields.minWidth,80));
   const weather=ink.getImage();ink.ops=[];
-  shared.icons.push(headerVectorBounds(weather.ops.filter(o=>o.type!=='text')));
+  shared.icons[slotIndex]=headerVectorBounds(weather.ops.filter(o=>o.type!=='text'));
   ctx.op('header',{rect:card,frame:{x:card.x,y:WIDGET_CONTOUR.strokeInset-DAY_BOUNDARY_LAYOUT_INSET/2,width:card.width,height:TITLE_CARD_HEIGHT},
-    weekday:date.getDay(),slotIndex,title,word:weekday,number,isToday,twoRows:true,weather,shared});
+    weekday:date.getDay(),slotIndex,edgeAlignment:titleHeaderEdgeAlignment(card),
+    title,word:weekday,number,isToday,twoRows:true,weather,shared});
   if(!isSelected){
     const image={...ctx.getImage(),outerClip:dayCardNeighbourClip()};
     parent.drawImageInRect(image,new Rect(0,0,CANVAS.width,CANVAS.height));
@@ -13237,7 +13274,7 @@ function weekHeaderFields(date) {
 }
 function weekHeaderStyle() {
   if(weekHeaderStyle.cache)return weekHeaderStyle.cache;
-  const days=Array.from({length:TITLE_CARD_COUNT},(_,i)=>weekHeaderFields(addDays(titleRangeStart(),i)));
+  const days=Array.from({length:titleHeaderCardCount()},(_,i)=>weekHeaderFields(addDays(titleRangeStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
   return weekHeaderStyle.cache={titleSize:38,temperatureSize,
     headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};

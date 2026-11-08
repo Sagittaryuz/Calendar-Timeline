@@ -1,0 +1,71 @@
+{
+  "version": "0.3.39",
+  "base": {
+    "branch": "scripting",
+    "version": "0.3.38",
+    "commit": "dc953dab66091f8f0d0012adced4b223954581f8"
+  },
+  "cause": "0.3.38 translated only seven header dates (three before, today, three after) while the row moved 45.5 logical px/hour. At 00:00 the first card began near x=619, leaving about 615 px blank at the left; at 06:00 it began near x=346, leaving about 342 px; at 18:00 the drawn strip ended near x=893, leaving about 195 px at the right; at 23:59 it ended near x=621, leaving about 467 px. The blank space came from missing chronological cards, not a change in card geometry or timeline scale.",
+  "solution": {
+    "file": "scripting/scripts/Calendar Timeline Scripting/original-engine.js",
+    "range": "Model 16 local civil dates: eight before today, today, and seven after. Paint only cards intersecting the visible canvas interior, while retaining today in the model as the temporal anchor when it is fully offscreen.",
+    "cardGeometry": "Keep the original seven-card width/gap formula (154.9468 px card, 1.2287 px gap on the 1092 px logical canvas). No horizontal rescaling or re-centering.",
+    "anchorAndSpeed": "The selected card keeps x + 4 = temporal.midnightX. All cards use the existing lower timeline clock and move 45.5 logical px/hour. Date labels advance through addDays local-civil arithmetic at local midnight.",
+    "alignment": "Only the first visible card aligns its two rows to the right and the last visible card aligns to the left; interior visible cards stay centered. This is based on viewport position, not weekday.",
+    "data": "Keep EventKit reads within their existing seven-day schedule span. Increase Open-Meteo past_days and weather-hour retention from six/seven to eight preceding days so the newly visible header dates can use cached/provider weather. Extend automatic-holiday year coverage to the expanded header range.",
+    "clipping": "Canvas coordinates remain complete. Offscreen cards are not painted; cards crossing the widget contour use the existing outer clipping path. The today frame remains one continuous six-pixel path, with eight-pixel dividers/rings unchanged."
+  },
+  "sampleCoordinates": {
+    "timezone": "Etc/UTC",
+    "date": "2026-10-27",
+    "canvasWidth": 1092,
+    "todayCardX": {
+      "00:00": 1088,
+      "06:00": 815,
+      "12:00": 542,
+      "18:00": 269,
+      "23:59": -3.2417
+    },
+    "visibleDates": [
+      { "localTime": "00:00", "first": "2026-10-20", "last": "2026-10-26", "todayOffscreen": true },
+      { "localTime": "06:00", "first": "2026-10-21", "last": "2026-10-28", "todayOffscreen": false },
+      { "localTime": "12:00", "first": "2026-10-23", "last": "2026-10-30", "todayOffscreen": false },
+      { "localTime": "18:00", "first": "2026-10-25", "last": "2026-11-01", "todayOffscreen": false },
+      { "localTime": "23:59", "first": "2026-10-27", "last": "2026-11-02", "todayPartiallyOffscreen": true }
+    ],
+    "dstMidnight": {
+      "springForwardHours": 23,
+      "springForwardMidnightX": 1046.5,
+      "fallBackHours": 25,
+      "fallBackMidnightX": 1137.5,
+      "pastCardsCoverFallBackBoundary": true
+    }
+  },
+  "preserved": {
+    "timeline": "Lower time axis, 24-hour window, bars, charts, hitboxes, and clipping remain unchanged.",
+    "todayFrame": "6 px; same continuous path and anchor.",
+    "dividersAndAstroRings": "8 px.",
+    "cardGap": 1.2287,
+    "touch": "0.3.37 bounded calendar refresh/navigation and weathergraph:// route remain intact; refresh by other touches remains disabled.",
+    "dataAndBridge": "Local agenda, weather cache, Bridge removal, and user data are preserved; no migration or deletion."
+  },
+  "validation": {
+    "fullSuite": "npm run test:scripting passed (exit 0), including navigation, hit areas, frames, header typography, curves, and Bridge-local-only regressions.",
+    "build": "npm run build:scripting and npm run check:scripting passed; all 11 Scripting modules compiled for syntax/import validation. Native iOS types remain unverified.",
+    "rolling": "59 scenes across seven dates; all 16 dates retain 45.5 px/hour motion, edge gaps are zero in the five requested preview states, and first/last visible card alignment is correct.",
+    "localDatesAndDST": "12 America/New_York scenes, four local-midnight transitions, spring-forward and fall-back dates, month/year rollover, and 23:59-to-00:00 verified.",
+    "headerAndScale": "96 synthetic scenes; 768 visible/current-anchor header operations and 5,376 scale checks; minimum substitute-font safety margin 8.91 px.",
+    "frame": "59 scenes; 51 shared header/timeline joins with a single clipped frame path.",
+    "adjacentCurves": "63 scenes and 5,466 samples; 1.2287 px gap error at most 1.97e-13.",
+    "package": {
+      "file": "work/releases/Calendar-Timeline-Scripting-0.3.39.scripting",
+      "entries": 16,
+      "bytes": 128950,
+      "sha256": "d67223534ff07b925ec2c67a4601b8425c0963147e7b8fb653e2120ebac93a8c",
+      "bytesAndCRCVerifiedAgainstSource": true
+    },
+    "ci": "No Scripting workflow exists in .github/workflows; the configured workflow publishes validated Android builds only.",
+    "preview": "docs/previews/calendar-timeline-moving-header-0.3.39.png",
+    "physicalIOS": "Not tested. Preview/test renderer uses synthetic agenda/weather and substitute desktop fonts; actual rasterization and refresh cadence remain controlled by iOS/Scripting."
+  }
+}

@@ -1,3 +1,13 @@
+## 0.3.39 — faixa superior contínua nas bordas
+
+A faixa superior agora modela 16 dias em sequência local: oito anteriores, hoje e sete seguintes. O motor pinta os cartões que cruzam o viewport e mantém hoje como referência mesmo quando está fora da tela. A largura e o vão de cada cartão continuam calculados com a geometria aprovada de sete cartões. A causa do vazio era mover somente sete datas fixas junto com a timeline. Às 00:00 e 23:59 a âncora temporal coloca o cartão de hoje na borda ou parcialmente fora da tela; a correção mantém essa âncora, e os dias cronológicos vizinhos preenchem a região visível.
+
+Todos os cartões usam o mesmo deslocamento de **45,5 px lógicos por hora**, o mesmo clipping externo e a mesma moldura contínua do dia atual. A fileira é gerada com aritmética de dias civis locais, inclusive na virada de data/DST. A primeira carta que aparece à esquerda alinha as duas linhas pela direita; a última visível alinha pela esquerda; as cartas internas permanecem centralizadas. A consulta local de eventos/lembretes fica no intervalo já existente. A solicitação Open-Meteo passa a incluir oito dias anteriores para acompanhar os cartões extras; o horizonte futuro, a timeline inferior e seus dados/layout não mudam.
+
+Validação sintética: os cinco horários pedidos (00:00, 06:00, 12:00, 18:00 e 23:59) cobrem ambas as bordas com no máximo o intervalo normal entre cartões. Foram testadas datas locais, virada de dia/mês/ano, horário de verão de primavera e outono, posição e velocidade da faixa, continuidade da moldura, curvas/gap, alinhamento das linhas, charts, hitboxes e navegação. [Comparação visual antes/depois com dados artificiais](../docs/previews/calendar-timeline-moving-header-0.3.39.png) e [registro completo](../docs/moving-header-0.3.39.json). A fonte desktop e o renderizador Canvas são aproximações: não houve teste físico no iPhone; o iOS decide quando renderizar novamente.
+
+Atualize pelo [projeto Calendar Timeline na branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando os dados existentes.
+
 ## 0.3.38 — quadros acompanham o relógio da timeline
 
 Os sete quadros superiores agora deslizam horizontalmente junto com o mesmo eixo temporal da timeline. A borda interna esquerda do quadro de hoje acompanha a divisória da próxima meia-noite local: `x + 4 = temporal.midnightX` no canvas lógico. No canvas atual de 1092 px, isso move todos os quadros **45,5 px por hora**. A sequência continua sendo três dias anteriores, hoje na quarta posição e três dias seguintes; os rótulos só avançam na mudança da data civil local. A parte inferior da timeline continua com seu relógio e janela existentes, sem ser recentralizada.

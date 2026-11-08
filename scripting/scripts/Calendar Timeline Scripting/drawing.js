@@ -197,7 +197,7 @@ export function segments(image,viewport={x:0,y:0,width:image.size.width,height:i
 
 function unionHeaderBounds(boxes){return {left:Math.min(...boxes.map(b=>b.left)),right:Math.max(...boxes.map(b=>b.right)),top:Math.min(...boxes.map(b=>b.top)),bottom:Math.max(...boxes.map(b=>b.bottom))};}
 function headerSlotIndex(op){return Number.isInteger(op.slotIndex)?op.slotIndex:op.weekday;}
-function headerAlignment(op){const index=headerSlotIndex(op);return index===0?'right':index===6?'left':'center';}
+function headerAlignment(op){if(op.edgeAlignment==='right'||op.edgeAlignment==='left'||op.edgeAlignment==='center')return op.edgeAlignment;const index=headerSlotIndex(op);return index===0?'right':index===6?'left':'center';}
 const headerMeasureCache=new WeakMap();
 export function headerTextBounds(ctx,op,text=op.text,cache){
   const font=op.state.font;ctx.font=canvasFont(font);ctx.textAlign='left';ctx.textBaseline='top';
@@ -276,7 +276,7 @@ function twoRowHeaderPlan(ctx,op){
   const rowHeight=size*(s.diskScale??1.375)+(s.diskPadding??1.5),textY=(rowHeight-size)/2;
   const title={left:Math.min(word.left,number.left+numberX),right:Math.max(word.right,number.right+numberX),top:textY,bottom:textY+size};
   const temperature=op.weather.ops.find(o=>o.type==='text');
-  const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons]);
+  const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons.filter(Boolean)]);
   const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2,alignment=headerAlignment(op);
   // Only the two spatial edge slots use internal edge alignment; every
   // weekday uses its real date for content and color, not for layout.

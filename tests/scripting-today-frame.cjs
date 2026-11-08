@@ -11,7 +11,7 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
   const now=new Date(2026,9,day,0,Math.round(hour*60)),midnight=new Date(2026,9,day+1),start=new Date(2026,9,day,8);
   const items=[{kind:'event',identifier:'test',title:'SYNTHETIC EVENT',start,end:new Date(+midnight+7200000),color:'#FF9500',isAllDay:false}];
   const o=options(now,items),m=await render(host,o),b=await before(host,o);
-  for(const key of ['hourLegend','thermalBand','windowStart','windowEnd','panel'])assert.deepEqual(m[key],b[key],key+' unchanged');assert.equal(m.temporal.midnightX,b.temporal.midnightX,'Timeline remains anchored to the existing clock basis');assert.equal(m.header[3].date,m.focusDate,'Today is fixed in the center card');
+  for(const key of ['hourLegend','thermalBand','windowStart','windowEnd','panel'])assert.deepEqual(m[key],b[key],key+' unchanged');assert.equal(m.temporal.midnightX,b.temporal.midnightX,'Timeline remains anchored to the existing clock basis');assert.equal(m.header.find(d=>d.selected).date,m.focusDate,'Today retains its moving temporal anchor');
   const {bridgeY,outline}=m.frameProbe,limit=Math.min(1088,m.temporal.midnightX),strokes=flatten(m.image).filter(isFrame);assert.equal(strokes.length,1,'One white outline stroke');
   let last,lowerSegments=0;
   for(const [op,x,y]of outline){
@@ -37,6 +37,6 @@ const isFrame=o=>o.type==='strokePath'&&o.state.stroke?.hex==='FFFFFF'&&o.state.
  for(const now of [new Date(2026,9,31,23,59),new Date(2026,10,1),new Date(2026,11,31,23,59),new Date(2027,0,1)]){
   const m=await render(host,options(now));assert(m.header.find(d=>d.selected).date===m.focusDate);
  }
- const report={version:'0.3.38-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around today’s moving card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
+ const report={version:'0.3.39-preview',populatedComparisons:states.length,additionalColumnPassages:77,midnightAndYearCases:4,unchanged:'timeline time basis, charts, hour/temperature regions and touch geometry are unchanged; white frame remains one path around today’s moving card and moving today region',nativeIOS:'not tested; synthetic Canvas/font substitution',states};
  if(process.env.FRAME_REPORT)fs.writeFileSync(process.env.FRAME_REPORT,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({...report,states:undefined}));
 })().catch(e=>{console.error(e);process.exitCode=1});
