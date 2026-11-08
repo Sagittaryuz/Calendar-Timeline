@@ -34,7 +34,7 @@ async function main(){
    const now=new Date(+at(day)+h*3600000),o=options(now),model=await render(host,o),before=await old(host,o);
    assert.equal(model.windowStart,+new Date(now.setSeconds(0,0)));assert.equal(model.windowEnd-model.windowStart,86400000);assert.equal(model.nowMarker,null);
    assert.equal(model.header.length,16,'The moving strip draws all dates needed to cover the viewport');assert.equal(model.header[8].date,model.focusDate,'Today keeps its temporal anchor at its natural moving position');assert.equal(model.header.filter(d=>d.selected).length,1);
-   assert(Math.abs(model.header[8].x+4-model.temporal.midnightX)<1e-7,'Today card’s visible left edge follows today’s timeline endpoint');assertHeaderCoversEdges(model.header);
+   assert(Math.abs(model.header[8].x+model.header[8].width-4-model.temporal.midnightX)<1e-7,'Today card’s rendered right frame edge follows the day-change line');assertHeaderCoversEdges(model.header);
    for(let i=0;i<6;i++)assert(Math.abs(model.header[i+1].x-model.header[i].x-model.header[i].width-1.2287)<1e-7,'Card width and approved gap stay constant while the ribbon moves');
    const headers=flatten(model.image).filter(o=>o.type==='header'),expectedHeaders=model.header.filter(card=>(card.x+card.width>4&&card.x<1088)||card.selected).length;assert.equal(headers.length,expectedHeaders,'The full 16-date range is modeled; only visible cards and today’s offscreen anchor are drawn');
    const ops=flatten(model.image);assert(!ops.some(o=>o.type==='fillRect'&&o.state.fill?.hex==='30D158'&&o.rect.height>300));
@@ -51,7 +51,7 @@ async function main(){
  const a=await render(host,options(at(26,10))),b=await render(host,options(at(26,11)));
  assert.equal(a.temporal.midnightX-b.temporal.midnightX,1092/24);assert.deepEqual(a.header.map(d=>d.date),b.header.map(d=>d.date),'Civil-day labels remain stable intraday');
  for(let i=0;i<a.header.length;i++){assert.equal(a.header[i].width,b.header[i].width);assert(Math.abs(a.header[i].x-b.header[i].x-1092/24)<1e-7,'Every day card moves left with the timeline');}assertHeaderCoversEdges(a.header);assertHeaderCoversEdges(b.header);
- assert(Math.abs(a.header[8].x+4-a.temporal.midnightX)<1e-7);assert(Math.abs(b.header[8].x+4-b.temporal.midnightX)<1e-7);
+ assert(Math.abs(a.header[8].x+a.header[8].width-4-a.temporal.midnightX)<1e-7);assert(Math.abs(b.header[8].x+b.header[8].width-4-b.temporal.midnightX)<1e-7);
  const other=await render(host,options(at(26,11),[],{focusDate:+at(27)}));assert(!other.temporal.rolling);assert.equal(other.windowStart,+at(27));assert.equal(other.windowEnd,+at(28));
  const event=item('event',at(26,23),at(27,2));
  const pending=item('reminder',at(26,8),at(27),{sourceIsAllDay:false});

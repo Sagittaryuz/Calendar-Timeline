@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.11.08.2";
+const WIDGET_BUILD_VERSION = "2026.11.08.3";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -4494,12 +4494,13 @@ function titleCardRowOffset(cardWidth, cardGap) {
   const staticTodayLeft =
     CANVAS.marginX +
     titleTodayCardIndex() * (cardWidth + cardGap);
-  const todayRegionRight =
+  const todayBoundaryX =
     CANVAS.plotLeft +
     timeToX(addDays(startOfDay(windowStart), 1));
-  // The visible left edge of today's card follows the end of today's
-  // timeline segment. Every title card inherits the same px/hour translation.
-  return todayRegionRight - WIDGET_CONTOUR.strokeInset - staticTodayLeft;
+  // The rendered frame centerline is inset from the card rect on both sides.
+  // Align its right edge (card.right - strokeInset) with local midnight.
+  // Every title card keeps the same timeline speed.
+  return todayBoundaryX + WIDGET_CONTOUR.strokeInset - cardWidth - staticTodayLeft;
 }
 
 function titleHeaderEdgeAlignment(card) {

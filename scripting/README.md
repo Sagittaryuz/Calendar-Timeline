@@ -1,3 +1,13 @@
+## 0.3.40 — borda direita da moldura alinhada à virada
+
+A borda direita **realmente desenhada** do quadro de hoje agora coincide com a linha vertical da mudança do dia. A causa da diferença era que o cálculo anterior comparava a borda esquerda do cartão; além disso, o traço da moldura passa 4 px para dentro do retângulo do cartão. A nova âncora usa a geometria do traço renderizado (`card.right − 4 px`) e o centro da divisória temporal, sem mover a timeline ou a própria divisória. A borda de 6 px e a linha de virada de 8 px compartilham o mesmo centro lógico; a rasterização da divisória pode quantizar até meio pixel.
+
+A faixa cronológica de 16 dias, largura e espaçamento dos cartões, velocidade de 45,5 px lógicos por hora, clipping, cabeçalhos, moldura contínua e cobertura completa das bordas permanecem. À meia-noite e perto das 23:59, a linha de virada e a borda correspondente podem ficar naturalmente fora da área interna do widget; o clipping existente as recorta sem forçar o quadro para dentro. Agenda, clima, gráficos, curvas, hitboxes e navegação não mudaram.
+
+Validação sintética: alinhamento geométrico medido às 00:00, 06:00, 12:00, 18:00 e 23:59; 12 cenas cronológicas, quatro viradas locais e transições DST de primavera/outono, incluindo datas de fim de mês/ano. A comparação mostra a diferença de 146,9468 px da interpretação anterior e erro geométrico de 0 px na nova âncora; centro da divisória rasterizada a até 0,5 px. `npm run test:scripting` e `npm run check:scripting` passaram; os 16 arquivos do pacote também foram comparados byte a byte com o checkout. [Comparação visual com dados artificiais](../docs/previews/calendar-timeline-frame-right-alignment-0.3.40.png) e [registro de medidas e verificações](../docs/header-right-frame-alignment-0.3.40.json). Fontes desktop e renderização sintética não reproduzem exatamente o iOS; não houve teste físico. A cadência de atualização continua sob controle do iOS.
+
+Atualize pelo [projeto Calendar Timeline na branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando os dados existentes.
+
 ## 0.3.39 — faixa superior contínua nas bordas
 
 A faixa superior agora modela 16 dias em sequência local: oito anteriores, hoje e sete seguintes. O motor pinta os cartões que cruzam o viewport e mantém hoje como referência mesmo quando está fora da tela. A largura e o vão de cada cartão continuam calculados com a geometria aprovada de sete cartões. A causa do vazio era mover somente sete datas fixas junto com a timeline. Às 00:00 e 23:59 a âncora temporal coloca o cartão de hoje na borda ou parcialmente fora da tela; a correção mantém essa âncora, e os dias cronológicos vizinhos preenchem a região visível.
