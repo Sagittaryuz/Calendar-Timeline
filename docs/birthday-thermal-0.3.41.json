@@ -1,0 +1,61 @@
+{
+  "version": "0.3.41",
+  "branch": "scripting",
+  "baseCommit": "bff4c71bd466de2ab1510860a04143ffd32b828c",
+  "scope": "Calendar Timeline Scripting only",
+  "cause": {
+    "visibility": "chooseItems only appended a birthday group when an unoccupied chart row remained; a full agenda silently omitted it.",
+    "position": "The old textY used centerY - fontSize/2 - 4 while drawTextInRect received a 1.2×fontSize box, leaving rendered glyphs above the thermal band's center."
+  },
+  "solution": {
+    "selection": "Birthday groups bypass chart-row allocation and overflow counting. They are also excluded from the row-count heuristic, so birthdays do not compress event/reminder chart rows.",
+    "layerOrder": "The thermal band is painted first, birthdays next, then arrival/start guides and event/reminder charts and titles. Existing foreground boundaries, weather markers and rain overlays still render later.",
+    "placement": "Birthday text is placed in the center of the thermal graph band, with font-size-specific optical corrections (2 logical px for 28 px and 1 logical px for 26 px in the local renderer). Adjacent day groups reserve horizontal space to prevent their names from overlapping. Existing rounded-widget clipping remains active.",
+    "lateDayVisibility": "A birthday interval that overlaps the rolling window remains eligible at 23:59 even when its remaining all-day duration is narrower than the rounded edge inset; its label continues from the date origin as designed."
+  },
+  "validation": {
+    "scenes": ["00:00", "06:00", "12:00", "18:00", "23:59"],
+    "fixture": "Synthetic six-event / four-reminder agenda, three birthdays on one date and one on the next date; no personal calendar data.",
+    "selection": "Selected event and reminder identifiers and overflow marker match the 0.3.40 baseline in all five scenes. Five-event control confirms birthday presence does not change chart row count. All three same-day birthday labels remain visible with all chart rows occupied.",
+    "layering": "Canvas operations confirm thermal/base drawing precedes birthday labels and event titles follow them. Pixel-bounds test confirms adjacent date groups do not overlap horizontally.",
+    "opticalCenter": {
+      "thermalBandCenterLogicalY": 334.0561347107438,
+      "measuredInkCenterCanvasY": 334,
+      "absoluteDeltaLogicalPx": 0.05613471074377685,
+      "fontSubstitute": "Open Sans ExtraBold on @napi-rs/canvas; not the native iOS SF Pro font."
+    },
+    "checks": {
+      "npmRunTestScripting": "passed, including birthday thermal test",
+      "npmRunCheckScripting": "passed; 11 modules, syntax and imports",
+      "gitDiffCheck": "passed"
+    },
+    "package": {
+      "path": "work/releases/Calendar-Timeline-Scripting-0.3.41.scripting",
+      "members": 16,
+      "bytes": 130327,
+      "sha256": "50d9086f0316c35d5f31809708a47fc9bad5acbe3ae136df75cafd8ddc767222",
+      "archiveIntegrity": "passed",
+      "sourceFilesByteForByteMatched": true,
+      "libraryFileId": "libfile_b2729290c7f08191808c8cbc67d8b94c"
+    },
+    "continuousIntegration": "No Scripting-specific GitHub Actions workflow exists in this checkout; only the Android workflow is configured. The Scripting checks above passed locally.",
+    "physicalIOS": "Not tested. Synthetic rendering uses desktop fonts and Canvas and cannot establish exact SF Pro ink metrics or widget behavior on an iPhone.",
+    "iosRefresh": "Widget refresh timing remains controlled by iOS."
+  },
+  "previews": {
+    "full": "previews/calendar-timeline-birthday-thermal-0.3.41.png",
+    "thermalDetail": "previews/calendar-timeline-birthday-thermal-detail-0.3.41.png",
+    "libraryFiles": [
+      {
+        "name": "calendar-timeline-birthday-thermal-0.3.41.png",
+        "libraryFileId": "libfile_2be3d47c41548191a110025c2c405ab2",
+        "status": "created"
+      },
+      {
+        "name": "calendar-timeline-birthday-thermal-detail-0.3.41.png",
+        "libraryFileId": "libfile_e2e6056c079c8191b91e4d766bb6b4ed",
+        "status": "created"
+      }
+    ]
+  }
+}

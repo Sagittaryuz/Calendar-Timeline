@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.11.08.3";
+const WIDGET_BUILD_VERSION = "2026.11.10.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -3118,7 +3118,8 @@ function groupBirthdayItems(items) {
 
 function prepareTimelineRowCounts(items) {
   const relevant = groupBirthdayItems((items ?? []).filter(item =>
-    item?.start instanceof Date && item?.end instanceof Date));
+    item?.start instanceof Date && item?.end instanceof Date))
+    .filter(item => !isBirthdayGroup(item));
   const counts = {};
   for (let day = startOfDay(windowStart); day < windowEnd; day = addDays(day, 1)) {
     const start = Math.max(day.getTime(), windowStart.getTime());
@@ -3157,6 +3158,9 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       item.start < windowEnd
   );
   const groupedRelevant = groupBirthdayItems(relevant);
+  // Birthday names live in the thermal band, outside the chart-row allocator.
+  // Keeping them separate prevents a full agenda from suppressing a birthday.
+  const birthdayGroups = groupedRelevant.filter(isBirthdayGroup);
 
   const byTime = (a, b) =>
     a.start.getTime() - b.start.getTime() ||
@@ -3191,8 +3195,6 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     );
   for (const [dayKey, dayItems] of orderedDayGroups) {
     const dayLimit = rowCounts?.[dayKey] ?? limit;
-    const birthdayGroup =
-      dayItems.find((item) => isBirthdayGroup(item)) ?? null;
     const isBottomItem = (item) =>
       item.kind === "event" &&
       item.isAllDay &&
@@ -3261,7 +3263,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
         existing.isTimelineTitleReservation === true
       );
 
-      // Eventos de dia inteiro e aniversários nunca compartilham linha.
+      // Eventos de dia inteiro nunca compartilham linha.
       // Se a linha estiver ocupada por um item de outro dia que já terminou,
       // ela volta a ficar disponível para o dia atual.
       if (isBottomItem(item)) {
@@ -3409,24 +3411,11 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     }
 
     // Prioridade menor não reserva linhas: primeiro feriados (ordem anterior
-    // entre os demais tipos), depois eventos de dia inteiro e aniversários.
-    // Todos ocupam a próxima linha livre de cima para baixo.
+    // entre os demais tipos), depois eventos de dia inteiro. Aniversários
+    // ficam separados da grade de charts.
     const freeRowOrder = Array.from({ length: dayLimit }, (_, row) => row);
     holidayItems.forEach((item) => placeItem(item, freeRowOrder));
     bottomItems.forEach((item) => placeItem(item, freeRowOrder));
-    if (birthdayGroup) {
-      const birthdayRow = freeRowOrder.find((row) =>
-        rows[row].every((item) =>
-          displayDayKey(item) !== dayKey && !itemsOverlap(item, birthdayGroup)
-        )
-      );
-      if (birthdayRow !== undefined) {
-        const positioned = { ...birthdayGroup, gridRow: birthdayRow };
-        rows[birthdayRow].push(positioned);
-        placed.push(positioned);
-      }
-    }
-
     // Finalize o recorte pelo badge antes de reservar títulos no próximo dia.
     // A reserva deve usar a geometria que realmente será desenhada, não o
     // título integral que depois desaparece sob o +N.
@@ -3552,7 +3541,14 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     }
   }
 
-  return [...placed, ...overflowMarkers];
+  return [
+    ...placed,
+    ...overflowMarkers,
+    ...birthdayGroups.map((item) => ({
+      ...item,
+      layoutRows: rowCounts?.[dateKey(item.start)] ?? limit,
+    })),
+  ];
 }
 
 function isCompactMode() {
@@ -9211,12 +9207,41 @@ function timelineItemsStartingTomorrow(items) {
 }
 
 function drawTimelineItemLayer(ctx, items, arrivalGuideDay = null, guideItems = items) {
-  if (arrivalGuideDay) drawEventArrivalGuides(ctx, guideItems, arrivalGuideDay);
-  drawEventStartLineAnchors(ctx, items);
+  const birthdayItems = items.filter(isBirthdayItem);
+  const thermalTop = thermalBandTopY();
+  const thermalHeight = thermalBandBottomY() - thermalTop;
+  const birthdayPositions = birthdayGroupLabelPositions(
+    guideItems,
+    thermalTop,
+    thermalHeight
+  );
+  for (const item of birthdayItems) {
+    const group = isBirthdayGroup(item)
+      ? item
+      : { ...item, isBirthdayGroup: true, birthdayItems: [item] };
+    drawBirthdayGroupLabel(
+      ctx,
+      group,
+      thermalTop,
+      thermalHeight,
+      birthdayPositions.get(item)
+    );
+  }
+
+  // The curve is already painted in the base. Birthdays go above it and
+  // before guides/charts so event bars and their titles remain in front.
+  const chartItems = items.filter((item) => !isBirthdayItem(item));
+  if (arrivalGuideDay) {
+    drawEventArrivalGuides(
+      ctx,
+      guideItems.filter((item) => !isBirthdayItem(item)),
+      arrivalGuideDay
+    );
+  }
+  drawEventStartLineAnchors(ctx, chartItems);
   const chartTop = timelineChartTop();
-  // Desenha o item inteiro com a geometria do dia de origem, inclusive
-  // sua projeção após a meia-noite. O título não recomeça na virada.
-  const ordered = [...items].sort((a, b) =>
+  // Preserve each chart's source-day geometry, including its midnight span.
+  const ordered = [...chartItems].sort((a, b) =>
     a.gridRow / timelineRowCountForItem(a) - b.gridRow / timelineRowCountForItem(b) ||
     Number(a.isOverflow) - Number(b.isOverflow) || a.start - b.start);
   for (const item of ordered) {
@@ -12275,8 +12300,8 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     return;
   }
 
-  // O grupo de aniversários ocupa uma única linha e é desenhado depois dos
-  // eventos e lembretes. Todos os nomes permanecem no mesmo chart.
+  // Fallback para chamadas diretas antigas: o caminho normal agora desenha
+  // grupos na faixa térmica antes de eventos e lembretes.
   if (isBirthdayGroup(item)) {
     drawBirthdayGroupLabel(ctx, item, y, rowHeight);
     return;
@@ -12602,35 +12627,86 @@ function drawBirthdayLabel(ctx, item, y, rowHeight) {
   );
 }
 
-function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
-  const startX = timeToX(
-    new Date(Math.max(windowStart.getTime(), item.start.getTime()))
-  );
-  const endX = timeToX(
-    new Date(Math.min(windowEnd.getTime(), item.end.getTime()))
-  );
-  const bounds = timelineVisibleContentBounds(y, rowHeight, 4);
-  const visibleLeft = Math.max(bounds.left, startX);
-  if (Math.min(bounds.right, endX) <= visibleLeft) return;
-  // O intervalo do aniversário define sua origem, não o fim do texto.
-  // O grupo continua além da meia-noite até o limite visível do widget.
-  const visibleRight = bounds.right;
-
-  const centerY = y + rowHeight / 2;
-
-  const fontSize = isCompactMode()
-    ? compactTimelineFontSize(item.layoutRows === 5 ? 21 : 20)
-    : scaleFontSize(item.layoutRows === 5 ? 28 : 26);
-  // Aniversários não possuem chart nem faixa opaca. O texto ocupa a linha
-  // reservada sobre o fundo original da timeline.
-  const textY = centerY - fontSize / 2 - scaleVertical(4);
-  const labels = (
+function birthdayGroupLabels(item) {
+  return (
     Array.isArray(item.birthdayItems)
       ? item.birthdayItems
       : [item]
   )
     .map((birthday) => cleanTitle(birthday?.title, "🎂 Aniversário"))
     .filter(Boolean);
+}
+
+function birthdayGroupFontSize(item) {
+  return isCompactMode()
+    ? compactTimelineFontSize(item.layoutRows === 5 ? 21 : 20)
+    : scaleFontSize(item.layoutRows === 5 ? 28 : 26);
+}
+
+function birthdayGroupLabelPositions(items, y, rowHeight) {
+  const bounds = timelineVisibleContentBounds(y, rowHeight, 4);
+  const groups = (Array.isArray(items) ? items : [])
+    .filter(isBirthdayItem)
+    .sort((first, second) => first.start - second.start);
+  const labelGap = scaleVertical(
+    Math.max(0, Number(SETTINGS.birthdayLabelGap) || 0)
+  );
+  const positions = new Map();
+  let nextTextX = bounds.left + 7;
+
+  for (const group of groups) {
+    const labels = birthdayGroupLabels(group);
+    if (!labels.length) continue;
+    const startX = timeToX(
+      new Date(Math.max(windowStart.getTime(), group.start.getTime()))
+    );
+    const textX = Math.max(bounds.left + 7, startX + 7, nextTextX);
+    positions.set(group, textX - 7);
+
+    const fontSize = birthdayGroupFontSize(group);
+    const contentWidth = labels.reduce(
+      (total, label) => total + birthdayLabelWidth(label, fontSize),
+      0
+    );
+    // Keep adjacent day groups separate even when the current day has only
+    // a minute left in view; text remains clipped by the widget bounds.
+    nextTextX = Math.min(
+      bounds.right,
+      textX + contentWidth + labelGap * labels.length
+    );
+  }
+  return positions;
+}
+
+function drawBirthdayGroupLabel(ctx, item, y, rowHeight, positionedLeft = null) {
+  const startX = timeToX(
+    new Date(Math.max(windowStart.getTime(), item.start.getTime()))
+  );
+  const bounds = timelineVisibleContentBounds(y, rowHeight, 4);
+  const visibleLeft = Math.max(
+    bounds.left,
+    startX,
+    Number.isFinite(positionedLeft) ? positionedLeft : bounds.left
+  );
+  // The all-day interval may occupy only a few pixels near 23:59. The label
+  // intentionally extends from its date origin, so do not drop it merely
+  // because that tiny interval falls inside the widget's rounded inset.
+  if (item.end.getTime() <= windowStart.getTime() ||
+      item.start.getTime() >= windowEnd.getTime()) return;
+  // O intervalo do aniversário define sua origem, não o fim do texto.
+  // O grupo continua além da meia-noite até o limite visível do widget.
+  const visibleRight = bounds.right;
+
+  const centerY = y + rowHeight / 2;
+
+  const fontSize = birthdayGroupFontSize(item);
+  // Center the top-aligned box, then correct the measured upward ink bias:
+  // the 28 px font needs 2 logical px, the 26 px font 1 px. Native iOS glyph
+  // metrics can still differ from the local Canvas substitute.
+  const textHeight = fontSize * 1.2;
+  const inkCorrection = scaleVertical(item.layoutRows === 5 ? 2 : 1);
+  const textY = centerY - textHeight / 2 + inkCorrection;
+  const labels = birthdayGroupLabels(item);
   if (labels.length === 0) return;
 
   const labelGap = scaleVertical(
@@ -12652,11 +12728,11 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight) {
       [-1, 1],  [0, 1],  [1, 1],
     ]) {
       ctx.drawTextInRect(label,
-        new Rect(cursorX + offsetX, textY + offsetY, labelWidth, fontSize * 1.2));
+        new Rect(cursorX + offsetX, textY + offsetY, labelWidth, textHeight));
     }
 
     ctx.setTextColor(new Color(SETTINGS.birthdayTextColor, 1.0));
-    ctx.drawTextInRect(label, new Rect(cursorX, textY, labelWidth, fontSize * 1.2));
+    ctx.drawTextInRect(label, new Rect(cursorX, textY, labelWidth, textHeight));
     cursorX += birthdayLabelWidth(label, fontSize) + labelGap;
   }
 }

@@ -1,3 +1,13 @@
+## 0.3.41 — aniversários na faixa térmica
+
+Os nomes de aniversariantes agora são desenhados sobre a curva térmica, centralizados verticalmente pelo centro visível do texto e atrás dos gráficos e títulos de eventos/lembretes. A causa de aniversários ausentes era a seleção em `chooseItems`: o grupo só era adicionado se sobrasse uma linha de gráfico. A nova camada não reserva linhas nem aumenta a contagem que determina a geometria dos gráficos. Com seis linhas de eventos ocupadas e lembretes em espera, três aniversários sintéticos continuam visíveis e a seleção de eventos/lembretes permanece idêntica à 0.3.40.
+
+O deslocamento anterior de `−4 px` e a caixa de texto de `1,2×` a fonte deixavam a tinta visual acima do centro da faixa. A caixa agora é centralizada e recebe correção óptica medida por tamanho de fonte. Grupos de datas adjacentes reservam espaço horizontal um do outro, sem sobreposição; nomes continuam recortados pelos limites arredondados do widget. Em 23:59, a pequena porção restante do dia não suprime o rótulo.
+
+Validação sintética em 00:00, 06:00, 12:00, 18:00 e 23:59: três nomes no mesmo dia, aniversário do dia seguinte, grade cheia, seleção de eventos/lembretes antes/depois, contagem de linhas, ordem da curva/camada/gráficos, limites de clipping, não sobreposição dos grupos e centro de pixels de texto medido a **0,06 px** do centro da faixa no Canvas local. A fonte Open Sans e o renderer desktop são substitutos: isso não verifica SF Pro nativo nem o desenho físico do iPhone. [Comparação completa antes/depois](../docs/previews/calendar-timeline-birthday-thermal-0.3.41.png), [detalhe da curva](../docs/previews/calendar-timeline-birthday-thermal-detail-0.3.41.png) e [registro de medidas](../docs/birthday-thermal-0.3.41.json). `npm run test:scripting` e `npm run check:scripting` validam a versão. A atualização do widget continua sob controle do iOS.
+
+Atualize pelo [projeto Calendar Timeline na branch scripting](https://github.com/Sagittaryuz/Calendar-Timeline/tree/scripting/scripting/scripts/Calendar%20Timeline%20Scripting), preservando os dados existentes.
+
 ## 0.3.40 — borda direita da moldura alinhada à virada
 
 A borda direita **realmente desenhada** do quadro de hoje agora coincide com a linha vertical da mudança do dia. A causa da diferença era que o cálculo anterior comparava a borda esquerda do cartão; além disso, o traço da moldura passa 4 px para dentro do retângulo do cartão. A nova âncora usa a geometria do traço renderizado (`card.right − 4 px`) e o centro da divisória temporal, sem mover a timeline ou a própria divisória. A borda de 6 px e a linha de virada de 8 px compartilham o mesmo centro lógico; a rasterização da divisória pode quantizar até meio pixel.
