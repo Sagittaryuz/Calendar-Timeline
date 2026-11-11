@@ -1,3 +1,9 @@
+## Scripting 0.3.42 — 2026-11-11
+
+- Coloca os nomes dos aniversariantes acima das barras azuis de chuva sem mudar sua posição ou duplicar o texto.
+- Mantém o blur do dia seguinte quando a regra existente se aplica e preserva os demais elementos de primeiro plano.
+- Suíte Scripting, checagem de importações e prévias sintéticas com chuva cruzando os nomes aprovadas localmente. Validação física no iPhone pendente.
+
 ## Scripting 0.3.20 — 2026-10-26
 
 - Corrige a regressão da 0.3.19 que cortou todos os títulos no aparelho: remove a conversão de métricas verticais externas em offsets e desenha o cabeçalho com coordenadas absolutas.

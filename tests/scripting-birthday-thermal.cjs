@@ -7,7 +7,7 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
 
 const root=path.resolve(__dirname,'..');
 const engine='scripting/scripts/Calendar Timeline Scripting/original-engine.js';
-const baselineRaw=cp.execFileSync('git',['show',`bff4c71:${engine}`],{cwd:root,encoding:'utf8'});
+const baselineRaw=cp.execFileSync('git',['show',`0873ed9:${engine}`],{cwd:root,encoding:'utf8'});
 const inspectSource=source=>source.replace('return {temporal:',
   'return {debug:{selected:selectedItems.map(item=>({identifier:item.identifier,kind:item.kind,birthday:isBirthdayItem(item),group:isBirthdayGroup(item),row:item.gridRow,layoutRows:item.layoutRows,start:item.start.getTime(),names:(item.birthdayItems??[]).map(x=>x.title)})),rowCounts:timelineRowCounts,thermal:{top:thermalBandTopY(),bottom:thermalBandBottomY(),canvasTop:CANVAS.timelineTop,bounds:timelineVisibleContentBounds(thermalBandTopY(),thermalBandBottomY()-thermalBandTopY(),4),offset5:scaleVertical(2),offset6:scaleVertical(1)}},temporal:');
 
@@ -50,9 +50,12 @@ async function main(){
   GlobalFonts.registerFromPath('/usr/share/fonts/truetype/open-sans/OpenSans-ExtraBold.ttf','BirthdayHeavy');
   const thermalDraw=raw.indexOf('drawCompactThermalBand(baseCtx, hourlyWeather');
   const tomorrowLayer=raw.indexOf('drawTimelineItemLayer(\n      baseCtx');
-  const itemLayer=raw.slice(raw.indexOf('function drawTimelineItemLayer'),raw.indexOf('\n\nfunction diagonalWeekdayLabelColor'));
+  const panelLayer=raw.slice(raw.indexOf('async function renderTimelinePanel'),raw.indexOf('\nfunction timelineItemsStartingToday'));
   assert(thermalDraw>=0&&tomorrowLayer>thermalDraw,'The thermal curve is painted before the birthday layer');
-  assert(itemLayer.indexOf('drawBirthdayGroupLabel')<itemLayer.indexOf('drawTimelineItem(ctx'),'Birthday labels precede event chart painting');
+  assert(panelLayer.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather)')<panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
+    'Birthday labels are composited after the rain overlay');
+  assert(panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)')<panelLayer.indexOf('drawEventStartLines(ctx,'),
+    'Event start guides and remaining structural overlays stay above birthday labels');
   const {d,host,options}=await fixture();
   const before=compile(inspectSource(baselineRaw)),after=compile(inspectSource(raw));
   const snapshots=[['00:00',0,0],['06:00',6,0],['12:00',12,0],['18:00',18,0],['23:59',23,59]];
@@ -84,7 +87,7 @@ async function main(){
     const firstBirthday=flatten(newModel.image).findIndex(op=>op.type==='text'&&/ff69b4/i.test(op.state?.text?.hex??''));
     const eventTitle=flatten(newModel.image).findIndex(op=>op.type==='text'&&op.text==='SYNTHETIC EVENT 1');
     assert(graphOrBase>=0&&firstBirthday>graphOrBase,`${label}: thermal drawing precedes the birthday layer`);
-    assert(eventTitle>firstBirthday,`${label}: event title is drawn over the birthday layer`);
+    assert(eventTitle>=0&&firstBirthday>eventTitle,`${label}: birthdays are recomposed after event charts and weather overlays`);
     const todayPinkOps=ops.filter(op=>expectedToday.includes(op.text));
     const ink=inkBounds(todayPinkOps,d);
     const inkDelta=ink.center-center;
@@ -112,6 +115,6 @@ async function main(){
   const withBirthdays=await after(host,options(noon,fiveEventsAndBirthdays,{hourlyWeather:{hours:[],daily:{}}}));
   assert.equal(withBirthdays.debug.rowCounts['2026-10-27'],withoutBirthdays.debug.rowCounts['2026-10-27'],'Birthday labels do not change chart row count or compress the event layout');
   console.log(JSON.stringify({scenes:snapshots.length,fullAgendaComparison,measurements,deviceRender:'not tested; Canvas substitute only'},null,2));
-  console.log('PASS: birthdays stay centered on the thermal band and behind events at five local times, including fully occupied agenda rows.');
+  console.log('PASS: birthday placement and visibility stay stable at five local times, including fully occupied agenda rows.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

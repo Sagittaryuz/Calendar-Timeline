@@ -185,7 +185,7 @@ const EVENT_ARRIVAL_GUIDE_LABEL_FONT_SIZE = 21;
 // escala vertical mantém a proporção da geometria-base enquanto amplia a
 // timeline até as duas extremidades do widget.
 // Identifica o código internamente; a versão não é desenhada no widget.
-const WIDGET_BUILD_VERSION = "2026.11.10.1";
+const WIDGET_BUILD_VERSION = "2026.11.11.1";
 const WIDGET_CANVAS_HEIGHT = 510;
 const LEGACY_CONTENT_TOP = 13;
 const LEGACY_CONTENT_BOTTOM_EDGE = 497;
@@ -9113,8 +9113,10 @@ async function renderTimelinePanel(items, loadError) {
   // A curva térmica permanece na base; a chuva será composta sobre os charts.
   drawCompactThermalBand(baseCtx, hourlyWeather, rainCountdown?.rect);
 
-  // Os eventos, charts e lembretes que começam amanhã fazem parte da
-  // imagem-base e serão suavizados junto com o restante do futuro.
+  // Os charts e lembretes que começam amanhã fazem parte da imagem-base e
+  // serão suavizados junto com o restante do futuro. Os nomes dos
+  // aniversariantes são recompostos depois das barras de chuva para manter
+  // a camada legível sem alterar a posição do rótulo.
   if (!loadError) {
     drawTimelineItemLayer(
       baseCtx,
@@ -9172,6 +9174,9 @@ async function renderTimelinePanel(items, loadError) {
   // Chuva opaca sobre os charts de hoje/amanhã e sobre o blur,
   // mantendo horários, volume e geometria da faixa térmica original.
   drawTimelineRainOverlay(ctx, hourlyWeather);
+  // Os nomes ficam à frente das barras, mantendo o centro térmico e o blur
+  // aplicado aos aniversários do dia seguinte.
+  drawTimelineBirthdayLabelsAfterRain(ctx, items);
   if (!loadError) {
     // A linha de início fica na frente dos charts, da chuva e da curva
     // térmica; os contornos e indicadores estruturais seguem nítidos acima.
@@ -9207,29 +9212,6 @@ function timelineItemsStartingTomorrow(items) {
 }
 
 function drawTimelineItemLayer(ctx, items, arrivalGuideDay = null, guideItems = items) {
-  const birthdayItems = items.filter(isBirthdayItem);
-  const thermalTop = thermalBandTopY();
-  const thermalHeight = thermalBandBottomY() - thermalTop;
-  const birthdayPositions = birthdayGroupLabelPositions(
-    guideItems,
-    thermalTop,
-    thermalHeight
-  );
-  for (const item of birthdayItems) {
-    const group = isBirthdayGroup(item)
-      ? item
-      : { ...item, isBirthdayGroup: true, birthdayItems: [item] };
-    drawBirthdayGroupLabel(
-      ctx,
-      group,
-      thermalTop,
-      thermalHeight,
-      birthdayPositions.get(item)
-    );
-  }
-
-  // The curve is already painted in the base. Birthdays go above it and
-  // before guides/charts so event bars and their titles remain in front.
   const chartItems = items.filter((item) => !isBirthdayItem(item));
   if (arrivalGuideDay) {
     drawEventArrivalGuides(
@@ -9248,6 +9230,78 @@ function drawTimelineItemLayer(ctx, items, arrivalGuideDay = null, guideItems = 
     const rowHeight = timelineRowHeight(null, timelineRowCountForItem(item));
     drawTimelineItem(ctx, item, chartTop + item.gridRow * rowHeight, rowHeight);
   }
+}
+
+function drawTimelineBirthdayLayer(ctx, items, guideItems = items, opacity = 1) {
+  const birthdayItems = (Array.isArray(items) ? items : [])
+    .filter(isBirthdayItem);
+  const thermalTop = thermalBandTopY();
+  const thermalHeight = thermalBandBottomY() - thermalTop;
+  const birthdayPositions = birthdayGroupLabelPositions(
+    guideItems,
+    thermalTop,
+    thermalHeight
+  );
+  for (const item of birthdayItems) {
+    const group = isBirthdayGroup(item)
+      ? item
+      : { ...item, isBirthdayGroup: true, birthdayItems: [item] };
+    drawBirthdayGroupLabel(
+      ctx,
+      group,
+      thermalTop,
+      thermalHeight,
+      birthdayPositions.get(item),
+      opacity
+    );
+  }
+}
+
+function drawTimelineBirthdayLabelsAfterRain(ctx, items) {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const todayBirthdays = timelineItemsStartingToday(sourceItems)
+    .filter(isBirthdayItem);
+  if (todayBirthdays.length) {
+    drawTimelineBirthdayLayer(ctx, todayBirthdays, sourceItems);
+  }
+
+  const tomorrowBirthdays = timelineItemsStartingTomorrow(sourceItems)
+    .filter(isBirthdayItem);
+  if (!tomorrowBirthdays.length) return;
+
+  const metrics = futureTimelineBlurMetrics();
+  if (!shouldBlurFutureTimeline() || metrics.width <= 0) {
+    drawTimelineBirthdayLayer(ctx, tomorrowBirthdays, sourceItems);
+    return;
+  }
+
+  // Recompose only tomorrow's labels in a transparent layer, then reuse the
+  // same blur radius and future crop. The existing future tint is represented
+  // in the label opacity so it is not applied a second time to the panel.
+  const birthdayCtx = new DrawContext();
+  birthdayCtx.size = new Size(timelineWidth(), timelineHeight());
+  birthdayCtx.opaque = false;
+  birthdayCtx.respectScreenScale = false;
+  const tintOpacity = Math.max(0, Math.min(1,
+    Number(SETTINGS.futureTimelineBlurTintOpacity) || 0));
+  drawTimelineBirthdayLayer(
+    birthdayCtx,
+    tomorrowBirthdays,
+    sourceItems,
+    1 - tintOpacity
+  );
+  const cropped = cropTransparentCanvasImage(
+    birthdayCtx.getImage(),
+    metrics.startX,
+    0,
+    metrics.width,
+    metrics.height
+  );
+  const softened = softenTimelineImage(cropped, metrics.width, metrics.height);
+  ctx.drawImageInRect(
+    softened,
+    new Rect(metrics.startX, 0, metrics.width, metrics.height)
+  );
 }
 
 
@@ -12678,7 +12732,14 @@ function birthdayGroupLabelPositions(items, y, rowHeight) {
   return positions;
 }
 
-function drawBirthdayGroupLabel(ctx, item, y, rowHeight, positionedLeft = null) {
+function drawBirthdayGroupLabel(
+  ctx,
+  item,
+  y,
+  rowHeight,
+  positionedLeft = null,
+  opacity = 1
+) {
   const startX = timeToX(
     new Date(Math.max(windowStart.getTime(), item.start.getTime()))
   );
@@ -12721,7 +12782,7 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight, positionedLeft = null) 
     // mantendo a mesma leitura forte dos títulos dos charts normais.
     const labelWidth = visibleRight - cursorX - 2;
     if (labelWidth <= 0) break;
-    ctx.setTextColor(new Color("#000000", 1.0));
+    ctx.setTextColor(new Color("#000000", opacity));
     for (const [offsetX, offsetY] of [
       [-1, -1], [0, -1], [1, -1],
       [-1, 0],             [1, 0],
@@ -12731,7 +12792,7 @@ function drawBirthdayGroupLabel(ctx, item, y, rowHeight, positionedLeft = null) 
         new Rect(cursorX + offsetX, textY + offsetY, labelWidth, textHeight));
     }
 
-    ctx.setTextColor(new Color(SETTINGS.birthdayTextColor, 1.0));
+    ctx.setTextColor(new Color(SETTINGS.birthdayTextColor, opacity));
     ctx.drawTextInRect(label, new Rect(cursorX, textY, labelWidth, textHeight));
     cursorX += birthdayLabelWidth(label, fontSize) + labelGap;
   }

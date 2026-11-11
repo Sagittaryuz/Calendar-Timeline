@@ -1,0 +1,40 @@
+{
+  "version": "0.3.42",
+  "branch": "scripting",
+  "baseCommit": "0873ed953dd3e3e7bcc242b9d726c1989a288c37",
+  "scope": "Calendar Timeline Scripting only",
+  "cause": "Birthday labels were drawn before drawTimelineRainOverlay. The opaque blue rain bars were composited afterward and obscured the names wherever their rectangles crossed the thermal band.",
+  "solution": {
+    "layerOrder": "Draw chart items as before, compose the existing rain overlay, then paint each birthday name once. Existing event-start guides, day dividers, weekday badges, moon markers and countdown remain later foreground layers.",
+    "placement": "The same birthday text layout and thermal-band center are used; no text coordinates or chart geometry changed.",
+    "futureBlur": "Tomorrow's label is rebuilt in a transparent cropped layer after rain and uses the existing future blur radius. Its text opacity accounts for the future tint already applied to the panel, avoiding a duplicate tint over the widget.",
+    "data": "Birthday groups remain outside the chart-row allocator; events, reminders, overflow markers and rain data are unchanged."
+  },
+  "validation": {
+    "scenes": ["00:00", "06:00", "12:00", "18:00", "23:59"],
+    "fixture": "Synthetic active agenda with events, birthdays today and tomorrow, and blue rain bars positioned across the thermal-band text; no personal calendar data.",
+    "drawOrder": "All synthetic rain bars are painted before the birthday text layer. Each visible name is painted once, actual bar rectangles intersect its text box, and visible text boxes keep identical x/y/width/height to 0.3.41.",
+    "futureBlur": "Tomorrow's birthday is in the soft future layer when the existing active-today rule enables blur. At 23:59 the existing rule does not blur future when no blocking event remains today.",
+    "agenda": "Selected event/reminder identifiers match the 0.3.41 baseline in all five scenes.",
+    "checks": {
+      "npmRunTestScripting": "passed, including birthday thermal and birthday/rain-layer tests",
+      "npmRunCheckScripting": "passed; 11 modules, syntax and imports",
+      "gitDiffCheck": "passed",
+      "physicalIOS": "not tested; Canvas/Scripting drawing-contract simulation only"
+    },
+    "continuousIntegration": "No Scripting-specific GitHub Actions workflow exists in this checkout; only an Android workflow is configured."
+  },
+  "previews": [
+    {
+      "file": "previews/calendar-timeline-birthday-rain-layer-0.3.42.png",
+      "libraryFileId": "libfile_34fb76c3531481918d82418d5fddc72c",
+      "dimensions": "2224x2110"
+    },
+    {
+      "file": "previews/calendar-timeline-birthday-rain-layer-detail-0.3.42.png",
+      "libraryFileId": "libfile_9f3007f311888191b60bce5d1c548e91",
+      "dimensions": "2224x858"
+    }
+  ],
+  "previewRenderer": "@napi-rs/canvas with desktop Open Sans; neither image is a physical iPhone capture."
+}

@@ -1,3 +1,9 @@
+## 0.3.42 — aniversariantes acima da chuva
+
+Os nomes dos aniversariantes agora são compostos depois das barras opacas de chuva, então permanecem legíveis quando as barras atravessam a faixa térmica. A posição, o centro vertical, o agrupamento por dia e a renderização única do texto foram preservados. O rótulo de amanhã continua no recorte desfocado quando a regra existente de blur está ativa; guias de início, divisórias e outros elementos de primeiro plano continuam sendo desenhados depois. A agenda e seus charts não mudam.
+
+Validação sintética em 00:00, 06:00, 12:00, 18:00 e 23:59 com barras azuis opacas cruzando os nomes de hoje e, quando visível, amanhã. O teste confirma que cada nome é desenhado uma vez, fica acima das barras, mantém os mesmos limites de texto da 0.3.41, e que seleção de eventos/lembretes permanece igual. Prévia comparativa e registro em `docs/previews/calendar-timeline-birthday-rain-layer-0.3.42.png`, `docs/previews/calendar-timeline-birthday-rain-layer-detail-0.3.42.png` e `docs/birthday-rain-layer-0.3.42.json`. `npm run test:scripting` e `npm run check:scripting` validam localmente. A imagem usa Canvas e fonte substituta; não é teste físico no iPhone.
+
 ## 0.3.41 — aniversários na faixa térmica
 
 Os nomes de aniversariantes agora são desenhados sobre a curva térmica, centralizados verticalmente pelo centro visível do texto e atrás dos gráficos e títulos de eventos/lembretes. A causa de aniversários ausentes era a seleção em `chooseItems`: o grupo só era adicionado se sobrasse uma linha de gráfico. A nova camada não reserva linhas nem aumenta a contagem que determina a geometria dos gráficos. Com seis linhas de eventos ocupadas e lembretes em espera, três aniversários sintéticos continuam visíveis e a seleção de eventos/lembretes permanece idêntica à 0.3.40.
