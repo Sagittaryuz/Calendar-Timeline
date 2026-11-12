@@ -3477,8 +3477,11 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       let overlayX = 0;
       for (const candidate of anchors) {
         const bounds = timelineItemVisualFootprint(candidate);
+        // Pending reminders can continue until 06:00 tomorrow. Keep their
+        // daily +N on today's part of the bar, not at that extended endpoint.
         const markerX = candidate.kind === "reminder"
-          ? Math.max(bounds.left, bounds.barRight - markerWidth)
+          ? Math.max(bounds.left, badgeDayLeft,
+              Math.min(bounds.barRight, badgeDayRight) - markerWidth)
           : bounds.left;
         const badgeRight = markerX + markerWidth;
         if (

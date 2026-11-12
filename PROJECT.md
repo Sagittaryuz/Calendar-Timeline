@@ -23,3 +23,15 @@ A captura semanal continua sem notas, endereços ou alarmes. bridge_request_deta
 Atualize o mesmo projeto no Scripting para 0.3.1; mantenha pareamento/armazenamento. O painel Pro e a abertura direta do Calendário foram preservados. Configuração de alerta confirmada por releitura não comprova entrega da notificação; localização requer permissão e teste físico. Sem execução contínua garantida com iPhone bloqueado. Séries, participantes e exclusão permanecem fora das escritas.
 
 Validação: SQLite real com APIs Scripting simuladas, notas Unicode/multilinha, acrescentar/limpar, localização/link/coordenadas, prioridade, alertas, conflito só nas notas, recuperação após ACK perdido, isolamento de clientes antigos e privacidade da captura semanal. Nenhum item real foi alterado durante a implantação. Falta validar novos campos e disparo dos alertas no iPhone.
+
+## 2026-11-12 — Scripting 0.3.43: +N diário
+
+Pedido direto: restaurar a indicação dos eventos/lembretes excedentes de hoje.
+Referências recebidas foram vistas, sem copiar agenda pessoal para o repositório.
+Reprodução local confirmou que o carryover de lembretes após 12h até 06h do dia
+seguinte deslocava a tentativa de badge para fora do dia; a checagem de limite
+então o rejeitava. Correção mínima: restringir a âncora do lembrete à porção do
+seu dia, mantendo duração e disposição. Não confundir itens passados mostrados
+pelo Calendário com excedentes ativos do widget. A ponte remota só continha
+captura de 28/10, portanto não serviu para comprovar os registros de 12/11.
+Testes sintéticos e prévias em docs/previews; validação física no iPhone pendente.
