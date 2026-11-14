@@ -8455,8 +8455,8 @@ function drawClippedDayBoundaryMoonBorder(
     borderDate.getMinutes() === 0;
   if (!isDayBoundary) return;
 
-  const lineWidth = dayBoundaryLineWidth();
-  const ringRadius = size / 2 + lineWidth / 2;
+  const lineWidth = dayBoundaryMoonLineWidth();
+  const ringRadius = size / 2 + dayBoundaryLineWidth() / 2;
   const sampleCount = 720;
   const path = new Path();
   let previousVisible = false;
@@ -10966,17 +10966,18 @@ function strokeMoonEllipseOutside(
   ctx,
   rect,
   color,
-  lineWidth
+  lineWidth,
+  geometryWidth = lineWidth
 ) {
   // O retângulo recebido contém os 44 px do desenho da Lua.
   // A borda é deslocada para fora, preservando integralmente
   // o tamanho visual do disco lunar.
-  const outset = lineWidth / 2;
+  const outset = geometryWidth / 2;
   const borderRect = new Rect(
     rect.x - outset,
     rect.y - outset,
-    rect.width + lineWidth,
-    rect.height + lineWidth
+    rect.width + geometryWidth,
+    rect.height + geometryWidth
   );
   ctx.setStrokeColor(color);
   ctx.setLineWidth(lineWidth);
@@ -11006,6 +11007,7 @@ function drawMoonPhase(
         borderDate,
         loadResult.holidayDates
       ),
+      dayBoundaryMoonLineWidth(),
       dayBoundaryLineWidth()
     );
   };
@@ -11064,6 +11066,7 @@ function drawDayBoundaryMoonBorder(
       borderDate,
       loadResult.holidayDates
     ),
+    dayBoundaryMoonLineWidth(),
     dayBoundaryLineWidth()
   );
 }
@@ -11431,6 +11434,11 @@ function dayBoundaryLineWidth() {
   // O valor inteiro evita diferenças de rasterização entre fillRect,
   // strokePath e strokeEllipse depois da compressão vertical do layout.
   return DAY_BOUNDARY_LINE_WIDTH;
+}
+
+// Only the midnight lunar ring is thinner; its existing centerline and joins stay fixed.
+function dayBoundaryMoonLineWidth() {
+  return 4;
 }
 
 function todayFrameLineWidth() {

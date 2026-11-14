@@ -78,3 +78,13 @@ Não se alteraram permissões, calendário nativo, pareamento, visual ou limites
 atualização do iOS. Não reinstalar/apagar dados para aplicar a atualização. Próximo
 passo se persistir no aparelho: ler diagnóstico do widget/Canvas no app e conferir
 versão de Scripting/iOS, sem presumir falta de permissão ou limite de memória.
+
+## 2026-11-14 — Scripting 0.3.46: aro lunar mais fino
+
+Pedido direto de Marcos: afinar somente o contorno ao redor da Lua. Aro de
+virada do dia reduzido de 8 para 4 pixels lógicos; trajetória e centros
+preservados. Divisórias continuam em 8, moldura do dia em 6. Não altera
+disco lunar, eclipse, layout, áreas de toque nem atualização. Cinco cenas
+sintéticas comparadas com 0.3.45: somente 34 operações de stroke lunar
+mudaram; demais operações efetivas e geometria iguais. Prévias desktop
+antes/depois inspecionadas; execução física no iPhone não realizada.

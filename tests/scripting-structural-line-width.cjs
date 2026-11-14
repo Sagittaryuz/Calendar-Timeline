@@ -83,23 +83,23 @@ function pathPoints(path){
 
   const ringCtx=new d.DrawContext();p.drawMoonRing(ringCtx,500,220,32,new Date(2026,10,3,0));
   const ring=ringCtx.getImage().ops.find(o=>o.type==='strokePath');
-  assert(ring&&ring.state.width===DIVIDER_WIDTH,'Midnight moon ring uses exact 8 px width');
+  assert(ring&&ring.state.width===4,'Midnight moon ring uses exact 4 px width');
   assert(pathPoints(ring.path).length>300,'Moon ring retains its rounded high-resolution contour');
   ringStrokes++;
 
   const moonBoundaryCtx=new d.DrawContext();p.drawMoonBoundary(moonBoundaryCtx,500,220,32,new Date(2026,10,3,0));
   const moonBoundary=moonBoundaryCtx.getImage().ops.find(o=>o.type==='strokeEllipse');
-  assert(moonBoundary&&moonBoundary.state.width===DIVIDER_WIDTH,'Moon ellipse boundary also uses exact 8 px width');
+  assert(moonBoundary&&moonBoundary.state.width===4,'Moon ellipse boundary also uses exact 4 px width');
   ringStrokes++;
 
   const edgeRingCtx=new d.DrawContext();p.drawMoonRing(edgeRingCtx,p.inset,220,32,new Date(2026,10,3,0));
   const edgeRing=edgeRingCtx.getImage().ops.find(o=>o.type==='strokePath');
-  assert(edgeRing&&edgeRing.state.width===DIVIDER_WIDTH,'Partially clipped boundary ring retains its 8 px stroke spec');
+  assert(edgeRing&&edgeRing.state.width===4,'Partially clipped boundary ring retains its 4 px stroke spec');
   for(const [x,y] of pathPoints(edgeRing.path)){
     assert(x>=p.inset-1e-8&&x<=p.width-p.inset+1e-8&&y>=0&&y<=p.height,'Visible ring centerline remains within the widget contour');
   }
   ringStrokes++;
-  console.log(JSON.stringify({version:'0.3.35',frameWidth:FRAME_WIDTH,dividerAndRingWidth:DIVIDER_WIDTH,scenes,
+  console.log(JSON.stringify({version:'0.3.46',frameWidth:FRAME_WIDTH,dividerWidth:DIVIDER_WIDTH,moonRingWidth:4,scenes,
     continuousFrameStrokes:frameStrokes,visibleWhiteDividerRects:dividerRects,moonRingCases:ringStrokes,
     coverage:'actual render and direct frame/divider/both moon-boundary operations; intraday, weekends, DST date, month/year, canvas clipping',
     physicalIOS:'not tested; synthetic DrawContext contract only'}));

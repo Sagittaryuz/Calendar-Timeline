@@ -126,3 +126,13 @@ A captura semanal continua sem notas, endereços ou alarmes. bridge_request_deta
 Atualize o mesmo projeto no Scripting para 0.3.1; mantenha pareamento/armazenamento. O painel Pro e a abertura direta do Calendário foram preservados. Configuração de alerta confirmada por releitura não comprova entrega da notificação; localização requer permissão e teste físico. Sem execução contínua garantida com iPhone bloqueado. Séries, participantes e exclusão permanecem fora das escritas.
 
 Validação: SQLite real com APIs Scripting simuladas, notas Unicode/multilinha, acrescentar/limpar, localização/link/coordenadas, prioridade, alertas, conflito só nas notas, recuperação após ACK perdido, isolamento de clientes antigos e privacidade da captura semanal. Nenhum item real foi alterado durante a implantação. Falta validar novos campos e disparo dos alertas no iPhone.
+
+## 2026-11-14 — Scripting 0.3.46: aro lunar mais fino
+
+Pedido direto de Marcos: afinar somente o contorno ao redor da Lua. Aro de
+virada do dia reduzido de 8 para 4 pixels lógicos; trajetória e centros
+preservados. Divisórias continuam em 8, moldura do dia em 6. Não altera
+disco lunar, eclipse, layout, áreas de toque nem atualização. Cinco cenas
+sintéticas comparadas com 0.3.45: somente 34 operações de stroke lunar
+mudaram; demais operações efetivas e geometria iguais. Prévias desktop
+antes/depois inspecionadas; execução física no iPhone não realizada.
