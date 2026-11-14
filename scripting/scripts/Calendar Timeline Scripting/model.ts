@@ -1,12 +1,11 @@
 import { createHost } from './host'
 import { renderOriginal } from './original-engine'
-import { resolveFocus, clearTimelineSelection } from './selection'
+import { resolveFocus } from './selection'
 import { markPhase } from './diagnostics'
 
 export async function loadModel(options:{background?:boolean;forceWeather?:boolean;prepareOnly?:boolean;shouldPersist?:()=>boolean}={}){
   const started=Date.now()
   markPhase('inicialização e cache',started)
-  clearTimelineSelection()
   const now=new Date(),focus=resolveFocus(null,now)
   const snapshot=Storage.get<{savedAt:number;weather:any;location:any}>('weather-model')
   const reusable=!options.forceWeather&&snapshot&&Date.now()>=snapshot.savedAt&&Date.now()-snapshot.savedAt<15*60*1000
@@ -29,7 +28,7 @@ export async function loadModel(options:{background?:boolean;forceWeather?:boole
   try{if(model.panel){
     const sources=Object.values(model.panel.freshness??{}) as {source:string;fetchedAt:number|null}[]
     const times=sources.map(s=>s.fetchedAt).filter((n):n is number=>Number.isFinite(n)&&Number(n)>0)
-    if(!sources.length||times.length)Storage.set('sagittaryuz-dashboard-v1:Calendar',{schema:1,source:'Calendar',at:times.length?Math.min(...times):Date.now(),version:'0.3.43',...model.panel,cached:sources.some(s=>s.source!=='live')},{shared:true})
+    if(!sources.length||times.length)Storage.set('sagittaryuz-dashboard-v1:Calendar',{schema:1,source:'Calendar',at:times.length?Math.min(...times):Date.now(),version:'0.3.44',...model.panel,cached:sources.some(s=>s.source!=='live')},{shared:true})
   }}catch{}
   markPhase('modelo pronto',started)
   return model

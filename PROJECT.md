@@ -35,3 +35,24 @@ seu dia, mantendo duração e disposição. Não confundir itens passados mostra
 pelo Calendário com excedentes ativos do widget. A ponte remota só continha
 captura de 28/10, portanto não serviu para comprovar os registros de 12/11.
 Testes sintéticos e prévias em docs/previews; validação física no iPhone pendente.
+
+## 2026-11-14 — Scripting 0.3.44: renderização sem alteração visual
+
+Pedido direto de Marcos: investigar resquícios de navegação por dia e otimizar
+somente o processamento do desenho, preservando estética e timeline em tempo real.
+A produção já ignora a seleção antiga; os intents antigos continuam como aliases
+que abrem o Calendário, para não quebrar widgets renderizados antes da migração.
+Retirados validadores sem consumidores e a exclusão de `selected-day` em cada
+carregamento. Um registro antigo, se existir, permanece ignorado; nenhum cache de
+agenda, clima ou pareamento é removido. Refresh por toque e política de 1 minuto
+permanecem iguais (execução efetiva depende do iOS).
+
+No replay Canvas, cada operação configura somente estilos que usa e evita repetir
+fill/stroke/lineWidth iguais. O cache é local a uma chamada e invalidado antes dos
+pintores especializados; save/restore, ordem, paths, textos, cores e clips não mudam.
+Teste de regressão compara com d7310b6 em dez renderizações sintéticas (cinco
+cenas com e sem agrupamento raster): pixels idênticos. No caminho raster,
+16.198 → 1.802 atribuições de estilo (89% a menos); sem raster,
+961.351 → 315.401 (67% a menos). Isso mede chamadas redundantes removidas,
+não ganho percentual no tempo ou no iPhone.
+Não foi identificada causa comprovada para a latência específica do aparelho.

@@ -87,9 +87,19 @@ export class DrawContext {
 
 export function replay(ctx,ops,width,height,targetWidth,targetHeight,resolveSymbol){
   ctx.save();ctx.scale(targetWidth/width,targetHeight/height);
+  // Cache only renderer-owned styles. Nested/custom painters invalidate it below.
+  // Avoid crossing the native Canvas bridge for unused/unchanged attributes.
+  let fill,stroke,lineWidth;
+  const setFill=color=>{const value=color.css();if(fill!==value){ctx.fillStyle=value;fill=value;}};
+  const setStroke=state=>{const value=state.stroke.css();if(stroke!==value){ctx.strokeStyle=value;stroke=value;}if(lineWidth!==state.width){ctx.lineWidth=state.width;lineWidth=state.width;}};
   for(const op of ops){
     const s=op.state,r=op.rect;
-    if(s){ctx.fillStyle=s.fill.css();ctx.strokeStyle=s.stroke.css();ctx.lineWidth=s.width;}
+    if(op.type==='fillRect'||op.type==='fillEllipse'||op.type==='fillPath')setFill(s.fill);
+    else if(op.type==='strokeRect'||op.type==='strokeEllipse'||op.type==='strokePath')setStroke(s);
+    else if(op.type==='header'||op.type==='diagonal'||op.type==='capsules'){
+      // These painters have their own style changes; never assume their exit state.
+      fill=stroke=lineWidth=undefined;
+    }
     if(op.type==='header')replayHeader(ctx,op,resolveSymbol);
     else if(op.type==='fillRect'||op.type==='strokeRect')ctx[op.type](r.x,r.y,r.width,r.height);
     else if(op.type==='fillEllipse'||op.type==='strokeEllipse'){

@@ -1,3 +1,9 @@
+## Scripting 0.3.44 — 2026-11-14
+- Removidos validadores de seleção diária aposentados e limpeza repetida de armazenamento no carregamento.
+- Replay Canvas evita estilos não usados e atribuições redundantes; layout e ordem de pintura preservados.
+- Intents antigos continuam abrindo o Calendário. Toques atuais e refresh não mudam.
+- Dez renderizações sintéticas pixel a pixel e contagem de chamadas; desempenho físico iPhone não medido.
+
 ## Scripting 0.3.42 — 2026-11-11
 
 - Coloca os nomes dos aniversariantes acima das barras azuis de chuva sem mudar sua posição ou duplicar o texto.

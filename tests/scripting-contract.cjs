@@ -50,11 +50,8 @@ async function main(){
   const select=load('selection'),today=new Date(2026,9,22,12);
   assert.equal(select.localDay(select.resolveFocus(null,today)),'2026-10-22');
   assert.equal(select.resolveFocus(null,today).getHours(),0,'Today is a fixed full-day overview');
-  for(const day of ['2026-10-18','2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24'])assert.equal(select.validateSelection(day,today),day);
-  for(const day of ['2026-10-17','2026-10-25'])assert.throws(()=>select.validateSelection(day,today));
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-22'},today)),'2026-10-22');
   assert.equal(select.localDay(select.resolveFocus({date:'2026-10-23',selectedOn:'2026-10-21'},today)),'2026-10-22');
-  for(const bad of ['2026-02-30','2026-13-01','invalid',null,{},'2020-01-01'])assert.throws(()=>select.validateSelection(bad,today));
   const {createHost}=load('host'),host=createHost(today);
   const bitmap=new host.DrawContext().makeRaster({width:1,height:1,pixels:new Uint8Array([255,0,0,255])});
   assert.deepEqual([...encodedBitmap.slice(0,8)],[137,80,78,71,13,10,26,10]);
@@ -90,6 +87,6 @@ async function main(){
     const result=ts.transpileModule(fs.readFileSync(path.join(dir,filename),'utf8'),{fileName:filename,reportDiagnostics:true,compilerOptions:{jsx:ts.JsxEmit.React,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}});
     assert.equal(result.diagnostics.length,0,filename);
   }
-  console.log('PASS: native globals/module separation, bitmap adapter, diagnostics, selection/reset/invalid dates, native data mapping, denied permission, cache move, network allowlist, day intent, source syntax.');
+  console.log('PASS: native globals/module separation, bitmap adapter, diagnostics, legacy selection ignored, native data mapping, denied permission, cache move, network allowlist, day intent, source syntax.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
