@@ -14,7 +14,7 @@ const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripti
  const first=drawing.segments(model.image);assert.equal(drawing.segments(model.image),first,'Immutable Canvas segmentation reused');
  const m={exports:{}},values=new Map([['calendar-local-touch',Date.now()]]);let bridge=0,loads=0;
  const sdk={Widget:{family:'systemMedium',displaySize:{width:338,height:170},present:()=>{}},Text:'Text'};
- const deps={scripting:sdk,'./bridge-auto':{autoSynchronize:async()=>bridge++},'./model':{loadModel:async()=>{loads++;return model}},'./timeline-view':{TimelineView:()=>{}},'./diagnostics':{VERSION:'fixture',failureDetails:String}};
+ const deps={scripting:sdk,'./bridge-auto':{autoSynchronize:async()=>bridge++},'./model':{loadModel:async()=>{loads++;return model}},'./timeline-view':{TimelineView:()=>{}},'./diagnostics':{VERSION:'fixture',failureDetails:String,resetCanvasDiagnostics:()=>{}}};
  const code=transformSync(fs.readFileSync(path.join(dir,'widget.tsx'),'utf8').replace(/main\(\)\s*$/,'module.exports=main'),{loader:'tsx',format:'cjs',jsxFactory:'createElement'}).code;
  vm.runInNewContext(code,{module:m,exports:m.exports,require:id=>deps[id],createElement:()=>({}),Date,Storage:{get:k=>values.get(k),set:()=>true}});await m.exports();assert.equal(bridge,0,'Local tap render does not wait for bridge');assert.equal(loads,1,'One native agenda render');
  console.log('PASS touch/render: Sun/Sat lower corners, overlap label removed, one neighbor mask, memoized Canvas segments, normal iOS render without Bridge; taps do not request reload. Physical latency pending.');

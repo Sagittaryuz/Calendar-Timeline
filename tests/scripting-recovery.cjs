@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_pro
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting'),base='481bbce',prefix='scripting/scripts/Calendar Timeline Scripting/';
 const old=cp.execFileSync('git',['ls-tree','-r','--name-only',base,'--',prefix],{encoding:'utf8'}).trim().split('\n').map(p=>path.basename(p));
 const retired=old.filter(n=>n.startsWith('bridge'));assert.equal(retired.length,9);assert.deepEqual(fs.readdirSync(dir).sort(),old.filter(n=>!retired.includes(n)).sort());
-for(const name of ['diagonal-canvas.js','rect-raster.js','graph-view.tsx','host.ts'])assert(fs.readFileSync(path.join(dir,name)).equals(cp.execFileSync('git',['show',base+':'+prefix+name])),name+' remains byte-identical: local reads/cache, layout/fonts/frame, navigation');
+for(const name of ['diagonal-canvas.js','rect-raster.js'])assert(fs.readFileSync(path.join(dir,name)).equals(cp.execFileSync('git',['show',base+':'+prefix+name])),name+' remains byte-identical: local reads/cache, layout/fonts/frame, navigation');
 
 const descriptor=JSON.parse(fs.readFileSync(path.join(dir,'script.json')));assert(fs.readFileSync(path.join(dir,'diagnostics.ts'),'utf8').includes("VERSION='"+descriptor.version+"'"));
 for(const name of ['index.tsx','widget.tsx','app_intents.tsx','intent.tsx'])assert(!/from ['"]\.\/bridge/.test(fs.readFileSync(path.join(dir,name),'utf8')),'No active entry imports retired modules');

@@ -1,5 +1,17 @@
 ## 0.3.42 — aniversariantes acima da chuva
 
+## Atualização 0.3.45 — primeira carga e diagnóstico
+
+Corrigida uma espera ilimitada reproduzida em resposta HTTP com corpo travado.
+O diagnóstico no app agora separa preparação de dados, pedido de apresentação e
+callbacks Canvas. Registra também volume raster estimado, sem eventos/lembretes.
+A causa da tela preta relatada em outros aparelhos ainda precisa dos respectivos
+registros. Não há validação física nem promessa de corrigir qualquer tela preta.
+Atualize o mesmo projeto remoto, sem apagar dados. Abra o projeto no Scripting
+para consultar os diagnósticos locais; a primeira camada concluída não atesta o
+widget completo. Visual e comportamento normal permanecem iguais.
+
+
 ## Atualização 0.3.44 — desenho otimizado, visual preservado
 
 Removidos validadores da seleção diária aposentada e a limpeza de armazenamento

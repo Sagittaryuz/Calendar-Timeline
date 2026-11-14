@@ -1,7 +1,7 @@
 import { Widget, Text } from 'scripting'
 import { loadModel } from './model'
 import { TimelineView } from './timeline-view'
-import { VERSION, failureDetails } from './diagnostics'
+import { VERSION, failureDetails, resetCanvasDiagnostics } from './diagnostics'
 
 async function main(){
   const family=String(Widget.family)
@@ -10,8 +10,10 @@ async function main(){
     return
   }
   try{
+    resetCanvasDiagnostics()
+    try{Storage.set('widget-diagnostic',{version:VERSION,phase:'loading-model',at:Date.now()})}catch{}
     const model=await loadModel({background:true}),{width,height}=Widget.displaySize
-    Storage.set('widget-diagnostic',{version:VERSION,phase:'present-requested',at:Date.now()})
+    try{Storage.set('widget-diagnostic',{version:VERSION,phase:'present-requested',at:Date.now()})}catch{}
     Widget.present(<TimelineView model={model} width={width} height={height} extraLarge={family==='systemExtraLarge'}/>,
       {policy:'after',date:new Date((Math.floor(Date.now()/60000)+1)*60000)})
   }catch(error){

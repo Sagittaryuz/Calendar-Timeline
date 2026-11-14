@@ -1,3 +1,9 @@
+## Scripting 0.3.45 — 2026-11-14
+- Timeout cobre também o corpo da resposta HTTP na primeira carga.
+- Logs locais de callbacks Canvas e contadores raster, sem conteúdo da agenda.
+- Testes de primeira carga offline/sem cache/permissões negadas e falhas tardias.
+- A causa da tela preta nos aparelhos relatados ainda não foi comprovada.
+
 ## Scripting 0.3.44 — 2026-11-14
 - Removidos validadores de seleção diária aposentados e limpeza repetida de armazenamento no carregamento.
 - Replay Canvas evita estilos não usados e atribuições redundantes; layout e ordem de pintura preservados.

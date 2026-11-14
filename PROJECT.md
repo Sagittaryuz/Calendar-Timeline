@@ -56,3 +56,25 @@ cenas com e sem agrupamento raster): pixels idênticos. No caminho raster,
 961.351 → 315.401 (67% a menos). Isso mede chamadas redundantes removidas,
 não ganho percentual no tempo ou no iPhone.
 Não foi identificada causa comprovada para a latência específica do aparelho.
+
+## 2026-11-14 — Scripting 0.3.45: primeira carga e diagnóstico Canvas
+
+Relato: tela inicial preta após importar/reconstruir em dois iPhones de amigos e
+primeira carga demorada no iPad. Sem logs/execução nesses aparelhos: a causa real
+não foi identificada e a atualização não é declarada solução comprovada do relato.
+
+Reprodução sintética confirmou uma espera ilimitada em `res.text()` depois dos
+headers HTTP. Agora o prazo existente cobre headers e corpo. HTTP 401, JSON
+inválido, headers/corpo pendentes, falta de cache, localização indisponível,
+permissões locais negadas e rede offline foram exercitados sem usar agenda real.
+Canvas desenha em callbacks posteriores a Widget.present: acrescentados registros
+locais de espera, entrada, primeira camada concluída e primeira exceção. Uma
+primeira camada concluída não significa que todo o widget foi renderizado.
+O diagnóstico é reiniciado por execução, falhas de Storage não interrompem a pintura,
+e nenhum conteúdo de eventos/lembretes é adicionado aos logs. Contadores raster
+registram quantidade/bytes PNG e estimativa de pixels RGBA, não memória total iOS.
+
+Não se alteraram permissões, calendário nativo, pareamento, visual ou limites de
+atualização do iOS. Não reinstalar/apagar dados para aplicar a atualização. Próximo
+passo se persistir no aparelho: ler diagnóstico do widget/Canvas no app e conferir
+versão de Scripting/iOS, sem presumir falta de permissão ou limite de memória.

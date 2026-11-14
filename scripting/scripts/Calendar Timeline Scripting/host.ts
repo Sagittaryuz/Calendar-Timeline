@@ -43,7 +43,7 @@ async function within<T>(task:Promise<T>,milliseconds:number):Promise<T>{
 
 export function createHost(now=new Date(),options:{background?:boolean}={}) {
   const files=storedFiles(),today=dayRange(now)
-  const renderWarnings:{count:number;first?:any}={count:0}
+  const renderWarnings={count:0,first:undefined as any,rasterImages:0,rasterEncodedBytes:0,rasterDecodedBytesEstimate:0}
   const background=options.background===true,networkDeadline=Date.now()+(background?6000:15000)
   const promises=new Map<string,Promise<any[]>>()
   const memo=(key:string,fn:()=>Promise<any[]>)=>{
@@ -60,16 +60,24 @@ export function createHost(now=new Date(),options:{background?:boolean}={}) {
       const remaining=networkDeadline-Date.now()
       if(remaining<=0)throw new Error('Orçamento de rede encerrado; manter cache')
       const timeout=Math.min(this.timeoutInterval,background?3:8,remaining/1000)
-      const res=await within(fetch(this.url,{method:this.method,headers:this.headers,body:this.body,timeout}),Math.ceil(timeout*1000))
-      this.response={statusCode:res.status};if(!res.ok)throw new Error('HTTP '+res.status)
-      return res.text()
+      // Bound the complete response, not only arrival of its headers. A stalled
+      // body must not keep a cache-empty widget waiting indefinitely.
+      return within((async()=>{
+        const res=await fetch(this.url,{method:this.method,headers:this.headers,body:this.body,timeout})
+        this.response={statusCode:res.status};if(!res.ok)throw new Error('HTTP '+res.status)
+        return await res.text()
+      })(),Math.ceil(timeout*1000))
     }
     async loadJSON(){return JSON.parse(await this.loadString())}
   }
   class BitmapDrawContext extends drawing.DrawContext {
     onInvalidColor=(detail:any)=>{renderWarnings.count++;renderWarnings.first??=detail}
     makeRaster=(crop:any)=>{
-      const data=Data.fromUint8Array(encodePNG(crop))
+      const encoded=encodePNG(crop)
+      renderWarnings.rasterImages++
+      renderWarnings.rasterEncodedBytes+=encoded.length
+      renderWarnings.rasterDecodedBytesEstimate+=crop.width*crop.height*4
+      const data=Data.fromUint8Array(encoded)
       const native=data?UIImage.fromData(data):null
       if(!native)throw new Error('Falha ao preparar camada bitmap')
       return {native,size:{width:crop.width,height:crop.height}}
