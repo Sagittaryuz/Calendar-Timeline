@@ -3233,7 +3233,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       if (!rowCounts) {
         const row = Number(previous.gridRow);
         if (row >= 0 && row < dayLimit) rows[row].push({
-          ...previous,
+          ...previous, continuationSource: previous,
           ...(titleContinuesIntoDay ? {isTimelineTitleReservation: true} : {}),
         });
         continue;
@@ -3246,7 +3246,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       const bottom = (previous.gridRow + 1) / originRows;
       for (let row = 0; row < dayLimit; row++) {
         if (top < (row + 1) / dayLimit && bottom > row / dayLimit) {
-          rows[row].push({...previous, gridRow: row,
+          rows[row].push({...previous, gridRow: row, continuationSource: previous,
             isContinuationReservation: true,
             ...(titleContinuesIntoDay ? {isTimelineTitleReservation: true} : {}),
           });
@@ -3320,9 +3320,33 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     };
 
     const placeItem = (item, rowOrder) => {
-      const availableRow = [...new Set(rowOrder)].find((row) =>
+      let availableRow = [...new Set(rowOrder)].find((row) =>
         rowCanAccept(item, row)
       );
+      // A extensão visual de uma pendência não pode esconder o evento de
+      // dia inteiro de amanhã. Libere somente uma faixa de carryover
+      // artificial, nunca um evento real ou lembrete do próprio dia.
+      if (availableRow === undefined && isBottomItem(item)) {
+        const reclaimable = [...new Set(rowOrder)].reverse().find(row =>
+          rows[row].length > 0 && rows[row].every(entry => {
+            const source = entry.continuationSource;
+            return source?.kind === "reminder" &&
+              source.isPendingDayCarryover === true &&
+              source.start < dayStart && source.end > dayStart;
+          }));
+        if (reclaimable !== undefined) {
+          const sources = new Set(rows[reclaimable].map(entry => entry.continuationSource));
+          for (const source of sources) {
+            // São cópias de desenho; os registros e vencimentos não mudam.
+            source.end = new Date(dayStart);
+            source.carryoverClipRight = timeToX(dayStart) - timelineDayBoundaryGap();
+          }
+          for (let row = 0; row < rows.length; row++) {
+            rows[row] = rows[row].filter(entry => !sources.has(entry.continuationSource));
+          }
+          availableRow = reclaimable;
+        }
+      }
 
       if (availableRow === undefined) {
         hidden.push(item);
@@ -3672,7 +3696,8 @@ function timelineItemVisualFootprint(item) {
   const titleClipRight = item.kind === "reminder" && Number.isFinite(badgeLeft)
     ? badgeLeft - scaleVertical(4)
     : timelineWidth();
-  const titleRight = Math.min(estimatedTitleRight, titleClipRight);
+  const titleRight = Math.min(estimatedTitleRight, titleClipRight,
+    Number.isFinite(item.carryoverClipRight) ? item.carryoverClipRight : timelineWidth());
   return {
     left,
     right: Math.max(barRight, titleRight),
@@ -12487,7 +12512,7 @@ function drawTimelineItem(ctx, item, y, rowHeight) {
     ? Math.max(badgeBounds.left, Math.min(badgeBounds.right - 62, badgeLeft))
     : null;
   const reminderTextRight = item.kind === "reminder"
-    ? Math.min(badgeBounds.right, visibleBadgeLeft !== null
+    ? Math.min(badgeBounds.right, Number.isFinite(item.carryoverClipRight) ? item.carryoverClipRight : badgeBounds.right, visibleBadgeLeft !== null
       ? visibleBadgeLeft - scaleVertical(4) : badgeBounds.right)
     : null;
   const textPoint = new Point(

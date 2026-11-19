@@ -594,3 +594,12 @@ disco lunar, eclipse, layout, áreas de toque nem atualização. Cinco cenas
 sintéticas comparadas com 0.3.45: somente 34 operações de stroke lunar
 mudaram; demais operações efetivas e geometria iguais. Prévias desktop
 antes/depois inspecionadas; execução física no iPhone não realizada.
+
+## 0.3.47 — eventos de dia inteiro e pendências anteriores
+
+Corrigida a omissão de eventos de dia inteiro quando a extensão visual das
+pendências anteriores ocupava todas as faixas do dia seguinte. Nesse conflito,
+a extensão necessária termina na meia-noite; o lembrete continua em seu dia de
+origem e os dados reais não mudam. Atualize o mesmo projeto remoto na branch
+`scripting`, sem apagar dados. Não altera permissões, evento, calendário, blur ou
+preferências. Validado em simulação; execução no iPhone ainda não verificada.

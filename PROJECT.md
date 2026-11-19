@@ -88,3 +88,25 @@ disco lunar, eclipse, layout, áreas de toque nem atualização. Cinco cenas
 sintéticas comparadas com 0.3.45: somente 34 operações de stroke lunar
 mudaram; demais operações efetivas e geometria iguais. Prévias desktop
 antes/depois inspecionadas; execução física no iPhone não realizada.
+
+## 2026-11-19 — Scripting 0.3.47: evento de dia inteiro após carryover
+
+Pedido direto de Marcos: evento de dia inteiro do dia seguinte ausente do widget.
+Referências pessoais inspecionadas, sem copiar imagens ou títulos ao repositório.
+Reprodução no motor real: seis faixas de lembretes prolongadas artificialmente até
+06h ocupavam a grade seguinte; o evento era reduzido a overflow. A ponte conectada
+estava fora do período solicitado, portanto não foi usada para afirmar ausência.
+
+Correção mínima na seleção: somente quando um evento de dia inteiro não encontra
+faixa livre, encerra na meia-noite a continuação visual dos lembretes anteriores
+que bloqueiam uma faixa, recortando também seus títulos. Preserva o lembrete em
+seu dia de origem. Não desloca datas reais, não altera registros, não libera
+faixas ocupadas por eventos reais ou lembretes do próprio dia. O blur de amanhã,
+aniversários, layout, atualização e as demais famílias permanecem.
+Sem evento/conflito, desenho comparado com a versão anterior é idêntico.
+
+Regressão: tests/scripting-all-day-carryover.cjs, 30 cenas em America/Sao_Paulo,
+múltiplos eventos, proteção de eventos noturnos e imutabilidade da entrada.
+Prévia sintética: tools/preview-scripting-all-day.cjs. Não é captura nativa;
+atualização e execução física no iPhone ainda não verificadas. Não regenerar o
+motor pela antiga ferramenta build-scripting.cjs (ela reconstrói uma base histórica).

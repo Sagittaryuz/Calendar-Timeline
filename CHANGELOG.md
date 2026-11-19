@@ -136,3 +136,10 @@ disco lunar, eclipse, layout, áreas de toque nem atualização. Cinco cenas
 sintéticas comparadas com 0.3.45: somente 34 operações de stroke lunar
 mudaram; demais operações efetivas e geometria iguais. Prévias desktop
 antes/depois inspecionadas; execução física no iPhone não realizada.
+
+## Scripting 0.3.47 — 2026-11-19
+- Evento de dia inteiro do próximo dia pode recuperar uma faixa ocupada apenas
+  pela extensão visual artificial de pendências do dia anterior.
+- Limita somente essa extensão/título à meia-noite, sem mudar agenda ou vencimentos.
+- Preserva desenho quando não há conflito, eventos noturnos reais e outras famílias.
+- Regressão sintética e prévia comparativa; validação física no iPhone pendente.
