@@ -603,3 +603,8 @@ a extensão necessária termina na meia-noite; o lembrete continua em seu dia de
 origem e os dados reais não mudam. Atualize o mesmo projeto remoto na branch
 `scripting`, sem apagar dados. Não altera permissões, evento, calendário, blur ou
 preferências. Validado em simulação; execução no iPhone ainda não verificada.
+
+## Scripting 0.3.48 — título dos quadros
+
+- Primeira linha: fonte de 38 para 43 px lógicos e posição 2 px acima.
+- Mantém a segunda linha de cada quadro no mesmo lugar e preserva bordas, pesos e alinhamentos.

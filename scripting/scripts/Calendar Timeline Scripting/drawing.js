@@ -277,22 +277,36 @@ function twoRowHeaderPlan(ctx,op){
   const s=op.shared;let cache=headerMeasureCache.get(s);if(!cache){cache=new Map();headerMeasureCache.set(s,cache)}
   const word=headerTextBounds(ctx,op.word,op.word.text,cache),number=headerTextBounds(ctx,op.number,op.number.text,cache),weather=headerWeatherBounds(ctx,op,cache),numberInk=headerInkBounds(ctx,op.number,cache);
   const size=op.title.state.font.size;
-  const metric=(name,text)=>{const spec={...op.word,state:{...op.word.state,font:{name,size}}};headerTextBounds(ctx,spec,text,cache);return cache.get(name+':'+size+':'+text)};
-  const faces=op.word.state.font.name.startsWith('AvenirNextCondensed')
-    ? ['AvenirNextCondensed-DemiBold','AvenirNextCondensed-Heavy'] : ['SFMono-Regular','SFMono-Heavy'];
-  const spaceAdvance=Math.max(1,...faces.map(name=>metric(name,'0 0').width-metric(name,'00').width));
-  headerTextBounds(ctx,op.word,op.word.text,cache);const wordAdvance=cache.get(op.word.state.font.name+':'+size+':'+op.word.text).width;
-  const numberX=wordAdvance+spaceAdvance,wordX=0;
-  const rowHeight=size*(s.diskScale??1.375)+(s.diskPadding??1.5),textY=(rowHeight-size)/2;
-  const title={left:Math.min(word.left,number.left+numberX),right:Math.max(word.right,number.right+numberX),top:textY,bottom:textY+size};
+  const titleLayoutSize=s.titleLayoutSize??size;
+  const resized=(part,fontSize)=>({...part,state:{...part.state,font:{...part.state.font,size:fontSize}}});
+  const spacingAt=fontSize=>{
+    const metric=(name,text)=>{const spec={...op.word,state:{...op.word.state,font:{name,size:fontSize}}};headerTextBounds(ctx,spec,text,cache);return cache.get(name+':'+fontSize+':'+text)};
+    const faces=op.word.state.font.name.startsWith('AvenirNextCondensed')
+      ? ['AvenirNextCondensed-DemiBold','AvenirNextCondensed-Heavy'] : ['SFMono-Regular','SFMono-Heavy'];
+    const spaceAdvance=Math.max(1,...faces.map(name=>metric(name,'0 0').width-metric(name,'00').width));
+    return {spaceAdvance,wordAdvance:metric(op.word.state.font.name,op.word.text).width};
+  };
+  const {spaceAdvance,wordAdvance}=spacingAt(size),numberX=wordAdvance+spaceAdvance,wordX=0;
+  // Lock the card footprint and second-row position to the pre-adjustment
+  // layout. Only the title ink grows and moves: keep its edge/center anchor.
+  const rowHeight=titleLayoutSize*(s.diskScale??1.375)+(s.diskPadding??1.5);
+  const baseTextY=(rowHeight-titleLayoutSize)/2,textY=baseTextY+(s.titleOffsetY??0);
+  const titleBox=(w,n,nx)=>({left:Math.min(w.left,n.left+nx),right:Math.max(w.right,n.right+nx)});
+  const title={...titleBox(word,number,numberX),top:textY,bottom:textY+size};
+  let layoutTitle=title;
+  if(titleLayoutSize!==size){
+    const baseline=spacingAt(titleLayoutSize);
+    layoutTitle=titleBox(headerTextBounds(ctx,resized(op.word,titleLayoutSize),op.word.text,cache),
+      headerTextBounds(ctx,resized(op.number,titleLayoutSize),op.number.text,cache),baseline.spaceAdvance+baseline.wordAdvance);
+  }
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons.filter(Boolean)]);
   const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2,alignment=headerAlignment(op);
-  // Only the two spatial edge slots use internal edge alignment; every
-  // weekday uses its real date for content and color, not for layout.
-  const relative=alignment==='right'?weather.right-title.right:alignment==='left'?weather.left-title.left:(weather.left+weather.right-title.left-title.right)/2;
-  const commonLeft=Math.min(weather.left,title.left+relative),commonRight=Math.max(weather.right,title.right+relative);
-  const wx=center-(commonLeft+commonRight)/2,tx=wx+relative,wy=top+rowHeight+s.gap-row2.top;
+  // Only the two spatial edge slots use internal edge alignment.
+  const alignedX=box=>alignment==='right'?weather.right-box.right:alignment==='left'?weather.left-box.left:(weather.left+weather.right-box.left-box.right)/2;
+  const layoutRelative=alignedX(layoutTitle);
+  const commonLeft=Math.min(weather.left,layoutTitle.left+layoutRelative),commonRight=Math.max(weather.right,layoutTitle.right+layoutRelative);
+  const wx=center-(commonLeft+commonRight)/2,tx=wx+alignedX(title),wy=top+rowHeight+s.gap-row2.top;
   const shift=(box,x,y)=>({...box,left:box.left+x,right:box.right+x,top:box.top+y,bottom:box.bottom+y});
   const positionedNumber=shift(number,tx+numberX,top+textY-number.top),positionedInk=shift(numberInk,tx+numberX,top+textY-number.top);
   // Preserve the common text line boxes; today has no decoration or extra reservation.

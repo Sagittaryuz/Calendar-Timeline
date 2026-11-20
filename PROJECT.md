@@ -110,3 +110,8 @@ múltiplos eventos, proteção de eventos noturnos e imutabilidade da entrada.
 Prévia sintética: tools/preview-scripting-all-day.cjs. Não é captura nativa;
 atualização e execução física no iPhone ainda não verificadas. Não regenerar o
 motor pela antiga ferramenta build-scripting.cjs (ela reconstrói uma base histórica).
+
+## Scripting 0.3.48 — título dos quadros
+
+- Primeira linha: fonte de 38 para 43 px lógicos e posição 2 px acima.
+- Mantém a segunda linha de cada quadro no mesmo lugar e preserva bordas, pesos e alinhamentos.

@@ -143,3 +143,8 @@ antes/depois inspecionadas; execução física no iPhone não realizada.
 - Limita somente essa extensão/título à meia-noite, sem mudar agenda ou vencimentos.
 - Preserva desenho quando não há conflito, eventos noturnos reais e outras famílias.
 - Regressão sintética e prévia comparativa; validação física no iPhone pendente.
+
+## Scripting 0.3.48 — título dos quadros
+
+- Primeira linha: fonte de 38 para 43 px lógicos e posição 2 px acima.
+- Mantém a segunda linha de cada quadro no mesmo lugar e preserva bordas, pesos e alinhamentos.

@@ -1,4 +1,4 @@
-export const VERSION='0.3.47'
+export const VERSION='0.3.48'
 
 export function markPhase(phase:string,started:number){
   // Diagnostics must never turn a successful model into a failure.

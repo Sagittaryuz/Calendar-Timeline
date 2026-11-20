@@ -1,13 +1,13 @@
 // Synthetic records only. Exercise the production selection and drawing engine.
 const assert=require('node:assert/strict'),cp=require('node:child_process');
-const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
+const {fixture,compile,flatten,raw,withHistoricalTitle}=require('./scripting-rolling.cjs');
 const baseline=cp.execFileSync('git',['show','d0f2da1:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
 const probe=s=>compile(s.replace('return {temporal:','return {selected:selectedItems,temporal:'));
 const at=(day,h=0,m=0)=>new Date(2026,10,day,h,m);
 const reminders=n=>Array.from({length:n},(_,i)=>({kind:'reminder',identifier:'r'+i,title:'SYNTHETIC PENDING TASK '+i,start:at(18),end:at(19),sourceIsAllDay:true,color:'#0088FF'}));
 const event=(i=0)=>({kind:'event',identifier:'event'+i,title:'SYNTHETIC ALL DAY '+i,start:at(19),end:at(20),isAllDay:true,color:'#FF0000'});
 (async()=>{
- const {host,options}=await fixture(),before=probe(baseline),after=probe(raw);
+ const {host,options}=await fixture(),before=probe(baseline),after=probe(withHistoricalTitle(raw));
  const bad=await before(host,options(at(18,21,23),[...reminders(8),event()]));
  assert(!bad.selected.some(i=>i.identifier==='event0'),'Reproduce all-day event hidden by carryover');
  assert(bad.selected.some(i=>i.isOverflow&&i.title==='+1'));

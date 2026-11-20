@@ -3,7 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict'),os=require('node:os');
 const {pathToFileURL}=require('node:url');
 const {createCanvas,ImageData}=require('@napi-rs/canvas');
-const {fixture,compile,raw}=require('./scripting-rolling.cjs');
+const {fixture,compile,raw,withHistoricalTitle}=require('./scripting-rolling.cjs');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
 const baseline='d7310b6';
 function adapter(ctx,count){return new Proxy(ctx,{set(target,key,value){if(['fillStyle','strokeStyle','lineWidth'].includes(key))count.styles++;target[key]=key==='font'&&typeof value==='object'?`${value.size}px sans-serif`:value;return true;},get(target,key){if(key==='drawImage')return(source,...args)=>target.drawImage(source.image??source,...args);const value=target[key];return typeof value==='function'?value.bind(target):value;}})}
@@ -19,7 +19,7 @@ function paint(image,d,count,view={x:0,y:0,width:image.size.width,height:image.s
 }
 (async()=>{
  const {d,host,options}=await fixture();
- const previous=compile(cp.execFileSync('git',['show','026be645177d619158e7d974d5a5f609c9ceabb3:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'})),render=compile(raw);
+ const previous=compile(cp.execFileSync('git',['show','026be645177d619158e7d974d5a5f609c9ceabb3:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'})),render=compile(withHistoricalTitle(raw));
  let changed=0;
  function compare(a,b){
   if(a&&typeof a==='object'){

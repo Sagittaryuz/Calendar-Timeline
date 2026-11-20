@@ -3,7 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict'),os=require('node:os');
 const {pathToFileURL}=require('node:url');
 const {createCanvas,ImageData}=require('@napi-rs/canvas');
-const {fixture,compile,raw}=require('./scripting-rolling.cjs');
+const {fixture,compile,raw,withHistoricalTitle}=require('./scripting-rolling.cjs');
 const dir=path.resolve(__dirname,'../scripting/scripts/Calendar Timeline Scripting');
 const baseline='d7310b6';
 function adapter(ctx,count){return new Proxy(ctx,{set(target,key,value){if(['fillStyle','strokeStyle','lineWidth'].includes(key))count.styles++;target[key]=key==='font'&&typeof value==='object'?`${value.size}px sans-serif`:value;return true;},get(target,key){if(key==='drawImage')return(source,...args)=>target.drawImage(source.image??source,...args);const value=target[key];return typeof value==='function'?value.bind(target):value;}})}
@@ -23,7 +23,7 @@ function paint(image,d,count,view={x:0,y:0,width:image.size.width,height:image.s
   let old=cp.execFileSync('git',['show',`${baseline}:scripting/scripts/Calendar Timeline Scripting/drawing.js`],{encoding:'utf8'});
   for(const name of ['diagonal-canvas.js','rect-raster.js'])old=old.replace(`'./${name}'`,JSON.stringify(pathToFileURL(path.join(dir,name)).href));
   fs.writeFileSync(path.join(temp,'drawing.mjs'),old);
-  const previous=await import(pathToFileURL(path.join(temp,'drawing.mjs')).href),{d,host,options}=await fixture(),render=compile(raw);
+  const previous=await import(pathToFileURL(path.join(temp,'drawing.mjs')).href),{d,host,options}=await fixture(),render=compile(withHistoricalTitle(raw));
   let before=0,after=0;const results=[];
   class BitmapDrawContext extends d.DrawContext {
    makeRaster=crop=>{const canvas=createCanvas(crop.width,crop.height);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(crop.pixels),crop.width,crop.height),0,0);return {size:{width:crop.width,height:crop.height},native:canvas};};
