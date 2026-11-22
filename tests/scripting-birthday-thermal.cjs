@@ -48,10 +48,10 @@ function inkBounds(ops,d){
 
 async function main(){
   GlobalFonts.registerFromPath('/usr/share/fonts/truetype/open-sans/OpenSans-ExtraBold.ttf','BirthdayHeavy');
-  const thermalDraw=raw.indexOf('drawCompactThermalBand(baseCtx, hourlyWeather');
+  const astroDraw=raw.indexOf('drawWeatherConditionStrip(baseCtx, hourlyWeather');
   const tomorrowLayer=raw.indexOf('drawTimelineItemLayer(\n      baseCtx');
   const panelLayer=raw.slice(raw.indexOf('async function renderTimelinePanel'),raw.indexOf('\nfunction timelineItemsStartingToday'));
-  assert(thermalDraw>=0&&tomorrowLayer>thermalDraw,'The thermal curve is painted before the birthday layer');
+  assert(astroDraw>=0&&tomorrowLayer>astroDraw,'The original weather strip precedes the birthday layer');
   assert(panelLayer.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather)')<panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
     'Birthday labels are composited after the rain overlay');
   assert(panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)')<panelLayer.indexOf('drawEventStartLines(ctx,'),

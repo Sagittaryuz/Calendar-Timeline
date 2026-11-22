@@ -1,14 +1,14 @@
 // Real selection/drawing engine with synthetic agenda, never personal records.
 const assert=require('node:assert/strict');
 const cp=require('node:child_process');
-const {fixture,compile,flatten,raw,withHistoricalTitle}=require('./scripting-rolling.cjs');
+const {fixture,compile,flatten,raw,withHistoricalTitle,withHistoricalWeatherSpace}=require('./scripting-rolling.cjs');
 const engine='scripting/scripts/Calendar Timeline Scripting/original-engine.js';
 const baseline=cp.execFileSync('git',['show',`100531a:${engine}`],{encoding:'utf8'});
 const probe=s=>compile(s.replace('return {temporal:','return {selected:selectedItems,temporal:'));
 const at=(day,h=0,m=0)=>new Date(2026,10,day,h,m);
 const reminders=(count,day=12)=>Array.from({length:count},(_,i)=>({kind:'reminder',identifier:`r${day}-${i}`,title:'SYNTHETIC TASK '+i,start:at(day),end:at(day+1),sourceIsAllDay:true,color:'#0088FF'}));
 async function main(){
- const {host,options}=await fixture(),before=probe(baseline),after=probe(withHistoricalTitle(raw).replace('function dayBoundaryMoonLineWidth() {\n  return 4;', 'function dayBoundaryMoonLineWidth() {\n  return 8;')); // Isolate overflow vs its historical baseline; 0.3.46 lunar width tested independently.
+ const {host,options}=await fixture(),before=probe(baseline),after=probe(withHistoricalTitle(withHistoricalWeatherSpace(raw)).replace('function dayBoundaryMoonLineWidth() {\n  return 4;', 'function dayBoundaryMoonLineWidth() {\n  return 8;')); // Isolate overflow vs its historical baseline; 0.3.46 lunar width tested independently.
  const bad=await before(host,options(at(12,12,55),reminders(8)));
  assert.equal(bad.selected.filter(i=>i.isOverflow).length,0,'Baseline reproduces missing +2 after noon');
  let count=0;

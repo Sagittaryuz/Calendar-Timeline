@@ -608,3 +608,8 @@ preferências. Validado em simulação; execução no iPhone ainda não verifica
 
 - Primeira linha: fonte de 38 para 43 px lógicos e posição 2 px acima.
 - Mantém a segunda linha de cada quadro no mesmo lugar e preserva bordas, pesos e alinhamentos.
+
+## Scripting 0.3.49 — temperaturas sob os astros
+
+- Substitui a curva térmica inferior e seus números por cápsulas coloridas abaixo dos astros. Reutiliza a paleta térmica contínua e seleciona texto preto ou branco pelo contraste.
+- As barras de precipitação passam a crescer para baixo a partir da base dos astros. Mantém horários, escala de mm/h, grade, aniversários em primeiro plano e demais elementos independentes. A agenda ocupa 22 px da antiga faixa térmica para deixar livres os títulos abaixo das cápsulas, sem reduzir a altura das linhas.
