@@ -10,7 +10,7 @@ const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
  const before=compile(cp.execFileSync('git',['show','d124c4c:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'})),after=compile(raw);let headers=0;
  for(const day of [25,27,31]){
   const o=options(new Date(2026,9,day,20)),a=await after(host,o),b=await before(host,o);for(const key of ['hourLegend','thermalBand','panel','windowStart','windowEnd'])assert.deepEqual(a[key],b[key],key+' unchanged');assert.equal(a.temporal.midnightX,b.temporal.midnightX,'The lower timeline still follows the clock');
-  for(const h of flatten(a.image).filter(o=>o.type==='header')){assert.equal(h.title.state.font.size,53);assert.equal(h.word.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');assert.deepEqual(h.number.state.font,h.word.state.font);assert.equal(h.number.state.text.hex,h.word.state.text.hex);headers++}
+  for(const h of flatten(a.image).filter(o=>o.type==='header')){assert.equal(h.title.state.font.size,43);assert.equal(h.word.state.font.name,h.isToday?'AvenirNextCondensed-Heavy':'AvenirNextCondensed-DemiBold');assert.deepEqual(h.number.state.font,h.word.state.font);assert.equal(h.number.state.text.hex,h.word.state.text.hex);headers++}
  }
  const c=require('@napi-rs/canvas'),path=require('node:path');
  for(const [file,name]of [['BarlowCondensed-SemiBold.ttf','Semi'],['BarlowCondensed-Black.ttf','Heavy']])c.GlobalFonts.registerFromPath(path.join(__dirname,'fixtures/fonts',file),name);

@@ -3903,8 +3903,7 @@ async function renderWidget(items, loadError) {
   drawDatePanel(contentCtx, loadResult.holidayDates);
 
   const astroTicks = weatherConditionTicks(hourlyWeather);
-  const rainBars = [];
-  const timelineImage = await renderTimelinePanel(items, loadError, astroTicks, rainBars);
+  const timelineImage = await renderTimelinePanel(items, loadError, astroTicks);
   contentCtx.drawImageInRect(
     timelineImage,
     new Rect(
@@ -3937,7 +3936,7 @@ async function renderWidget(items, loadError) {
   // A borda superior da timeline não pode cobrir seu aro branco.
   drawDayBoundaryMoonBordersOnForeground(contentCtx);
   // Preserve os dígitos inclusive no cruzamento da divisória da meia-noite.
-  drawAstroTemperatureCapsules(contentCtx, hourlyWeather, astroTicks, rainBars);
+  drawAstroTemperatureCapsules(contentCtx, hourlyWeather, astroTicks);
 
   const finalImage=contentCtx.getImage();
   const clipPoints=widgetLeftContourPoints(WIDGET_CONTOUR.strokeInset);
@@ -6003,7 +6002,7 @@ function timelineRainScaleTopY() {
   return weatherStripBottomY() + TITLE_TIMELINE_GAP_ADJUSTMENT;
 }
 
-function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOrigin = null, painted = null) {
+function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOrigin = null) {
   const quarterHourMilliseconds = WEATHER_QUARTER_MS;
   const rainEntries = thermalRainEntries(sourceHours);
   if (!rainEntries.length) return;
@@ -6042,7 +6041,6 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOr
       const rect = new Rect(centerX - barWidth / 2,
         downwardOrigin ?? graphBottom - height, barWidth, height);
       drawRainBar(ctx, rect, new Color(SETTINGS.rainLineColor, opacity));
-      painted?.push(rect);
     }
     // Raios continuam alternados na mesma grade; não desenhar gotas.
     if (entry.storm && Math.floor(entry.timestamp / quarterHourMilliseconds) % 2 === 0) {
@@ -6254,7 +6252,7 @@ function rainCountdownLayout(weather, items = []) {
   for (const rain of thermalRainEntries(sourceHours)) {
     if (rain.amount < SETTINGS.rainEvidenceMinMM) continue;
     const bar = new Rect(timeToX(new Date(rain.timestamp)) - 4,
-      weatherAstroBaseY(), 8, thermalRainBarHeight(rain.amount, timelineRainScaleTopY(), bottom));
+      solarLineY(), 8, thermalRainBarHeight(rain.amount, timelineRainScaleTopY(), bottom));
     if (rainRectsOverlap(rect, bar, scaleVertical(2))) return null;
   }
   for (let day = addDays(startOfDay(windowStart), 1); day < windowEnd; day = addDays(day, 1)) {
@@ -6267,7 +6265,7 @@ function rainCountdownLayout(weather, items = []) {
     if (rainRectsOverlap(rect, obstacle)) return null;
     obstacles.push(obstacle);
   }
-  const targetY = weatherAstroBaseY() +
+  const targetY = solarLineY() +
     thermalRainBarHeight(entry.amount, timelineRainScaleTopY(), bottom) - scaleVertical(2);
   const visible = timelineVisibleContentBounds(targetY, scaleVertical(2), 4);
   if (targetX <= visible.left || targetX >= visible.right) return null;
@@ -6892,9 +6890,20 @@ function weatherIconIntersectsTimeline(centerX, halfWidth) {
   );
 }
 
-// A linha solar nasce no primeiro pixel útil do grid, abaixo da faixa fixa
-// dos ícones. Assim o halo não interfere no alinhamento óptico dos astros.
+function temperatureCapsuleTopY() {
+  return weatherAstroBaseY() + scaleVertical(1);
+}
+
+function temperatureCapsuleHeight() {
+  return hourLegendFontSize() + scaleVertical(2);
+}
+
+// Use the same center for the solar glow and the rain origin, including midnight.
 function solarLineY() {
+  return temperatureCapsuleTopY() + temperatureCapsuleHeight() / 2;
+}
+
+function timelineWeatherGridTopY() {
   return timelineChartTop() - weatherChartInset;
 }
 
@@ -8808,7 +8817,7 @@ function timelineRainSourceHours(weather) {
     .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
 }
 
-function drawTimelineRainOverlay(ctx, weather, painted) {
+function drawTimelineRainOverlay(ctx, weather) {
   const sourceHours = timelineRainSourceHours(weather);
   if (!sourceHours.some(hour =>
     Number(hour.timestamp) >= windowStart.getTime() &&
@@ -8817,8 +8826,7 @@ function drawTimelineRainOverlay(ctx, weather, painted) {
     ctx, sourceHours,
     timelineRainScaleTopY(),
     thermalBandBottomY(),
-    weatherAstroBaseY(),
-    painted
+    solarLineY()
   );
 }
 
@@ -8829,16 +8837,13 @@ function temperatureCapsuleTextColor(hex) {
   return luminance >= Math.sqrt(0.0525) - 0.05 ? "#000000" : "#FFFFFF";
 }
 
-function drawAstroTemperatureCapsules(ctx, weather, ticks, rainBars) {
+function drawAstroTemperatureCapsules(ctx, weather, ticks) {
   const sourceHours = timelineRainSourceHours(weather);
   if (!sourceHours.length) return;
   const fontSize = hourLegendFontSize();
-  const height = fontSize + scaleVertical(2);
+  const height = temperatureCapsuleHeight();
+  const y = CANVAS.timelineTop + temperatureCapsuleTopY();
   for (const {tick} of ticks) {
-    const iconBase = tick.getHours() === 0
-      ? weatherIconCenterY() + dayBoundaryAstroOuterRadius()
-      : weatherAstroBaseY();
-    const y = CANVAS.timelineTop + iconBase + scaleVertical(1);
     const centerX = timeToX(tick);
     if (!weatherIconIntersectsTimeline(centerX, weatherIconSize())) continue;
     const sample = temperatureAtTimestamp(sourceHours, +tick);
@@ -8851,33 +8856,12 @@ function drawAstroTemperatureCapsules(ctx, weather, ticks, rainBars) {
     fillRoundedRect(ctx, rect, height / 2, new Color(fill, 1));
     ctx.setTextAlignedCenter();
     ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
-    const labelColor = temperatureCapsuleTextColor(fill);
-    // Repaint only the clipped portion of the bars covered by the label's
-    // background. Do not move bars or redraw rain over the agenda.
-    let intersectsRain = false;
-    for (const bar of rainBars) {
-      const x = Math.max(rect.x, CANVAS.plotLeft + bar.x);
-      const right = Math.min(rect.x + rect.width, CANVAS.plotLeft + bar.x + bar.width);
-      const y = Math.max(rect.y, CANVAS.timelineTop + bar.y);
-      const bottom = Math.min(rect.y + rect.height, CANVAS.timelineTop + bar.y + bar.height);
-      if (right <= x || bottom <= y) continue;
-      intersectsRain = true;
-      drawRainBar(ctx, new Rect(x, y, right - x, bottom - y), new Color(SETTINGS.rainLineColor, 1));
-    }
-    // Dark text is readable on rain cyan; a narrow white keyline protects
-    // it on cool navy capsules without obscuring the remaining bar area.
-    if (intersectsRain && labelColor === "#FFFFFF") {
-      ctx.setTextColor(new Color("#FFFFFF", 1));
-      for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-        ctx.drawTextInRect(label, new Rect(rect.x + dx, rect.y + dy, rect.width, rect.height));
-      }
-    }
-    ctx.setTextColor(new Color(intersectsRain ? "#000000" : labelColor, 1));
+    ctx.setTextColor(new Color(temperatureCapsuleTextColor(fill), 1));
     ctx.drawTextInRect(label, rect);
   }
 }
 
-async function renderTimelinePanel(items, loadError, astroTicks, rainBars) {
+async function renderTimelinePanel(items, loadError, astroTicks) {
   // Mantém a base visual separada da composição final. Isso impede que
   // a rasterização do blur substitua pixels transparentes do dia atual.
   const baseCtx = new DrawContext();
@@ -8954,7 +8938,7 @@ async function renderTimelinePanel(items, loadError, astroTicks, rainBars) {
     );
   }
   // Chuva cresce para baixo, com a mesma escala e a mesma grade temporal.
-  drawTimelineRainOverlay(ctx, hourlyWeather, rainBars);
+  drawTimelineRainOverlay(ctx, hourlyWeather);
   // Os nomes ficam à frente das barras, mantendo o centro térmico e o blur
   // aplicado aos aniversários do dia seguinte.
   drawTimelineBirthdayLabelsAfterRain(ctx, items);
@@ -9100,7 +9084,7 @@ function diagonalWeekdayLabelEntries() {
     "SEXTA",
     "SÁBADO",
   ];
-  const gridTop = solarLineY();
+  const gridTop = timelineWeatherGridTopY();
   const gridBottom = thermalBandBottomY();
   let dayStart = startOfDay(windowStart);
   const finalDay = startOfDay(windowEnd);
@@ -11979,7 +11963,7 @@ function drawEventStartLineAnchors(ctx, items) {
 
 function drawHourAxis(ctx, items) {
   const ticks = hourTicks();
-  const gridTop = solarLineY();
+  const gridTop = timelineWeatherGridTopY();
   const gridBottom = thermalBandBottomY();
 
   for (const tick of ticks) {
@@ -13202,7 +13186,7 @@ function weekHeaderStyle() {
   if(weekHeaderStyle.cache)return weekHeaderStyle.cache;
   const days=Array.from({length:titleHeaderCardCount()},(_,i)=>weekHeaderFields(addDays(titleRangeStart(),i)));
   const temperatureSize=Math.min(scaleFontSize(21),scaleFontSize(21)*3/Math.max(...days.flatMap(d=>[d.maximum.length,d.minimum.length])));
-  return weekHeaderStyle.cache={titleSize:53,titleLayoutSize:38,titleOffsetY:-2,temperatureSize,
+  return weekHeaderStyle.cache={titleSize:43,titleLayoutSize:38,titleOffsetY:-12,temperatureSize,
     headlines:days.map(d=>d.headline),dates:days.map(d=>d.headline.split(' ')[1]),temperatures:days.flatMap(d=>[d.maximum,d.minimum]),icons:[],gap:0.5,wordGap:2,diskScale:1.375,diskPadding:1.5,circlePadding:2,circleStroke:2};
 }
 function weekHeaderLayout(date,card) {

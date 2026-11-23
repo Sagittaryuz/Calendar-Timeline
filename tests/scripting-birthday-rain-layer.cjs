@@ -53,7 +53,7 @@ function intersects(a,b){
 
 async function main(){
   const panel=raw.slice(raw.indexOf('async function renderTimelinePanel'),raw.indexOf('\nfunction timelineItemsStartingToday'));
-  assert(panel.includes('drawTimelineRainOverlay(ctx, hourlyWeather, rainBars)')&&panel.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather, rainBars)')<panel.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
+  assert(panel.includes('drawTimelineRainOverlay(ctx, hourlyWeather)')&&panel.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather)')<panel.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
     'The actual timeline rain overlay is painted before birthday labels');
   assert(panel.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)')<panel.indexOf('drawEventStartLines(ctx,'),
     'Event start guides and day-boundary overlays retain foreground priority');

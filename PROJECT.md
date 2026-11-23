@@ -126,3 +126,8 @@ motor pela antiga ferramenta build-scripting.cjs (ela reconstrói uma base hist�
 - Temperatura sob o astro compartilha os 25 px lógicos da legenda das horas; primeira linha dos quadros de data cresce de 43 para 53 px na mesma âncora.
 - Retira as gotas decorativas do gráfico e dos astros, mantendo raios, barras opacas, intensidade, horários e sentido descendente.
 - Segmentos azuis reaparecem somente dentro da área de colisão com cada cápsula, atrás dos números. Reserva fixa de 10 px adicionais acima da primeira linha de agenda evita que as cápsulas maiores cubram eventos, sem alterar altura das linhas ou geometria da grade.
+
+## Scripting 0.3.51 — alinhamento do clima e dos quadros
+
+- A cápsula da virada fica na mesma linha das demais. Chuva e linha solar usam o centro vertical das cápsulas como origem; as cápsulas ficam à frente da chuva.
+- Primeira linha de 53 para 43 px lógicos e solicitação de 10 px acima, limitada pelo contorno superior para não cortar os títulos; demais linhas, grade e áreas de toque preservadas.

@@ -290,10 +290,10 @@ function twoRowHeaderPlan(ctx,op){
   // Lock the card footprint and second-row position to the pre-adjustment
   // layout. Only the title ink grows and moves: keep its edge/center anchor.
   const rowHeight=titleLayoutSize*(s.diskScale??1.375)+(s.diskPadding??1.5);
-  const baseTextY=(rowHeight-titleLayoutSize)/2,textY=baseTextY+(s.titleOffsetY??0);
+  const baseTextY=(rowHeight-titleLayoutSize)/2;
   const titleBox=(w,n,nx)=>({left:Math.min(w.left,n.left+nx),right:Math.max(w.right,n.right+nx)});
-  const title={...titleBox(word,number,numberX),top:textY,bottom:textY+size};
-  let layoutTitle=title;
+  const unpositionedTitle=titleBox(word,number,numberX);
+  let layoutTitle=unpositionedTitle;
   if(titleLayoutSize!==size){
     const baseline=spacingAt(titleLayoutSize);
     layoutTitle=titleBox(headerTextBounds(ctx,resized(op.word,titleLayoutSize),op.word.text,cache),
@@ -302,6 +302,11 @@ function twoRowHeaderPlan(ctx,op){
   const temperature=op.weather.ops.find(o=>o.type==='text');
   const row2=unionHeaderBounds([...s.temperatures.map(t=>headerTextBounds(ctx,temperature,t,cache)),...s.icons.filter(Boolean)]);
   const height=rowHeight+s.gap+row2.bottom-row2.top,top=op.frame.y+(op.frame.height-height)/2,center=op.frame.x+op.frame.width/2,alignment=headerAlignment(op);
+  // Negative native DrawContext anchors can suppress the whole glyph. Keep
+  // the requested rise wherever the original card contour has room.
+  const titleAnchorFloor=op.frame.y+1-top+Math.max(word.top,number.top);
+  const textY=Math.max(baseTextY+(s.titleOffsetY??0),titleAnchorFloor);
+  const title={...unpositionedTitle,top:textY,bottom:textY+size};
   // Only the two spatial edge slots use internal edge alignment.
   const alignedX=box=>alignment==='right'?weather.right-box.right:alignment==='left'?weather.left-box.left:(weather.left+weather.right-box.left-box.right)/2;
   const layoutRelative=alignedX(layoutTitle);

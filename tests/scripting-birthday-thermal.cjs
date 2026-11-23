@@ -52,7 +52,7 @@ async function main(){
   const tomorrowLayer=raw.indexOf('drawTimelineItemLayer(\n      baseCtx');
   const panelLayer=raw.slice(raw.indexOf('async function renderTimelinePanel'),raw.indexOf('\nfunction timelineItemsStartingToday'));
   assert(astroDraw>=0&&tomorrowLayer>astroDraw,'The original weather strip precedes the birthday layer');
-  assert(panelLayer.includes('drawTimelineRainOverlay(ctx, hourlyWeather, rainBars)')&&panelLayer.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather, rainBars)')<panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
+  assert(panelLayer.includes('drawTimelineRainOverlay(ctx, hourlyWeather)')&&panelLayer.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather)')<panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
     'Birthday labels are composited after the rain overlay');
   assert(panelLayer.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)')<panelLayer.indexOf('drawEventStartLines(ctx,'),
     'Event start guides and remaining structural overlays stay above birthday labels');
