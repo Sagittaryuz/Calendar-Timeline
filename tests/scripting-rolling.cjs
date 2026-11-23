@@ -6,7 +6,7 @@ const compile=s=>new(Object.getPrototypeOf(async function(){}).constructor)('hos
 // Narrow historical feature comparisons to their original header typography.
 const withHistoricalTitle=s=>s.replace(/titleSize:\d+,titleLayoutSize:\d+,titleOffsetY:-?\d+,temperatureSize/, 'titleSize:38,temperatureSize');
 // Isolate old layout comparisons from the new fixed astro-label clearance.
-const withHistoricalWeatherSpace=s=>s.replace('const weatherChartInset = 22;', 'const weatherChartInset = 0;');
+const withHistoricalWeatherSpace=s=>s.replace(/const weatherChartInset = \d+;/, 'const weatherChartInset = 0;');
 const probe=s=>compile(s.replace('return {temporal:',`return {test:{bridgeY:dayBoundaryMoonBorderTopY(),blur:shouldBlurFutureTimeline(),prepared:preparedItems,chosen:selectedItems,segments:preparedItems.map(i=>timelineBarSegments(i,Math.max(0,timeToX(i.start)),Math.min(timelineWidth(),timeToX(i.end))))},temporal:`));
 const flatten=image=>image.ops.flatMap(o=>o.image?.ops?[o,...flatten(o.image)]:[o]);
 function assertHeaderCoversEdges(header){

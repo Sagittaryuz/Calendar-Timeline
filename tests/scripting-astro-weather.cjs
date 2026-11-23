@@ -18,7 +18,7 @@ const temperatures=[[-6,'1261C9'],[18,'0A84FF'],[20,'12A9D8'],[22,'20B7A5'],[24,
 const close=(a,b)=>Math.abs(a-b)<1e-6;
 const rain=op=>op.type==='fillRect'&&op.state?.fill?.hex==='17BAEC'&&op.state.fill.alpha===1&&op.rect.width<=8;
 async function main(){
- const {host,options}=await fixture();
+ const {d,host,options}=await fixture();
  let scenes=0,labels=0,bars=0;
  for(const [year,month,day,hour,minute] of [[2026,10,22,0,0],[2026,10,22,6,17],[2026,10,22,11,0],[2026,10,22,18,0],[2026,11,31,23,59]])
  for(const mode of ['dry','varied rain','missing']){
@@ -37,7 +37,7 @@ async function main(){
   const [old,next]=await Promise.all([before(host,config),after(host,config)]);
   for(const field of ['header','hourLegend','thermalBand','temporal'])
    assert.deepEqual(next[field],old[field],field+' unchanged');
-  const inset=22;
+  const inset=32;
   const {top,bottomChart,...stable}=next.weatherGeometry;
   const {top:oldTop,bottomChart:oldBottom,...oldStable}=old.weatherGeometry;
   assert.deepEqual(stable,oldStable,'No clock, astro or grid movement');
@@ -49,7 +49,7 @@ async function main(){
    assert(close(moved[i][prop],old.touchSplit.charts[i][prop]),'Chart geometry changes only by the fixed y translation');
   assert.deepEqual(next.panel,old.panel,'All-day/event selection and counts unchanged');
   const ops=flatten(next.image),earlier=flatten(old.image);
-  const printed=ops.filter(op=>op.type==='text'&&/^-?\d+°$/.test(op.text));
+  const printed=ops.filter(op=>op.type==='text'&&/^-?\d+°$/.test(op.text)&&next.weatherGeometry.ticks.some(t=>close(t.x,op.rect.x+op.rect.width/2)&&close(op.rect.y,next.weatherGeometry.panelY+(t.hour===0?next.weatherGeometry.moon:next.weatherGeometry.astro)+510/484)));
   assert.equal(ops.filter(op=>op.type==='text'&&/^-?\d+º$/.test(op.text)&&op.rect&&op.rect.y>=next.weatherGeometry.bottom-65&&op.rect.y<next.weatherGeometry.bottom).length,0,'No duplicate lower thermal labels');
   assert.equal(ops.filter(op=>op.type==='strokePath'&&op.state?.stroke?.hex==='FFFFFF'&&op.state.stroke.alpha===0.95&&op.path?.length>100).length,0,'No lower thermal curve path');
   if(mode==='missing') assert.equal(printed.length,0,'Do not fabricate temperatures');
@@ -67,10 +67,12 @@ async function main(){
     assert(op.rect.y+op.rect.height<=next.weatherGeometry.panelY+top,'Weather labels stop above all charts');
     const fill=temperatures.find(([t])=>t===source.temperature)[1];
     assert(ops.some(p=>p.type==='fillEllipse'&&p.state?.fill?.hex?.toUpperCase()===fill&&p.rect.y>base&&p.rect.y<base+3&&p.rect.x>=op.rect.x-1e-6&&p.rect.x<op.rect.x+op.rect.width),JSON.stringify({x,base,fill, op: op.rect, ellipses:ops.filter(p=>p.type==='fillEllipse'&&p.state?.fill?.hex?.toUpperCase()===fill).slice(-10).map(p=>p.rect)}));
-    assert.equal(op.state.text.hex,['1261C9'].includes(fill)?'FFFFFF':'000000');
+    const hourFont=ops.find(p=>p.type==='text'&&/^\d+h$/.test(p.text)).state.font.size;
+    assert.equal(op.state.font.size,hourFont,'Temperature shares the hour font size');
+    if(mode==='dry')assert.equal(op.state.text.hex,['1261C9'].includes(fill)?'FFFFFF':'000000');
    }
   }
-  const previousBars=earlier.filter(rain),newBars=ops.filter(rain);
+  const previousBars=earlier.filter(rain),newBars=ops.filter(op=>rain(op)&&close(op.rect.y,next.weatherGeometry.astro));
   assert.equal(newBars.length,previousBars.length,'Precipitation evidence/quarter frequency unchanged');
   if(mode==='varied rain') {
    assert(newBars.length>0&&new Set(newBars.map(b=>b.rect.height)).size>2);
@@ -83,6 +85,36 @@ async function main(){
   } else assert.equal(newBars.length,0,'No rain inferred from dry/missing data');
   scenes++; labels+=printed.length; bars+=newBars.length;
  }
- console.log(JSON.stringify({scenes,labels,bars,geometry:'clock, astro, grid and header unchanged; 22 px separate chart block keeps its height; rain lengths/timing unchanged',physicalIOS:'not tested'}));
+ // Reproduce the weak, short bar precisely under the 08h capsule; compare the
+ // composed pixel inside the badge, not only the presence of a background op.
+ const {createCanvas}=require('@napi-rs/canvas');
+ const collisionOld=probe(cp.execFileSync('git',['show','e1cf963:'+engine],{encoding:'utf8'}));
+ const now=new Date(2026,10,22,6);
+ for(const amount of [0,0.4,2,10]){
+  const weather={hours:Array.from({length:26},(_,i)=>({timestamp:+now+i*h,temperature:22,rainMM:amount,rainRate:amount,
+    rainChance:amount?100:0,cloudiness:amount?90:0,symbol:amount?'d5':'d0'})),daily:{}};
+  const opt=options(now,[],{hourlyWeather:weather});
+  const [old,result]=await Promise.all([collisionOld(host,opt),after(host,opt)]);
+  const x=91, y=Math.ceil(result.weatherGeometry.panelY+result.weatherGeometry.astro+2);
+  const near=(r)=>r&&r.x<=x&&r.x+r.width>x&&r.y<=y&&r.y+r.height>y;
+  const sample=model=>{
+   const canvas=createCanvas(1092,510),ctx=canvas.getContext('2d');
+   const bridge=new Proxy(ctx,{set(o,k,v){o[k]=k==='font'&&typeof v==='object'?`${v.size}px monospace`:v;return true;},get(o,k){const v=o[k];return typeof v==='function'?v.bind(o):v;}});
+   const localY=y-model.weatherGeometry.panelY;
+   // Repaint the relevant bar rectangle then the actual foreground ops in order.
+   for(const bar of flatten(model.image).filter(op=>rain(op)&&close(op.rect.y,model.weatherGeometry.astro)&&op.rect.x<=x&&op.rect.x+op.rect.width>x&&op.rect.y+op.rect.height>localY)){
+    ctx.fillStyle='#17BAEC';ctx.fillRect(bar.rect.x,bar.rect.y+model.weatherGeometry.panelY,bar.rect.width,bar.rect.height);
+   }
+   d.replay(bridge,model.image.ops.filter(op=>near(op.rect)&&['fillRect','fillEllipse','text'].includes(op.type)),1092,510,1092,510,()=>null);
+   return [...ctx.getImageData(x,y,1,1).data];
+  };
+  const pixel=sample(result);
+  assert.deepEqual(pixel,amount?[23,186,236,255]:[32,183,165,255],`Final 08h pixel amount ${amount}`);
+  if(amount)assert.notDeepEqual(sample(old),pixel,'0.3.49 capsule covered the rain pixel');
+  const markers=ops=>ops.filter(o=>o.type==='fillPath'&&o.state?.fill?.hex?.toUpperCase()==='17BAEC');
+  const strokes=ops=>ops.filter(o=>o.type==='strokePath'&&o.state?.stroke?.hex?.toUpperCase()==='17BAEC');
+  if(amount){assert(markers(flatten(old.image)).length>0,'Previously drawn drops reproduced');assert.equal(markers(flatten(result.image)).length,0);assert.equal(strokes(flatten(result.image)).length,0);}
+ }
+ console.log(JSON.stringify({scenes,labels,bars,finalPixelCases:4,geometry:'clock, astro, grid and header unchanged; 32 px separate chart block keeps its height; rain lengths/timing unchanged',physicalIOS:'not tested'}));
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

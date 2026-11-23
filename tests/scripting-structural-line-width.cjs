@@ -44,8 +44,8 @@ function pathPoints(path){
       'All seven header card positions and dimensions are unchanged');
     for(const key of ['hourLegend','thermalBand','windowStart','windowEnd'])
       assert.deepEqual(model[key],before[key],`${key} layout remains unchanged`);
-    assert.deepEqual(model.touchSplit,{...before.touchSplit,y:before.touchSplit.y+22},
-      'Touch boundary follows the 22px astro weather clearance');
+    assert.deepEqual(model.touchSplit,{...before.touchSplit,y:before.touchSplit.y+32},
+      'Touch boundary follows the 32px astro weather clearance');
     const headerLayout=image=>flatten(image).filter(o=>o.type==='header').map(o=>({
       slotIndex:o.slotIndex,isToday:o.isToday,rect:o.rect,frame:o.frame,
       titlePoint:o.title.point,wordPoint:o.word.point,numberPoint:o.number.point,

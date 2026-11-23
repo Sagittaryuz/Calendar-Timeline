@@ -153,3 +153,9 @@ antes/depois inspecionadas; execução física no iPhone não realizada.
 
 - Substitui a curva térmica inferior e seus números por cápsulas coloridas abaixo dos astros. Reutiliza a paleta térmica contínua e seleciona texto preto ou branco pelo contraste.
 - As barras de precipitação passam a crescer para baixo a partir da base dos astros. Mantém horários, escala de mm/h, grade, aniversários em primeiro plano e demais elementos independentes. A agenda ocupa 22 px da antiga faixa térmica para deixar livres os títulos abaixo das cápsulas, sem reduzir a altura das linhas.
+
+## Scripting 0.3.50 — tipografia e leitura da chuva
+
+- Temperatura sob o astro compartilha os 25 px lógicos da legenda das horas; primeira linha dos quadros de data cresce de 43 para 53 px na mesma âncora.
+- Retira as gotas decorativas do gráfico e dos astros, mantendo raios, barras opacas, intensidade, horários e sentido descendente.
+- Segmentos azuis reaparecem somente dentro da área de colisão com cada cápsula, atrás dos números. Reserva fixa de 10 px adicionais acima da primeira linha de agenda evita que as cápsulas maiores cubram eventos, sem alterar altura das linhas ou geometria da grade.

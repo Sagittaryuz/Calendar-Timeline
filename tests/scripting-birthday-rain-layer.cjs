@@ -8,6 +8,10 @@ const engine='scripting/scripts/Calendar Timeline Scripting/original-engine.js';
 const baselineRaw=cp.execFileSync('git',['show',`0873ed9:${engine}`],{cwd:root,encoding:'utf8'});
 const birthdayColor='ff69b4';
 const rainColor='17baec';
+// Panel rain starts near the astros in panel-local coordinates. The clipped
+// patch inside the root capsule is far above any birthday ink and need not
+// precede the separately composited birthday layer.
+const fullRainBar=op=>op.type==='fillRect'&&op.state?.fill?.hex?.toLowerCase()===rainColor&&op.rect.y<100;
 
 function birthday(title,date){
   const start=new Date(date);start.setHours(0,0,0,0);
@@ -49,7 +53,7 @@ function intersects(a,b){
 
 async function main(){
   const panel=raw.slice(raw.indexOf('async function renderTimelinePanel'),raw.indexOf('\nfunction timelineItemsStartingToday'));
-  assert(panel.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather)')<panel.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
+  assert(panel.includes('drawTimelineRainOverlay(ctx, hourlyWeather, rainBars)')&&panel.indexOf('drawTimelineRainOverlay(ctx, hourlyWeather, rainBars)')<panel.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)'),
     'The actual timeline rain overlay is painted before birthday labels');
   assert(panel.indexOf('drawTimelineBirthdayLabelsAfterRain(ctx, items)')<panel.indexOf('drawEventStartLines(ctx,'),
     'Event start guides and day-boundary overlays retain foreground priority');
@@ -96,8 +100,7 @@ async function main(){
       }
     }
 
-    const rainBars=operations.filter(op=>op.type==='fillRect'&&
-      op.state?.fill?.hex?.toLowerCase()===rainColor);
+    const rainBars=operations.filter(fullRainBar);
     assert(rainBars.length>0,`${label}: synthetic rain bars are actually rendered`);
     for(const {op} of birthdayTexts){
       const overlap=rainBars.find(bar=>intersects(op.rect,bar.rect));
@@ -105,7 +108,7 @@ async function main(){
     }
     let lastRainIndex=-1,firstBirthdayIndex=Number.POSITIVE_INFINITY;
     operations.forEach((op,index)=>{
-      if(op.type==='fillRect'&&op.state?.fill?.hex?.toLowerCase()===rainColor)lastRainIndex=index;
+      if(fullRainBar(op))lastRainIndex=index;
       if(op.type==='text'&&op.state?.text?.hex?.toLowerCase()===birthdayColor)
         firstBirthdayIndex=Math.min(firstBirthdayIndex,index);
     });
