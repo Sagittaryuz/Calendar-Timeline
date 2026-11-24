@@ -1,0 +1,37 @@
+const assert=require('node:assert/strict');
+const cp=require('node:child_process');
+const {fixture,compile,flatten,raw}=require('./scripting-rolling.cjs');
+const engine='scripting/scripts/Calendar Timeline Scripting/original-engine.js';
+const prior=compile(cp.execFileSync('git',['show','966ec21:'+engine],{encoding:'utf8'}));
+const render=compile(raw);
+const rain=o=>o.type==='fillRect'&&o.state?.fill?.hex?.toUpperCase()==='17BAEC';
+const lightning=o=>o.type==='fillPath'&&['17BAEC','FFD60A'].includes(o.state?.fill?.hex?.toUpperCase());
+const bars=image=>flatten(image).filter(rain).map(o=>o.rect);
+const find=(image,p)=>flatten(image).filter(p);
+const stamp=(day,hour)=>new Date(2026,10,day,hour);
+(async()=>{
+ const {host,options}=await fixture(),now=stamp(24,12),dayStart=stamp(25,0);
+ const hours=Array.from({length:28},(_,i)=>({timestamp:+now+i*3600000,
+  temperature:23,rainRate:5,rainMM:5,rainChance:100,cloudiness:95,symbol:'d6'}));
+ const event={kind:'event',identifier:'pending',title:'Test',start:stamp(24,20),end:stamp(25,4),color:'#FF9500'};
+ const weather={hourlyWeather:{hours,daily:{}}};
+ const input=options(now,[event],weather);
+ const old=await prior(host,input),next=await render(host,input);
+ assert(find(old.image,o=>o.type==='diagonal').length>0,'Fixture reproduces the old diagonal weekday and date');
+ assert.equal(find(next.image,o=>o.type==='diagonal').length,0);
+ assert(find(old.image,lightning).length>0,'Fixture reproduces the old lightning');
+ assert.equal(find(next.image,lightning).length,0);
+ assert.deepEqual(bars(next.image).sort((a,b)=>a.x-b.x),bars(old.image).sort((a,b)=>a.x-b.x),'Weather geometry and amounts preserved');
+ const rainBlur=find(next.image,o=>o.image?.blurRadius&&bars(o.image).length>0);
+ assert.equal(rainBlur.length,1);
+ const boundary=next.temporal.midnightX;
+ assert(Math.abs(rainBlur[0].rect.x-boundary)<1,'Blur cropped to the future panel');
+ const future=bars(rainBlur[0].image);
+ assert(future.length>0&&future.every(b=>b.x+b.width/2>=boundary-1e-6));
+ assert(bars(next.image).some(b=>b.x+b.width/2<boundary-1));
+ const clear=await render(host,options(now,[],weather));
+ assert.equal(find(clear.image,o=>o.image?.blurRadius&&bars(o.image).length>0).length,0);
+ const selected=await render(host,options(now,[event],{...weather,focusDate:+dayStart}));
+ assert.equal(find(selected.image,o=>o.image?.blurRadius&&bars(o.image).length>0).length,0);
+ console.log('PASS: no lightning or diagonal dates; identical rain geometry, blur only at/after midnight when future panel is blurred.');
+})().catch(e=>{console.error(e);process.exit(1)});

@@ -636,3 +636,7 @@ As cápsulas de temperatura de amanhã acompanham o desfoque existente do dia se
 ## Scripting 0.3.54 — 2026-11-24
 
 A cápsula de temperatura sobre a divisória da meia-noite fica sempre nítida. As demais cápsulas do dia seguinte continuam acompanhando o desfoque existente. Sem mudança na composição da chuva, linha solar ou ordem dos eventos.
+
+## Scripting 0.3.55 — 2026-11-24
+
+- Remove os raios dos astros e das barras e os rótulos diagonais de dia/data da faixa desfocada. As barras de chuva no trecho futuro acompanham seu desfoque, atrás das cápsulas; a cápsula da virada segue nítida.

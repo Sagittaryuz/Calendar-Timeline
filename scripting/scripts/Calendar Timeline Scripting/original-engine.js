@@ -5978,25 +5978,6 @@ function drawThermalDayBadgeFrames(ctx, ticks, centerY) {
   }
 }
 
-// Centro visual do raio, mantido após retirar as gotas do gráfico.
-function rainTopMarkerTopY(height) {
-  return solarLineY() - height * (106331 / 227100);
-}
-
-function drawRainTopMarker(ctx, x, top, height, width, color) {
-  const path = new Path();
-  path.move(new Point(x, top));
-  path.addLine(new Point(x - width / 2, top + height * 0.58));
-  path.addLine(new Point(x, top + height * 0.58));
-  path.addLine(new Point(x - width * 0.18, top + height));
-  path.addLine(new Point(x + width / 2, top + height * 0.4));
-  path.addLine(new Point(x + width * 0.12, top + height * 0.4));
-  path.closeSubpath();
-  ctx.setFillColor(color);
-  ctx.addPath(path);
-  ctx.fillPath();
-}
-
 function rainBarMaximumHeight(graphTop, graphBottom) {
   return Math.max(scaleVertical(4), graphBottom - graphTop - scaleVertical(2));
 }
@@ -6020,8 +6001,8 @@ function timelineRainScaleTopY() {
   return weatherStripBottomY() + TITLE_TIMELINE_GAP_ADJUSTMENT;
 }
 
-function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOrigin = null) {
-  const quarterHourMilliseconds = WEATHER_QUARTER_MS;
+function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOrigin = null,
+  resolveTarget = () => ctx) {
   const rainEntries = thermalRainEntries(sourceHours);
   if (!rainEntries.length) return;
 
@@ -6043,10 +6024,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOr
     // A altura representa volume real, não a posição relativa dentro
     // da janela. Assim, 0,10 mm continua pequeno mesmo se for o maior
     // valor encontrado no período.
-    const normalized = thermalRainBarFraction(entry.amount);
     const height = thermalRainBarHeight(entry.amount, graphTop, graphBottom);
-    // Barras e gotas retomam a opacidade original, acima dos charts.
-    const opacity = 1.0;
     const centerX = timeToX(new Date(entry.timestamp));
     if (
       centerX < -barWidth ||
@@ -6058,16 +6036,7 @@ function drawThermalRainBars(ctx, sourceHours, graphTop, graphBottom, downwardOr
     if (entry.amount >= SETTINGS.rainEvidenceMinMM) {
       const rect = new Rect(centerX - barWidth / 2,
         downwardOrigin ?? graphBottom - height, barWidth, height);
-      drawRainBar(ctx, rect, new Color(SETTINGS.rainLineColor, opacity));
-    }
-    // Raios continuam alternados na mesma grade; não desenhar gotas.
-    if (entry.storm && Math.floor(entry.timestamp / quarterHourMilliseconds) % 2 === 0) {
-      const markerHeight = scaleVertical(16 + 24 * normalized);
-      drawRainTopMarker(ctx, centerX,
-        rainTopMarkerTopY(markerHeight),
-        markerHeight,
-        Math.max(scaleVertical(7), Math.min(scaleVertical(13), quarterWidth * 1.15)),
-        new Color(SETTINGS.rainLineColor, opacity));
+      drawRainBar(resolveTarget(entry.timestamp), rect, new Color(SETTINGS.rainLineColor, 1));
     }
   }
 }
@@ -7431,55 +7400,6 @@ function drawSunriseSunsetGlyph(
   }
 }
 
-function drawWeatherLightning(ctx, centerX, centerY, size) {
-  const path = new Path();
-  path.move(
-    new Point(
-      centerX + size * 0.04,
-      centerY + size * 0.18
-    )
-  );
-  path.addLine(
-    new Point(
-      centerX - size * 0.08,
-      centerY + size * 0.39
-    )
-  );
-  path.addLine(
-    new Point(
-      centerX + size * 0.01,
-      centerY + size * 0.36
-    )
-  );
-  path.addLine(
-    new Point(
-      centerX - size * 0.04,
-      centerY + size * 0.55
-    )
-  );
-  path.addLine(
-    new Point(
-      centerX + size * 0.15,
-      centerY + size * 0.29
-    )
-  );
-  path.addLine(
-    new Point(
-      centerX + size * 0.05,
-      centerY + size * 0.32
-    )
-  );
-  path.addLine(
-    new Point(
-      centerX + size * 0.04,
-      centerY + size * 0.18
-    )
-  );
-  ctx.setFillColor(new Color("#FFD60A", weatherElementOpacity(0.98)));
-  ctx.addPath(path);
-  ctx.fillPath();
-}
-
 function drawWeatherSnowflake(
   ctx,
   centerX,
@@ -7638,15 +7558,6 @@ function drawCelestialWeatherOverlay(
       centerY + size * 0.19,
       cloudScale,
       state.rain || state.storm
-    );
-  }
-
-  if (state.storm) {
-    drawWeatherLightning(
-      ctx,
-      centerX,
-      centerY + size * 0.02,
-      size * 0.76
     );
   }
 
@@ -8844,12 +8755,34 @@ function drawTimelineRainOverlay(ctx, weather) {
   if (!sourceHours.some(hour =>
     Number(hour.timestamp) >= windowStart.getTime() &&
     Number(hour.timestamp) <= windowEnd.getTime())) return;
+  const metrics = shouldBlurFutureTimeline() ? futureTimelineBlurMetrics() : null;
+  const blurFrom = metrics?.width > 0 ? +addDays(startOfDay(windowStart), 1) : Infinity;
+  let futureCtx;
   drawThermalRainBars(
     ctx, sourceHours,
     timelineRainScaleTopY(),
     thermalBandBottomY(),
-    solarLineY()
+    solarLineY(),
+    timestamp => {
+      if (timestamp < blurFrom) return ctx;
+      if (!futureCtx) {
+        futureCtx = new DrawContext();
+        futureCtx.size = new Size(timelineWidth(), timelineHeight());
+        futureCtx.opaque = false;
+        futureCtx.respectScreenScale = false;
+      }
+      return futureCtx;
+    }
   );
+  if (futureCtx) {
+    // Keep rain above the charts and below capsules; clip the blur at midnight.
+    const cropped = cropTransparentCanvasImage(
+      futureCtx.getImage(), metrics.startX, 0, metrics.width, metrics.height
+    );
+    const softened = softenTimelineImage(cropped, metrics.width, metrics.height);
+    ctx.drawImageInRect(softened,
+      new Rect(metrics.startX, 0, metrics.width, metrics.height));
+  }
 }
 
 function temperatureCapsuleTextColor(hex) {
@@ -8960,7 +8893,6 @@ async function renderTimelinePanel(items, loadError, astroTicks) {
       true
     );
     ctx.drawImageAtPoint(blurCtx.getImage(), new Point(0, 0));
-    await drawDiagonalWeekdayLabels(ctx);
   }
 
   if (loadError) {

@@ -1,7 +1,9 @@
 // Synthetic records only. Exercise the production selection and drawing engine.
 const assert=require('node:assert/strict'),cp=require('node:child_process');
 const {fixture,compile,flatten,raw,withHistoricalTitle,withHistoricalWeatherSpace}=require('./scripting-rolling.cjs');
-const baseline=cp.execFileSync('git',['show','d0f2da1:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'});
+// Isolate agenda painting from the intentionally removed diagonal date overlay.
+const baseline=cp.execFileSync('git',['show','d0f2da1:scripting/scripts/Calendar Timeline Scripting/original-engine.js'],{encoding:'utf8'})
+ .replace('    await drawDiagonalWeekdayLabels(ctx);\n','');
 const probe=s=>compile(s.replace('return {temporal:','return {selected:selectedItems,temporal:'));
 const at=(day,h=0,m=0)=>new Date(2026,10,day,h,m);
 const reminders=n=>Array.from({length:n},(_,i)=>({kind:'reminder',identifier:'r'+i,title:'SYNTHETIC PENDING TASK '+i,start:at(18),end:at(19),sourceIsAllDay:true,color:'#0088FF'}));

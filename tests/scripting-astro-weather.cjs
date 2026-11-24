@@ -98,7 +98,10 @@ async function main(){
   if(mode==='varied rain') {
    const previous=await previousRelease(host,config);
    const previousOps=flatten(previous.image);
-   for(const match of [rain,solarStripe]) assert.deepEqual(ops.filter(match),previousOps.filter(match),'Rain and painted solar stripe exactly match published 0.3.51');
+   // Rain may paint on its own blur layer, whose unused text/stroke state differs.
+   const paintedRect=({rect,state:{fill}})=>({rect,fill});
+   for(const match of [rain,solarStripe]) assert.deepEqual(ops.filter(match).map(paintedRect),
+     previousOps.filter(match).map(paintedRect),'Rain and solar stripe retain the published geometry and fill before blur');
    const oldLabels=previous.image.ops.filter(o=>o.type==='text'&&/^-?\d+°$/.test(o.text));
    for(const op of printed){
     const prev=oldLabels.find(o=>o.rect.x===op.rect.x&&o.text===op.text);
