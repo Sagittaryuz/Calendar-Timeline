@@ -25,14 +25,15 @@ const equal=(a,b)=>Math.abs(a-b)<1e-6;
  assert(layer,'Temperature foreground must receive native blur');
  const blurredTemps=layer.image.ops.filter(temp);
  assert(blurredTemps.length>1);
- assert(blurredTemps.some(o=>equal(o.rect.x+o.rect.width/2,active.temporal.midnightX)),
-   'Midnight pill is entirely in blurred layer');
- assert(blurredTemps.every(o=>o.rect.x+o.rect.width/2>=active.temporal.midnightX-1e-6));
+ assert(blurredTemps.every(o=>o.rect.x+o.rect.width/2>active.temporal.midnightX+1e-6),
+   'Only pills after midnight belong in the blurred layer');
  assert(layer.image.ops.some(o=>o.type==='fillEllipse'&&o.state?.fill?.alpha===1
    &&blurredTemps.some(p=>equal(o.rect.y,p.rect.y))),
  'The pill background shares the same blurred surface as the digits');
  const sharpTemps=active.image.ops.filter(temp);
- assert(sharpTemps.length&&sharpTemps.every(o=>o.rect.x+o.rect.width/2<active.temporal.midnightX));
+ assert(sharpTemps.some(o=>equal(o.rect.x+o.rect.width/2,active.temporal.midnightX)),
+   'The midnight boundary capsule stays sharp');
+ assert(sharpTemps.every(o=>o.rect.x+o.rect.width/2<=active.temporal.midnightX+1e-6));
  assert.equal(sharpTemps.length+blurredTemps.length,clear.image.ops.filter(temp).length);
  const old=clear.image.ops.filter(temp);
  for(const o of [...sharpTemps,...blurredTemps]){
@@ -61,5 +62,5 @@ const equal=(a,b)=>Math.abs(a-b)<1e-6;
    assert(Math.max(...timed.map(i=>i.gridRow))<Math.min(...whole.map(i=>i.gridRow)));
    assert(whole.every(i=>+i.start===+start&&+i.end===+end));
  }
- console.log('PASS: future pill text+fill and midnight share native blur, current/day-selected stay sharp; timed/overnight/all-day/holiday and multi-day order; source and pill geometry preserved.');
+ console.log('PASS: future pill text+fill share native blur; boundary, current and selected day stay sharp; timed/overnight/all-day/holiday and multi-day order; source and pill geometry preserved.');
 })().catch(e=>{console.error(e);process.exit(1)});

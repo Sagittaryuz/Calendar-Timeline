@@ -8878,15 +8878,15 @@ function drawAstroTemperatureCapsules(ctx, weather, ticks) {
     const width = Math.max(scaleVertical(36),
       Math.ceil(label.length * fontSize * 0.62) + scaleVertical(12));
     const rect = new Rect(CANVAS.plotLeft + centerX - width / 2, y, width, height);
-    // A cápsula da virada pertence a amanhã mesmo se parte dela cruza
-    // a linha de meia-noite. Desfoque o fundo e o texto juntos.
-    if (+tick >= blurFrom && !futureCtx) {
+    // A cápsula sobre a própria divisória fica nítida. Desfoque juntos
+    // o fundo e o texto somente das cápsulas depois da meia-noite.
+    if (+tick > blurFrom && !futureCtx) {
       futureCtx = new DrawContext();
       futureCtx.size = new Size(CANVAS.width, CANVAS.height);
       futureCtx.opaque = false;
       futureCtx.respectScreenScale = false;
     }
-    const target = +tick >= blurFrom ? futureCtx : ctx;
+    const target = +tick > blurFrom ? futureCtx : ctx;
     fillRoundedRect(target, rect, height / 2, new Color(fill, 1));
     target.setTextAlignedCenter();
     target.setFont(Font.blackMonospacedSystemFont(fontSize));

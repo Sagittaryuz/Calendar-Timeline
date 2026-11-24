@@ -172,3 +172,7 @@ antes/depois inspecionadas; execução física no iPhone não realizada.
 ## Scripting 0.3.53 — 2026-11-24
 
 As cápsulas de temperatura de amanhã acompanham o desfoque existente do dia seguinte, incluindo a cápsula da virada. As temperaturas de hoje, a posição da linha solar e a camada da chuva permanecem iguais. Os eventos de dia inteiro ficam abaixo dos compromissos com horário de cada dia; eventos de vários dias são segmentados apenas para a disposição visual, sem alterar os compromissos no Calendário.
+
+## Scripting 0.3.54 — 2026-11-24
+
+A cápsula de temperatura sobre a divisória da meia-noite fica sempre nítida. As demais cápsulas do dia seguinte continuam acompanhando o desfoque existente. Sem mudança na composição da chuva, linha solar ou ordem dos eventos.
