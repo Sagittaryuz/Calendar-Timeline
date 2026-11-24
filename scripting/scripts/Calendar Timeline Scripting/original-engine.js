@@ -6898,9 +6898,13 @@ function temperatureCapsuleHeight() {
   return hourLegendFontSize() + scaleVertical(2);
 }
 
-// Use the same center for the solar glow and the rain origin, including midnight.
+// The painted solar stripe extends down from this same rain origin.
 function solarLineY() {
   return temperatureCapsuleTopY() + temperatureCapsuleHeight() / 2;
+}
+
+function solarLineThickness() {
+  return scaleVertical(10);
 }
 
 function timelineWeatherGridTopY() {
@@ -8842,7 +8846,8 @@ function drawAstroTemperatureCapsules(ctx, weather, ticks) {
   if (!sourceHours.length) return;
   const fontSize = hourLegendFontSize();
   const height = temperatureCapsuleHeight();
-  const y = CANVAS.timelineTop + temperatureCapsuleTopY();
+  // The stripe starts at solarLineY, so align with its painted center, not its top.
+  const y = CANVAS.timelineTop + temperatureCapsuleTopY() + solarLineThickness() / 2;
   for (const {tick} of ticks) {
     const centerX = timeToX(tick);
     if (!weatherIconIntersectsTimeline(centerX, weatherIconSize())) continue;
@@ -9623,7 +9628,7 @@ function drawFixedDaylightGlow(ctx, weather) {
           slice.x - 1,
           lineY,
           slice.width + 3,
-          scaleVertical(10)
+          solarLineThickness()
         )
       );
 

@@ -12,14 +12,15 @@ const probe=s=>compile(s.replace('return {temporal:',`return {weatherGeometry:{
     timestamp:+tick,x:timeToX(tick),hour:tick.getHours()
   })),
   top:timelineChartTop(), axis:typeof timelineWeatherGridTopY==="function"?timelineWeatherGridTopY():solarLineY(), solar:solarLineY(), bottomChart:timelineChartBottom()},temporal:`));
-const before=probe(baseline),after=probe(raw);
+const before=probe(baseline),previousRelease=probe(cp.execFileSync('git',['show','aec8e3a:'+engine],{encoding:'utf8'})),after=probe(raw);
 const h=3600000;
 const temperatures=[[-6,'1261C9'],[18,'0A84FF'],[20,'12A9D8'],[22,'20B7A5'],[24,'51B866'],[27,'E8C229'],[29,'FF9500'],[34,'FF1F1F']];
 const close=(a,b)=>Math.abs(a-b)<1e-6;
+const solarStripe=op=>op.type==='fillRect'&&op.state?.fill?.hex==='FFD000'&&op.rect.height>9;
 const rain=op=>op.type==='fillRect'&&op.state?.fill?.hex==='17BAEC'&&op.state.fill.alpha===1&&op.rect.width<=8;
 async function main(){
  const {d,host,options}=await fixture();
- let scenes=0,labels=0,bars=0;
+ let scenes=0,labels=0,bars=0,midnightCapsules=0,partialCapsules=0;
  for(const [year,month,day,hour,minute] of [[2026,10,22,0,0],[2026,10,22,6,17],[2026,10,22,11,0],[2026,10,22,18,0],[2026,11,31,23,59]])
  for(const mode of ['dry','varied rain','missing']){
   const now=new Date(year,month,day,hour,minute),start=new Date(now);start.setMinutes(0,0,0);
@@ -50,7 +51,14 @@ async function main(){
    assert(close(moved[i][prop],old.touchSplit.charts[i][prop]),'Chart geometry changes only by the fixed y translation');
   assert.deepEqual(next.panel,old.panel,'All-day/event selection and counts unchanged');
   const ops=flatten(next.image),earlier=flatten(old.image);
-  const printed=ops.filter(op=>op.type==='text'&&/^-?\d+°$/.test(op.text)&&next.weatherGeometry.ticks.some(t=>close(t.x,op.rect.x+op.rect.width/2)&&close(op.rect.y,next.weatherGeometry.panelY+next.weatherGeometry.astro+510/484)));
+  const panel=next.image.ops.find(o=>o.image?.ops?.some(solarStripe)||o.image?.ops?.some(child=>child.image?.ops?.some(solarStripe)));
+  assert(panel,'Solar stripe is painted inside the child timeline canvas');
+  const stripes=flatten(panel.image).filter(solarStripe);
+  const yy=y=>panel.rect.y+y*panel.rect.height/panel.image.size.height;
+  const paintedCenter=yy(stripes[0].rect.y+stripes[0].rect.height/2);
+  for(const stripe of stripes)assert(close(yy(stripe.rect.y+stripe.rect.height/2),paintedCenter));
+  assert(paintedCenter>next.weatherGeometry.panelY+solar+4,'Finely distinguish the middle of the stripe from its top');
+  const printed=ops.filter(op=>op.type==='text'&&/^-?\d+°$/.test(op.text)&&next.weatherGeometry.ticks.some(t=>close(t.x,op.rect.x+op.rect.width/2)&&close(op.rect.y+op.rect.height/2,paintedCenter)));
   assert.equal(ops.filter(op=>op.type==='text'&&/^-?\d+º$/.test(op.text)&&op.rect&&op.rect.y>=next.weatherGeometry.bottom-65&&op.rect.y<next.weatherGeometry.bottom).length,0,'No duplicate lower thermal labels');
   assert.equal(ops.filter(op=>op.type==='strokePath'&&op.state?.stroke?.hex==='FFFFFF'&&op.state.stroke.alpha===0.95&&op.path?.length>100).length,0,'No lower thermal curve path');
   if(mode==='missing') assert.equal(printed.length,0,'Do not fabricate temperatures');
@@ -64,11 +72,13 @@ async function main(){
     assert(source,'Fixture has a forecast at the timestamp');
     assert.equal(op.text,source.temperature+'°');
     const base=next.weatherGeometry.panelY+next.weatherGeometry.astro;
-    assert(op.rect.y>base&&op.rect.y<base+4,'One shared top below regular astro, including midnight');
-    assert(close(op.rect.y+op.rect.height/2,next.weatherGeometry.panelY+solar),'Solar line hits every capsule center');
+    assert(op.rect.y>base+4,'Capsule lowered below its old astro offset');
+    assert(close(op.rect.y+op.rect.height/2,paintedCenter),'Painted stripe center hits every capsule center after viewport');
+    if(tick.hour===0) midnightCapsules++;
+    if(op.rect.x<0||op.rect.x+op.rect.width>next.image.size.width) partialCapsules++;
     assert(op.rect.y+op.rect.height<=next.weatherGeometry.panelY+top,'Weather labels stop above all charts');
     const fill=temperatures.find(([t])=>t===source.temperature)[1];
-    assert(ops.some(p=>p.type==='fillEllipse'&&p.state?.fill?.hex?.toUpperCase()===fill&&p.rect.y>base&&p.rect.y<base+3&&p.rect.x>=op.rect.x-1e-6&&p.rect.x<op.rect.x+op.rect.width),JSON.stringify({x,base,fill, op: op.rect, ellipses:ops.filter(p=>p.type==='fillEllipse'&&p.state?.fill?.hex?.toUpperCase()===fill).slice(-10).map(p=>p.rect)}));
+    assert(ops.some(p=>p.type==='fillEllipse'&&p.state?.fill?.hex?.toUpperCase()===fill&&close(p.rect.y,op.rect.y)&&p.rect.x>=op.rect.x-1e-6&&p.rect.x<op.rect.x+op.rect.width),JSON.stringify({x,base,fill, op: op.rect, ellipses:ops.filter(p=>p.type==='fillEllipse'&&p.state?.fill?.hex?.toUpperCase()===fill).slice(-10).map(p=>p.rect)}));
     const hourFont=ops.find(p=>p.type==='text'&&/^\d+h$/.test(p.text)).state.font.size;
     assert.equal(op.state.font.size,hourFont,'Temperature shares the hour font size');
     if(mode==='dry')assert.equal(op.state.text.hex,['1261C9'].includes(fill)?'FFFFFF':'000000');
@@ -85,6 +95,20 @@ async function main(){
     assert.equal(b.x,old.x);assert.equal(b.width,old.width);assert.equal(b.height,old.height);
    }
   } else assert.equal(newBars.length,0,'No rain inferred from dry/missing data');
+  if(mode==='varied rain') {
+   const previous=await previousRelease(host,config);
+   const previousOps=flatten(previous.image);
+   for(const match of [rain,solarStripe]) assert.deepEqual(ops.filter(match),previousOps.filter(match),'Rain and painted solar stripe exactly match published 0.3.51');
+   const oldLabels=previous.image.ops.filter(o=>o.type==='text'&&/^-?\d+°$/.test(o.text));
+   for(const op of printed){
+    const prev=oldLabels.find(o=>o.rect.x===op.rect.x&&o.text===op.text);
+    assert(prev,'Each capsule remains bound to the original astro incl. edge/month transition');
+    assert.equal(JSON.stringify({...op,rect:{...op.rect,y:prev.rect.y},point:{...op.point,y:prev.point.y}}),JSON.stringify(prev),'Only the capsules’ y coordinate changed');
+    assert(close(op.rect.y-prev.rect.y,stripes[0].rect.height/2),'Previous painting reproduced the half-stripe mismatch');
+   }
+   assert.deepEqual(next.image.outerClip,previous.image.outerClip,'Outer contour/clipping unchanged');
+   assert.deepEqual(next.touchSplit,previous.touchSplit,'Chart hit regions unchanged');
+  }
   scenes++; labels+=printed.length; bars+=newBars.length;
  }
  // Reproduce the weak, short bar precisely under the 08h capsule; compare the
@@ -121,6 +145,7 @@ async function main(){
   const strokes=ops=>ops.filter(o=>o.type==='strokePath'&&o.state?.stroke?.hex?.toUpperCase()==='17BAEC');
   if(amount){assert.equal(markers(flatten(result.image)).length,0);assert.equal(strokes(flatten(result.image)).length,0);}
  }
- console.log(JSON.stringify({scenes,labels,bars,finalPixelCases:4,geometry:'clock, astro and grid unchanged; midnight capsule matches all others; solar line exact center, rain behind with lengths/timing unchanged',physicalIOS:'not tested'}));
+ assert(midnightCapsules>0);assert(partialCapsules>0);
+ console.log(JSON.stringify({scenes,labels,bars,midnightCapsules,partialCapsules,finalPixelCases:4,geometry:'clock, astro and grid unchanged; midnight capsule matches all others; center of painted solar stroke after viewport, rain behind with lengths/timing unchanged',physicalIOS:'not tested'}));
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

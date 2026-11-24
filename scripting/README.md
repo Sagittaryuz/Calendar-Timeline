@@ -624,3 +624,7 @@ preferências. Validado em simulação; execução no iPhone ainda não verifica
 
 - A cápsula da virada fica na mesma linha das demais. Chuva e linha solar usam o centro vertical das cápsulas como origem; as cápsulas ficam à frente da chuva.
 - Primeira linha de 53 para 43 px lógicos e solicitação de 10 px acima, limitada pelo contorno superior para não cortar os títulos; demais linhas, grade e áreas de toque preservadas.
+
+## Scripting 0.3.52 — centro visual da linha solar
+
+- Desce as cápsulas de temperatura em metade da espessura da faixa solar, incluindo a virada do dia. O centro agora coincide com o centro da faixa pintada, sem alterar chuva, linha solar, quadros ou grade.
