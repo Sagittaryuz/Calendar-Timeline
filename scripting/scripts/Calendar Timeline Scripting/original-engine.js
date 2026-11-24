@@ -3120,10 +3120,24 @@ function groupBirthdayItems(items) {
 }
 
 
+function splitAllDayEventForLayout(item) {
+  if (item.kind !== "event" || !item.isAllDay || isBirthdayItem(item)) return [item];
+  const first = startOfDay(item.start > windowStart ? item.start : windowStart);
+  const segments = [];
+  for (let day = first; day < item.end && day < windowEnd; day = addDays(day, 1)) {
+    const start = item.start > day ? item.start : day;
+    const dayEnd = addDays(day, 1);
+    const end = item.end < dayEnd ? item.end : dayEnd;
+    if (end > windowStart) segments.push(start === item.start && end === item.end
+      ? item : {...item, start, end});
+  }
+  return segments;
+}
+
 function prepareTimelineRowCounts(items) {
   const relevant = groupBirthdayItems((items ?? []).filter(item =>
     item?.start instanceof Date && item?.end instanceof Date))
-    .filter(item => !isBirthdayGroup(item));
+    .filter(item => !isBirthdayGroup(item)).flatMap(splitAllDayEventForLayout);
   const counts = {};
   for (let day = startOfDay(windowStart); day < windowEnd; day = addDays(day, 1)) {
     const start = Math.max(day.getTime(), windowStart.getTime());
@@ -3161,7 +3175,7 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
       item.end > windowStart &&
       item.start < windowEnd
   );
-  const groupedRelevant = groupBirthdayItems(relevant);
+  const groupedRelevant = groupBirthdayItems(relevant).flatMap(splitAllDayEventForLayout);
   // Birthday names live in the thermal band, outside the chart-row allocator.
   // Keeping them separate prevents a full agenda from suppressing a birthday.
   const birthdayGroups = groupedRelevant.filter(isBirthdayGroup);
@@ -3441,9 +3455,12 @@ function chooseItems(items, _referenceDate, limit, rowCounts = null) {
     // Prioridade menor não reserva linhas: primeiro feriados (ordem anterior
     // entre os demais tipos), depois eventos de dia inteiro. Aniversários
     // ficam separados da grade de charts.
-    const freeRowOrder = Array.from({ length: dayLimit }, (_, row) => row);
-    holidayItems.forEach((item) => placeItem(item, freeRowOrder));
-    bottomItems.forEach((item) => placeItem(item, freeRowOrder));
+    // Não use uma lacuna acima de um compromisso com horário, inclusive
+    // quando a continuação da véspera ocupa uma linha intermediária.
+    const lowerRows = Array.from({ length: dayLimit }, (_, row) => row)
+      .filter(row => row > highestEventRow);
+    holidayItems.forEach((item) => placeItem(item, lowerRows));
+    bottomItems.forEach((item) => placeItem(item, lowerRows));
     // Finalize o recorte pelo badge antes de reservar títulos no próximo dia.
     // A reserva deve usar a geometria que realmente será desenhada, não o
     // título integral que depois desaparece sob o +N.
@@ -3935,7 +3952,8 @@ async function renderWidget(items, loadError) {
   // A borda da Lua é redesenhada após o contorno externo da timeline.
   // A borda superior da timeline não pode cobrir seu aro branco.
   drawDayBoundaryMoonBordersOnForeground(contentCtx);
-  // Preserve os dígitos inclusive no cruzamento da divisória da meia-noite.
+  // Cápsulas continuam acima da chuva. Quando o painel de amanhã está
+  // desfocado, o conjunto dessa cápsula recebe o mesmo efeito nativo.
   drawAstroTemperatureCapsules(contentCtx, hourlyWeather, astroTicks);
 
   const finalImage=contentCtx.getImage();
@@ -8848,6 +8866,8 @@ function drawAstroTemperatureCapsules(ctx, weather, ticks) {
   const height = temperatureCapsuleHeight();
   // The stripe starts at solarLineY, so align with its painted center, not its top.
   const y = CANVAS.timelineTop + temperatureCapsuleTopY() + solarLineThickness() / 2;
+  const blurFrom = shouldBlurFutureTimeline() ? +addDays(startOfDay(windowStart), 1) : Infinity;
+  let futureCtx;
   for (const {tick} of ticks) {
     const centerX = timeToX(tick);
     if (!weatherIconIntersectsTimeline(centerX, weatherIconSize())) continue;
@@ -8858,11 +8878,24 @@ function drawAstroTemperatureCapsules(ctx, weather, ticks) {
     const width = Math.max(scaleVertical(36),
       Math.ceil(label.length * fontSize * 0.62) + scaleVertical(12));
     const rect = new Rect(CANVAS.plotLeft + centerX - width / 2, y, width, height);
-    fillRoundedRect(ctx, rect, height / 2, new Color(fill, 1));
-    ctx.setTextAlignedCenter();
-    ctx.setFont(Font.blackMonospacedSystemFont(fontSize));
-    ctx.setTextColor(new Color(temperatureCapsuleTextColor(fill), 1));
-    ctx.drawTextInRect(label, rect);
+    // A cápsula da virada pertence a amanhã mesmo se parte dela cruza
+    // a linha de meia-noite. Desfoque o fundo e o texto juntos.
+    if (+tick >= blurFrom && !futureCtx) {
+      futureCtx = new DrawContext();
+      futureCtx.size = new Size(CANVAS.width, CANVAS.height);
+      futureCtx.opaque = false;
+      futureCtx.respectScreenScale = false;
+    }
+    const target = +tick >= blurFrom ? futureCtx : ctx;
+    fillRoundedRect(target, rect, height / 2, new Color(fill, 1));
+    target.setTextAlignedCenter();
+    target.setFont(Font.blackMonospacedSystemFont(fontSize));
+    target.setTextColor(new Color(temperatureCapsuleTextColor(fill), 1));
+    target.drawTextInRect(label, rect);
+  }
+  if (futureCtx) {
+    const layer = softenTimelineImage(futureCtx.getImage(), CANVAS.width, CANVAS.height);
+    ctx.drawImageAtPoint(layer, new Point(0, 0));
   }
 }
 

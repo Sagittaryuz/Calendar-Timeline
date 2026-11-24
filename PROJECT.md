@@ -135,3 +135,7 @@ motor pela antiga ferramenta build-scripting.cjs (ela reconstrói uma base hist�
 ## Scripting 0.3.52 — centro visual da linha solar
 
 - Desce as cápsulas de temperatura em metade da espessura da faixa solar, incluindo a virada do dia. O centro agora coincide com o centro da faixa pintada, sem alterar chuva, linha solar, quadros ou grade.
+
+## Scripting 0.3.53 — 2026-11-24
+
+As cápsulas de temperatura de amanhã acompanham o desfoque existente do dia seguinte, incluindo a cápsula da virada. As temperaturas de hoje, a posição da linha solar e a camada da chuva permanecem iguais. Os eventos de dia inteiro ficam abaixo dos compromissos com horário de cada dia; eventos de vários dias são segmentados apenas para a disposição visual, sem alterar os compromissos no Calendário.

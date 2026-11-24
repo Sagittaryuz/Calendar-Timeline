@@ -103,7 +103,10 @@ async function main(){
    for(const op of printed){
     const prev=oldLabels.find(o=>o.rect.x===op.rect.x&&o.text===op.text);
     assert(prev,'Each capsule remains bound to the original astro incl. edge/month transition');
-    assert.equal(JSON.stringify({...op,rect:{...op.rect,y:prev.rect.y},point:{...op.point,y:prev.point.y}}),JSON.stringify(prev),'Only the capsules’ y coordinate changed');
+    // Moving tomorrow's drawing to a transparent child resets unused stroke
+    // state. Compare the state that actually controls text rasterization.
+    const paintedText=({state:{stroke,width,...state},point,rect,...shape})=>({...shape,point:{...point},rect:{...rect},state});
+    assert.deepEqual(paintedText({...op,rect:{...op.rect,y:prev.rect.y},point:{...op.point,y:prev.point.y}}),paintedText(prev),'Only the capsules’ y coordinate changed before blur composition');
     assert(close(op.rect.y-prev.rect.y,stripes[0].rect.height/2),'Previous painting reproduced the half-stripe mismatch');
    }
    assert.deepEqual(next.image.outerClip,previous.image.outerClip,'Outer contour/clipping unchanged');
